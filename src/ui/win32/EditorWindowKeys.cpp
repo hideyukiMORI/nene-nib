@@ -155,6 +155,12 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
     {
         return 0;
     }
+    // 補完の面が見えている間の上下・Enter・Tab・Esc は面へ（ADR 0190 の決定 5）。ほかの鍵と文字は
+    // 本文へ通す。
+    if (take_completion_key(message, word))
+    {
+        return 0;
+    }
     // 鍵の 3 通とフォーカスを失ったとき。Ctrl を離したとき・フォーカスを失ったときは、歩いて
     // いれば使った順を確定してから OS の既定処理へ渡す（ADR 0058 の決定 4）。
     switch (message)
@@ -193,6 +199,8 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
         // WM_MOUSEMOVE が載せ直す。
         hover(std::nullopt);
+        // 補完の面も閉じる（ADR 0190 の決定 5）。
+        close_completion_outside();
         // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
         zoom_wheel_remainder_ = 0;
         break;

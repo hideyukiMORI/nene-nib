@@ -25,6 +25,7 @@
 #include "ClauseEmphasis.hpp"
 #include "ClipboardOperation.hpp"
 #include "CommandEdit.hpp"
+#include "CompletionDirection.hpp"
 #include "Composition.hpp"
 #include "CompositionClause.hpp"
 #include "DeleteDirection.hpp"
@@ -56,6 +57,8 @@
 #include "VimSearchDirection.hpp"
 #include "VimState.hpp"
 #include "VimTestSupport.hpp"
+#include "WordCount.hpp"
+#include "WordTable.hpp"
 
 #include <algorithm>
 #include <array>
@@ -64,6 +67,7 @@
 #include <cstdio>
 #include <expected>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <random>
 #include <string>
@@ -336,10 +340,36 @@ constexpr std::array<app::ExplorerKeyKind, 6> explorer_keys{
                : Reason{};
 }
 
+// 語の表（ADR 0169 の決定 1）は、在る間は本文から作り直した表と同じ。無ければ補完の入口で作る
+// （1 MiB 以下）ので、どの道（Vim の命令・矩形・`:s`・貼り付け・タブ）の後も照合が効く。
+[[nodiscard]] std::vector<core::WordCount> all_words(const core::WordTable &table)
+{
+    return table.prefixed("", std::numeric_limits<std::size_t>::max());
+}
+
+[[nodiscard]] Reason word_violation(app::EditorController &controller)
+{
+    if (!controller.word_table().has_value())
+    {
+        static_cast<void>(controller.insert_completion(core::CompletionDirection::forward));
+    }
+    const auto &table = controller.word_table();
+    const auto rebuilt = core::WordTable::of(controller.text());
+    if (table.has_value() != rebuilt.has_value())
+    {
+        return "5: the word table is missing or kept beyond its limit";
+    }
+    return table.has_value() && rebuilt.has_value() &&
+                   all_words(table.value()) != all_words(rebuilt.value())
+               ? Reason{"5: the word table differs from the table rebuilt from the text"}
+               : Reason{};
+}
+
 [[nodiscard]] Reason frame_violation(app::EditorController &controller, app::EditorFrame &frame)
 {
     frame = controller.frame();
-    Reason reason = band_violation(frame, controller);
+    Reason reason = word_violation(controller);
+    reason = reason.empty() ? band_violation(frame, controller) : reason;
     reason = reason.empty() ? input_violation(frame, controller) : reason;
     reason = reason.empty() ? mode_violation(frame, controller) : reason;
     return reason.empty() ? text_violation(controller, frame) : reason;

@@ -184,6 +184,11 @@ void EditorWindow::release_left(LPARAM data)
     {
         return;
     }
+    // 補完の面の上で押した左の離しは、その候補の確定だけ（#1844 の R1）。
+    if (release_completion(data))
+    {
+        return;
+    }
     // 窓の操作を押して捕まえていたら、離したのはその押しの終わりだけ（#1464）。
     if (release_caption(data))
     {
@@ -565,6 +570,11 @@ void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
     {
         return;
     }
+    // 補完の面の上の押しは面へ（本文へ渡さない・面の外は今までどおり本文へ）。
+    if (press_completion(data))
+    {
+        return;
+    }
     click_client(data, clicks);
 }
 
@@ -813,6 +823,11 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
     }
     // 面を閉じた後のホイールは面の余りを持ち越さない（#737）。
     palette_wheel_remainder_ = 0;
+    // 補完の面の上のホイールは面の行だけを送る（#1844 の R1）。
+    if (scroll_completion(delta, data))
+    {
+        return;
+    }
     if (over_title_bar(data))
     {
         scroll_tabs(delta);

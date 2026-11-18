@@ -16,7 +16,7 @@ namespace
 {
 // 試験の組の表（関数の外に置く・表が伸びて関数の長さの上限を越えた・#1836）。
 namespace ui = nenenib::tests::ui;
-constexpr std::array<std::pair<std::string_view, void (*)()>, 48> groups{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 49> groups{{
     {"", ui::verify_fallback_keys},
     {"", ui::verify_fallback_cache},
     {"--glyphs", ui::verify_glyph_collector},
@@ -63,6 +63,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 48> groups{{
     {"--project-hits", ui::verify_project_hit_paint},
     {"--context-menu", ui::verify_context_menu_paint},
     {"--finder-preview", ui::verify_finder_preview_paint},
+    {"--completion", ui::verify_completion_paint},
     {"--settings-panel", ui::verify_settings_panel_paint},
     {"--settings-panel", ui::verify_settings_input},
 }};

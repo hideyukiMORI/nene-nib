@@ -92,6 +92,33 @@ class ScriptedLanguageServer final : public nenenib::application::LanguageServer
         }
         return found;
     }
+    // 送った要求の id（ADR 0190 の決定 11）。send で受けた本文のうち method の本文の最初の `"id":`
+    // の数を順に返す（要求は id が method より前・`$/cancelRequest` は params の id）。
+    [[nodiscard]] std::vector<std::int64_t> requests(std::string_view method) const
+    {
+        constexpr std::string_view key = R"("id":)";
+        std::vector<std::int64_t> ids;
+        for (const std::string &body : notifications(method))
+        {
+            const std::size_t at = body.find(key);
+            if (at != std::string::npos)
+            {
+                ids.push_back(std::stoll(body.substr(at + key.size())));
+            }
+        }
+        return ids;
+    }
+    // 取り消した要求の id（`$/cancelRequest` の params の id・決定 1）。
+    [[nodiscard]] std::vector<std::int64_t> cancelled() const
+    {
+        return requests("$/cancelRequest");
+    }
+    // 要求 id に result（JSON の文字列）で答える本文を次の collect に足す（決定 11）。
+    void answer(std::int64_t id, std::string_view result)
+    {
+        serve(nenenib::application::ServerMessage{R"({"jsonrpc":"2.0","id":)" + std::to_string(id) +
+                                                  R"(,"result":)" + std::string{result} + "}"});
+    }
     // 次の start を failure で断らせる（1 回だけ）。
     void refuse(nenenib::application::ServerFailure failure)
     {

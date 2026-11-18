@@ -9,11 +9,13 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
+#include "ChooseCompletion.hpp"
 #include "ChangeSetting.hpp"
 #include "ChooseContextMenu.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "ChooseStartEntry.hpp"
 #include "ClipboardAction.hpp"
+#include "CloseCompletion.hpp"
 #include "CloseContextMenu.hpp"
 #include "ClosePane.hpp"
 #include "CloseSettings.hpp"
@@ -42,6 +44,7 @@
 #include "NewLine.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenCompletion.hpp"
 #include "OpenContextMenu.hpp"
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
@@ -67,6 +70,7 @@
 #include "RestoreAutosave.hpp"
 #include "RevertSettings.hpp"
 #include "SaveDocument.hpp"
+#include "ScrollCompletion.hpp"
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
@@ -84,6 +88,7 @@
 #include "SettleRecentTab.hpp"
 #include "ShowVersion.hpp"
 #include "SplitPane.hpp"
+#include "StepCompletion.hpp"
 #include "StepContextMenu.hpp"
 #include "StepSettings.hpp"
 #include "StoreVimRegister.hpp"
@@ -125,6 +130,8 @@ using EditorIntent = std::variant<
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
+    CycleFinderPreview, TabTipTick, OpenCompletion, StepCompletion, ChooseCompletion,
+    CloseCompletion, ScrollCompletion>;
     CycleFinderPreview, TabTipTick, OpenSettings, CloseSettings, RevertSettings, StepSettings,
     ChangeSetting, ChooseSettingsPreset, FilterSettings, JumpSettingsSection, FocusSettingsRow,
     ScrollSettings>;

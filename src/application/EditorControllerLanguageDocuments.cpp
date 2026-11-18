@@ -14,6 +14,7 @@
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
+#include "LspPositionJson.hpp"
 #include "OperationGuide.hpp"
 #include "SentRevision.hpp"
 
@@ -38,15 +39,6 @@ namespace
     return core::JsonValue{core::json_integer(static_cast<std::int64_t>(value))};
 }
 
-// LSP の Position の JSON（ADR 0161 の決定 1）。
-[[nodiscard]] core::JsonValue position_json(core::LspPosition position)
-{
-    core::JsonObject object;
-    object.emplace_back("line", count_json(position.line));
-    object.emplace_back("character", count_json(position.character));
-    return core::JsonValue{std::move(object)};
-}
-
 // 1 編集 → `TextDocumentContentChangeEvent`（決定 1・増分）。range は編集の前の本文 before の
 // 上の位置で、core の lsp_position_of の 1 本で写す。
 [[nodiscard]] core::JsonValue change_json(const core::TextBuffer &before, const core::Edit &edit,
@@ -54,8 +46,10 @@ namespace
 {
     const core::Offset end{edit.at.value + edit.removed.size()};
     core::JsonObject range;
-    range.emplace_back("start", position_json(core::lsp_position_of(before, edit.at, encoding)));
-    range.emplace_back("end", position_json(core::lsp_position_of(before, end, encoding)));
+    range.emplace_back("start",
+                       core::lsp_position_json(core::lsp_position_of(before, edit.at, encoding)));
+    range.emplace_back("end",
+                       core::lsp_position_json(core::lsp_position_of(before, end, encoding)));
     core::JsonObject change;
     change.emplace_back("range", core::JsonValue{std::move(range)});
     change.emplace_back("text", core::JsonValue{edit.inserted});

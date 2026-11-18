@@ -9,6 +9,8 @@
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
+#include "CompletionFaceLayout.hpp"
+#include "CompletionPainter.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuPainter.hpp"
 #include "DeviceWarmup.hpp"
@@ -121,6 +123,11 @@ class Direct2DRenderer final
     [[nodiscard]] std::optional<std::size_t> context_menu_row_at(std::int32_t x,
                                                                  std::int32_t y) const;
     [[nodiscard]] bool context_menu_covers(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた補完の面の点（クライアントの物理画素）の下の候補（今の接頭辞に当たる候補の中の
+    // 位置）と、面の中か（ADR 0190 の決定 5・#1844 の R1）。面を描いていなければ無し・偽。
+    [[nodiscard]] std::optional<std::size_t> completion_row_at(std::int32_t x,
+                                                               std::int32_t y) const;
+    [[nodiscard]] bool completion_covers(std::int32_t x, std::int32_t y) const;
     // 最後に描いた設定の面（施主決定 D102・#1836）。描いた配置（core::settings_layout の 1 本）を
     // そのまま引く。面を描いていなければ outside・値なし。
     // - settings_target_at: 点（クライアントの物理画素）の下の部品。
@@ -453,6 +460,9 @@ class Direct2DRenderer final
     // 右クリックのメニュー（#1051）。ほかの全部の上に描き、描いた配置を当たりのために覚える。
     void draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
                            std::int32_t height);
+    // 補完の面（ADR 0169 の決定 4・ADR 0190 の決定 5）。本文と面とステータスバーの上・タブの札と
+    // 右クリックのメニューの下に描く。bounds は面を収める矩形。
+    void draw_completion(const application::EditorFrame &frame, const core::LayoutRect &bounds);
     // 設定の面（#1836）。area はタイトルバーの下からステータスバーの上まで。面が無い frame は最初の
     // 1 行で返る（書式も配置も作らない）。
     void draw_settings(const application::EditorFrame &frame, const core::LayoutRect &area);
@@ -547,6 +557,12 @@ class Direct2DRenderer final
     // （メニューを閉じたときも）。
     PaletteRowLayouts context_menu_layouts_{ContextMenuPainter::retained};
     std::optional<core::ContextMenuLayout> context_menu_layout_;
+    // 補完の面の文字組みと、面の左端の覚え（面の通し番号と、開いたときのキャレットの左・ADR 0190 の
+    // 決定 5）。捨てる時は context_menu_layouts_ と同じ（面を閉じたときも）。
+    PaletteRowLayouts completion_layouts_{CompletionPainter::retained};
+    std::optional<std::pair<std::uint64_t, std::int32_t>> completion_anchor_;
+    // 最後に描いた補完の面の配置と、その表示値の first（当たりが描画と同じ値を読む）。
+    std::optional<std::pair<core::CompletionFaceLayout, std::size_t>> completion_layout_;
     // 設定の面の書式（最初に描くときに作る）・文字組み・最後に描いた配置と帯（#1836）。書式の
     // 作り直しで書式と文字組みを捨て、面を閉じたら文字組みと配置を捨てる。
     SettingsPanelFormats settings_formats_;
