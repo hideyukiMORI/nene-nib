@@ -622,6 +622,7 @@ namespace
     case VimActionGroup::ex_line:
     case VimActionGroup::substitute:
     case VimActionGroup::display:
+    case VimActionGroup::language:
         return false;
     }
     std::unreachable();
@@ -693,6 +694,9 @@ namespace
         return detail::finds_illegal_byte(state, action)
                    ? failed(visual_unchanged(state), VimRepeatFailure::refused)
                    : visual_unchanged(state);
+    // `gd` `K` は VISUAL では表に無い鍵と同じ（選択のまま・ADR 0190 の決定 8）。
+    case VimActionGroup::language:
+        return visual_unchanged(state);
     }
     std::unreachable();
 }
@@ -774,7 +778,8 @@ namespace detail
         return counted(state, key.code);
     }
     const auto action = vim_action_for(key.code);
-    if (!action.has_value())
+    // `K` は VISUAL では表に無い鍵と同じ（ADR 0190 の決定 8）。
+    if (!action.has_value() || vim_language_query_for(action.value()).has_value())
     {
         return visual_unchanged(state);
     }

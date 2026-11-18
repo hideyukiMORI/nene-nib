@@ -1421,6 +1421,9 @@ namespace
         return detail::substitute_action(state, view, action);
     case VimActionGroup::display:
         return detail::displayed(state, view, action);
+    // `gd` `K` は鍵を引いた所が先に受ける（language_queried）。ここは表に無い鍵と同じ形。
+    case VimActionGroup::language:
+        return failed(cancelled(state), VimRepeatFailure::refused);
     }
     std::unreachable();
 }
@@ -1773,6 +1776,12 @@ namespace
     {
         return failed(cancelled(state), VimRepeatFailure::refused);
     }
+    // `K`（ADR 0190 の決定 8）。表に行が無かったときの歩に、問いの効果だけを添える。
+    if (const auto query = vim_language_query_for(action.value()); query.has_value())
+    {
+        return detail::language_queried(state, query.value(),
+                                        failed(cancelled(state), VimRepeatFailure::refused));
+    }
     return acted(state, view, action.value());
 }
 } // namespace
@@ -2037,11 +2046,16 @@ namespace
 [[nodiscard]] VimStep g_prefix_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     const std::optional<VimAction> action = g_action_of(key);
-    if (action.has_value())
+    if (!action.has_value())
     {
-        return completed_prefix(state, view, action.value());
+        return escaped_or_refused(state, key);
     }
-    return escaped_or_refused(state, key);
+    // `gd`（ADR 0190 の決定 8）。表に行が無かったときの歩に、問いの効果だけを添える。
+    if (const auto query = vim_language_query_for(action.value()); query.has_value())
+    {
+        return detail::language_queried(state, query.value(), escaped_or_refused(state, key));
+    }
+    return completed_prefix(state, view, action.value());
 }
 
 // z の後ろの鍵を表の文字へ。<CR> は 0x0D（z<CR>）。ほかの特別な鍵と検索の文字列は表に無い 0。
@@ -2744,6 +2758,10 @@ namespace
 {
     return caret_position(view);
 }
+[[nodiscard]] TextPosition change_position(const VimEditorView &view, const VimLanguageQuery &)
+{
+    return caret_position(view);
+}
 // `:s///c` の答えは置いた当たりの行頭を印に書いて返す（VimStepSubstituteConfirm.cpp）。
 [[nodiscard]] TextPosition change_position(const VimEditorView &view,
                                            const VimConfirmSubstitute &effect)
@@ -2973,6 +2991,10 @@ namespace
     return false;
 }
 [[nodiscard]] bool replaces(const VimWindowCommand &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimLanguageQuery &) noexcept
 {
     return false;
 }

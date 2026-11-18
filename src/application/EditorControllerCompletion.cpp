@@ -346,6 +346,8 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
     {
         return;
     }
+    // 補完の面と hover の札は同時に出さない（ADR 0190 の決定 5・6）。面を開くときに札を消す。
+    drop_hover();
     const bool by_hand = !trigger.has_value();
     const core::Offset caret = state_.selection().caret;
     CompletionSession session{.id = ++completion_sessions_,
@@ -649,6 +651,8 @@ void EditorController::offer_vim_completion(const core::VimKey &key)
         return;
     }
     close_completion();
+    // 補完の面と hover の札は同時に出さない（ADR 0190 の決定 5・6）。
+    drop_hover();
     const core::Offset caret = state_.selection().caret;
     core::CompletionList list = insert_completion(direction.value());
     CompletionSession session{.id = ++completion_sessions_,

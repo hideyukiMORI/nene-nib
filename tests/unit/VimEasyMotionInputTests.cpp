@@ -23,6 +23,7 @@
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SubmitCommand.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
@@ -31,6 +32,8 @@
 #include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
@@ -217,6 +220,48 @@ void verify_discarded_labels()
 }
 
 // 改行で終わる本文は最後の空の行に跳び先を作らない（ADR 0188）。
+// 窓が非アクティブになった知らせは、印・保留のオペレータ・回数・レジスタの指定・Ctrl+Tab の歩きを
+// 動かさない（#1843 のレビュー M1）。窓を離れて戻った後の印の鍵は跳ぶ。
+void verify_deactivated_window_keeps_waits()
+{
+    Editing labeled;
+    open_vim_document(labeled, "ab cd ef");
+    static_cast<void>(leader_typed(labeled.controller(), U"w"));
+    const auto away = labeled.controller().apply_frame(app::WindowDeactivated{});
+    expect(!no_labels(away) && labeled.controller().vim_state().easy_motion.has_value(),
+           "a deactivated window keeps the labels");
+    const auto jumped = typed(labeled.controller(), U"a");
+    expect(caret_at(jumped, 1, 4) && no_labels(jumped) && engine_rests(labeled.controller()),
+           "the label key typed after coming back jumps to the target");
+    // オペレータの後ろの `\` は engine が断るので、保留のオペレータは印と別に確かめる。
+    Editing pending;
+    open_vim_document(pending, "ab cd ef");
+    static_cast<void>(typed(pending.controller(), U"d"));
+    static_cast<void>(pending.controller().apply_frame(app::WindowDeactivated{}));
+    expect(pending.controller().vim_state().pending.has_value(),
+           "a deactivated window keeps the pending operator");
+    static_cast<void>(typed(pending.controller(), U"w"));
+    expect(whole_vim_body(pending.controller()) == "cd ef",
+           "the motion typed after coming back completes the operator");
+    Editing counted;
+    open_vim_document(counted, "ab cd ef");
+    static_cast<void>(typed(counted.controller(), U"\"a2"));
+    static_cast<void>(counted.controller().apply_frame(app::WindowDeactivated{}));
+    expect(counted.controller().vim_state().selected_register.has_value() &&
+               (counted.controller().vim_state().count.has_value() ||
+                counted.controller().vim_state().register_count.has_value()),
+           "a deactivated window keeps the chosen register and the count");
+    static_cast<void>(typed(counted.controller(), U"x"));
+    expect(whole_vim_body(counted.controller()) == " cd ef",
+           "the count typed before leaving applies to the key typed after coming back");
+    Editing walking;
+    open_vim_document(walking, "a");
+    static_cast<void>(walking.controller().apply_frame(app::NewTab{}));
+    static_cast<void>(walking.controller().apply_frame(app::WalkRecentTab{core::TabStep::next}));
+    static_cast<void>(walking.controller().apply_frame(app::WindowDeactivated{}));
+    expect(walking.controller().tab_walking(), "a deactivated window keeps the Ctrl+Tab walk");
+}
+
 void verify_final_line_break()
 {
     Editing editing;
@@ -354,6 +399,7 @@ void verify_vim_easymotion_input_contracts()
     verify_visual_and_repeat();
     verify_wide_cells();
     verify_discarded_labels();
+    verify_deactivated_window_keeps_waits();
     verify_final_line_break();
     verify_paused_insert();
     verify_paused_insert_jump();

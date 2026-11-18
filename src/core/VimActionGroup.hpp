@@ -52,6 +52,10 @@ enum class VimActionGroup : std::uint8_t
     // 何もせず失敗にもしない（後ろの鍵が効く）。オペレータの後ろでは、Vim の nv_g_cmd が動かずに
     // 返った後の do_pending_operator と同じく、キャレットの上の空の範囲（exclusive）に効かせる
     // （`dga` は何も消さず、`cga` は INSERT へ、`>ga` は行を字下げする・実測）。`8g8` は失敗。
-    display
+    display,
+    // `gd` `K`（ADR 0190 の決定 8）。言語サーバーへの問いの効果を添えるだけで、状態と失敗の印は
+    // 表に行が無かったときと同じ。鍵を引いた所（normal_character と g の後ろ）が先に受けるので、
+    // 大分類の写し先は「表に無い鍵」と同じ形を返す。
+    language
 };
 } // namespace nenenib::core

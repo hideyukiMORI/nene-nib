@@ -35,6 +35,7 @@
 #include "VimSpecialKey.hpp"
 #include "VimSpecialKeys.hpp"
 #include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WordDeletionKey.hpp"
 
 #include <algorithm>
@@ -143,6 +144,23 @@ constexpr char32_t tab_character = U'\t';
 }
 } // namespace
 
+// 窓が焦点を失ったとき（WM_KILLFOCUS）の片付け。
+void EditorWindow::lose_focus()
+{
+    end_selection_drag();
+    settle_tab_walk();
+    // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
+    // WM_MOUSEMOVE が載せ直す。
+    hover(std::nullopt);
+    // 補完の面も閉じる（ADR 0190 の決定 5）。
+    close_completion_outside();
+    // hover の札も消す（ADR 0190 の決定 6）。使う人の操作ではない知らせで、札が無ければ何も
+    // 変えない。
+    send(application::WindowDeactivated{});
+    // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
+    zoom_wheel_remainder_ = 0;
+}
+
 LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
 {
     // 右クリックのメニューが開いている間の鍵と文字はメニューへ（#1051）。
@@ -189,15 +207,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         }
         break;
     case WM_KILLFOCUS:
-        end_selection_drag();
-        settle_tab_walk();
-        // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
-        // WM_MOUSEMOVE が載せ直す。
-        hover(std::nullopt);
-        // 補完の面も閉じる（ADR 0190 の決定 5）。
-        close_completion_outside();
-        // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
-        zoom_wheel_remainder_ = 0;
+        lose_focus();
         break;
     default:
         break;
