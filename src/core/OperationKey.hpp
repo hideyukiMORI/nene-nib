@@ -54,6 +54,9 @@ enum class OperationKey : std::uint8_t
     a,
     delete_key,
     // 修飾なしの F12 の定義へ移動（ADR 0190 の決定 8・両モード）。
-    f12
+    f12,
+    // 通常モードの Ctrl+I の補完（2 つ目の鍵・施主決定 2026-11-18・IME が Ctrl+Space を取る環境の
+    // 逃げ道）。Vim では表に行を置かない（Vim の Ctrl-I は Tab とジャンプ）。
+    i
 };
 } // namespace nenenib::core

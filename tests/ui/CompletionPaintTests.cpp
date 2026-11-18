@@ -15,7 +15,11 @@
 #include "CompletionView.hpp"
 #include "ContextMenuText.hpp"
 #include "DirectWriteFactory.hpp"
+#include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "LayoutRect.hpp"
+#include "OperationBindings.hpp"
+#include "OperationShortcut.hpp"
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "PointerClicks.hpp"
@@ -183,6 +187,32 @@ void verify_vim_completion_keys()
            "a key without Ctrl alone, and a key that is not a completion key, are not sent");
 }
 
+// 補完の 2 つ目の鍵（施主決定 2026-11-18）: 通常モードの Ctrl+I は操作「補完」で、Vim のモードの
+// Ctrl+I は今までどおり操作に当たらない。Ctrl+I の WM_CHAR（Tab・0x09）は Ctrl を押している間の
+// 文字として type_character が捨てるので、本文に Tab は入らない。素の I・素の Tab・Shift+Tab は
+// 操作の鍵にならない（今までの道）。
+void verify_second_completion_key()
+{
+    using nenenib::core::EditMode;
+    using nenenib::core::EditorOperation;
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::operation_chord;
+    const auto chord = operation_chord('I', true, false);
+    expect(chord.has_value() &&
+               operation_for(chord.value(), EditMode::ordinary) == EditorOperation::complete,
+           "Ctrl+I opens the completion in the ordinary mode");
+    expect(chord.has_value() && !operation_for(chord.value(), EditMode::vim).has_value(),
+           "Ctrl+I is not an operation in the Vim mode");
+    const auto spaced = operation_chord(VK_SPACE, true, false);
+    expect(spaced.has_value() &&
+               operation_for(spaced.value(), EditMode::ordinary) == EditorOperation::complete,
+           "Ctrl+Space still opens the completion");
+    expect(!operation_chord('I', false, false).has_value() &&
+               !operation_chord(VK_TAB, false, false).has_value() &&
+               !operation_chord(VK_TAB, false, true).has_value(),
+           "a plain I, Tab and Shift+Tab are not operation chords");
+}
+
 // #1844 の再確認 R1b・L1b・L3b: 面のマウスの守り。面の上で始まった押しの列の 2 回目・3 回目は本文へ
 // 渡さない・窓の外へ出た / 捕まえが変わったら押した行の覚えを下ろす・面の上の右と中の押しは面が
 // 受ける。
@@ -209,6 +239,7 @@ void verify_completion_pointer_guards()
 void verify_completion_paint()
 {
     verify_completion_pointer_guards();
+    verify_second_completion_key();
     verify_vim_completion_keys();
     SoftwareTarget target;
     const auto factory = directwrite_factory();

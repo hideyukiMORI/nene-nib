@@ -50,7 +50,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 65> chord_rows{{
+constexpr std::array<ChordRow, 67> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -75,6 +75,10 @@ constexpr std::array<ChordRow, 65> chord_rows{{
     // Ctrl+Space（Shift なし）は通常モードだけ補完の面（ADR 0190 の決定 5）。Vim では INSERT の
     // Ctrl-@ に残すので割り当てない（D61）。
     {ctrl(OperationKey::space), EditorOperation::complete, std::nullopt},
+    // 補完の 2 つ目の鍵 Ctrl+I（施主決定 2026-11-18）。通常モードだけで、Vim と Ctrl+Shift+I は
+    // 値なし。
+    {ctrl(OperationKey::i), EditorOperation::complete, std::nullopt},
+    {ctrl_shift(OperationKey::i), std::nullopt, std::nullopt},
     // Shift を見ていなかった今の振る舞いを保つ行（Vim の Ctrl+Shift+Z / Y は値なし）。
     {ctrl_shift(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl_shift(OperationKey::p), EditorOperation::list_files, EditorOperation::list_files},
@@ -220,7 +224,7 @@ constexpr std::array<ShownRow, 49> shown_rows{{
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 39> label_rows{{
+constexpr std::array<LabelRow, 40> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -260,6 +264,7 @@ constexpr std::array<LabelRow, 39> label_rows{{
     {ctrl(OperationKey::a), "Ctrl+A"},
     {KeyChord{false, false, OperationKey::delete_key}, "Delete"},
     {KeyChord{false, false, OperationKey::f12}, "F12"},
+    {ctrl(OperationKey::i), "Ctrl+I"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
