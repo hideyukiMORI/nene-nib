@@ -62,6 +62,7 @@
 #include "ResizeExplorer.hpp"
 #include "RestoreAutosave.hpp"
 #include "SaveDocument.hpp"
+#include "ScrollCompletion.hpp"
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
@@ -120,5 +121,5 @@ using EditorIntent = std::variant<
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
     CycleFinderPreview, TabTipTick, OpenCompletion, StepCompletion, ChooseCompletion,
-    CloseCompletion>;
+    CloseCompletion, ScrollCompletion>;
 } // namespace nenenib::application

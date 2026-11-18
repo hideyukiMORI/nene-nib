@@ -194,6 +194,13 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 vim_completion_reoffered(const VimState &state,
                          std::shared_ptr<const std::vector<std::string>> words);
 
+// 開いている補完の index 番目の候補を入れて確定する 1 歩（#1845・補完の面の行のクリック・ADR 0190
+// の決定 5）。効果は語の頭からキャレットまでをその語に置き換える 1 つ（INSERT の 1 単位に吸収）で、
+// 補完を閉じ、鍵で選んで確定したときと同じに `.` の記録と回数の鍵の列に打った本文として足す。
+// 鍵ではないのでマクロの録画には積まない。補完が開いていないか index が列の外なら何もしない。
+[[nodiscard]] VimStep vim_completion_chosen(const VimState &state, const VimEditorView &view,
+                                            std::size_t index);
+
 // 開いている補完を確定して閉じたあとの状態（#1845）。本文は選んでいた語のままで、鍵で確定した
 // ときと同じに、選んでいた語を打った本文として `.` の記録と回数の鍵の列に足す。engine の外の
 // 出来事で面を閉じるとき（ホイール・窓の非アクティブ・面の意図など）に controller が呼ぶ。候補の

@@ -9,6 +9,8 @@
 #include "CompletionDirection.hpp"
 #include "EditBoundary.hpp"
 #include "Utf8.hpp"
+#include "VimChange.hpp"
+#include "VimChangeMark.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimCompletionOffer.hpp"
 #include "VimInsertCompletion.hpp"
@@ -361,6 +363,21 @@ VimState vim_completion_reoffered(const VimState &state, Words words)
     VimState next = state;
     next.insert_completion = std::make_shared<const VimInsertCompletion>(std::move(completion));
     return next;
+}
+
+VimStep vim_completion_chosen(const VimState &state, const VimEditorView &view, std::size_t index)
+{
+    if (state.insert_completion == nullptr || index >= state.insert_completion->words->size())
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
+    VimInsertCompletion completion = *state.insert_completion;
+    completion.selected = index;
+    const TextPosition at = view.text.position_of(completion.begin);
+    VimStep step = selected_step(state, view, std::move(completion));
+    step.next = detail::completion_settled(step.next);
+    step.change = VimChangeMark{VimChange::changed, at};
+    return step;
 }
 
 VimState vim_completion_settled(const VimState &state)

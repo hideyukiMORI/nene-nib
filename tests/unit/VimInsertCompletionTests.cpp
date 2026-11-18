@@ -5,6 +5,7 @@
 // キャレットとレジスタが Vim と合うことは fixture（insert-complete-）が oracle と突き合わせる。
 // 替え玉 ScriptedLanguageServer だけを使い、本物のサーバーも窓も使わない。
 #include "CaretMotion.hpp"
+#include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
 #include "CompletionFace.hpp"
 #include "CompletionFaceLayout.hpp"
@@ -22,6 +23,7 @@
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
+#include "ScrollCompletion.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
@@ -40,7 +42,6 @@
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
-#include <cstdio>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -109,9 +110,10 @@ app::EditorFrame pressed(Editing &editing, std::string_view keys)
                                              : "";
 }
 
+// 見えている行の本文（意図を流さない: 面を閉じる意図を挟まずに読む）。
 [[nodiscard]] std::string body(Editing &editing)
 {
-    return whole_vim_body(editing.controller());
+    return vim_body(editing.controller().frame());
 }
 
 [[nodiscard]] bool completing(Editing &editing)
@@ -125,7 +127,6 @@ void verify_ring()
     Editing editing;
     open_vim_document(editing, std::string(words_text));
     const auto first = pressed(editing, "fxcwa<C-n>");
-    std::fprintf(stderr, "DBG rows=%zu chosen=%s body=[%s] c=%d o=%d msg=[%s];", rows(first).size(), chosen(first).c_str(), body(editing).c_str(), completing(editing) ? 1 : 0, editing.controller().completion_open() ? 1 : 0, message(first).c_str()); // NOLINT
     expect(rows(first) == std::vector<std::string>{"a3", "a2", "a1"} && chosen(first) == "a3" &&
                body(editing) == "a1 a2 a1 a3 a3 a2" && completing(editing) &&
                face_of(first).rows.front().source == core::CompletionSource::buffer,
@@ -251,6 +252,29 @@ void verify_refusals_and_outside_close()
            "the word accepted by the outside close is in the dot record");
 }
 
+// 面の行のクリックはその候補を入れて確定する（INSERT のまま・`.` の記録に残る）。面のホイールは
+// 窓だけを送り、選んでいる語を変えない。
+void verify_click()
+{
+    Editing editing;
+    open_vim_document(editing, std::string(words_text));
+    static_cast<void>(pressed(editing, "fxcwa<C-n>"));
+    const auto scrolled = editing.controller().apply_frame(app::ScrollCompletion{1});
+    expect(scrolled.completion.has_value() && completing(editing) &&
+               body(editing) == "a1 a2 a1 a3 a3 a2",
+           "the wheel on the face keeps the completion and the chosen word");
+    const auto clicked = editing.controller().apply_frame(app::ChooseCompletion{2});
+    expect(!clicked.completion.has_value() && !completing(editing) &&
+               body(editing) == "a1 a2 a1 a1 a3 a2" &&
+               editing.controller().vim_state().mode == core::VimMode::insert,
+           "a click on a row puts that candidate in, closes the face and stays in INSERT");
+    static_cast<void>(pressed(editing, "z<Esc>"));
+    expect(dot_record_is(editing.controller().vim_state(), std::nullopt, "cwa1z<Esc>"),
+           "the clicked candidate is in the dot record as typed text");
+    static_cast<void>(pressed(editing, "u"));
+    expect(body(editing) == words_text, "the click is part of the one undo unit of the insert");
+}
+
 // 他のタブの語（語の表を持つタブだけ・ADR 0169 の決定 1）は今の文書の語の後ろに並ぶ。
 void verify_other_tabs()
 {
@@ -274,8 +298,8 @@ void verify_other_tabs()
     return SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}};
 }
 
-// main.cpp を開いて補完の能力つきで `initialize` に答え、Vim のモードで本文の終わり（空の 2 行目）
-// にキャレットを置く。
+// main.cpp を開いて補完の能力つきで `initialize` に答え、Vim のモードにする（eol の文書なので
+// Vim の本文は 1 行。試験は `o` で 2 行目を開いて打つ）。
 void capable(Editing &editing)
 {
     editing.files().hold_at(std::string(source_path), Bytes{std::string("int main() {}\n")});
@@ -302,6 +326,20 @@ void capable(Editing &editing)
     return text.find(part) != std::string_view::npos;
 }
 
+// 送った補完の要求のどれかが、手で開いた形（triggerKind 1）で position を持つか。
+[[nodiscard]] bool asked_at(const std::vector<std::string> &sent, std::string_view position)
+{
+    for (const std::string &message : sent)
+    {
+        if (contains(message, completion_method) && contains(message, position) &&
+            contains(message, R"("context":{"triggerKind":1})"))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 // LSP が動いている文書: 始める鍵で要求を 1 つ送り、後から届いた候補を列の先頭側に足す。選んで
 // いる語は動かない（同じ綴りは LSP の 1 つ）。
 void verify_server_candidates()
@@ -309,18 +347,17 @@ void verify_server_candidates()
     Editing editing(lsp_settings());
     capable(editing);
     auto &server = editing.language_server();
-    const auto face = pressed(editing, "imap ma<C-n><C-n>");
+    const auto face = pressed(editing, "omap ma<C-n><C-n>");
     expect(rows(face) == std::vector<std::string>{"main", "map"} && chosen(face) == "map" &&
                server.requests(completion_method).size() == 1 &&
-               contains(server.sent().back(), R"("position":{"line":1,"character":6})") &&
-               contains(server.sent().back(), R"("context":{"triggerKind":1})"),
+               asked_at(server.sent(), R"("position":{"line":1,"character":6})"),
            "the first Ctrl-n shows the buffer words at once and asks the server once at the caret");
     const auto filled = answered(
         editing,
         R"j([{"label":"max","sortText":"b"},{"label":"main","sortText":"a","detail":"int ()"},{"label":"zeta"}])j");
     const app::CompletionView view = face_of(filled);
     expect(rows(filled) == std::vector<std::string>{"main", "max", "map"} &&
-               chosen(filled) == "map" && body(editing) == "int main() {}\nmap map" &&
+               chosen(filled) == "map" && body(editing) == "int main() {}\nmap map\n" &&
                view.rows.front().source == core::CompletionSource::language_server &&
                view.rows.front().detail == "int ()" && view.detailed &&
                view.rows.back().source == core::CompletionSource::buffer,
@@ -329,12 +366,12 @@ void verify_server_candidates()
     expect(!editing.controller().language_answers().completion.has_value(),
            "the answer is taken out of the state once the face has it");
     const auto stepped = pressed(editing, "<C-p>");
-    expect(chosen(stepped) == "max" && body(editing) == "int main() {}\nmap max" &&
+    expect(chosen(stepped) == "max" && body(editing) == "int main() {}\nmap max\n" &&
                server.requests(completion_method).size() == 1,
            "the next key walks the merged list without asking again");
     const auto closed = pressed(editing, "<Esc>");
-    expect(!closed.completion.has_value() && server.cancelled().empty(),
-           "an answered completion closes without a cancel");
+    expect(!closed.completion.has_value() && body(editing) == "int main() {}\nmap max\n",
+           "Esc accepts the server candidate and closes the face");
 }
 
 // 本文の語が無くても答えを待ち、届いた候補で面が出る（どの行も選ばない）。空の答えは知らせる。
@@ -344,16 +381,16 @@ void verify_waiting()
     Editing editing(lsp_settings());
     capable(editing);
     auto &server = editing.language_server();
-    const auto waiting = pressed(editing, "iap<C-n>");
+    const auto waiting = pressed(editing, "oap<C-n>");
     expect(!waiting.completion.has_value() && message(waiting).empty() && completing(editing) &&
-               editing.controller().completion_open() && body(editing) == "int main() {}\nap",
+               editing.controller().completion_open() && body(editing) == "int main() {}\nap\n",
            "with no buffer word the completion waits for the answer without touching the text");
     const auto shown = answered(editing, R"([{"label":"Apple"},{"label":"other"}])");
     expect(rows(shown) == std::vector<std::string>{"Apple"} && chosen(shown) == "<none>" &&
-               body(editing) == "int main() {}\nap",
+               body(editing) == "int main() {}\nap\n",
            "the answer opens the waiting face with no row chosen");
     static_cast<void>(pressed(editing, "<C-n><Esc>0."));
-    expect(body(editing) == "int main() {}\nAppleApple",
+    expect(body(editing) == "int main() {}\nApple\nApple\n",
            "a candidate that does not start with the typed prefix replaces it, and the dot "
            "command repeats the replacement");
     static_cast<void>(pressed(editing, "A zz<C-n>"));
@@ -375,7 +412,7 @@ void verify_text_edit_range()
 {
     Editing editing(lsp_settings());
     capable(editing);
-    static_cast<void>(pressed(editing, "ix.ma<C-n>"));
+    static_cast<void>(pressed(editing, "ox.ma<C-n>"));
     const auto filled = answered(
         editing,
         R"j([{"label":"mango","sortText":"a","textEdit":{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":4}},"newText":"mango()"}},{"label":"mast","sortText":"b","textEdit":{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":4}},"newText":"x.mast"}},{"label":"mad","sortText":"c","textEdit":{"range":{"start":{"line":1,"character":1},"end":{"line":1,"character":4}},"newText":"->mad"}}])j");
@@ -383,10 +420,10 @@ void verify_text_edit_range()
                chosen(filled) == "main",
            "a candidate whose text edit cannot be written from the word start is left out");
     static_cast<void>(pressed(editing, "<C-p>"));
-    expect(body(editing) == "int main() {}\nx.mast",
+    expect(body(editing) == "int main() {}\nx.mast\n",
            "a text edit that starts before the word start puts in the rest of its text");
     static_cast<void>(pressed(editing, "<C-p>"));
-    expect(body(editing) == "int main() {}\nx.mango()",
+    expect(body(editing) == "int main() {}\nx.mango()\n",
            "a text edit that starts at the word start puts in its whole text");
 }
 
@@ -409,6 +446,7 @@ void verify_vim_insert_completion()
     verify_repeat();
     verify_face_follows_engine();
     verify_refusals_and_outside_close();
+    verify_click();
     verify_other_tabs();
     verify_server_candidates();
     verify_waiting();

@@ -24,24 +24,29 @@ using Collected = std::pair<CompletionList, std::vector<std::string>>;
     return vim_keyword_group(vim_keyword_class_at(content, at));
 }
 
+// 接頭辞が Vim の 1 文字を 2 つ以上持つか。
+[[nodiscard]] bool two_characters(std::string_view prefix) noexcept
+{
+    return !prefix.empty() && vim_character_end(prefix, Offset{0}).value < prefix.size();
+}
+
 // 語の頭 run が Vim の照合（接頭辞が 2 文字以上なら `\<prefix`、0〜1 文字なら続く 1 文字も
 // 語の文字 `\<prefix\k`）に当たるか。
 [[nodiscard]] bool run_matches(std::string_view content, const OffsetRange &run,
                                std::string_view prefix)
 {
-    // 接頭辞の終わりが本文の Vim の 1 文字の途中なら当たらない（`aa` は `aá` の頭に当たらない）。
-    if (!content.substr(run.begin.value).starts_with(prefix) ||
-        (!prefix.empty() &&
-         vim_character_continues(content, Offset{run.begin.value + prefix.size()})))
+    // 2 文字以上の接頭辞の終わりが本文の Vim の 1 文字の途中なら当たらない（`aa` は `aá` の頭に
+    // 当たらない）。1 文字の接頭辞は続く `\k` が結合文字を食うので当たる（`b` は `b́`）。
+    if (!content.substr(run.begin.value).starts_with(prefix))
     {
         return false;
     }
+    if (two_characters(prefix))
+    {
+        return !vim_character_continues(content, Offset{run.begin.value + prefix.size()});
+    }
     const std::size_t head = prefix.empty() ? vim_character_end(content, run.begin).value
                                             : run.begin.value + prefix.size();
-    if (!prefix.empty() && vim_character_end(prefix, Offset{0}).value < prefix.size())
-    {
-        return true;
-    }
     return head < run.end.value || keyword_at(content, head);
 }
 
@@ -122,7 +127,7 @@ void offer_table(const WordTable &table, std::string_view prefix,
     const std::size_t wanted = completion_candidate_limit + collected.second.size() + 1;
     for (const WordCount &entry : table.prefixed(prefix, wanted))
     {
-        if (vim_character_continues(entry.word, Offset{prefix.size()}))
+        if (two_characters(prefix) && vim_character_continues(entry.word, Offset{prefix.size()}))
         {
             continue;
         }
@@ -169,6 +174,31 @@ matched_runs(std::string_view content, std::span<const OffsetRange> runs, const 
         }
     }
     return matched;
+}
+
+// 照合の連なりに食われた語を拾い直す（Vim の complete の `i` が今の文書をもう 1 度走り、語ごとに
+// 照合する・oracle の実測）。キャレットの行の外の、単独で照合に当たる語の頭を本文の順に返す。
+// キャレットの行は拾い直さない（`日本語の補完は便利です |` は 4 語・別の行なら `補完` `便利` も）。
+[[nodiscard]] std::vector<OffsetRange> unchained_runs(std::string_view content,
+                                                      std::span<const OffsetRange> runs,
+                                                      const OffsetRange &typed)
+{
+    const std::string_view prefix =
+        content.substr(typed.begin.value, typed.end.value - typed.begin.value);
+    const std::size_t at = typed.end.value;
+    const std::size_t newline = at == 0 ? std::string_view::npos : content.rfind('\n', at - 1);
+    const std::size_t line = newline == std::string_view::npos ? 0 : newline + 1;
+    const std::size_t stop = std::min(content.find('\n', at), content.size());
+    std::vector<OffsetRange> found;
+    for (const OffsetRange &run : runs)
+    {
+        const bool caret_line = run.begin.value >= line && run.begin.value <= stop;
+        if (!caret_line && run_matches(content, run, prefix))
+        {
+            found.push_back(run);
+        }
+    }
+    return found;
 }
 
 // 接頭辞の位置から始まる語（無ければ空）。
@@ -221,8 +251,11 @@ CompletionList completion_list(const TextBuffer &text, Offset caret, CompletionD
     const std::string prefix{content.substr(start, at - start)};
     Collected collected{CompletionList{OffsetRange{Offset{from + first + start}, caret}, {}}, {}};
     const std::vector<OffsetRange> runs = whole_runs(content, from > 0, upto < text.size_bytes());
-    offer_runs(content, matched_runs(content, runs, OffsetRange{Offset{start}, Offset{at}}),
-               {start, direction}, collected);
+    const OffsetRange typed_range{Offset{start}, Offset{at}};
+    offer_runs(content, matched_runs(content, runs, typed_range), {start, direction}, collected);
+    // 拾い直した語は列の後ろに、forward は本文の順・backward は逆順で足す（位置 0 で分ければ全部が
+    // 「後ろ」になる）。
+    offer_runs(content, unchained_runs(content, runs, typed_range), {0, direction}, collected);
     if (tables.own != nullptr && !whole)
     {
         const std::string_view typed =

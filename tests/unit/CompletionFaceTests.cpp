@@ -38,6 +38,7 @@
 #include "OpenCompletion.hpp"
 #include "OpenDocument.hpp"
 #include "Scopes.hpp"
+#include "ScrollCompletion.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
@@ -197,6 +198,19 @@ void verify_face_layout()
     expect(!clipped.above && clipped.rows == 2 && clipped.first == 5 &&
                clipped.panel == LayoutRect{20, 82, 260, 138},
            "a window too short on both sides shows the rows that fit around the chosen one");
+    const LayoutRect slit{0, 0, 300, 60};
+    const LayoutRect inside{20, 25, 22, 45};
+    const auto squeezed = core::completion_face_layout(
+        core::CompletionFaceRequest{inside, 20, slit, 8, 3, false, 96});
+    expect(squeezed.rows == 1 && squeezed.first == 3 &&
+               squeezed.panel == LayoutRect{20, 0, 260, 32},
+           "a window without room for one row keeps the face inside the bounds");
+    expect(core::completion_face_hit(below, 150, 127) == std::optional<std::size_t>{0} &&
+               core::completion_face_hit(below, 150, 317) == std::optional<std::size_t>{7} &&
+               !core::completion_face_hit(below, 150, 123).has_value() &&
+               !core::completion_face_hit(below, 99, 150).has_value() &&
+               core::completion_face_hit(clipped, 30, 90) == std::optional<std::size_t>{5},
+           "a point finds the row under it, counted from the first drawn row");
     const auto scaled = core::completion_face_layout(
         core::CompletionFaceRequest{caret, 100, LayoutRect{0, 0, 1600, 1200}, 8, 0, false, 192});
     expect(core::width_of(scaled.panel) == 480 && core::height_of(scaled.panel) == 400,
@@ -215,13 +229,13 @@ void verify_face_layout()
 
 // main.cpp を開き、補完の能力（triggerCharacters は `.` と `->`）つきで `initialize` に答え、
 // キャレットを本文の終わり（空の 2 行目）へ置く。
-void capable(Editing &editing)
+void capable(Editing &editing, std::string_view answer = capable_answer)
 {
     editing.files().hold_at(std::string(source_path), Bytes{std::string("int main() {}\n")});
     applied(editing.controller(), app::OpenDocument{core::FilePath::parse(source_path).value()});
     editing.language_server().serve(app::ServerStarted{});
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
-    editing.language_server().serve(app::ServerMessage{std::string{capable_answer}});
+    editing.language_server().serve(app::ServerMessage{std::string{answer}});
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
     applied(editing.controller(),
@@ -558,7 +572,8 @@ void verify_selection_kept()
 }
 
 // 決定 5・10: triggerCharacters の 1 文字で開く（LSP が動いている文書だけ）。変更は要求より先に
-// 出る。面は LSP の候補が届くまで出さず、候補が無ければ黙って閉じる。
+// 出る。面は LSP の候補が届くまで出さず、候補が無ければ黙って閉じる。自動の面は LSP の候補だけ
+// （本文の語を足さない・#1844 の R3 / R4 の決め）。
 void verify_trigger_characters()
 {
     Editing editing(lsp_settings(true));
@@ -577,8 +592,8 @@ void verify_trigger_characters()
     expect(!dotted.completion.has_value() && editing.controller().completion_open(),
            "the automatic face is not shown before the server answers");
     const auto shown = answered(editing, R"([{"label":"size"},{"label":"swap"}])");
-    expect(rows(shown) == std::vector<std::string>{"size", "swap", "int", "main"},
-           "the answer opens the face with the buffer words after the server items");
+    expect(rows(shown) == std::vector<std::string>{"size", "swap"},
+           "the answer opens the automatic face with the server items only");
     const auto narrowed = typed(editing, "sw");
     expect(rows(narrowed) == std::vector<std::string>{"swap"}, "typing narrows the automatic face");
     static_cast<void>(editing.controller().apply_frame(app::ChooseCompletion{}));
@@ -603,6 +618,95 @@ void verify_trigger_characters()
                plain.language_server().touches() == untouched,
            "without a running server a trigger character opens nothing and touches no port");
 }
+
+// M1（#1844）: trigger
+// が語の文字のサーバーでも、語の頭は接頭辞の始まりで、確定は語を二重に入れない。
+void verify_word_trigger()
+{
+    Editing editing(lsp_settings(true));
+    capable(
+        editing,
+        R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":["b"]}}}})");
+    auto &server = editing.language_server();
+    static_cast<void>(typed(editing, "a"));
+    static_cast<void>(typed(editing, "b"));
+    expect(server.requests(completion_method).size() == 1 &&
+               contains(server.sent().back(), R"("triggerCharacter":"b")"),
+           "a word character trigger asks the server");
+    const auto shown = answered(editing, R"([{"label":"abc"},{"label":"other"}])");
+    expect(rows(shown) == std::vector<std::string>{"abc"},
+           "the automatic face narrows by the word typed so far, not by nothing");
+    static_cast<void>(editing.controller().apply_frame(app::ChooseCompletion{}));
+    expect(text_of(editing) == "int main() {}|abc",
+           "the choice replaces the word from its start and does not double it");
+}
+
+// R5（#1844）: ↑↓ の後に打って絞ったら、その後に届いた答えは先頭を選ぶ。
+void verify_step_forgotten()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    static_cast<void>(typed(editing, "mile mist mi"));
+    static_cast<void>(opened(editing));
+    static_cast<void>(stepped(editing, app::CompletionStep::next));
+    const auto narrowed = typed(editing, "s");
+    expect(rows(narrowed) == std::vector<std::string>{"mist"} && chosen(narrowed) == "mist",
+           "typing narrows the list and chooses its first row");
+    const auto filled = answered(editing, R"([{"label":"misty"},{"label":"mis"}])");
+    expect(rows(filled) == std::vector<std::string>{"mis", "misty", "mist"} &&
+               chosen(filled) == "mis",
+           "an answer after narrowing chooses the first server item");
+}
+
+// R1（#1844）: 面の行のクリックはその候補を確定し、面の上のホイールは窓だけを送る。
+void verify_click_and_wheel()
+{
+    Editing editing;
+    static_cast<void>(typed(editing, "alpha beta alto al"));
+    static_cast<void>(opened(editing));
+    const auto clicked = editing.controller().apply_frame(app::ChooseCompletion{std::size_t{1}});
+    expect(!clicked.completion.has_value() && text_of(editing) == "alpha beta alto alto",
+           "a click on a row accepts that candidate");
+    static_cast<void>(typed(editing, " al"));
+    static_cast<void>(opened(editing));
+    const auto outside = editing.controller().apply_frame(app::ChooseCompletion{std::size_t{9}});
+    expect(outside.completion.has_value() && text_of(editing) == "alpha beta alto alto al",
+           "a row that does not exist accepts nothing");
+    Editing many;
+    std::string words;
+    for (std::size_t index = 0; index < 12; ++index)
+    {
+        words += "w" + std::string(1, static_cast<char>('a' + index)) + "x ";
+    }
+    static_cast<void>(typed(many, words + "w"));
+    static_cast<void>(opened(many));
+    const auto down = many.controller().apply_frame(app::ScrollCompletion{2});
+    expect(face_of(down).first == 2 && chosen(down) == "wcx" && text_of(many) == words + "w",
+           "the wheel moves the window, keeps the chosen row in it and leaves the text");
+    const auto bottom = many.controller().apply_frame(app::ScrollCompletion{40});
+    expect(face_of(bottom).first == 4 && chosen(bottom) == "wex", "the window stops at the end");
+    const auto up = many.controller().apply_frame(app::ScrollCompletion{-40});
+    expect(face_of(up).first == 0 && chosen(up) == "wex",
+           "the window stops at the top and a visible chosen row stays");
+}
+
+// L1（#1844）: 打った語と同じ綴りの候補だけのとき、確定は本文を変えない（窓は Enter
+// を本文へ通す）。
+void verify_commits()
+{
+    Editing editing;
+    static_cast<void>(typed(editing, "ab ab"));
+    const auto same = opened(editing);
+    expect(rows(same) == std::vector<std::string>{"ab"} &&
+               !editing.controller().completion_commits(),
+           "a face with only the word already typed commits nothing");
+    Editing other;
+    static_cast<void>(typed(other, "abc ab"));
+    static_cast<void>(opened(other));
+    expect(other.controller().completion_commits(), "a longer candidate commits");
+    static_cast<void>(other.controller().apply_frame(app::CloseCompletion{}));
+    expect(!other.controller().completion_commits(), "a closed face commits nothing");
+}
 } // namespace
 
 void verify_completion_face_contracts()
@@ -622,6 +726,10 @@ void verify_completion_face_contracts()
     verify_waiting();
     verify_selection_kept();
     verify_trigger_characters();
+    verify_word_trigger();
+    verify_step_forgotten();
+    verify_click_and_wheel();
+    verify_commits();
     verify_vim_insert_completion();
 }
 

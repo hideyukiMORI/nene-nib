@@ -45,7 +45,10 @@ CompletionFaceLayout completion_face_layout(const CompletionFaceRequest &request
         to_pixels(request.detailed ? completion_face_wide_dips : completion_face_width_dips, dpi);
     const auto left = placed_left(request, width);
     const auto height = height_for(rows, dpi);
-    const auto top = above ? request.caret.top - gap - height : request.caret.bottom + gap;
+    const auto wanted_top = above ? request.caret.top - gap - height : request.caret.bottom + gap;
+    // 1 行ぶんの高さも無い窓では、面を bounds の中へ寄せる（外へ出さない）。
+    const auto last_top = std::max(request.bounds.top, request.bounds.bottom - height);
+    const auto top = std::clamp(wanted_top, request.bounds.top, last_top);
     // 選んでいる行が無い（selected が rows 以上・Vim の補完が元の接頭辞へ戻った 1 歩・#1845）ときは
     // 先頭から出す。
     const bool chosen = request.selected < request.rows;
@@ -56,6 +59,19 @@ CompletionFaceLayout completion_face_layout(const CompletionFaceRequest &request
                                 above,
                                 request.detailed,
                                 dpi};
+}
+
+std::optional<std::size_t> completion_face_hit(const CompletionFaceLayout &layout, std::int32_t x,
+                                               std::int32_t y) noexcept
+{
+    for (std::size_t index = 0; index < layout.rows; ++index)
+    {
+        if (contains(completion_face_row(layout, index), x, y))
+        {
+            return layout.first + index;
+        }
+    }
+    return std::nullopt;
 }
 
 LayoutRect completion_face_row(const CompletionFaceLayout &layout, std::size_t index) noexcept

@@ -319,6 +319,13 @@ constexpr std::string_view too_long_notice = "E1240: Resulting text too long";
 
 [[nodiscard]] core::VimStep engine_step(const core::VimState &state,
                                         const core::VimEditorView &view,
+                                        const CompletionChoice &choice)
+{
+    return core::vim_completion_chosen(state, view, choice.row);
+}
+
+[[nodiscard]] core::VimStep engine_step(const core::VimState &state,
+                                        const core::VimEditorView &view,
                                         const VimStepSource &source)
 {
     return std::visit([&state, &view](const auto &chosen)

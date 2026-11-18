@@ -270,13 +270,14 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<CloseContextMenu>(intent);
 }
 
-// 補完の面の開く・上下・閉じるもキャレットを動かさない（ADR 0190 の決定 5）。確定の
+// 補完の面の開く・上下・ホイール・閉じるもキャレットを動かさない（ADR 0190 の決定 5）。確定の
 // ChooseCompletion は編集なので捨てる側。
 [[nodiscard]] bool keeps_wanted_x_for_completion(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<OpenCompletion>(intent) ||
            std::holds_alternative<StepCompletion>(intent) ||
-           std::holds_alternative<CloseCompletion>(intent);
+           std::holds_alternative<CloseCompletion>(intent) ||
+           std::holds_alternative<ScrollCompletion>(intent);
 }
 
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
@@ -774,6 +775,11 @@ PaneSource EditorController::framed_source(const core::VimPattern *pattern) cons
 {
     return drawn_source(PaneSource{state_, highlighted_range(), block_selection(), pattern,
                                    state_.autosave_ids().at(state_.active_tab())});
+}
+
+const std::optional<core::WordTable> &EditorController::word_table() const noexcept
+{
+    return state_.word_table();
 }
 
 core::CompletionList EditorController::insert_completion(core::CompletionDirection direction)
