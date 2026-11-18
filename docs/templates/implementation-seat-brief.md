@@ -18,6 +18,7 @@ ADR: docs/adr/<NNNN>-....md（決定 1〜N が設計。変えない）
 
 - この席が担う範囲は上の「席・モデル・工程」と「範囲」のとおり。終わったら報告して止まる。
 - テストは対象だけ実行する（`ctest -R <名前>` / `build/tests/unit/nib_tests.exe <対象>`）。出力は `out/<issue>-<工程>.log` に落とし、失敗行だけ `tail` / `Select-String` で読む。
+- scope は 1 つずつ回す（`nib_tests` は 2 つ以上の引数を失敗で終わらせる・#1853）。
 - ビルド・ゲート（`eng/check.ps1`・`eng/conformance.py`・`eng/symbols.py`）の出力も `out/` のファイルへ落とし、`grep` で読む。端末に全文を流さない。
 - 大きいファイル（fixture・生成物・ログ・数千行の翻訳単位）は必要な範囲だけ読む（`Read` の offset / limit・`Grep`）。触る関数とその呼び出し元は、判断に要るだけ読む。
 - 作業を捨てる git の命令（`checkout --`・`reset --hard`・`clean`・`push --force`）を使わない。誤って書いた所は Edit で直して報告する（無人の席は権限の確認に答えられない）。
