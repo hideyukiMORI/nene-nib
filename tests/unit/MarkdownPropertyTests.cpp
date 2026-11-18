@@ -393,7 +393,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
         return true;
     }
     const std::string_view digits = marker.substr(0U, marker.size() - 1U);
-    return marker.ends_with('.') && !digits.empty() &&
+    return (marker.ends_with('.') || marker.ends_with(')')) && !digits.empty() &&
            std::ranges::all_of(digits,
                                [](char character) { return character >= '0' && character <= '9'; });
 }
@@ -444,7 +444,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
     }
     if (!marker_holds(block.marker))
     {
-        return "marker is not empty, the bullet or digits and a dot";
+        return "marker is not empty, the bullet or digits and a dot or a parenthesis";
     }
     return spans_hold(block) ? std::string_view{} : "a span outside the text or out of order";
 }

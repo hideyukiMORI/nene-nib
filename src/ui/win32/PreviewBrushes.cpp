@@ -118,6 +118,7 @@ std::optional<PreviewInk> preview_span_ink(core::PreviewStyle style) noexcept
         return PreviewInk::comment;
     case core::PreviewStyle::emphasis:
     case core::PreviewStyle::strong:
+    case core::PreviewStyle::strikethrough:
         return std::nullopt;
     }
     std::unreachable();

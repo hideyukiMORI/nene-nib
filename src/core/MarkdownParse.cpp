@@ -56,9 +56,11 @@ constexpr std::string_view replacement_character = "�";
                         .mark_offset = static_cast<std::size_t>(item->task_mark_offset)};
 }
 
-[[nodiscard]] std::uint64_t list_start(const void *detail) noexcept
+// 番号つきの最初の番号と区切り（'.' か ')'・#1840）。
+[[nodiscard]] std::pair<std::uint64_t, char> list_numbering(const void *detail) noexcept
 {
-    return static_cast<const MD_BLOCK_OL_DETAIL *>(detail)->start;
+    const auto *list = static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
+    return {list->start, list->mark_delimiter};
 }
 
 // 表（MD_BLOCK_TABLE 系）は flag を立てないので来ない。来たらセルを段落として扱う。
@@ -79,7 +81,7 @@ void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *deta
         builder.enter_list(std::nullopt);
         return;
     case MD_BLOCK_OL:
-        builder.enter_list(list_start(detail));
+        builder.enter_list(list_numbering(detail));
         return;
     case MD_BLOCK_LI:
         builder.enter_item(item_task(detail));
@@ -136,8 +138,9 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     }
 }
 
-// 装飾の種類。画像は代わりの文字の装飾（builder が「[画像: alt]」の枠を足す）。打ち消し・数式・
-// wiki リンク・下線は装飾を持たない（flag を立てないので来ない）。
+// 装飾の種類。画像は代わりの文字の装飾（builder が「[画像: alt]」の枠を足す）。
+// 打ち消しは MD_FLAG_STRIKETHROUGH（#1840）。数式・wiki リンク・下線は
+// 装飾を持たない（flag を立てないので来ない）。
 [[nodiscard]] std::optional<PreviewStyle> span_style(MD_SPANTYPE type) noexcept
 {
     switch (type)
@@ -153,6 +156,7 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     case MD_SPAN_IMG:
         return PreviewStyle::image;
     case MD_SPAN_DEL:
+        return PreviewStyle::strikethrough;
     case MD_SPAN_LATEXMATH:
     case MD_SPAN_LATEXMATH_DISPLAY:
     case MD_SPAN_WIKILINK:
@@ -314,13 +318,19 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
         return std::unexpected(MarkdownFailure::too_large);
     }
     MarkdownBuilder builder(text, stop, language);
-    if (text.empty())
+    // 先頭の front matter は md4c に渡さない（#1840）。要素の位置は本文を
+    // 指す pointer から引くので、後ろだけを渡しても本文の中の位置のまま。
+    const std::string_view parsed = text.substr(builder.front_matter());
+    if (parsed.empty())
     {
         return std::move(builder).finished();
     }
+    // 打ち消し線と裸の URL・www・メールの自動リンク（GFM の拡張・#1840）。
     const MD_PARSER parser{
         .abi_version = 0U,
-        .flags = MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS,
+        .flags = MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH |
+                 MD_FLAG_PERMISSIVEURLAUTOLINKS | MD_FLAG_PERMISSIVEWWWAUTOLINKS |
+                 MD_FLAG_PERMISSIVEEMAILAUTOLINKS,
         .enter_block = on_enter_block,
         .leave_block = on_leave_block,
         .enter_span = on_enter_span,
@@ -329,7 +339,7 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
         .debug_log = nullptr,
         .syntax = nullptr,
     };
-    if (md_parse(text.data(), static_cast<MD_SIZE>(text.size()), &parser, &builder) == 0)
+    if (md_parse(parsed.data(), static_cast<MD_SIZE>(parsed.size()), &parser, &builder) == 0)
     {
         return std::move(builder).finished();
     }

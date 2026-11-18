@@ -59,6 +59,9 @@ constexpr float unbounded_height = 1.0e7F;
         return layout.SetFontFamilyName(code_family.c_str(), range);
     case core::PreviewStyle::link:
         return layout.SetUnderline(TRUE, range);
+    case core::PreviewStyle::strikethrough:
+        // 線の太さと位置は DirectWrite の字体の値に任せ、色は文字の色のまま（#1840）。
+        return layout.SetStrikethrough(TRUE, range);
     }
     std::unreachable();
 }

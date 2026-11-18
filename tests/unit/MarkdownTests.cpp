@@ -273,8 +273,14 @@ void verify_ordered_lists()
         "7. a\n8. b",
         {listed(leaf(list_item, "a", 3U), 1U, "7."), listed(leaf(list_item, "b", 8U), 1U, "8.")},
         "an ordered list may start at 7");
-    expect_blocks("3) a", {listed(leaf(list_item, "a", 3U), 1U, "3.")},
-                  "a parenthesis delimiter is shown with a period");
+    expect_blocks(
+        "3) a\n4) b",
+        {listed(leaf(list_item, "a", 3U), 1U, "3)"), listed(leaf(list_item, "b", 8U), 1U, "4)")},
+        "a parenthesis delimiter is shown as it is written (#1840)");
+    expect_blocks(
+        "1) a\n   1. b",
+        {listed(leaf(list_item, "a", 3U), 1U, "1)"), listed(leaf(list_item, "b", 11U), 2U, "1.")},
+        "a nested list keeps its own delimiter");
     expect_blocks("0. ok", {listed(leaf(list_item, "ok", 3U), 1U, "0.")},
                   "an ordered list may start at 0");
     expect_blocks(
@@ -407,6 +413,108 @@ void verify_entities()
                   "an entity inside strong sets the span and the position");
     expect_blocks("[a](url &quot;tit&quot;)", {leaf(paragraph, "[a](url \"tit\")", 0U)},
                   "an entity quote does not delimit a link title");
+}
+
+// HTML5 の名前つきの実体参照の全表（#1840・生成物 MarkdownEntityTable.hpp）。2 コードポイントに写る
+// 名前・大文字の別名・表に無い名前・`;` の無い綴り。
+void verify_html5_entities()
+{
+    expect_blocks("&hellip; &mdash; &ndash; &rarr; &AMP; &NotEqualTilde;",
+                  {leaf(paragraph, "… — – → & ≂̸", 0U)},
+                  "HTML5 named references are resolved, two code points included");
+    expect_blocks("&AElig;&zwnj;", {leaf(paragraph, "Æ\xE2\x80\x8C", 0U)},
+                  "the first and last names of the table are found by the binary search");
+    expect_blocks("&nosuch; &amp &hellip &Hellip;",
+                  {leaf(paragraph, "&nosuch; &amp &hellip &Hellip;", 0U)},
+                  "unknown names and names without a semicolon keep their spelling");
+}
+
+// 打ち消し線（MD_FLAG_STRIKETHROUGH・#1840）。記号は文字に入らず、装飾が範囲を持つ。md4c は GFM と
+// 同じく 1 つと 2 つの `~` を打ち消しにし、3 つ以上と数の合わない対は文字のまま。
+void verify_strikethrough()
+{
+    const PreviewStyle struck = PreviewStyle::strikethrough;
+    expect_blocks("~~a~~", {styled(leaf(paragraph, "a", 2U), {span(0U, 1U, struck)})},
+                  "double tildes strike through and drop the marks");
+    expect_blocks("~a~", {styled(leaf(paragraph, "a", 1U), {span(0U, 1U, struck)})},
+                  "single tildes strike through as GFM does");
+    expect_blocks("x ~~~a~~~ y", {leaf(paragraph, "x ~~~a~~~ y", 0U)}, "three tildes are text");
+    expect_blocks("x ~~a~ y", {leaf(paragraph, "x ~~a~ y", 0U)},
+                  "tildes that do not pair are text");
+    expect_blocks("**~~a~~**",
+                  {styled(leaf(paragraph, "a", 4U), {span(0U, 1U, strong), span(0U, 1U, struck)})},
+                  "strike through nested in strong");
+    expect_blocks(
+        "~~a **b** c~~",
+        {styled(leaf(paragraph, "a b c", 2U), {span(0U, 5U, struck), span(2U, 3U, strong)})},
+        "strong nested in strike through");
+    expect_blocks("`~~a~~`", {styled(leaf(paragraph, "~~a~~", 1U), {span(0U, 5U, inline_code)})},
+                  "tildes in a code span are text");
+    expect_blocks("```\n~~a~~\n```", {leaf(code, "~~a~~\n", 4U)},
+                  "tildes in a code block are text");
+}
+
+// 裸の URL・www・メール（MD_FLAG_PERMISSIVE{URL,WWW,EMAIL}AUTOLINKS・#1840）。
+// 見た目は今のリンクと同じ装飾で、文字は書いたまま（http:// を足さない）。
+// 末尾の句読点はリンクに入らない。
+void verify_bare_links()
+{
+    expect_blocks(
+        "see https://example.com/a?b=1.",
+        {styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U), {span(4U, 29U, link)})},
+        "a bare URL is a link without its trailing period");
+    expect_blocks("www.example.com",
+                  {styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)})},
+                  "a www address is a link shown as written");
+    expect_blocks("mail a@example.com",
+                  {styled(leaf(paragraph, "mail a@example.com", 0U), {span(5U, 18U, link)})},
+                  "an e-mail address is a link");
+    expect_blocks("example.com", {leaf(paragraph, "example.com", 0U)},
+                  "a host without a scheme or www is text");
+    expect_blocks(
+        "`https://example.com`",
+        {styled(leaf(paragraph, "https://example.com", 1U), {span(0U, 19U, inline_code)})},
+        "an address in a code span is not a link");
+}
+
+[[nodiscard]] PreviewBlock front(std::string text)
+{
+    return leaf(PreviewBlockKind::front_matter, std::move(text), 0U);
+}
+
+// 文書の先頭の front matter（#1840）。`---` の行から `---` か `...` の行までを
+// Markdown として読まず 1 要素にし、後ろの要素の位置と task の印の位置は
+// 本文の中の位置のまま。閉じる行が無い・先頭の行が `---` でない・
+// 先頭に空行がある文書は今までどおり。
+void verify_front_matter()
+{
+    expect_blocks("---\ntitle: a\n---\n# b", {front("title: a\n"), titled(1U, "b", 19U)},
+                  "a front matter closed by --- is one element and the heading keeps its position");
+    expect_blocks("---\na: 1\n...\nx", {front("a: 1\n"), leaf(paragraph, "x", 13U)},
+                  "a front matter may be closed by ...");
+    expect_blocks("---\r\na: 1\r\nb: 2\r\n---\r\nx",
+                  {front("a: 1\nb: 2\n"), leaf(paragraph, "x", 22U)},
+                  "a CRLF front matter ends its lines with LF and keeps byte positions");
+    expect_blocks("---\na\n---", {front("a\n")}, "a front matter may end the document");
+    expect_blocks("---\n---\nx", {front(""), leaf(paragraph, "x", 8U)},
+                  "an empty front matter is one empty element");
+    expect_blocks("---\n# not a heading\n- not a list\n---\n",
+                  {front("# not a heading\n- not a list\n")},
+                  "the inside of a front matter is not read as Markdown");
+    expect_blocks("---\na\n---\n\n***", {front("a\n"), leaf(rule, "", 11U)},
+                  "an element without text after a front matter begins on its own line");
+    expect_blocks("---\na\n---\n- [x] b",
+                  {front("a\n"), tasked(listed(leaf(list_item, "b", 16U), 1U, bullet), true, 13U)},
+                  "a task mark after a front matter keeps its position in the document");
+    expect_blocks("---\na: 1\n", {leaf(rule, "", 0U), leaf(paragraph, "a: 1", 4U)},
+                  "without a closing line the document is read as before");
+    expect_blocks("\n---\na\n---\n", {leaf(rule, "", 1U), titled(2U, "a", 5U)},
+                  "a blank line before the opening line reads as before");
+    expect_blocks("----\na\n----", {leaf(rule, "", 0U), titled(2U, "a", 5U)},
+                  "an opening line other than --- reads as before");
+    expect_blocks("--- \na\n---", {leaf(rule, "", 0U), titled(2U, "a", 5U)},
+                  "an opening line with a trailing space reads as before");
+    expect_blocks("---", {leaf(rule, "", 0U)}, "a lone --- is a thematic break");
 }
 
 void verify_html_and_line_endings()
@@ -542,6 +650,10 @@ void verify_markdown_scope()
     verify_code_blocks();
     verify_rules();
     verify_entities();
+    verify_html5_entities();
+    verify_strikethrough();
+    verify_bare_links();
+    verify_front_matter();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();

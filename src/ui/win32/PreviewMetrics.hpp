@@ -26,10 +26,13 @@ namespace nenenib::ui::win32
 [[nodiscard]] float preview_line_pixels(const PreviewTextStyle &style) noexcept;
 // 見出しの倍率（h1 1.6・h2 1.35・h3 1.15・ほかは 1）。
 [[nodiscard]] float preview_heading_scale(std::uint8_t level) noexcept;
-// 等幅で描く要素（コードブロックと HTML ブロック）か。
+// 等幅で描く要素（コードブロック・HTML ブロック・front matter）か。
 [[nodiscard]] bool preview_monospaced(core::PreviewBlockKind kind) noexcept;
+// 囲みのコードの面（panel・内側の余白・折らずに面で切る）に描く要素
+// （コードブロックと front matter・#1840）か。
+[[nodiscard]] bool preview_paneled(core::PreviewBlockKind kind) noexcept;
 // 要素の layout の幅。枠の幅から字下げ indent（PreviewBlockTops が決める）と右の余白、
-// コードブロックは面の内側の余白を引く。
+// 面に描く要素（preview_paneled）は面の内側の余白を引く。
 [[nodiscard]] float preview_text_width(const core::PreviewBlock &block, float frame_width,
                                        float indent, std::uint32_t dpi) noexcept;
 // 左右の余白（16 DIP）・引用の深さ depth（0 から）の左の線の左端・箇条書きの 1 段の字下げの

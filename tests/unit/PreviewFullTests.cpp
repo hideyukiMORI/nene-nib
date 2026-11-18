@@ -552,6 +552,29 @@ void verify_selection_text()
            "the rule");
 }
 
+// 12b. front matter と打ち消し線（#1840）。front matter は 1 要素の文字
+// （末尾の改行を除く）で、打ち消しは記号を除いた文字。
+// 錨の要素は front matter の分だけずれない。
+void verify_front_matter_selection_text()
+{
+    const auto fronted =
+        core::parse_markdown("---\nt: a\nu: b\n---\n# H\n\n~~x~~ y\n", core::MarkdownStop::never());
+    if (!fronted)
+    {
+        expect(false, "the front matter sample parses");
+        return;
+    }
+    const auto whole = core::preview_selection_all(fronted.value());
+    expect(whole.has_value() &&
+               core::preview_selection_text(fronted.value(), whole.value()) == "t: a\nu: b\nH\nx y",
+           "select all copies the front matter as it is and the struck text without tildes");
+    expect(core::preview_anchor_block(fronted.value(), core::Offset{0}) == 0 &&
+               core::preview_anchor_block(fronted.value(), core::Offset{9}) == 0 &&
+               core::preview_anchor_block(fronted.value(), core::Offset{20}) == 1 &&
+               core::preview_anchor_block(fronted.value(), core::Offset{25}) == 2,
+           "the anchor block of a body position after a front matter is its own block");
+}
+
 // 13. 全面の選択とコピーの鍵（改訂 18）。Shift+矢印は錨の要素の頭から選び、Ctrl+C は文書の改行の
 // 形で ClipboardPort へ置き（替え玉だけ）、Ctrl+A は全部、マウスは押した点から伸ばす。どれも本文を
 // 変えず知らせも出さない。選択がある間の Space は本文に届かない鍵。全面をやめると選択は消える。
@@ -884,6 +907,7 @@ void verify_preview_full_scope()
     verify_quit_leaves_full();
     verify_hidden_panes_return();
     verify_selection_text();
+    verify_front_matter_selection_text();
     verify_selection_keys();
     verify_vim_selection();
     verify_selection_dropped_on_result();

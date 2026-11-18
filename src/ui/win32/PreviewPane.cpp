@@ -293,9 +293,8 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     }
     const auto &style = measured_style_.value();
     const auto &block = measured_->blocks.at(index);
-    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。コードブロックは面の内側の余白だけ下げる。
-    const auto inset =
-        block.kind == core::PreviewBlockKind::code ? preview_code_padding(style.dpi) : 0.0F;
+    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ下げる。
+    const auto inset = preview_paneled(block.kind) ? preview_code_padding(style.dpi) : 0.0F;
     const auto width = preview_text_width(block, static_cast<float>(core::width_of(area)),
                                           tops.indent(index), style.dpi);
     // 描く所と同じ箱で同じ layout を引く（画像の上の点は箱の前か後ろ・画像は 1 つの単位）。

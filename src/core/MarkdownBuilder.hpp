@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
@@ -38,10 +39,18 @@ class MarkdownBuilder final
     void exhaust() noexcept;
     [[nodiscard]] bool exhausted() const noexcept;
 
+    // 本文の先頭が `---` だけの行で、後ろに `---` か `...` だけの行があれば、
+    // その間を front_matter の 1 要素にして、閉じる行の次の行頭を返す
+    // （md4c にはそこから先を渡す・#1840）。無ければ 0 で、何も足さない。
+    // md4c の要素の位置は本文を指す pointer から引くのでずれない。
+    // task の印の位置（md4c に渡した本文の中の位置）は enter_item が
+    // この値を足す。最初のコールバックの前に 1 回だけ呼ぶ。
+    [[nodiscard]] std::size_t front_matter();
+
     void enter_quote();
     void leave_quote();
-    // first は番号つきの最初の番号。箇条書きは nullopt。
-    void enter_list(std::optional<std::uint64_t> first);
+    // numbering は番号つきの最初の番号と区切り（'.' か ')'・#1840）。箇条書きは nullopt。
+    void enter_list(std::optional<std::pair<std::uint64_t, char>> numbering);
     void leave_list();
     // task はタスクリストの項目のチェックボックス（ADR 0155 の追補 22・ほかは nullopt）。項目の
     // 記号と同じく、項目の最初の要素が持つ。
@@ -85,7 +94,9 @@ class MarkdownBuilder final
     std::optional<std::string> marker_;
     std::optional<MarkdownTask> task_;
     std::size_t quote_depth_ = 0;
-    std::vector<std::optional<std::uint64_t>> lists_;
+    std::vector<std::optional<std::pair<std::uint64_t, char>>> lists_;
+    // md4c に渡した本文の先頭の、本文の中の位置（front_matter の後ろ・無ければ 0）。
+    std::size_t parsed_from_ = 0;
     std::vector<std::optional<std::size_t>> spans_;
     std::vector<MarkdownImage> images_;
     // 開いている画像の節の images_ の番号（入れ子は外側が先）。

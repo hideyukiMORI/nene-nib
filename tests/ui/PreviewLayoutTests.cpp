@@ -1196,6 +1196,107 @@ void check_task_press()
     press.forget();
     expect(!press.release(1U).has_value(), "the next press forgets a press left over");
 }
+
+// 画素の行のうち、地の色（枠の左上の画素）と違う画素が横に続くいちばん長い数。
+[[nodiscard]] std::int32_t longest_inked_run(const std::vector<std::uint8_t> &pixels)
+{
+    const auto ground = [&pixels](std::size_t at)
+    {
+        return std::equal(pixels.begin() + static_cast<std::ptrdiff_t>(at),
+                          pixels.begin() + static_cast<std::ptrdiff_t>(at) + 3, pixels.begin());
+    };
+    std::int32_t longest = 0;
+    for (std::size_t row = 0; row < 200U; ++row)
+    {
+        std::int32_t run = 0;
+        for (std::size_t column = 0; column < 400U; ++column)
+        {
+            run = ground((row * 400U + column) * 4U) ? 0 : run + 1;
+            longest = std::max(longest, run);
+        }
+    }
+    return longest;
+}
+
+// 打ち消し線（#1840）: 間の空いた字の列に打ち消しを掛けると、字の間の空白をまたいで横に続く線が
+// 描かれる（線の太さと位置は DirectWrite に任せる）。掛けない同じ文字には無い。保持の鍵は装飾を
+// 含むので、同じ文字の打ち消しの有無は別の layout。
+void check_strikethrough_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (!theme)
+    {
+        expect(false, "the theme for the strike through check is found");
+        return;
+    }
+    const std::string text = "i      i      i      i";
+    core::MarkdownDocument plain;
+    plain.blocks.push_back(block_of(core::PreviewBlockKind::paragraph, text));
+    core::MarkdownDocument struck;
+    struck.blocks.push_back(block_of(
+        core::PreviewBlockKind::paragraph, text,
+        {{core::Offset{0}, core::Offset{text.size()}, core::PreviewStyle::strikethrough}}));
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto plain_pixels = directly_painted(plain, theme.value().view(), area, 0);
+    const auto struck_pixels = directly_painted(struck, theme.value().view(), area, 0);
+    if (plain_pixels.empty() || struck_pixels.empty())
+    {
+        expect(false, "both strike through samples paint");
+        return;
+    }
+    // 字 i の幅は数画素。線は字の間の空白（6 文字ぶん）をまたいで 60 画素を超えて続く。
+    expect(longest_inked_run(plain_pixels) < 20 && longest_inked_run(struck_pixels) > 60,
+           "a strike through draws one line across the spaces between the letters");
+    PreviewTextLayouts layouts;
+    const auto bare = layouts.get(plain.blocks.front(), width, style_of());
+    const auto lined = layouts.get(struck.blocks.front(), width, style_of());
+    BOOL has_line = FALSE;
+    expect(bare.has_value() && lined.has_value() && layouts.created() == 2 &&
+               SUCCEEDED(lined.value()->GetStrikethrough(3, &has_line)) && has_line != FALSE,
+           "the strike through is a separate held layout with the DirectWrite strike through");
+}
+
+// front matter（#1840）: 囲みのコードと同じ panel の面（内側の余白・等幅・
+// 折らない）に comment の色で描く。同じ文字のコードブロックとは文字の色だけが違う。
+void check_front_matter_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (!theme)
+    {
+        expect(false, "the theme for the front matter check is found");
+        return;
+    }
+    core::MarkdownDocument fronted;
+    fronted.blocks.push_back(block_of(core::PreviewBlockKind::front_matter, "title: a\n"));
+    core::MarkdownDocument coded;
+    coded.blocks.push_back(block_of(core::PreviewBlockKind::code, "title: a\n"));
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto front_pixels = directly_painted(fronted, theme.value().view(), area, 0);
+    const auto code_pixels = directly_painted(coded, theme.value().view(), area, 0);
+    if (front_pixels.empty() || code_pixels.empty())
+    {
+        expect(false, "both front matter samples paint");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    // 面の右寄り（文字の無い所・角丸の外れ）の画素は panel。面の下の地は background。
+    expect(distance_of(front_pixels, 360, 22, palette.ui.panel) <= 6 &&
+               distance_of(front_pixels, 360, 190, palette.body.background) <= 6,
+           "the front matter is painted on the panel like a code block");
+    expect(distance_of(code_pixels, 360, 22, palette.ui.panel) <= 6 && front_pixels != code_pixels,
+           "the front matter differs from the same code block only in its text ink");
+    PreviewTextLayouts layouts;
+    const auto layout = layouts.get(fronted.blocks.front(), width, style_of());
+    std::array<wchar_t, 64> family{};
+    expect(layout.has_value() &&
+               layout.value()->GetWordWrapping() == DWRITE_WORD_WRAPPING_NO_WRAP &&
+               SUCCEEDED(layout.value()->GetFontFamilyName(0, family.data(),
+                                                           static_cast<UINT32>(family.size()))) &&
+               std::wstring_view(family.data()) != L"Segoe UI",
+           "the front matter is monospaced and does not wrap");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -1228,5 +1329,7 @@ void verify_preview_layouts()
     check_task_pixels();
     check_task_press();
     check_selection_pixels();
+    check_strikethrough_pixels();
+    check_front_matter_pixels();
 }
 } // namespace nenenib::tests::ui

@@ -1,8 +1,9 @@
 #include "MarkdownEntity.hpp"
 
+#include "MarkdownEntityTable.hpp"
 #include "Utf8.hpp"
 
-#include <array>
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -17,26 +18,6 @@ constexpr char32_t replacement_character = U'�';
 constexpr char32_t last_code_point = 0x10FFFFU;
 constexpr char32_t first_surrogate = 0xD800U;
 constexpr char32_t last_surrogate = 0xDFFFU;
-
-// 名前つき実体の表。CommonMark 0.31 の例（6.2 Entity and numeric character references と、
-// リンク・コードの例）に出る名前だけ（ADR 0151 の決定 7・HTML5 の全表は入れない）。
-constexpr std::array<std::pair<std::string_view, std::u32string_view>, 15> named_entities{{
-    {"AElig", U"Æ"},
-    {"ClockwiseContourIntegral", U"∲"},
-    {"Dcaron", U"Ď"},
-    {"DifferentialD", U"ⅆ"},
-    {"HilbertSpace", U"ℋ"},
-    {"amp", U"&"},
-    {"auml", U"ä"},
-    {"copy", U"©"},
-    {"frac34", U"¾"},
-    {"gt", U">"},
-    {"lt", U"<"},
-    {"nbsp", U" "},
-    {"ngE", U"≧̸"},
-    {"ouml", U"ö"},
-    {"quot", U"\""},
-}};
 
 [[nodiscard]] std::optional<char32_t> digit_value(char digit, char32_t radix) noexcept
 {
@@ -89,16 +70,17 @@ constexpr std::array<std::pair<std::string_view, std::u32string_view>, 15> named
     return value;
 }
 
+// 名前つきは HTML5 の全表（生成物 MarkdownEntityTable.hpp・名前のバイト順）を二分探索で引く。
 [[nodiscard]] std::optional<std::u32string_view> named_value(std::string_view name) noexcept
 {
-    for (const auto &[entity, value] : named_entities)
+    const auto found =
+        std::ranges::lower_bound(markdown_named_entities, name, {},
+                                 &std::pair<std::string_view, std::u32string_view>::first);
+    if (found == markdown_named_entities.end() || found->first != name)
     {
-        if (entity == name)
-        {
-            return value;
-        }
+        return std::nullopt;
     }
-    return std::nullopt;
+    return found->second;
 }
 
 // "&" と ";" の間。数値は "#" と "#x" / "#X" の後ろ。

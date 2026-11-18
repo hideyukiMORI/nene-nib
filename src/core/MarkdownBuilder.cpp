@@ -94,6 +94,45 @@ constexpr std::size_t depth_limit = 255U;
     }
     return line;
 }
+
+// [from, to) の改行を LF にそろえる（CRLF と CR だけの改行も LF・md4c のコードブロックと同じ形）。
+[[nodiscard]] std::string lf_text(std::string_view input, std::size_t from, std::size_t to)
+{
+    std::string text;
+    text.reserve(to - from);
+    for (; from < to; ++from)
+    {
+        const bool crlf = input[from] == '\r' && from + 1U < to && input[from + 1U] == '\n';
+        if (!crlf)
+        {
+            text.push_back(input[from] == '\r' ? '\n' : input[from]);
+        }
+    }
+    return text;
+}
+
+// line から始まる行の中身（改行を除く）が word だけか。
+[[nodiscard]] bool line_is(std::string_view input, std::size_t line, std::string_view word) noexcept
+{
+    return input.substr(line, line_end(input, line) - line) == word;
+}
+
+// line から始めて、`---` か `...` だけの最初の行の行頭
+// （front matter の閉じる行・無ければ nullopt）。
+[[nodiscard]] std::optional<std::size_t> closing_line(std::string_view input,
+                                                      std::size_t line) noexcept
+{
+    while (line < input.size())
+    {
+        if (line_is(input, line, "---") || line_is(input, line, "..."))
+        {
+            return line;
+        }
+        const auto end = line_end(input, line);
+        line = end == input.size() ? end : next_line(input, end);
+    }
+    return std::nullopt;
+}
 } // namespace
 
 MarkdownBuilder::MarkdownBuilder(std::string_view input, const MarkdownStop &stop,
@@ -124,6 +163,29 @@ bool MarkdownBuilder::exhausted() const noexcept
     return exhausted_;
 }
 
+std::size_t MarkdownBuilder::front_matter()
+{
+    const auto opening = line_end(input_, 0U);
+    if (!line_is(input_, 0U, "---") || opening == input_.size())
+    {
+        return 0U;
+    }
+    const auto content = next_line(input_, opening);
+    const auto closing = closing_line(input_, content);
+    if (!closing.has_value())
+    {
+        return 0U;
+    }
+    auto block = started(PreviewBlockKind::front_matter, 0U);
+    block.text = lf_text(input_, content, closing.value());
+    blocks_.push_back(std::move(block));
+    // 位置を持たない次の要素（水平線など）は、閉じる行の次の行から探す。
+    last_end_ = closing.value();
+    const auto end = line_end(input_, closing.value());
+    parsed_from_ = end == input_.size() ? end : next_line(input_, end);
+    return parsed_from_;
+}
+
 void MarkdownBuilder::enter_quote()
 {
     close_implicit();
@@ -136,12 +198,12 @@ void MarkdownBuilder::leave_quote()
     quote_depth_ -= quote_depth_ == 0U ? 0U : 1U;
 }
 
-void MarkdownBuilder::enter_list(std::optional<std::uint64_t> first)
+void MarkdownBuilder::enter_list(std::optional<std::pair<std::uint64_t, char>> numbering)
 {
     // 記号だけの項目の直後に入れ子のリストが来たら（"- - a"）、外の項目の記号を空の要素で出す。
     close_implicit();
     flush_marker();
-    lists_.push_back(first);
+    lists_.push_back(numbering);
 }
 
 void MarkdownBuilder::leave_list()
@@ -158,14 +220,19 @@ void MarkdownBuilder::enter_item(std::optional<MarkdownTask> task)
     close_implicit();
     flush_marker();
     task_ = task;
-    const std::optional<std::uint64_t> number = lists_.empty() ? std::nullopt : lists_.back();
-    if (!number.has_value())
+    if (task_.has_value())
+    {
+        task_.value().mark_offset += parsed_from_;
+    }
+    const auto numbering = lists_.empty() ? std::nullopt : lists_.back();
+    if (!numbering.has_value())
     {
         marker_ = std::string(bullet_marker);
         return;
     }
-    marker_ = std::to_string(number.value()) + ".";
-    lists_.back() = number.value() + 1U;
+    const auto [number, delimiter] = numbering.value();
+    marker_ = std::to_string(number) + delimiter;
+    lists_.back() = std::pair{number + 1U, delimiter};
 }
 
 void MarkdownBuilder::leave_item()

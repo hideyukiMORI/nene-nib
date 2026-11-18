@@ -51,6 +51,7 @@ constexpr std::string_view deeper_bullet = "▪";
     case core::PreviewBlockKind::code:
     case core::PreviewBlockKind::html:
     case core::PreviewBlockKind::list_item:
+    case core::PreviewBlockKind::front_matter:
         return 0.0F;
     }
     std::unreachable();
@@ -68,6 +69,7 @@ constexpr std::string_view deeper_bullet = "▪";
     case core::PreviewBlockKind::code:
     case core::PreviewBlockKind::html:
     case core::PreviewBlockKind::list_item:
+    case core::PreviewBlockKind::front_matter:
         return line / 2.0F;
     }
     std::unreachable();
@@ -108,14 +110,18 @@ float preview_heading_scale(std::uint8_t level) noexcept
 
 bool preview_monospaced(core::PreviewBlockKind kind) noexcept
 {
-    return kind == core::PreviewBlockKind::code || kind == core::PreviewBlockKind::html;
+    return preview_paneled(kind) || kind == core::PreviewBlockKind::html;
+}
+
+bool preview_paneled(core::PreviewBlockKind kind) noexcept
+{
+    return kind == core::PreviewBlockKind::code || kind == core::PreviewBlockKind::front_matter;
 }
 
 float preview_text_width(const core::PreviewBlock &block, float frame_width, float indent,
                          std::uint32_t dpi) noexcept
 {
-    const auto padding =
-        block.kind == core::PreviewBlockKind::code ? 2.0F * preview_code_padding(dpi) : 0.0F;
+    const auto padding = preview_paneled(block.kind) ? 2.0F * preview_code_padding(dpi) : 0.0F;
     const auto width = frame_width - indent - preview_pixels(side_margin_dips, dpi) - padding;
     return std::max(width, 1.0F);
 }
@@ -169,6 +175,7 @@ float preview_extent(core::PreviewBlockKind kind, float text_height, std::uint32
     case core::PreviewBlockKind::rule:
         return std::max(preview_pixels(rule_dips, dpi), 1.0F);
     case core::PreviewBlockKind::code:
+    case core::PreviewBlockKind::front_matter:
         return text_height + 2.0F * preview_code_padding(dpi);
     case core::PreviewBlockKind::paragraph:
     case core::PreviewBlockKind::heading:

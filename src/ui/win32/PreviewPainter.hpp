@@ -83,8 +83,8 @@ template <typename Target> class PreviewPainter final
                            static_cast<float>(area.right), static_cast<float>(area.bottom));
     }
 
-    // 要素の文字の色（見出しは keyword・コードは string・HTML と水平線は comment・引用の中の
-    // 段落と項目は comment・ほかは foreground）。
+    // 要素の文字の色（見出しは keyword・コードは string・HTML と水平線と front matter は comment・
+    // 引用の中の段落と項目は comment・ほかは foreground）。
     [[nodiscard]] static PreviewInk ink_of(const core::PreviewBlock &block) noexcept
     {
         switch (block.kind)
@@ -95,6 +95,7 @@ template <typename Target> class PreviewPainter final
             return PreviewInk::string;
         case core::PreviewBlockKind::html:
         case core::PreviewBlockKind::rule:
+        case core::PreviewBlockKind::front_matter:
             return PreviewInk::comment;
         case core::PreviewBlockKind::paragraph:
         case core::PreviewBlockKind::list_item:
@@ -116,6 +117,7 @@ template <typename Target> class PreviewPainter final
             draw_rule(scene, origin.y, scene.tops.bottom(index) - scene.tops.top(index));
             return;
         case core::PreviewBlockKind::code:
+        case core::PreviewBlockKind::front_matter:
             draw_code(scene, index, origin);
             return;
         case core::PreviewBlockKind::list_item:
@@ -160,7 +162,8 @@ template <typename Target> class PreviewPainter final
                               brushes_.of(PreviewInk::comment));
     }
 
-    // コードブロック: panel の面（角丸 5）の内側の余白 12 に折らずに描き、面の外は切る。
+    // コードブロックと front matter: panel の面（角丸 5）の内側の
+    // 余白 12 に折らずに描き、面の外は切る。
     void draw_code(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
         const auto dpi = scene.style.dpi;
