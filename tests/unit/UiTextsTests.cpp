@@ -84,15 +84,17 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 243,
-           "the table has 243 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+    expect(core::ui_message_count == 309,
+           "the table has 309 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
            "project search mark 1 of #1003, the project search face 8 of #1763, the "
            "easymotion prompt of ADR 0163, the 5 context menu operations 10 of #1051, the finder "
            "preview 4 of #1785, the preview failures 3 more of #1793, the packaged "
            "registration notice 1 of #1809, the completion operation 2 and notice 1 of "
-           "#1833 and the language queries 9 of #1834)");
-    expect(placed == 31, "31 messages take placeholders (T1a 26, the search progress 3, the "
-                         "preview line 1 and the definition count 1)");
+           "#1833, the language queries 9 of #1834, the settings panel 54 of #1828, its screen "
+           "4 of #1836 and the screen fixes 8 of #1836)");
+    expect(placed == 36, "36 messages take placeholders (T1a 26, the search progress 3, the "
+                         "preview line 1, the definition count 1, the settings summary 4 and "
+                         "the settings no-match line 1)");
     expect(core::ui_text(core::UiMessage::tab_untitled, core::DisplayLanguage::english) ==
                "Untitled",
            "the English column is read for english");

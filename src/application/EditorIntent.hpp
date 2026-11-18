@@ -9,13 +9,16 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
+#include "ChangeSetting.hpp"
 #include "ChooseCompletion.hpp"
 #include "ChooseContextMenu.hpp"
+#include "ChooseSettingsPreset.hpp"
 #include "ChooseStartEntry.hpp"
 #include "ClipboardAction.hpp"
 #include "CloseCompletion.hpp"
 #include "CloseContextMenu.hpp"
 #include "ClosePane.hpp"
+#include "CloseSettings.hpp"
 #include "CloseTab.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
@@ -27,11 +30,14 @@
 #include "EndSession.hpp"
 #include "ExplorerKey.hpp"
 #include "ExplorerRootChosen.hpp"
+#include "FilterSettings.hpp"
 #include "FirstFramePresented.hpp"
+#include "FocusSettingsRow.hpp"
 #include "HistoryAction.hpp"
 #include "HoverExplorer.hpp"
 #include "InsertDateTime.hpp"
 #include "InsertText.hpp"
+#include "JumpSettingsSection.hpp"
 #include "LanguageServerTick.hpp"
 #include "MapTimeout.hpp"
 #include "MoveCaret.hpp"
@@ -45,6 +51,7 @@
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
+#include "OpenSettings.hpp"
 #include "OpenTabList.hpp"
 #include "PasteCommand.hpp"
 #include "PinTab.hpp"
@@ -62,12 +69,14 @@
 #include "RegisterShell.hpp"
 #include "ResizeExplorer.hpp"
 #include "RestoreAutosave.hpp"
+#include "RevertSettings.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollCompletion.hpp"
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollSettings.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
@@ -82,6 +91,7 @@
 #include "SplitPane.hpp"
 #include "StepCompletion.hpp"
 #include "StepContextMenu.hpp"
+#include "StepSettings.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchPane.hpp"
@@ -123,5 +133,7 @@ using EditorIntent = std::variant<
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
     CycleFinderPreview, TabTipTick, OpenCompletion, StepCompletion, ChooseCompletion,
-    CloseCompletion, ScrollCompletion, QueryLanguage, WindowDeactivated>;
+    CloseCompletion, ScrollCompletion, QueryLanguage, WindowDeactivated, OpenSettings,
+    CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
+    FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings>;
 } // namespace nenenib::application

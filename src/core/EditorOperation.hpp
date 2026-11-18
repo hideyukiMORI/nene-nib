@@ -84,6 +84,9 @@ enum class EditorOperation : std::uint8_t
     // NORMAL の `gd` と同じ問い）、「情報を表示」は鍵なしで F1 の一覧から（Vim の NORMAL の `K` と
     // 同じ問い）。言語サーバーが動いていない文書では 1 行知らせる。
     go_to_definition,
-    show_information
+    show_information,
+    // 設定の面を開く（ADR 0170 の決定 5・施主決定 D102・#1836）。Ctrl+, で両モード・F1 の一覧から。
+    // 開いている間の Ctrl+, は面の鍵（閉じて保存する）。
+    open_settings
 };
 } // namespace nenenib::core

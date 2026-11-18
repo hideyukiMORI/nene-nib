@@ -33,6 +33,11 @@ namespace nenenib::application
 // では 1 行知らせる。
 void EditorController::accept(const QueryLanguage &intent)
 {
+    // 設定の面が開いていた（この意図の入口で閉じた）なら、問いを出さない（面どうしの排他）。
+    if (settings_closed_now_)
+    {
+        return;
+    }
     if (!query_language(intent.kind))
     {
         state_ = state_.with_command_message(
@@ -127,12 +132,13 @@ void EditorController::settle_language_answers(LspRequestKind kind)
 }
 
 // 入力行・面・右クリックのメニュー・IME の変換・補完の面（答えを待っていてまだ見えていない面を
-// 含む）が開いていない。補完の面と hover の札は同時に出さず、補完の面が開いている間は定義の答えで
-// 跳ばない（ADR 0190 の決定 5・6）。
+// 含む）・設定の面が開いていない。設定の面が開いている間は hover
+// の札を出さず、定義の答えで跳ばない。補完の面と hover
+// の札は同時に出さず、補完の面が開いている間は定義の答えで 跳ばない（ADR 0190 の決定 5・6）。
 bool EditorController::faces_closed() const noexcept
 {
     return !state_.command_input().has_value() && !context_menu_active() &&
-           !state_.composition().has_value() && !completion_open();
+           !state_.composition().has_value() && !completion_open() && !settings_open();
 }
 
 // 問いを出したときと同じ「何も待っていない」状態か。Vim は NORMAL で、オペレータ・回数・レジスタの

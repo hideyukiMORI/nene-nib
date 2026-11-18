@@ -37,6 +37,8 @@
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
+#include "SettingsLayout.hpp"
+#include "SettingsTarget.hpp"
 #include "SplitLayout.hpp"
 #include "StartPress.hpp"
 #include "StartScreenView.hpp"
@@ -62,6 +64,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -180,6 +183,8 @@ class EditorWindow final
     // メニューが開いている間の鍵（上下・Enter・Esc。ほかの鍵と文字は捨てる）と、焦点を失ったときに
     // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
+    // 開いている面（メニュー・設定の面・補完の面）が先に受ける鍵と文字。
+    [[nodiscard]] bool take_face_key(UINT message, WPARAM word, LPARAM data);
     void press_context_menu_key(WPARAM word);
     // 補完の面（ADR 0190 の決定 5・EditorWindowCompletion.cpp）。面が見えている間の上下・PageUp /
     // PageDown・Enter・Tab・Esc を面が受けたら真。窓が非アクティブになったら閉じる。
@@ -196,6 +201,32 @@ class EditorWindow final
     [[nodiscard]] bool release_completion(LPARAM data);
     [[nodiscard]] bool scroll_completion(std::int32_t delta, LPARAM data);
     [[nodiscard]] bool in_text_body(POINT point) const;
+
+    // ----------------------------------------------------------------
+    // 設定の面（施主決定 D102・#1836） EditorWindowSettings.cpp の群。開いている間の鍵・文字・
+    // マウス・ホイール・IME を面の意図にする。開いていなければどれも false / 値なし（今の道へ）。
+    // 鍵・文字・マウスを意図の列に写すのは SettingsInput の純関数（窓を作らずに試す）。
+    [[nodiscard]] bool take_settings_key(UINT message, WPARAM word, LPARAM data);
+    // 面の外の Ctrl+, の長押しの反復か（捨てる＝開閉を繰り返さない）。
+    [[nodiscard]] bool swallow_repeated_settings_key(WPARAM word, LPARAM data) const;
+    // 面の意図を送ってから、焦点の行が見える所へ行の領域の送りを寄せる。
+    void send_settings(const application::EditorIntent &intent);
+    void send_settings_all(const std::vector<application::EditorIntent> &intents);
+    [[nodiscard]] const std::optional<core::SettingsLayout> &settings_layout_drawn() const;
+    // 面が閉じた所で IME の変換を 1 回取り消す（deliver の 1 か所が呼ぶ・レビュー M1）。
+    void follow_settings_closing();
+    // 面の外を押して閉じた直後の 2 回目の押しか（読んだら消す）。
+    [[nodiscard]] bool take_settings_dismissal() noexcept;
+    void press_left_button(UINT message, LPARAM data);
+    [[nodiscard]] bool press_settings(LPARAM data);
+    [[nodiscard]] bool release_settings(LPARAM data);
+    [[nodiscard]] bool press_settings_right(LPARAM data);
+    // 点（クライアントの座標）が開いている面の上か。配置を読むだけで frame を作らない。
+    [[nodiscard]] bool over_settings(LPARAM data) const;
+    [[nodiscard]] bool wheel_settings(std::int32_t delta, LPARAM data);
+    [[nodiscard]] core::SettingsTarget settings_target_under(std::int32_t x, std::int32_t y) const;
+    [[nodiscard]] std::optional<LRESULT> compose_settings(UINT message, WPARAM word, LPARAM data);
+    void place_settings_composition(const core::LayoutRect &search);
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
     // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
     // 回目）。時刻は押しの窓メッセージの 時刻（GetMessageTime）だけを読む。
@@ -428,6 +459,7 @@ class EditorWindow final
     void run_complete();
     void run_go_to_definition();
     void run_show_information();
+    void run_open_settings();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
@@ -511,6 +543,14 @@ class EditorWindow final
     // 補完の面の上で押した行（離すまで・面の余白の押しは値なし）と、面のホイールの余り。
     std::optional<std::size_t> completion_pressed_;
     std::int32_t completion_wheel_remainder_ = 0;
+    // 設定の面の上で押した部品（離したときに同じ部品なら動かす）・ホイールの余り・探す欄へ打つ
+    // 文字の上位サロゲート（#1836）。
+    std::optional<core::SettingsTarget> settings_pressed_;
+    std::int32_t settings_wheel_remainder_ = 0;
+    wchar_t settings_high_surrogate_ = 0;
+    // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。
+    bool settings_shown_ = false;
+    bool settings_dismissed_ = false;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。

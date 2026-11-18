@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstdint>
+#include <string>
 #include <system_error>
 #include <utility>
 
@@ -59,6 +61,17 @@ FontSize adjusted_font_size(FontSize current, FontSizeAdjustment adjustment, std
         return default_font_size();
     }
     std::unreachable();
+}
+
+std::string font_size_text(FontSize size)
+{
+    const auto tenths = static_cast<std::int64_t>((size.points() * 10.0F) + 0.5F);
+    std::string text = std::to_string(tenths / 10);
+    if (tenths % 10 != 0)
+    {
+        text += "." + std::to_string(tenths % 10);
+    }
+    return text;
 }
 
 float font_size_dips(FontSize size) noexcept

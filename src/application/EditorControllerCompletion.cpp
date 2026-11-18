@@ -247,9 +247,10 @@ bool EditorController::completion_startable() const
         break;
     }
     const auto &selection = state_.selection();
-    return !state_.command_input().has_value() && !state_.composition().has_value() &&
-           !explorer_focused() && state_.full_preview() == nullptr &&
-           selection.anchor == selection.caret;
+    // 設定の面が開いている間と、この意図の入口で設定の面を閉じた直後は開かない（面どうしの排他）。
+    return !settings_open() && !settings_closed_now_ && !state_.command_input().has_value() &&
+           !state_.composition().has_value() && !explorer_focused() &&
+           state_.full_preview() == nullptr && selection.anchor == selection.caret;
 }
 
 // 開いている面がまだ成り立つか。同じ文書がアクティブで、キャレットが語の頭より前へ行かず、語の

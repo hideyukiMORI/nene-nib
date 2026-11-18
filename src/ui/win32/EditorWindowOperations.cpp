@@ -408,6 +408,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::complete, &EditorWindow::run_complete},
         {core::EditorOperation::go_to_definition, &EditorWindow::run_go_to_definition},
         {core::EditorOperation::show_information, &EditorWindow::run_show_information},
+        {core::EditorOperation::open_settings, &EditorWindow::run_open_settings},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");

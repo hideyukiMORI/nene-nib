@@ -151,7 +151,7 @@ constexpr std::array<ChordRow, 65> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 49> shown_rows{{
+constexpr std::array<ShownRow, 50> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -216,6 +216,8 @@ constexpr std::array<ShownRow, 49> shown_rows{{
     // 両モードの F12 と、鍵なしの「情報を表示」（ADR 0190 の決定 8）。
     {EditorOperation::go_to_definition, "F12", "F12", true, true},
     {EditorOperation::show_information, "", "", true, true},
+    // 設定の面は Ctrl+, で両モード（施主決定 D102・#1836）。
+    {EditorOperation::open_settings, "Ctrl+,", "Ctrl+,", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -403,7 +405,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 49 && vim.size() == 46,
+    expect(ordinary.size() == 50 && vim.size() == 47,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -480,8 +482,8 @@ void verify_packaged_operation_choices()
         }
         return counted;
     };
-    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{49, 46, 44, 46} &&
-               sizes(Distribution::packaged) == std::vector<std::size_t>{47, 44, 42, 44},
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{50, 47, 45, 47} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{48, 45, 43, 45},
            "the packaged list has two rows fewer than the zip list in every mode");
     const auto packaged = nenenib::core::operation_choices(
         "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},
