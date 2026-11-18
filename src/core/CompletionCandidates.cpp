@@ -24,32 +24,6 @@ using Collected = std::pair<CompletionList, std::vector<std::string>>;
     return vim_keyword_group(vim_keyword_class_at(content, at));
 }
 
-// content の caret の直前で終わる接頭辞の始まり（同じ種類の語の文字の連なり・Vim の
-// get_normal_compl_info）。直前が語の文字でなければ caret（空の接頭辞）。
-[[nodiscard]] std::size_t prefix_start(std::string_view content, std::size_t caret) noexcept
-{
-    if (caret == 0)
-    {
-        return caret;
-    }
-    std::size_t start = vim_character_start(content, Offset{caret}).value;
-    const std::uint32_t group = vim_keyword_class_at(content, start);
-    if (!vim_keyword_group(group))
-    {
-        return caret;
-    }
-    while (start > 0)
-    {
-        const std::size_t previous = vim_character_start(content, Offset{start}).value;
-        if (vim_keyword_class_at(content, previous) != group)
-        {
-            break;
-        }
-        start = previous;
-    }
-    return start;
-}
-
 // 接頭辞が Vim の 1 文字を 2 つ以上持つか。
 [[nodiscard]] bool two_characters(std::string_view prefix) noexcept
 {
@@ -238,6 +212,30 @@ matched_runs(std::string_view content, std::span<const OffsetRange> runs, const 
 }
 } // namespace
 
+std::size_t completion_prefix_start(std::string_view content, std::size_t caret) noexcept
+{
+    if (caret == 0)
+    {
+        return caret;
+    }
+    std::size_t start = vim_character_start(content, Offset{caret}).value;
+    const std::uint32_t group = vim_keyword_class_at(content, start);
+    if (!vim_keyword_group(group))
+    {
+        return caret;
+    }
+    while (start > 0)
+    {
+        const std::size_t previous = vim_character_start(content, Offset{start}).value;
+        if (vim_keyword_class_at(content, previous) != group)
+        {
+            break;
+        }
+        start = previous;
+    }
+    return start;
+}
+
 CompletionList completion_list(const TextBuffer &text, Offset caret, CompletionDirection direction,
                                const CompletionTables &tables)
 {
@@ -249,7 +247,7 @@ CompletionList completion_list(const TextBuffer &text, Offset caret, CompletionD
     const std::size_t first = from > 0 ? leading_continuations(window) : 0;
     const std::string_view content = std::string_view{window}.substr(first);
     const std::size_t at = caret.value - from - first;
-    const std::size_t start = prefix_start(content, at);
+    const std::size_t start = completion_prefix_start(content, at);
     const std::string prefix{content.substr(start, at - start)};
     Collected collected{CompletionList{OffsetRange{Offset{from + first + start}, caret}, {}}, {}};
     const std::vector<OffsetRange> runs = whole_runs(content, from > 0, upto < text.size_bytes());

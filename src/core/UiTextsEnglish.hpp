@@ -127,6 +127,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_cycle_finder_preview_name, "Switch the preview layout"},
     {UiMessage::operation_cycle_finder_preview_description,
      "Show the Ctrl+P preview on the right, below or not at all (Ctrl+Shift+P while it is open)"},
+    {UiMessage::operation_complete_name, "Complete"},
+    {UiMessage::operation_complete_description,
+     "Suggest completions for the word being typed (Up / Down to pick, Enter or Tab to accept)"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -297,5 +300,6 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::start_new_file_detail, "Just start typing"},
     {UiMessage::start_open_folder, "Open Folder"},
     {UiMessage::start_open_folder_detail, "Choose a root and show the Explorer"},
+    {UiMessage::notice_completion_none, "No completions"},
 }};
 } // namespace nenenib::core

@@ -17,13 +17,14 @@ namespace nenenib::core
 // ブックマークは通常 Ctrl+D / Vim Ctrl+Shift+D（ADR 0063）。元に戻す・やり直すは通常モードだけ
 // （Vim は u と Ctrl-r）。開くの Ctrl+O は通常モードだけで、Vim では Ctrl+Shift+O（Vim の Ctrl-o は
 // ジャンプの戻り・D71・ADR 0152 の追補 #1037）。通常 / Vim の切り替えは Ctrl+Shift+Space
-// で両モード（D61）。Ctrl+Space（Shift なし）は Vim INSERT の Ctrl-@ に残すので行を置かない。
+// で両モード（D61）。Ctrl+Space（Shift なし）は通常モードだけ補完の面（ADR 0190 の決定 5）で、Vim
+// では INSERT の Ctrl-@ に残すので行を置かない。
 // 「Shift を見ていなかった今の振る舞いを保つ行」は Shift なしの行のすぐ後ろに置く。見せる鍵は
 // そのモードで最初に当たる行なので、一覧に見える鍵は Shift なしのまま（Vim の開くは
 // Ctrl+Shift+O）。
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
 // Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
-inline constexpr std::array<OperationBinding, 67> operation_bindings{{
+inline constexpr std::array<OperationBinding, 68> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -140,6 +141,9 @@ inline constexpr std::array<OperationBinding, 67> operation_bindings{{
     // 入力行の鍵（面が閉じているときの Ctrl+Shift+P は上の list_files
     // の行）なので、表の行は鍵なしで F1 の一覧から。
     {EditorOperation::cycle_finder_preview, OperationModes::both, std::nullopt},
+    // 補完の面（ADR 0190 の決定 5）。通常モードだけ（Vim の INSERT の Ctrl-@ に譲る）。
+    {EditorOperation::complete, OperationModes::ordinary,
+     KeyChord{true, false, OperationKey::space}},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。
