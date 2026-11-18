@@ -17,10 +17,22 @@ namespace
     return value == '$' || value == '}' || value == '\\';
 }
 
-// from から続く名前の文字（英数字と `_`）の終わり。
+[[nodiscard]] bool digit(char value) noexcept
+{
+    return value >= '0' && value <= '9';
+}
+
+// from から続く印の名前の終わり（#1825 のレビュー
+// R3）。数字で始まればタブストップで数字だけ、英字か
+// `_` で始まれば変数で英数字と `_`。どちらでもなければ from。
 [[nodiscard]] std::size_t name_end(std::string_view text, std::size_t from) noexcept
 {
-    while (from < text.size() && name_character(text[from]))
+    if (from >= text.size() || (!digit(text[from]) && !name_character(text[from])))
+    {
+        return from;
+    }
+    const bool tab_stop = digit(text[from]);
+    while (from < text.size() && (tab_stop ? digit(text[from]) : name_character(text[from])))
     {
         ++from;
     }

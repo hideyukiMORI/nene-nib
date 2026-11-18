@@ -84,8 +84,11 @@ constexpr std::string_view fence = "```";
     LspCompletionList list{.incomplete = incomplete, .items = {}};
     for (const JsonValue &entry : entries)
     {
+        // 切ったら手元で絞り直しても足りないので、出し直しを求める incomplete にする（レビュー
+        // L1）。
         if (list.items.size() == lsp_completion_limit)
         {
+            list.incomplete = true;
             break;
         }
         auto item = completion_item(entry);

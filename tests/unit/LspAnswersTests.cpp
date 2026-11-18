@@ -128,6 +128,19 @@ void verify_completion_snippets_and_limit()
                core::lsp_snippet_text("cost $ and ${ and ${1") == "cost $ and ${ and ${1" &&
                core::lsp_snippet_text("{a}") == "{a}",
            "choices, escapes, nesting and variables lose their marks and stray marks stay");
+    // 表（レビュー R3）: `$数字` は数字だけを読む。
+    using SnippetRow = std::pair<std::string_view, std::string_view>;
+    for (const auto &[snippet, text] : std::vector<SnippetRow>{{"$1abc", "abc"},
+                                                               {"${1:x}", "x"},
+                                                               {"${1|a,b|}", "a"},
+                                                               {"$0", ""},
+                                                               {"a$12b", "ab"},
+                                                               {R"(\$)", "$"},
+                                                               {"$name", ""},
+                                                               {"$_x1 y", " y"}})
+    {
+        expect(core::lsp_snippet_text(snippet) == text, "one snippet row loses exactly its marks");
+    }
     std::string many = "[";
     for (std::size_t index = 0; index <= core::lsp_completion_limit; ++index)
     {
@@ -136,8 +149,8 @@ void verify_completion_snippets_and_limit()
     }
     const auto limited = core::lsp_completion_items(json(many + "]"));
     expect(limited.has_value() && limited.value().items.size() == core::lsp_completion_limit &&
-               limited.value().items.back().label == "w499",
-           "an answer over the limit keeps the first 500 items");
+               limited.value().items.back().label == "w499" && limited.value().incomplete,
+           "an answer over the limit keeps the first 500 items and asks to be asked again");
 }
 
 // hover の 4 つの形と囲みの行・改行・上限（決定 4）。
@@ -224,6 +237,42 @@ void verify_locations()
     expect(refused(core::lsp_locations(json("3"))), "a number is not a definition answer");
 }
 
+// 表（レビュー M1 / R1）: 値なしは std::nullopt。
+void verify_file_uri_rows()
+{
+    using Row = std::pair<std::string_view, std::optional<std::string_view>>;
+    for (const auto &[uri, path] :
+         std::vector<Row>{{"file:///C:foo.cpp", std::nullopt},
+                          {"file:///C:", std::nullopt},
+                          {"file:///C:/", R"(C:\)"},
+                          {"file://./pipe/x", std::nullopt},
+                          {"file://%3F/C:/x", std::nullopt},
+                          {"file://%2E/x/y", std::nullopt},
+                          {"file://C:/x", std::nullopt},
+                          {"file://server", std::nullopt},
+                          {"file://server/", std::nullopt},
+                          {"file://a%2Fb/s/x", std::nullopt},
+                          {"file:///C:/a/../b.cpp", R"(C:\b.cpp)"},
+                          {"file:///C:/a/./b//c", R"(C:\a\b\c)"},
+                          {"file:///C:/../x", std::nullopt},
+                          {"file://server/share/a/../b", R"(\\server\share\b)"},
+                          {"file://server/share/a/../../x", std::nullopt},
+                          {"file://server/../x", std::nullopt},
+                          {"file:///C:/a.cpp#L3", R"(C:\a.cpp)"},
+                          {"file:///C:/a.cpp?x=1", R"(C:\a.cpp)"},
+                          {"file:///c:/Users/x/a.cpp", R"(C:\Users\x\a.cpp)"},
+                          {"file:///C:/a%2Fb%5Cc", R"(C:\a\b\c)"},
+                          {"file:///C:/a%00b", std::nullopt},
+                          {"file:///C:/a%C3", std::nullopt},
+                          {"file:///%5C%5C.%5Cpipe%5Cx", std::nullopt}})
+    {
+        const auto found = path_text(uri);
+        expect(path.has_value() ? found == std::optional<std::string>{std::string{path.value()}}
+                                : !found.has_value(),
+               "one file URI row maps to its absolute path or is refused");
+    }
+}
+
 // URI → パス（決定 4）と document_uri の往復・percent-encoding の 1 本。
 void verify_file_uris()
 {
@@ -231,10 +280,12 @@ void verify_file_uris()
            "a drive URI decodes its spaces and uses backslashes");
     expect(path_text("file://server/share/x") == std::optional<std::string>{"\\\\server\\share\\x"},
            "a URI with a host is a UNC path");
-    expect(path_text("FILE:///c%3A/x.cpp") == std::optional<std::string>{"c:\\x.cpp"} &&
+    expect(path_text("FILE:///c%3A/x.cpp") == std::optional<std::string>{"C:\\x.cpp"} &&
                path_text("file://localhost/C:/x") == std::optional<std::string>{"C:\\x"} &&
                path_text("file:/C:/y") == std::optional<std::string>{"C:\\y"},
-           "the scheme ignores case, the colon may be encoded and localhost is no host");
+           "the scheme ignores case, the colon may be encoded, the drive is upper case and "
+           "localhost is no host");
+    verify_file_uri_rows();
     expect(!path_text("http://host/x").has_value() &&
                !path_text("untitled:Untitled-1").has_value() &&
                !path_text("file:///usr/include/x.h").has_value() &&
