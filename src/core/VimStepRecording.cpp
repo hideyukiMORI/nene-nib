@@ -470,6 +470,12 @@ namespace
     return false;
 }
 
+// `gd` `K` の問いは本文を変えない（ADR 0190 の決定 8）。
+[[nodiscard]] bool changes_text(const VimLanguageQuery &) noexcept
+{
+    return false;
+}
+
 // `:s` の族は `.` の記録に積まない（ADR 0168 の追補 6）。`c` の問いの答えも同じ。
 [[nodiscard]] bool changes_text(const VimConfirmSubstitute &) noexcept
 {

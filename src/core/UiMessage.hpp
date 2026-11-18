@@ -118,6 +118,11 @@ enum class UiMessage : std::uint16_t
     operation_cycle_finder_preview_description,
     operation_complete_name,
     operation_complete_description,
+    // 言語サーバーへの問いの 2 つの操作（ADR 0190 の決定 8・9）。
+    operation_go_to_definition_name,
+    operation_go_to_definition_description,
+    operation_show_information_name,
+    operation_show_information_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -256,10 +261,16 @@ enum class UiMessage : std::uint16_t
     start_open_folder,
     start_open_folder_detail,
     notice_completion_none,
+    // 言語サーバーへの問いの知らせ（ADR 0190 の決定 9）。
+    notice_language_server_not_running,
+    notice_definition_not_found,
+    notice_definition_first_of,
+    notice_definition_not_a_file,
+    notice_information_not_found,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_completion_none) + 1U;
+    std::to_underlying(UiMessage::notice_information_not_found) + 1U;
 } // namespace nenenib::core

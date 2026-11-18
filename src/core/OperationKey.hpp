@@ -52,6 +52,8 @@ enum class OperationKey : std::uint8_t
     x,
     c,
     a,
-    delete_key
+    delete_key,
+    // 修飾なしの F12 の定義へ移動（ADR 0190 の決定 8・両モード）。
+    f12
 };
 } // namespace nenenib::core

@@ -3,6 +3,7 @@
 #include "EasyMotionKind.hpp"
 #include "ExRange.hpp"
 #include "ExSubstituteRequest.hpp"
+#include "LanguageQueryKind.hpp"
 #include "SubstituteConfirmation.hpp"
 #include "SubstituteMatch.hpp"
 #include "SubstituteResult.hpp"
@@ -115,6 +116,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
                                          VimMotion motion);
 [[nodiscard]] VimStep cancelled(const VimState &state);
 [[nodiscard]] VimStep failed(VimStep step, VimRepeatFailure failure);
+[[nodiscard]] VimStep language_queried(const VimState &state, LanguageQueryKind kind,
+                                       VimStep unbound);
 [[nodiscard]] VimStep moved_or_failed(VimStep step, VimMotion motion, Offset from,
                                       const VimMotionLanding &landing);
 [[nodiscard]] VimStep context_marked(VimStep step, const VimEditorView &view);

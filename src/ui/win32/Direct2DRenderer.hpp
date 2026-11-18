@@ -23,6 +23,7 @@
 #include "GridRowView.hpp"
 #include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
+#include "HoverTipLayout.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
@@ -205,6 +206,10 @@ class Direct2DRenderer final
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     // タブの札（#1789）。frame に札のタブがあるときだけ描く。いちばん最後に描く（本文・面の上）。
     void draw_tab_tip(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    // hover の札（ADR 0190 の決定 6）。この frame
+    // で描いたキャレットの矩形の上（入らなければ下）に、 本文の領域 area
+    // の中で描く。文が無ければ何もしない。
+    void draw_hover_tip(const application::EditorFrame &frame, const core::LayoutRect &area);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     // 本文の layout を描く経路（保持した字形・範囲の描き直し・置き換え）は BodyTextPainter の
     // 1 本（ADR 0073・#531）。本文を描いている間の縦の範囲を渡した 1 回分を作る。
@@ -515,6 +520,7 @@ class Direct2DRenderer final
     // タブの札の文の書式と文字組みの保持（#1789・上限 1）。保持は書式の作り直しで捨てる。
     TextFormat tab_tip_format_;
     TabTipLayout tab_tip_layout_;
+    HoverTipLayout hover_tip_layout_;
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
     // ときに捨てる（ADR 0162 の決定 8）。
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};

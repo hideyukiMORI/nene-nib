@@ -4,6 +4,7 @@
 #include "Direct2DRendererDetail.hpp"
 
 #include "EditorFrame.hpp"
+#include "HoverTip.hpp"
 #include "LayoutRect.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
@@ -218,6 +219,28 @@ void Direct2DRenderer::draw_tab_tip(const application::EditorFrame &frame,
     static_cast<void>(tab_tip_layout_.fitted(*dwrite_.Get(), tab_tip_format_.Get(), text,
                                              core::tab_tip_text_limit(layout.band.right, dpi_)));
     const auto paint = tab_tip_layout_.painted(layout, tab, frame.palette, dpi_);
+    if (paint.has_value())
+    {
+        paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
+    }
+}
+
+// hover の札（ADR 0190 の決定 6）。文は frame の値（12 行に切ってある）で、幅の上限で折り返す
+// （HoverTipLayout の 1 本）。書式と描く 1 本（paint_tab_tip）はタブの札と同じで、置き場は
+// core::hover_tip_rect、色はトークンだけ。
+void Direct2DRenderer::draw_hover_tip(const application::EditorFrame &frame,
+                                      const core::LayoutRect &area)
+{
+    if (!frame.hover.has_value())
+    {
+        return;
+    }
+    static_cast<void>(
+        hover_tip_layout_.fitted(*dwrite_.Get(), tab_tip_format_.Get(), frame.hover.value(),
+                                 core::hover_tip_text_limit(core::width_of(area), dpi_)));
+    const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
+                                 caret_rectangle_.right, caret_rectangle_.bottom};
+    const auto paint = hover_tip_layout_.painted(caret, area, frame.palette, dpi_);
     if (paint.has_value())
     {
         paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
