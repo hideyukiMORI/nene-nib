@@ -247,7 +247,8 @@ LspRequestContext EditorController::request_context() const
                              .at = state_.selection().caret};
 }
 
-// 文脈を照合して答えを状態に置く（決定 1）。合わなければ捨て、知らせは出さない。
+// 文脈を照合して答えを状態に置く（決定 1）。合わなければ捨て、その種類の前の答えも消す（古い答えが
+// 後から使われる筋を無くす・#1825 のレビュー R4）。知らせは出さない。
 void EditorController::receive_answer(const PendingLspRequest &request,
                                       const core::LspResponse &response)
 {
@@ -261,24 +262,12 @@ void EditorController::receive_answer(const PendingLspRequest &request,
         return;
     case LspRequestKind::completion:
         answers.completion = completion_answer(request, response, active);
-        if (!answers.completion.has_value())
-        {
-            return;
-        }
         break;
     case LspRequestKind::hover:
         answers.hover = hover_answer(request, response, current);
-        if (!answers.hover.has_value())
-        {
-            return;
-        }
         break;
     case LspRequestKind::definition:
         answers.definition = definition_answer(request, response, current);
-        if (!answers.definition.has_value())
-        {
-            return;
-        }
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));
