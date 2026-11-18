@@ -16,7 +16,7 @@ namespace
 {
 namespace ui = nenenib::tests::ui;
 // 群の表（名前 → 検査）。関数の外に置く（行を足しても verify_selected の長さが変わらない）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 47> groups{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 48> groups{{
     {"", ui::verify_fallback_keys},
     {"", ui::verify_fallback_cache},
     {"--glyphs", ui::verify_glyph_collector},
@@ -64,6 +64,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 47> groups{{
     {"--context-menu", ui::verify_context_menu_paint},
     {"--finder-preview", ui::verify_finder_preview_paint},
     {"--completion", ui::verify_completion_paint},
+    {"--hover-tip", ui::verify_hover_tip_paint},
 }};
 
 bool verify_selected(std::string_view selector)

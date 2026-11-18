@@ -187,6 +187,9 @@ class EditorWindow final
     // Enter と Tab。確定が本文を変えなければ面を閉じて偽（鍵は本文へ通す）。
     [[nodiscard]] bool commit_completion();
     void close_completion_outside();
+    // 窓が焦点を失ったときの片付け（選択のドラッグ・Ctrl+Tab の歩き・帯の hover・補完の面・hover の
+    // 札・字の大きさのホイールの残り）。
+    void lose_focus();
     // 面の行のクリック（押した行と離した行が同じときだけ確定）と面の上のホイール（#1844 の R1）。
     // 面が受けたら真で、本文へ渡さない。
     [[nodiscard]] bool press_completion(LPARAM data);
@@ -423,6 +426,8 @@ class EditorWindow final
     void run_select_all();
     void run_cycle_finder_preview();
     void run_complete();
+    void run_go_to_definition();
+    void run_show_information();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
