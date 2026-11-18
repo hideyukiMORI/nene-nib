@@ -278,6 +278,13 @@ void EditorController::stop_language_server()
     link.language.reset();
     link.pending.clear();
     link.abilities = {};
+    // 前の子の答えは残さない（落ちた・再起動の道もここを通る・#1825 のレビュー R4）。
+    const auto &answers = state_.language_answers();
+    if (answers.completion.has_value() || answers.hover.has_value() ||
+        answers.definition.has_value())
+    {
+        state_ = state_.with_language_answers({});
+    }
     link.considered.reset();
     link.retired = true;
     ++link.generation;

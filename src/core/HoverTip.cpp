@@ -34,29 +34,29 @@ constexpr std::string_view clipped_mark = "…";
 // 末尾の空白と改行を除いた長さ。
 [[nodiscard]] std::size_t trimmed_size(std::string_view text) noexcept
 {
-    const std::size_t last = text.find_last_not_of(" \t\n");
-    return last == std::string_view::npos ? 0 : last + 1;
+    std::size_t size = text.size();
+    while (size > 0 && (text[size - 1] == ' ' || text[size - 1] == '\t' || text[size - 1] == '\n'))
+    {
+        --size;
+    }
+    return size;
 }
 
 // 先頭から lines 行ぶんの長さ（最後の行の改行は含まない）。行が足りなければ値なしの代わりに全体の
 // 長さ + 1（越えていない印）。
 [[nodiscard]] std::size_t lines_size(std::string_view text, std::size_t lines) noexcept
 {
-    std::size_t at = 0;
-    for (std::size_t line = 0; line < lines; ++line)
+    // 1 文字の検索は libc の memchr を core の外へ出す（ARC-003）ので、バイトを順に数える。
+    std::size_t feeds = 0;
+    for (std::size_t at = 0; at < text.size(); ++at)
     {
-        const std::size_t feed = text.find('\n', at);
-        if (feed == std::string_view::npos)
+        feeds += text[at] == '\n' ? 1U : 0U;
+        if (feeds == lines)
         {
-            return text.size() + 1;
+            return at;
         }
-        if (line + 1 == lines)
-        {
-            return feed;
-        }
-        at = feed + 1;
     }
-    return 0;
+    return text.size() + 1;
 }
 
 // 先頭から count 文字の後ろのバイト位置。
