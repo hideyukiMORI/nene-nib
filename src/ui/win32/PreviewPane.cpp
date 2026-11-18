@@ -8,6 +8,7 @@
 #include "PreviewPainter.hpp"
 #include "PreviewScene.hpp"
 #include "PreviewSelectionText.hpp"
+#include "PreviewTableCell.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -293,9 +294,13 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     }
     const auto &style = measured_style_.value();
     const auto &block = measured_->blocks.at(index);
-    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。コードブロックは面の内側の余白だけ下げる。
-    const auto inset =
-        block.kind == core::PreviewBlockKind::code ? preview_code_padding(style.dpi) : 0.0F;
+    if (block.kind == core::PreviewBlockKind::table_row)
+    {
+        return hit_cell(
+            index, D2D1::Point2F(point.x - tops.indent(index), point.y - tops.top(index)), style);
+    }
+    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ下げる。
+    const auto inset = preview_paneled(block.kind) ? preview_code_padding(style.dpi) : 0.0F;
     const auto width = preview_text_width(block, static_cast<float>(core::width_of(area)),
                                           tops.indent(index), style.dpi);
     // 描く所と同じ箱で同じ layout を引く（画像の上の点は箱の前か後ろ・画像は 1 つの単位）。
@@ -318,6 +323,54 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     }
     const auto units = metrics.textPosition + (trailing != FALSE ? metrics.length : 0U);
     return core::PreviewPoint{index, preview_byte_of_units(core::preview_shown_text(block), units)};
+}
+
+std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_POINT_2F point,
+                                                        const PreviewTextStyle &style)
+{
+    const auto &block = measured_->blocks.at(index);
+    if (!block.table.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &table = block.table.value();
+    const auto columns = layouts_.table_columns(*measured_, index, style);
+    if (!columns || table.cells.empty())
+    {
+        return std::nullopt;
+    }
+    const auto &widths = *columns.value();
+    const auto count = std::min(table.cells.size(), widths.size());
+    const auto padding = preview_table_padding_x(style.dpi);
+    // 点が掛かる列（右の余白までを含める・最後の列より右は最後の列）。
+    std::size_t column = 0;
+    while (column + 1U < count && point.x >= preview_table_cell_left(widths, column, style.dpi) +
+                                                 widths.at(column) + padding)
+    {
+        ++column;
+    }
+    const auto cell = core::preview_table_cell(block, column);
+    const auto layout = layouts_.get(cell, preview_marker_layout_width(), style);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!layout || FAILED(layout.value()->GetMetrics(&metrics)))
+    {
+        return std::nullopt;
+    }
+    const auto left =
+        preview_table_cell_left(widths, column, style.dpi) +
+        preview_table_aligned(widths.at(column), metrics.width, table.aligns.at(column));
+    BOOL trailing = FALSE;
+    BOOL inside = FALSE;
+    DWRITE_HIT_TEST_METRICS hit{};
+    if (FAILED(layout.value()->HitTestPoint(point.x - left,
+                                            point.y - preview_table_padding_y(style.dpi), &trailing,
+                                            &inside, &hit)))
+    {
+        return std::nullopt;
+    }
+    const auto units = hit.textPosition + (trailing != FALSE ? hit.length : 0U);
+    const auto first = core::preview_table_cell_range(block, column).first;
+    return core::PreviewPoint{index, first + preview_byte_of_units(cell.text, units)};
 }
 
 std::size_t PreviewPane::created() const noexcept

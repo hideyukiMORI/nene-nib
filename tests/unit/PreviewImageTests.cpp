@@ -144,6 +144,16 @@ void verify_image_order()
            "a document without images has no image node");
     expect(parsed_document("`![code](a.png)`\n").images.empty(),
            "an image inside a code span is not an image node");
+    // front matter（#1840）は要素 0 で、画像の節はその後ろの要素の番号と文字を指す。中の ![..](..)
+    // は画像にしない。
+    const auto fronted = parsed_document("---\ncover: ![no](no.png)\n---\n![x](1.png)\n");
+    expect(fronted.images.size() == 1U && fronted.images.front().block == 1U &&
+               fronted.images.front().source == "1.png" &&
+               fronted.blocks.at(1).text.substr(fronted.images.front().begin.value,
+                                                fronted.images.front().end.value -
+                                                    fronted.images.front().begin.value) ==
+                   "[画像: x]",
+           "an image after a front matter points at its own block and text");
 }
 
 // ---------------------------------------------------------------- core: 参照の解決（追補 48）

@@ -10,9 +10,14 @@
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
+#include "MarkdownTask.hpp"
+#include "Offset.hpp"
+#include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewSpan.hpp"
+#include "PreviewStyle.hpp"
+#include "PreviewTableRow.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 #include "Utf8.hpp"
@@ -393,7 +398,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
         return true;
     }
     const std::string_view digits = marker.substr(0U, marker.size() - 1U);
-    return marker.ends_with('.') && !digits.empty() &&
+    return (marker.ends_with('.') || marker.ends_with(')')) && !digits.empty() &&
            std::ranges::all_of(digits,
                                [](char character) { return character >= '0' && character <= '9'; });
 }
@@ -444,7 +449,7 @@ void verify_family(const char *description, std::uint64_t seed, Make make, Check
     }
     if (!marker_holds(block.marker))
     {
-        return "marker is not empty, the bullet or digits and a dot";
+        return "marker is not empty, the bullet or digits and a dot or a parenthesis";
     }
     return spans_hold(block) ? std::string_view{} : "a span outside the text or out of order";
 }
@@ -571,6 +576,154 @@ void verify_markdown_size_boundary()
            "markdown_size_fits takes the md4c size type exactly and refuses one byte more");
 }
 
+// front matter の族（#1840 のレビュー）: 先頭の `---` と閉じる `---` の間と後ろに断片を置く。
+std::string markdown_fronted(Random &random)
+{
+    return "---\n" + composed(random, markdown_fragments) + "\n---\n" +
+           composed(random, markdown_fragments);
+}
+
+// 位置の対応: task の印は本文の `[` と `]` の間の 1 バイトを指す（front matter の分だけずれない）。
+[[nodiscard]] std::string_view fronted_violation(std::string_view input)
+{
+    const std::string_view broken = markdown_violation(input);
+    if (!broken.empty())
+    {
+        return broken;
+    }
+    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
+    for (const auto &block : parsed.value().blocks)
+    {
+        const auto mark =
+            block.task.transform([](const core::MarkdownTask &task) { return task.mark_offset; });
+        if (mark.has_value() &&
+            (mark.value() == 0U || mark.value() + 1U >= input.size() ||
+             input[mark.value() - 1U] != '[' || input[mark.value() + 1U] != ']'))
+        {
+            return "a task mark does not point between brackets of the body";
+        }
+    }
+    return {};
+}
+
+// `~` 1 つを含む文書の断片（#1840 のレビュー）。`~~` と囲みの印 ```` ``` ```` を作らない（囲みの
+// info string の `~` は文字に出ない）。リンク・画像・HTML・実体参照は入れない（行き先や綴りの `~`
+// は文字に出ない）。
+constexpr std::array<std::string_view, 16> tilde_fragments{{
+    "~",
+    "a",
+    " ",
+    "*",
+    "**",
+    "_",
+    "`",
+    "\\",
+    "\n",
+    "\n\n",
+    "10時~12時",
+    "> ",
+    "- ",
+    "# ",
+    "x~y",
+    "\\~~b~",
+}};
+
+std::string markdown_tilded(Random &random)
+{
+    auto text = composed(random, tilde_fragments);
+    // `~~` は前が `\\`（エスケープした `~` の後ろの `~` 1 つの対）のときだけ残す（#1852
+    // のレビュー）。
+    for (auto at = text.find("~~"); at != std::string::npos; at = text.find("~~", at + 1U))
+    {
+        if (at == 0U || text[at - 1U] != '\\')
+        {
+            text.replace(at, 2U, "~ ~");
+        }
+    }
+    for (auto at = text.find("```"); at != std::string::npos; at = text.find("```"))
+    {
+        text.replace(at, 3U, "`` `");
+    }
+    return text;
+}
+
+[[nodiscard]] std::size_t tildes_in(std::string_view text)
+{
+    return static_cast<std::size_t>(std::ranges::count(text, '~'));
+}
+
+// `~` 1 つは打ち消しにしないので、出る文字の `~` の数は入力の数と同じ（`~` が消えない）。
+[[nodiscard]] std::string_view tilde_violation(std::string_view input)
+{
+    const std::string_view broken = markdown_violation(input);
+    if (!broken.empty())
+    {
+        return broken;
+    }
+    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
+    std::size_t shown = 0U;
+    for (const auto &block : parsed.value().blocks)
+    {
+        shown += tildes_in(block.text);
+    }
+    return shown == tildes_in(input) ? std::string_view{} : "a single tilde is lost from the text";
+}
+
+// 表と alert の族（#1852 のレビュー）: 表の見出しと揃えの行の後ろと、alert の引用の中に断片を置く。
+std::string markdown_tabled(Random &random)
+{
+    return "| a | b |\n|:--|--:|\n| " + composed(random, markdown_fragments) +
+           " |\n\n> [!NOTE]\n> " + composed(random, markdown_fragments);
+}
+
+// 表の行: 升の数は文字の Tab の数 ＋ 1・升の始まりは文字の中で増える・行の番号は 0 から 1 ずつ。
+[[nodiscard]] bool row_holds(const core::PreviewTableRow &table, const PreviewBlock &block,
+                             const PreviewBlock *previous)
+{
+    const auto tabs = static_cast<std::size_t>(std::ranges::count(block.text, '\t'));
+    const bool ordered = std::ranges::is_sorted(table.cells, {}, &core::Offset::value) &&
+                         (table.cells.empty() || table.cells.back().value <= block.text.size());
+    const bool counted = table.row == 0U || (previous != nullptr && previous->table.has_value() &&
+                                             previous->table.value().row + 1U == table.row);
+    return tabs + 1U == table.cells.size() && table.aligns.size() == table.cells.size() &&
+           ordered && counted;
+}
+
+// alert の名前の装飾は先頭で、長さは名前と同じ。
+[[nodiscard]] bool alert_holds(const PreviewBlock &block)
+{
+    const auto title =
+        std::ranges::find(block.spans, core::PreviewStyle::alert_title, &core::PreviewSpan::style);
+    return title == block.spans.end() ||
+           (block.alert.has_value() && title == block.spans.begin() && title->begin.value == 0U &&
+            title->end.value == core::preview_alert_name(block.alert.value()).size());
+}
+
+[[nodiscard]] std::string_view tabled_violation(std::string_view input)
+{
+    const std::string_view broken = markdown_violation(input);
+    if (!broken.empty())
+    {
+        return broken;
+    }
+    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
+    const auto &blocks = parsed.value().blocks;
+    for (std::size_t at = 0; at < blocks.size(); ++at)
+    {
+        const auto &block = blocks.at(at);
+        if (block.table.has_value() &&
+            !row_holds(block.table.value(), block, at > 0U ? &blocks.at(at - 1U) : nullptr))
+        {
+            return "a table row does not match its cells or its row number";
+        }
+        if (!alert_holds(block))
+        {
+            return "an alert title is not the leading span of the kind name";
+        }
+    }
+    return {};
+}
+
 void verify_markdown_properties()
 {
     verify_family("parse_markdown holds on random bytes", 8711U, markdown_bytes,
@@ -583,6 +736,12 @@ void verify_markdown_properties()
                   markdown_violation);
     verify_family("a stopping predicate is stopped or the whole document", 8715U, markdown_composed,
                   stop_violation);
+    verify_family("parse_markdown keeps positions after a front matter", 8717U, markdown_fronted,
+                  fronted_violation);
+    verify_family("parse_markdown keeps every single tilde in the text", 8718U, markdown_tilded,
+                  tilde_violation);
+    verify_family("parse_markdown keeps table rows and alert titles consistent", 8719U,
+                  markdown_tabled, tabled_violation);
     verify_stops_happen();
     verify_markdown_depths();
     verify_markdown_size_boundary();

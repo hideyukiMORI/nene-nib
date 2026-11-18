@@ -102,8 +102,9 @@ namespace
 std::string_view preview_shown_text(const PreviewBlock &block) noexcept
 {
     std::string_view text = block.text;
-    const bool monospaced =
-        block.kind == PreviewBlockKind::code || block.kind == PreviewBlockKind::html;
+    const bool monospaced = block.kind == PreviewBlockKind::code ||
+                            block.kind == PreviewBlockKind::html ||
+                            block.kind == PreviewBlockKind::front_matter;
     if (monospaced && text.ends_with('\n'))
     {
         text.remove_suffix(1);

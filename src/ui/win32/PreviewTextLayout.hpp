@@ -39,5 +39,7 @@ struct PreviewTextLayout
     std::vector<std::optional<D2D1_POINT_2F>> image_origins;
     std::uint64_t inked = 0;
     std::vector<DWRITE_TEXT_RANGE> ranges;
+    // 最後に引いた回（PreviewTextLayouts の通し番号・あふれたら最も小さい entry を捨てる）。
+    std::uint64_t used = 0;
 };
 } // namespace nenenib::ui::win32

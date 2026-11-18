@@ -5,6 +5,7 @@
 #include "MarkdownTask.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableAlign.hpp"
 
 // md4c の宣言を読むのはこの 1 ファイルだけ（ADR 0151 の決定 5・eng/conformance.py が守る）。
 #include <md4c.h>
@@ -56,21 +57,73 @@ constexpr std::string_view replacement_character = "�";
                         .mark_offset = static_cast<std::size_t>(item->task_mark_offset)};
 }
 
-[[nodiscard]] std::uint64_t list_start(const void *detail) noexcept
+// 番号つきの最初の番号と区切り（'.' か ')'・#1840）。
+[[nodiscard]] std::pair<std::uint64_t, char> list_numbering(const void *detail) noexcept
 {
-    return static_cast<const MD_BLOCK_OL_DETAIL *>(detail)->start;
+    const auto *list = static_cast<const MD_BLOCK_OL_DETAIL *>(detail);
+    return {list->start, list->mark_delimiter};
 }
 
-// 表（MD_BLOCK_TABLE 系）は flag を立てないので来ない。来たらセルを段落として扱う。
+// 升の揃え（指定なしは左・#1848）。
+[[nodiscard]] PreviewTableAlign cell_align(const void *detail) noexcept
+{
+    switch (static_cast<const MD_BLOCK_TD_DETAIL *>(detail)->align)
+    {
+    case MD_ALIGN_DEFAULT:
+    case MD_ALIGN_LEFT:
+        return PreviewTableAlign::left;
+    case MD_ALIGN_CENTER:
+        return PreviewTableAlign::center;
+    case MD_ALIGN_RIGHT:
+        return PreviewTableAlign::right;
+    }
+    return PreviewTableAlign::left;
+}
+
+// 表（MD_FLAG_TABLES・#1848）は行ごとに要素 table_row を 1 つ開き、升ごとに始まりと揃えを足す。
+void entered_table_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *detail)
+{
+    switch (type)
+    {
+    case MD_BLOCK_TABLE:
+        builder.enter_table();
+        return;
+    case MD_BLOCK_TR:
+        builder.enter_row();
+        return;
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
+        builder.enter_cell(cell_align(detail), type == MD_BLOCK_TH);
+        return;
+    case MD_BLOCK_DOC:
+    case MD_BLOCK_QUOTE:
+    case MD_BLOCK_UL:
+    case MD_BLOCK_OL:
+    case MD_BLOCK_LI:
+    case MD_BLOCK_HR:
+    case MD_BLOCK_H:
+    case MD_BLOCK_CODE:
+    case MD_BLOCK_HTML:
+    case MD_BLOCK_P:
+    case MD_BLOCK_THEAD:
+    case MD_BLOCK_TBODY:
+        return;
+    }
+}
+
 void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *detail)
 {
     switch (type)
     {
     case MD_BLOCK_DOC:
-    case MD_BLOCK_TABLE:
     case MD_BLOCK_THEAD:
     case MD_BLOCK_TBODY:
+        return;
+    case MD_BLOCK_TABLE:
     case MD_BLOCK_TR:
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
+        entered_table_block(builder, type, detail);
         return;
     case MD_BLOCK_QUOTE:
         builder.enter_quote();
@@ -79,7 +132,7 @@ void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *deta
         builder.enter_list(std::nullopt);
         return;
     case MD_BLOCK_OL:
-        builder.enter_list(list_start(detail));
+        builder.enter_list(list_numbering(detail));
         return;
     case MD_BLOCK_LI:
         builder.enter_item(item_task(detail));
@@ -97,8 +150,6 @@ void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *deta
         builder.open_leaf(PreviewBlockKind::html, 0U);
         return;
     case MD_BLOCK_P:
-    case MD_BLOCK_TH:
-    case MD_BLOCK_TD:
         builder.open_leaf(PreviewBlockKind::paragraph, 0U);
         return;
     }
@@ -108,11 +159,14 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
 {
     switch (type)
     {
-    case MD_BLOCK_DOC:
     case MD_BLOCK_TABLE:
+        builder.leave_table();
+        return;
+    case MD_BLOCK_DOC:
     case MD_BLOCK_THEAD:
     case MD_BLOCK_TBODY:
-    case MD_BLOCK_TR:
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
     case MD_BLOCK_HR:
         return;
     case MD_BLOCK_QUOTE:
@@ -129,15 +183,15 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     case MD_BLOCK_CODE:
     case MD_BLOCK_HTML:
     case MD_BLOCK_P:
-    case MD_BLOCK_TH:
-    case MD_BLOCK_TD:
+    case MD_BLOCK_TR:
         builder.close_leaf();
         return;
     }
 }
 
-// 装飾の種類。画像は代わりの文字の装飾（builder が「[画像: alt]」の枠を足す）。打ち消し・数式・
-// wiki リンク・下線は装飾を持たない（flag を立てないので来ない）。
+// 装飾の種類。画像は代わりの文字の装飾（builder が「[画像: alt]」の枠を足す）。
+// 打ち消しは MD_FLAG_STRIKETHROUGH（#1840）。数式・wiki リンク・下線は
+// 装飾を持たない（flag を立てないので来ない）。
 [[nodiscard]] std::optional<PreviewStyle> span_style(MD_SPANTYPE type) noexcept
 {
     switch (type)
@@ -153,6 +207,7 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
     case MD_SPAN_IMG:
         return PreviewStyle::image;
     case MD_SPAN_DEL:
+        return PreviewStyle::strikethrough;
     case MD_SPAN_LATEXMATH:
     case MD_SPAN_LATEXMATH_DISPLAY:
     case MD_SPAN_WIKILINK:
@@ -267,6 +322,11 @@ int on_leave_block(MD_BLOCKTYPE type, void * /*detail*/, void *userdata)
 // ので、コールバックの中で std::string に写す。
 void entered_span(MarkdownBuilder &builder, MD_SPANTYPE type, const void *detail)
 {
+    if (type == MD_SPAN_DEL)
+    {
+        builder.enter_strike();
+        return;
+    }
     if (type != MD_SPAN_IMG)
     {
         builder.enter_span(span_style(type));
@@ -314,13 +374,30 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
         return std::unexpected(MarkdownFailure::too_large);
     }
     MarkdownBuilder builder(text, stop, language);
-    if (text.empty())
+    // 先頭の front matter は md4c に渡さない（#1840）。要素の位置は本文を
+    // 指す pointer から引くので、後ろだけを渡しても本文の中の位置のまま。
+    // front matter の確保の失敗も md4c のコールバックと同じく
+    // insufficient_memory（ARC-010・#817）。
+    std::size_t parsed_from = 0;
+    try
+    {
+        parsed_from = builder.front_matter();
+    }
+    catch (const std::bad_alloc &)
+    {
+        return std::unexpected(MarkdownFailure::insufficient_memory);
+    }
+    const std::string_view parsed = text.substr(parsed_from);
+    if (parsed.empty())
     {
         return std::move(builder).finished();
     }
+    // 打ち消し線と裸の URL・www・メールの自動リンク（GFM の拡張・#1840）と表（#1848）。
     const MD_PARSER parser{
         .abi_version = 0U,
-        .flags = MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS,
+        .flags = MD_DIALECT_COMMONMARK | MD_FLAG_TASKLISTS | MD_FLAG_STRIKETHROUGH |
+                 MD_FLAG_PERMISSIVEURLAUTOLINKS | MD_FLAG_PERMISSIVEWWWAUTOLINKS |
+                 MD_FLAG_PERMISSIVEEMAILAUTOLINKS | MD_FLAG_TABLES,
         .enter_block = on_enter_block,
         .leave_block = on_leave_block,
         .enter_span = on_enter_span,
@@ -329,7 +406,7 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
         .debug_log = nullptr,
         .syntax = nullptr,
     };
-    if (md_parse(text.data(), static_cast<MD_SIZE>(text.size()), &parser, &builder) == 0)
+    if (md_parse(parsed.data(), static_cast<MD_SIZE>(parsed.size()), &parser, &builder) == 0)
     {
         return std::move(builder).finished();
     }
