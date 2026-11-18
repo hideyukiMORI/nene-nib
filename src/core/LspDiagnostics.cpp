@@ -4,8 +4,8 @@
 #include "DiagnosticSeverity.hpp"
 #include "DiagnosticsCount.hpp"
 #include "JsonNull.hpp"
-#include "JsonNumber.hpp"
 #include "JsonValue.hpp"
+#include "LspJsonRead.hpp"
 #include "LspPosition.hpp"
 #include "Offset.hpp"
 
@@ -30,75 +30,6 @@ using Version = std::optional<std::uint64_t>;
 constexpr std::uint64_t lowest_severity = 1;
 constexpr std::uint64_t highest_severity = 4;
 
-[[nodiscard]] const JsonObject *object_of(const JsonValue &value) noexcept
-{
-    return std::get_if<JsonObject>(&value.value);
-}
-
-[[nodiscard]] const JsonObject *object_member(const JsonObject &object, std::string_view key)
-{
-    const Member found = json_member(object, key);
-    return found.has_value() ? object_of(found.value().get()) : nullptr;
-}
-
-[[nodiscard]] const std::string *text_member(const JsonObject &object, std::string_view key)
-{
-    const Member found = json_member(object, key);
-    return found.has_value() ? std::get_if<std::string>(&found.value().get().value) : nullptr;
-}
-
-// 0 以上の整数の欄（Position の line / character・severity・version）。
-[[nodiscard]] std::optional<std::uint64_t> count_of(const JsonValue &value) noexcept
-{
-    const auto *number = std::get_if<JsonNumber>(&value.value);
-    if (number == nullptr || !number->integer.has_value() || number->integer.value() < 0)
-    {
-        return std::nullopt;
-    }
-    return static_cast<std::uint64_t>(number->integer.value());
-}
-
-[[nodiscard]] std::optional<std::uint64_t> count_member(const JsonObject &object,
-                                                        std::string_view key)
-{
-    const Member found = json_member(object, key);
-    return found.has_value() ? count_of(found.value().get()) : std::nullopt;
-}
-
-[[nodiscard]] std::optional<LspPosition> position_member(const JsonObject &object,
-                                                         std::string_view key)
-{
-    const JsonObject *position = object_member(object, key);
-    if (position == nullptr)
-    {
-        return std::nullopt;
-    }
-    const std::optional<std::uint64_t> line = count_member(*position, "line");
-    const std::optional<std::uint64_t> character = count_member(*position, "character");
-    if (!line.has_value() || !character.has_value())
-    {
-        return std::nullopt;
-    }
-    return LspPosition{.line = static_cast<std::size_t>(line.value()),
-                       .character = static_cast<std::size_t>(character.value())};
-}
-
-[[nodiscard]] std::optional<LspRange> range_member(const JsonObject &object)
-{
-    const JsonObject *range = object_member(object, "range");
-    if (range == nullptr)
-    {
-        return std::nullopt;
-    }
-    const std::optional<LspPosition> start = position_member(*range, "start");
-    const std::optional<LspPosition> end = position_member(*range, "end");
-    if (!start.has_value() || !end.has_value())
-    {
-        return std::nullopt;
-    }
-    return LspRange{.start = start.value(), .end = end.value()};
-}
-
 // severity の欄（LSP 3.17 の 1〜4）。欄が無ければ error、それ以外の値は値なし（その件を捨てる）。
 [[nodiscard]] std::optional<DiagnosticSeverity> severity_member(const JsonObject &object)
 {
@@ -107,7 +38,7 @@ constexpr std::uint64_t highest_severity = 4;
     {
         return DiagnosticSeverity::error;
     }
-    const std::optional<std::uint64_t> value = count_of(found.value().get());
+    const std::optional<std::uint64_t> value = json_count_of(found.value().get());
     if (!value.has_value() || value.value() < lowest_severity || value.value() > highest_severity)
     {
         return std::nullopt;
@@ -129,13 +60,13 @@ constexpr std::uint64_t highest_severity = 4;
 [[nodiscard]] std::optional<Diagnostic>
 diagnostic_of(const JsonValue &value, const TextBuffer &text, LspPositionEncoding encoding)
 {
-    const JsonObject *object = object_of(value);
+    const JsonObject *object = json_object_of(value);
     if (object == nullptr)
     {
         return std::nullopt;
     }
-    const std::string *message = text_member(*object, "message");
-    const std::optional<LspRange> range = range_member(*object);
+    const std::string *message = json_text_member(*object, "message");
+    const std::optional<LspRange> range = lsp_range_member(*object, "range");
     const std::optional<DiagnosticSeverity> severity = severity_member(*object);
     if (message == nullptr || !range.has_value() || !severity.has_value())
     {
@@ -158,7 +89,7 @@ diagnostic_of(const JsonValue &value, const TextBuffer &text, LspPositionEncodin
     {
         return Version{};
     }
-    const Version version = count_of(found.value().get());
+    const Version version = json_count_of(found.value().get());
     if (!version.has_value())
     {
         return std::unexpected{LspDiagnosticsFailure::invalid_params};
@@ -188,12 +119,12 @@ lsp_published_diagnostics(const LspNotification &notification, const TextBuffer 
     {
         return std::unexpected{LspDiagnosticsFailure::not_publish_diagnostics};
     }
-    const JsonObject *params = object_of(notification.params);
+    const JsonObject *params = json_object_of(notification.params);
     if (params == nullptr)
     {
         return std::unexpected{LspDiagnosticsFailure::invalid_params};
     }
-    const std::string *uri = text_member(*params, "uri");
+    const std::string *uri = json_text_member(*params, "uri");
     const Member listed = json_member(*params, "diagnostics");
     const auto *entries =
         listed.has_value() ? std::get_if<JsonArray>(&listed.value().get().value) : nullptr;

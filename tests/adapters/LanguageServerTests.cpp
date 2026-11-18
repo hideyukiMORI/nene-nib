@@ -23,6 +23,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -434,6 +435,63 @@ void verify_bind_after_start()
     server.stop();
 }
 
+// 替え玉に method の要求を 1 つ送り、届いた答えの本文（#1825・ADR 0190 の決定 11）。
+std::string answer_to(Arguments arguments, std::string_view method)
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(launch_of(std::move(arguments))).has_value(),
+           "the answering fake server starts");
+    server.send(R"({"jsonrpc":"2.0","id":7,"method":")" + std::string(method) +
+                R"(","params":{}})");
+    const auto answers = bodies(pump_until(server, messages(1)));
+    server.stop();
+    return answers.size() == 1 ? answers.front() : std::string{};
+}
+
+bool has_text(std::string_view body, std::string_view part)
+{
+    return body.find(part) != std::string_view::npos;
+}
+
+void verify_capabilities_answer()
+{
+    const auto body = answer_to({}, "initialize");
+    expect(has_text(body, R"("completionProvider":{"triggerCharacters":["."]})") &&
+               has_text(body, R"("hoverProvider":true)") &&
+               has_text(body, R"("definitionProvider":true)"),
+           "initialize is answered with completion, hover and definition providers");
+    expect(answer_to({}, "textDocument/hover") == R"({"jsonrpc":"2.0","id":7,"result":null})",
+           "a request without its answer argument is answered with null");
+}
+
+void verify_completion_answer()
+{
+    const auto body = answer_to({"--completion", "3"}, "textDocument/completion");
+    expect(has_text(body, R"("id":7,"result":{"isIncomplete":false,"items":[)") &&
+               has_text(body, R"({"label":"fake2"}]})") && !has_text(body, "fake3"),
+           "--completion 3 answers a CompletionList of three items");
+}
+
+void verify_hover_answer()
+{
+    const auto body = answer_to({"--hover"}, "textDocument/hover");
+    expect(
+        has_text(
+            body,
+            R"("result":{"contents":{"kind":"markdown","value":"```cpp\nint fake()\n```\nfake hover"}})"),
+        "--hover answers a fenced markdown MarkupContent");
+}
+
+void verify_definition_answer()
+{
+    const auto body = answer_to({"--definition", "C:\\work\\a.cpp"}, "textDocument/definition");
+    expect(
+        has_text(
+            body,
+            R"("result":{"uri":"file:///C:/work/a.cpp","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}})"),
+        "--definition answers one Location in the given file");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -457,6 +515,10 @@ int main(int argc, char **argv)
     verify_stop_does_not_wait();
     verify_stop_cancels_a_pending_write();
     verify_restart();
+    verify_capabilities_answer();
+    verify_completion_answer();
+    verify_hover_answer();
+    verify_definition_answer();
     std::printf("Language server adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
 }

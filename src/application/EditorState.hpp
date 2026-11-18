@@ -20,6 +20,7 @@
 #include "FindState.hpp"
 #include "InputHistory.hpp"
 #include "Language.hpp"
+#include "LanguageAnswers.hpp"
 #include "LineEnding.hpp"
 #include "ParkedTab.hpp"
 #include "PreviewPlacement.hpp"
@@ -306,6 +307,10 @@ class EditorState final
     // タブの札の段（#1789・ADR 0056 の #1789 の追補）。どのタブかは hovered が持つ。
     [[nodiscard]] TabTipPhase tab_tip() const noexcept;
     [[nodiscard]] EditorState with_tab_tip(TabTipPhase phase) const;
+    // 言語サーバーの答え（ADR 0190 の決定 1）。置くのは controller の答えの振り分けの 1 か所で、
+    // 面・札・跳ぶ道（段 B / C）が読んで消す。
+    [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
+    [[nodiscard]] EditorState with_language_answers(LanguageAnswers answers) const;
 
     // 枠（ADR 0148 の決定 2・3・5・9）。操作中の枠は上の欄そのもので、もう 1 つの枠は受け身の
     // 表示 PaneView として脇に 1 つだけ置く。layout == none ⇔ other が値なしで、1 枠の active_side
@@ -452,6 +457,7 @@ class EditorState final
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;
     TabTipPhase tab_tip_ = TabTipPhase::hidden;
+    LanguageAnswers language_answers_;
     SplitState split_;
     // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
     std::optional<PreviewView> full_preview_;

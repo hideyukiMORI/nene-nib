@@ -28,6 +28,8 @@
 #include "LanguageServerTick.hpp"
 #include "LineView.hpp"
 #include "LspDiagnostics.hpp"
+#include "NewTab.hpp"
+#include "Offset.hpp"
 #include "OpenDocument.hpp"
 #include "PlaceCaret.hpp"
 #include "SaveDocument.hpp"
@@ -907,6 +909,349 @@ void verify_line_end_diagnostic()
                                                        core::DiagnosticSeverity::error}},
            "a grid row underlines the one cell past the line end");
 }
+
+// ---------------------------------------------- 段 L2 / L3 の土台（ADR 0190・#1825）
+
+// 補完（triggerCharacters の数は捨てる）・hover（true）・定義へ（object）を持つサーバーの答え。
+constexpr std::string_view capable_answer =
+    R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":[".","->",3]},"hoverProvider":true,"definitionProvider":{}}}})";
+constexpr std::string_view main_location =
+    R"({"uri":"file:///C:/work/main.cpp","range":{"start":{"line":0,"character":4},"end":{"line":0,"character":8}}})";
+
+// 開いて、能力つきで `initialize` に答える（started の能力つきの形）。
+void capable(Editing &editing)
+{
+    hold_documents(editing);
+    editing.files().hold_at(std::string(second_path), Bytes{std::string("abc\n")});
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    static_cast<void>(delivered(editing, app::ServerMessage{std::string{capable_answer}}));
+}
+
+// 最後に送った method の要求の id。
+[[nodiscard]] std::int64_t last_request(Editing &editing, std::string_view method)
+{
+    const auto ids = editing.language_server().requests(method);
+    return ids.empty() ? -1 : ids.back();
+}
+
+// 置いた hover の平文（置いていなければ "<none>"・空の答えは "<empty>"）。
+[[nodiscard]] std::string hover_text(Editing &editing)
+{
+    const auto &hover = editing.controller().language_answers().hover;
+    return hover.has_value() ? hover.value().text.value_or("<empty>") : "<none>";
+}
+
+// 答えを仕込み、合図の意図で引かせる。
+void answer_with(Editing &editing, std::int64_t id, std::string_view result)
+{
+    editing.language_server().answer(id, result);
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+}
+
+// 決定 3: client の能力を申し出、答えの能力を持つ。能力の無いサーバーには要求を送らない。
+void verify_abilities()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    const auto &server = editing.language_server();
+    expect(
+        contains(
+            server.sent().front(),
+            R"("textDocument":{"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true}})"),
+        "initialize offers completion without snippets, hover text and definition links");
+    const auto &abilities = editing.controller().language_server_abilities();
+    expect(abilities.completion && abilities.hover && abilities.definition &&
+               abilities.trigger_characters == std::vector<std::string>{".", "->"},
+           "the answered capabilities keep the providers and the text trigger characters");
+
+    Editing plain(lsp_settings(true));
+    started(plain);
+    const std::size_t before = plain.language_server().sent().size();
+    expect(!plain.controller().request_completion(1) && !plain.controller().request_hover() &&
+               !plain.controller().request_definition() &&
+               plain.language_server().sent().size() == before,
+           "a server without the providers is sent no requests");
+
+    Editing stopped(lsp_settings(true));
+    capable(stopped);
+    static_cast<void>(run_ex(stopped.controller(), "set nolsp"));
+    static_cast<void>(
+        delivered(stopped, app::ServerMessage{R"({"jsonrpc":"2.0","id":2,"result":null})"}));
+    expect(!stopped.controller().language_server_abilities().hover &&
+               stopped.controller().language_server_abilities().trigger_characters.empty(),
+           "a stopped server keeps no abilities");
+}
+
+// 決定 2: `didOpen` していない文書（起動中・無題）では要求しない。
+void verify_requests_need_an_open_document()
+{
+    Editing editing(lsp_settings(true));
+    hold_documents(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    expect(!editing.controller().request_hover(), "nothing is requested before initialized");
+    static_cast<void>(delivered(editing, app::ServerMessage{std::string{capable_answer}}));
+    expect(editing.controller().request_hover(), "an open C++ document can ask for a hover");
+    const auto &server = editing.language_server();
+    applied(editing.controller(), app::NewTab{});
+    const std::size_t untitled = server.sent().size();
+    expect(!editing.controller().request_hover() && !editing.controller().request_definition() &&
+               !editing.controller().request_completion(1) && server.sent().size() == untitled,
+           "an untitled document sends no request");
+}
+
+// 決定 1・2: 要求は文書の URI とキャレットの Position で、変更の `didChange` の後に送る。
+void verify_request_params()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    auto &server = editing.language_server();
+    applied(editing.controller(), app::InsertText{"x"});
+    expect(editing.controller().request_definition(), "the definition request is sent");
+    const auto &sent = server.sent();
+    expect(
+        contains(sent.back(), R"("method":"textDocument/definition")") &&
+            contains(
+                sent.back(),
+                R"("params":{"textDocument":{"uri":"file:///C:/work/main.cpp"},"position":{"line":0,"character":1}})") &&
+            contains(sent.at(sent.size() - 2), R"("method":"textDocument/didChange")"),
+        "the request names the document and the caret after the change it follows");
+    expect(editing.controller().request_completion(4), "the completion request is sent");
+    expect(contains(server.sent().back(), R"("context":{"triggerKind":1})"),
+           "a completion opened by hand is Invoked");
+    expect(editing.controller().request_completion(5, std::string_view{"."}),
+           "a completion from a trigger character is sent");
+    expect(contains(server.sent().back(), R"("context":{"triggerKind":2,"triggerCharacter":"."})"),
+           "a trigger character is told to the server");
+}
+
+// 決定 1: hover と定義への答えは同じ文書・同じ版・同じキャレットのときだけ使う。
+void verify_answer_context()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    static_cast<void>(editing.controller().request_hover());
+    answer_with(editing, last_request(editing, "textDocument/hover"), R"({"contents":"doc"})");
+    const auto &answers = editing.controller().language_answers();
+    expect(hover_text(editing) == "doc" && answers.hover.has_value() &&
+               answers.hover.value().context.at == core::Offset{0},
+           "a current hover answer is placed with its context");
+    static_cast<void>(editing.controller().request_hover());
+    const std::int64_t typed = last_request(editing, "textDocument/hover");
+    applied(editing.controller(), app::InsertText{"y"});
+    answer_with(editing, typed, R"({"contents":"typed"})");
+    expect(hover_text(editing) == "<none>",
+           "a hover answer for an older revision is dropped and clears the earlier answer");
+    static_cast<void>(editing.controller().request_hover());
+    answer_with(editing, last_request(editing, "textDocument/hover"), R"({"contents":"doc"})");
+    static_cast<void>(editing.controller().request_hover());
+    const std::int64_t moved = last_request(editing, "textDocument/hover");
+    static_cast<void>(caret_at(editing, 4));
+    answer_with(editing, moved, R"({"contents":"moved"})");
+    expect(hover_text(editing) == "<none>",
+           "a hover answer for another caret is dropped and clears the earlier answer");
+    static_cast<void>(editing.controller().request_hover());
+    answer_with(editing, last_request(editing, "textDocument/hover"), "null");
+    expect(hover_text(editing) == "<empty>", "an empty hover answer is placed without text");
+    applied(editing.controller(), app::OpenDocument{path_of(second_path)});
+    static_cast<void>(editing.controller().request_definition());
+    const std::int64_t elsewhere = last_request(editing, "textDocument/definition");
+    applied(editing.controller(), app::SwitchTab{0});
+    answer_with(editing, elsewhere, std::string{"["} + std::string{main_location} + "]");
+    expect(!editing.controller().language_answers().definition.has_value(),
+           "a definition answer for another tab is dropped");
+    static_cast<void>(editing.controller().request_definition());
+    answer_with(editing, last_request(editing, "textDocument/definition"), main_location);
+    const auto &definition = editing.controller().language_answers().definition;
+    expect(definition.has_value() && definition.value().locations.size() == 1 &&
+               definition.value().locations.front().uri == source_uri,
+           "a current definition answer is placed");
+}
+
+// 決定 1: 同じ種類の新しい要求は古い要求を取り消し、遅れた古い答えは捨てる。ほかの種類は
+// 取り消さない。
+void verify_cancel()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    auto &server = editing.language_server();
+    static_cast<void>(editing.controller().request_definition());
+    const std::int64_t first = last_request(editing, "textDocument/definition");
+    static_cast<void>(editing.controller().request_hover());
+    expect(server.cancelled().empty(), "a request of another kind cancels nothing");
+    static_cast<void>(editing.controller().request_definition());
+    const std::int64_t second = last_request(editing, "textDocument/definition");
+    expect(server.cancelled() == std::vector<std::int64_t>{first} && second != first,
+           "a new definition request cancels the older one");
+    answer_with(editing, first, main_location);
+    expect(!editing.controller().language_answers().definition.has_value(),
+           "the late answer to the cancelled request is dropped");
+    answer_with(editing, second, "null");
+    const auto &definition = editing.controller().language_answers().definition;
+    expect(definition.has_value() && definition.value().locations.empty(),
+           "the answer to the newer request is placed");
+}
+
+// 決定 1: 補完の答えは同じ文書がアクティブなときに、面の通し番号と共に置く。誤りの答えは空。
+void verify_completion_answer()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    auto &server = editing.language_server();
+    static_cast<void>(editing.controller().request_completion(7));
+    const std::int64_t old = last_request(editing, "textDocument/completion");
+    static_cast<void>(editing.controller().request_completion(8, std::string_view{"."}));
+    expect(server.cancelled() == std::vector<std::int64_t>{old},
+           "a new completion request cancels the older one");
+    answer_with(editing, last_request(editing, "textDocument/completion"),
+                R"({"isIncomplete":true,"items":[{"label":"main"},{"label":"max"}]})");
+    const auto session = [&editing]
+    {
+        const auto &completion = editing.controller().language_answers().completion;
+        return completion.has_value() ? completion.value().session : 0;
+    };
+    // 置いた候補の数と isIncomplete（置いていなければ値なし）。
+    const auto placed = [&editing]
+    {
+        const auto &completion = editing.controller().language_answers().completion;
+        return completion.has_value()
+                   ? std::optional{std::pair{completion.value().list.items.size(),
+                                             completion.value().list.incomplete}}
+                   : std::nullopt;
+    };
+    expect(session() == 8 && placed() == std::optional{std::pair{std::size_t{2}, true}},
+           "a completion answer is placed with its session");
+    static_cast<void>(editing.controller().request_completion(9));
+    server.serve(
+        app::ServerMessage{R"({"jsonrpc":"2.0","id":)" +
+                           std::to_string(last_request(editing, "textDocument/completion")) +
+                           R"(,"error":{"code":-32603,"message":"x"}})"});
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    expect(session() == 9 && placed() == std::optional{std::pair{std::size_t{0}, false}},
+           "an error answer is an empty list");
+    applied(editing.controller(), app::OpenDocument{path_of(second_path)});
+    static_cast<void>(editing.controller().request_completion(10));
+    const std::int64_t elsewhere = last_request(editing, "textDocument/completion");
+    applied(editing.controller(), app::SwitchTab{0});
+    answer_with(editing, elsewhere, R"([{"label":"x"}])");
+    expect(session() == 0,
+           "a completion answer for another tab is dropped and clears the last one");
+    static_cast<void>(editing.controller().request_completion(11));
+    const std::int64_t cancelled = last_request(editing, "textDocument/completion");
+    static_cast<void>(editing.controller().request_completion(12));
+    answer_with(editing, cancelled, R"([{"label":"old"}])");
+    expect(session() == 0, "the answer to a cancelled completion is not placed");
+    answer_with(editing, last_request(editing, "textDocument/completion"), R"([{"label":"new"}])");
+    expect(session() == 12, "the answer carries the session of the request it answers");
+}
+
+// 能力の欄を capabilities（JSON の object）にした `initialize` の答えで、開いて進める。
+void started_with(Editing &editing, std::string_view capabilities)
+{
+    hold_documents(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    editing.language_server().answer(last_request(editing, "initialize"),
+                                     std::string{R"({"capabilities":)"} +
+                                         std::string{capabilities} + "}");
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+}
+
+// 決定 3: 能力ごとに出し分ける（持たない能力の要求だけを送らない）。
+void verify_abilities_one_by_one()
+{
+    Editing completing(lsp_settings(true));
+    started_with(completing, R"({"completionProvider":{},"hoverProvider":false})");
+    expect(completing.controller().request_completion(1) &&
+               !completing.controller().request_hover() &&
+               !completing.controller().request_definition() &&
+               completing.controller().language_server_abilities().trigger_characters.empty(),
+           "a server with completion only is asked for completion only");
+    Editing hovering(lsp_settings(true));
+    started_with(hovering,
+                 R"({"hoverProvider":{"workDoneProgress":true},"definitionProvider":false})");
+    expect(!hovering.controller().request_completion(1) && hovering.controller().request_hover() &&
+               !hovering.controller().request_definition(),
+           "hover options count as the hover provider and false is no provider");
+}
+
+// 決定 2: 言語の違う文書・4 MiB を超えた文書・shutting_down の間は要求しない。
+void verify_requests_need_a_sent_document()
+{
+    constexpr std::string_view big_path = "C:\\work\\big.cpp";
+    Editing editing(lsp_settings(true));
+    editing.files().hold_at(std::string(big_path),
+                            Bytes{std::string(app::language_server_document_limit + 1, 'x')});
+    capable(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(big_path)});
+    expect(!editing.controller().request_hover() && !editing.controller().request_completion(1),
+           "a document over 4 MiB is not sent and asks nothing");
+    applied(editing.controller(), app::SwitchTab{0});
+    expect(editing.controller().request_hover(), "the sent C++ document still asks");
+    applied(editing.controller(), app::OpenDocument{path_of(note_path)});
+    const std::size_t sent = editing.language_server().sent().size();
+    expect(contains(last_sent(editing), R"("method":"shutdown")") &&
+               !editing.controller().request_hover() &&
+               !editing.controller().request_definition() &&
+               editing.language_server().sent().size() == sent,
+           "a document of another language shuts the server down and asks nothing meanwhile");
+    applied(editing.controller(), app::SwitchTab{0});
+    expect(!editing.controller().request_hover(),
+           "the C++ document asks nothing while the server is shutting down");
+}
+
+// 決定 1: 落ちた・止めた子の保留の要求と答えは残らず、起こし直した子の id は前と重ならない。
+void verify_answers_after_restart()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    static_cast<void>(editing.controller().request_hover());
+    answer_with(editing, last_request(editing, "textDocument/hover"), R"({"contents":"doc"})");
+    static_cast<void>(editing.controller().request_definition());
+    const std::int64_t pending = last_request(editing, "textDocument/definition");
+    static_cast<void>(delivered(editing, app::ServerExited{1}));
+    expect(hover_text(editing) == "<none>" &&
+               !editing.controller().language_server_abilities().hover &&
+               editing.language_server().launches().size() == 2,
+           "an exited server leaves no answers and no abilities and is started again");
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    const std::int64_t initialize = last_request(editing, "initialize");
+    expect(initialize > pending, "the restarted server's ids continue after the old ones");
+    editing.language_server().answer(
+        initialize, R"({"capabilities":{"hoverProvider":true,"definitionProvider":true}})");
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    expect(editing.controller().language_server_abilities().hover &&
+               !editing.controller().language_server_abilities().completion,
+           "the restarted server's answer sets the abilities again");
+    answer_with(editing, pending, main_location);
+    expect(!editing.controller().language_answers().definition.has_value(),
+           "an answer to the old server's request is dropped");
+    static_cast<void>(editing.controller().request_hover());
+    answer_with(editing, last_request(editing, "textDocument/hover"), R"({"contents":"again"})");
+    expect(hover_text(editing) == "again", "the restarted server answers a new request");
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    expect(!editing.controller().request_hover(), "nothing is asked while shutting down");
+    answer_with(editing, last_request(editing, "shutdown"), "null");
+    expect(hover_text(editing) == "<none>", "a stopped server leaves no answers");
+}
+
+// 決定 1: 答えない要求は 2 回の tick で `$/cancelRequest` を送って捨てる（知らせず・止めない）。
+void verify_request_expiry()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    auto &server = editing.language_server();
+    static_cast<void>(editing.controller().request_hover());
+    const std::int64_t id = last_request(editing, "textDocument/hover");
+    static_cast<void>(editing.controller().apply_frame(app::LanguageServerTick{}));
+    const auto stale = editing.controller().apply_frame(app::LanguageServerTick{});
+    expect(server.cancelled() == std::vector<std::int64_t>{id} && message(stale).empty() &&
+               server.stops() == 0,
+           "a silent hover request is cancelled after two ticks without a notice");
+    answer_with(editing, id, R"({"contents":"late"})");
+    expect(hover_text(editing) == "<none>", "the answer after the expiry is dropped");
+}
 } // namespace
 
 void verify_language_server_contracts()
@@ -936,6 +1281,16 @@ void verify_language_server_contracts()
     verify_recording_hides_message();
     verify_truncated_count();
     verify_line_end_diagnostic();
+    verify_abilities();
+    verify_requests_need_an_open_document();
+    verify_request_params();
+    verify_answer_context();
+    verify_cancel();
+    verify_completion_answer();
+    verify_request_expiry();
+    verify_abilities_one_by_one();
+    verify_requests_need_a_sent_document();
+    verify_answers_after_restart();
 }
 
 void verify_language_server_scope()
