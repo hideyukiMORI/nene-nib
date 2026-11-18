@@ -3,6 +3,8 @@
 // `no_<名前>`・表に無い名前を残す・ミニマップの寄せ）・要約と組・設定の面の項目の列と探す欄と値の
 // 送り・切れる機能の `:set` の名前。時計・ファイル・乱数の種を読まない。
 #include "Appearance.hpp"
+#include "BuiltinTheme.hpp"
+#include "BuiltinThemes.hpp"
 #include "CostTier.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLanguageChoice.hpp"
@@ -24,6 +26,9 @@
 #include "SettingsValue.hpp"
 #include "SpeedSummary.hpp"
 #include "TestSupport.hpp"
+#include "ThemeChoice.hpp"
+#include "ThemeDocument.hpp"
+#include "ThemeName.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -183,8 +188,11 @@ void verify_rows()
         const auto count =
             std::ranges::count_if(core::settings_rows, [&cost](const core::SettingsRow &row)
                                   { return row.subject == core::SettingsSubject{cost.feature}; });
-        const bool shown = cost.storage != core::FeatureStorage::per_document;
-        expect(count == (shown ? 1 : 0), "each feature but per-document ones has one settings row");
+        const bool shown = cost.storage != core::FeatureStorage::per_document &&
+                           (core::feature_switchable(cost.feature) ||
+                            core::feature_tier(cost.feature).has_value());
+        expect(count == (shown ? 1 : 0),
+               "a feature has one settings row when it can be switched or carries a tier");
     }
     expect(std::ranges::is_sorted(core::settings_rows, {}, [](const core::SettingsRow &row)
                                   { return std::to_underlying(row.section); }),
@@ -202,38 +210,74 @@ void verify_rows()
            "a value row matches its :set name");
 }
 
+// 利用者のテーマ（一覧に無い配色）からでも送って戻れる（#1835 のレビュー R5）。
+void verify_user_theme_steps()
+{
+    const auto &base = core::theme_of(core::BuiltinTheme::neutral_light);
+    const auto user = core::ThemeChoice::from(
+        core::ThemeDocument{core::ThemeName::parse("my-theme").value(),
+                            base.appearance,
+                            base.ui,
+                            base.body,
+                            {fixed_text("author"), fixed_text("MIT"), fixed_text("local")}});
+    auto settings = core::default_editor_settings();
+    settings.theme = user;
+    const auto kept = std::optional{user};
+    const auto forward =
+        core::settings_value_stepped(settings, core::SettingsValue::theme, true, kept);
+    expect(!forward.theme.has_value(), "the user theme is the last of the list: forward is system");
+    const auto back =
+        core::settings_value_stepped(forward, core::SettingsValue::theme, false, kept);
+    expect(back.theme.has_value() && back.theme.value() == user,
+           "stepping back from system returns to the kept user theme");
+    const auto before =
+        core::settings_value_stepped(settings, core::SettingsValue::theme, false, kept);
+    const auto again = core::settings_value_stepped(before, core::SettingsValue::theme, true, kept);
+    expect(before.theme.has_value() && !(before.theme.value() == user) && again.theme.has_value() &&
+               again.theme.value() == user,
+           "stepping back to the last built-in theme and forward again returns to the user theme");
+    const auto plain = core::settings_value_stepped(
+        core::default_editor_settings(), core::SettingsValue::theme, false, std::nullopt);
+    expect(plain.theme.has_value() &&
+               plain.theme.value() == core::ThemeChoice::from(static_cast<core::BuiltinTheme>(
+                                          core::builtin_themes.size() - 1)),
+           "without a user theme the list wraps from system to the last built-in theme");
+}
+
 // 値の送り（段 1 の値の行）。
 void verify_values()
 {
     const auto defaults = core::default_editor_settings();
-    const auto themed = core::settings_value_stepped(defaults, core::SettingsValue::theme, true);
+    const auto themed =
+        core::settings_value_stepped(defaults, core::SettingsValue::theme, true, std::nullopt);
     expect(themed.theme.has_value() &&
                core::settings_value_text(themed, core::SettingsValue::theme) != "system" &&
                core::settings_value_text(defaults, core::SettingsValue::theme) == "system",
            "the theme steps from system to the first built-in theme");
-    expect(
-        !core::settings_value_stepped(themed, core::SettingsValue::theme, false).theme.has_value(),
-        "stepping back returns to system");
-    expect(
-        core::settings_value_stepped(defaults, core::SettingsValue::theme, false).theme.has_value(),
-        "stepping back from system wraps to the last built-in theme");
+    expect(!core::settings_value_stepped(themed, core::SettingsValue::theme, false, std::nullopt)
+                .theme.has_value(),
+           "stepping back returns to system");
+    expect(core::settings_value_stepped(defaults, core::SettingsValue::theme, false, std::nullopt)
+               .theme.has_value(),
+           "stepping back from system wraps to the last built-in theme");
     const auto bigger =
-        core::settings_value_stepped(defaults, core::SettingsValue::font_size, true);
+        core::settings_value_stepped(defaults, core::SettingsValue::font_size, true, std::nullopt);
     expect(core::settings_value_text(bigger, core::SettingsValue::font_size) == "14.5" &&
                core::settings_value_text(defaults, core::SettingsValue::font_size) == "13.5",
            "the font size steps by 1 pt");
-    const auto language =
-        core::settings_value_stepped(defaults, core::SettingsValue::ui_language, true);
+    const auto language = core::settings_value_stepped(defaults, core::SettingsValue::ui_language,
+                                                       true, std::nullopt);
     expect(defaults.ui_language == core::DisplayLanguageChoice::system &&
                language.ui_language == core::DisplayLanguageChoice::japanese,
            "the display language wraps through the listed choices");
-    const auto preview =
-        core::settings_value_stepped(defaults, core::SettingsValue::finder_preview, false);
+    const auto preview = core::settings_value_stepped(defaults, core::SettingsValue::finder_preview,
+                                                      false, std::nullopt);
     expect(preview.finder_preview == core::FinderPreview::off, "the finder preview wraps backward");
-    expect(core::same_settings(
-               core::settings_value_stepped(defaults, core::SettingsValue::font_family, true),
-               defaults),
+    expect(core::same_settings(core::settings_value_stepped(
+                                   defaults, core::SettingsValue::font_family, true, std::nullopt),
+                               defaults),
            "the font family is shown only in this stage");
+    verify_user_theme_steps();
 }
 
 // 切れる機能の名前は `:set` が受ける名前（決定 4・生成の寄せは後の工程）。

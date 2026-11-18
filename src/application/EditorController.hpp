@@ -1054,6 +1054,9 @@ class EditorController final
     // 設定を状態に置いて後ろの同期（エクスプローラー・ミニマップ・map の表・追従）を通す 1 本。
     // persist_settings が書いた後と、設定の面の切り替え（保存しない）が共用する。
     void adopt_settings(core::EditorSettings settings);
+    // 設定を port に書く 1 本（persist_settings と設定の面の閉じが共用）。失敗は状態に置いて偽、
+    // 成功は失敗を消して真。状態の設定は変えない。
+    [[nodiscard]] bool write_settings(const core::EditorSettings &settings);
     // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
     void follow_after_settings(bool reshaped);
     // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
@@ -1118,8 +1121,10 @@ class EditorController final
     // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
     // 写す前に閉じて保存する。
     void close_settings_before(const EditorIntent &intent);
-    // 閉じて、開いたときの写しと違えば 1 回だけ書く（失敗は状態と 1 行の知らせ）。
+    // 閉じて、開いたときの写しと違えば 1 回だけ書く（失敗は状態と 1 行の知らせと覚え）。
     void close_settings();
+    // 窓を閉じるとき（EndSession）に、面で変えて書けなかった設定をもう 1 回だけ書く。
+    void retry_unsaved_settings();
     // 面の切り替えをその場で効かせる（保存しない）。
     void preview_settings(core::EditorSettings settings);
     [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
@@ -1585,6 +1590,9 @@ class EditorController final
     std::optional<ContextMenuOpen> context_menu_;
     // 開いている設定の面（ADR 0170 の 2026-11-18 の追補 2）。
     std::optional<SettingsOpen> settings_;
+    // 面を閉じたときの書き込みが失敗し、状態の設定がまだファイルに無い（R1）。書けたとき・窓を
+    // 閉じるときの書き直しの後に落とす。
+    bool settings_unsaved_ = false;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

@@ -3,24 +3,53 @@
 // 元に戻すで書かない・ほかの操作で閉じるときも 1 回・探す欄と焦点・節の札・組・要約・配色と字の
 // 大きさがその場で frame に効く・表示言語の解決し直し・保存の失敗の知らせ。時計・ファイル・乱数の
 // 種を読まない。
+#include "AutosaveTick.hpp"
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
 #include "ChangeSetting.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "CloseSettings.hpp"
+#include "CloseTab.hpp"
+#include "Column.hpp"
+#include "CommandText.hpp"
 #include "DisplayLanguage.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFeature.hpp"
 #include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
+#include "EndSession.hpp"
 #include "FeatureCosts.hpp"
+#include "FilePath.hpp"
 #include "FilterSettings.hpp"
+#include "FirstFramePresented.hpp"
 #include "InsertText.hpp"
 #include "JumpSettingsSection.hpp"
+#include "LanguageServerTick.hpp"
+#include "LineNumber.hpp"
+#include "MapTimeout.hpp"
+#include "MinimapPointing.hpp"
+#include "NewTab.hpp"
+#include "OpenCommandPalette.hpp"
+#include "OpenDocument.hpp"
 #include "OpenSettings.hpp"
+#include "PlaceCaret.hpp"
+#include "PointMinimap.hpp"
+#include "PointText.hpp"
+#include "PointerClicks.hpp"
+#include "PreviewPlacement.hpp"
+#include "PreviewTick.hpp"
 #include "RevertSettings.hpp"
 #include "Scopes.hpp"
+#include "ScrollExplorer.hpp"
+#include "ScrollLines.hpp"
+#include "ScrollPane.hpp"
+#include "ScrollTabs.hpp"
+#include "SelectEditMode.hpp"
+#include "SelectionAnchoring.hpp"
+#include "SessionEnd.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsPreset.hpp"
 #include "SettingsRows.hpp"
@@ -28,9 +57,15 @@
 #include "SettingsValue.hpp"
 #include "SettingsView.hpp"
 #include "StepSettings.hpp"
+#include "SubmitCommand.hpp"
+#include "TabTipTick.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
+#include "VimKeyPress.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
@@ -38,6 +73,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 namespace nenenib::tests
@@ -261,6 +297,230 @@ void verify_failure()
     expect(editing.settings().writes() == 2 && !retried.settings_failure.has_value(),
            "closing again after a failure retries the write");
 }
+// 全面プレビューの間も面は開き、切り替えて閉じれば 1 回書く（#1835 のレビュー M1）。
+void verify_full_preview()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold_at(std::string("C:\\work\\probe.md"), Bytes{std::string("# t\n\ntext\n")});
+    static_cast<void>(controller.apply(app::VisibleLines{20, {}, 1000, 700}));
+    static_cast<void>(
+        controller.apply(app::OpenDocument{core::FilePath::parse("C:\\work\\probe.md").value()}));
+    const auto full = controller.apply_frame(app::SetPreviewPlacement{app::PreviewPlacement::full});
+    expect(full.full_preview.has_value(), "the full preview is shown");
+    const auto opened = controller.apply_frame(app::OpenSettings{});
+    expect(opened.settings_panel.has_value(), "the panel opens over the full preview");
+    focus_on(controller, core::EditorFeature::guide);
+    const auto changed = controller.apply_frame(app::ChangeSetting{true});
+    const auto closed = controller.apply_frame(app::CloseSettings{});
+    expect(!core::feature_enabled(changed.settings, core::EditorFeature::guide) &&
+               !closed.settings_panel.has_value() && closed.full_preview.has_value() &&
+               editing.settings().writes() == 1,
+           "switching and closing work over the full preview and write once");
+}
+
+// 合図 6 つでは閉じず書かない。窓を閉じる EndSession は閉じて 1 回だけ書き、2 回目は書かない
+// （R7）。タブを閉じるのもほかの使う人の操作として閉じて 1 回書く。
+void verify_signals_and_session()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    focus_on(controller, core::EditorFeature::guide);
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    static_cast<void>(controller.apply(app::AutosaveTick{}));
+    static_cast<void>(controller.apply(app::LanguageServerTick{}));
+    static_cast<void>(controller.apply(app::MapTimeout{}));
+    static_cast<void>(controller.apply(app::PreviewTick{}));
+    static_cast<void>(controller.apply(app::FirstFramePresented{}));
+    static_cast<void>(controller.apply(app::TabTipTick{true}));
+    expect(controller.settings_open() && editing.settings().writes() == 0,
+           "the six signals keep the panel open and write nothing");
+    static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+    expect(!controller.settings_open() && editing.settings().writes() == 1,
+           "closing the window closes the panel and writes once");
+    static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+    expect(editing.settings().writes() == 1, "a second EndSession does not write");
+
+    Editing tabs;
+    auto &other = tabs.controller();
+    static_cast<void>(other.apply(app::NewTab{}));
+    static_cast<void>(other.apply(app::OpenSettings{}));
+    focus_on(other, core::EditorFeature::guide);
+    static_cast<void>(other.apply(app::ChangeSetting{true}));
+    static_cast<void>(other.apply(app::CloseTab{1}));
+    expect(!other.settings_open() && tabs.settings().writes() == 1,
+           "closing a tab closes the panel and writes once");
+}
+
+// 閉じるときの保存に失敗したら、窓を閉じるときにもう 1 回だけ書く（R1）。2 回目も失敗すれば失敗を
+// 状態に置くだけで、さらには書かない。
+void verify_retry_at_session_end()
+{
+    using nenenib::application::SettingsFailure;
+    {
+        Editing editing;
+        auto &controller = editing.controller();
+        editing.settings().fail(SettingsFailure::unwritable);
+        static_cast<void>(controller.apply(app::OpenSettings{}));
+        focus_on(controller, core::EditorFeature::guide);
+        static_cast<void>(controller.apply(app::ChangeSetting{true}));
+        static_cast<void>(controller.apply(app::CloseSettings{}));
+        expect(editing.settings().writes() == 1, "the failed close tried once");
+        editing.settings().fail(std::nullopt);
+        static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+        expect(editing.settings().writes() == 2 && editing.settings().written().has_value() &&
+                   !core::feature_enabled(
+                       editing.settings().written().value_or(core::default_editor_settings()),
+                       core::EditorFeature::guide),
+               "closing the window writes the unsaved settings once more");
+        static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+        expect(editing.settings().writes() == 2, "after the retry nothing is left to write");
+    }
+    {
+        Editing editing;
+        auto &controller = editing.controller();
+        editing.settings().fail(SettingsFailure::unwritable);
+        static_cast<void>(controller.apply(app::OpenSettings{}));
+        focus_on(controller, core::EditorFeature::guide);
+        static_cast<void>(controller.apply(app::ChangeSetting{true}));
+        static_cast<void>(controller.apply(app::CloseSettings{}));
+        const auto ended = controller.apply_frame(app::EndSession{app::SessionEnd::window_closed});
+        static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+        expect(editing.settings().writes() == 2 &&
+                   ended.settings_failure == SettingsFailure::unwritable,
+               "a second failure is kept as the settings failure and is not retried again");
+    }
+}
+
+// 開くときに Ctrl+P の面と入力行を閉じる（配色の仮当てごと・R2）。面が開いている間に Ctrl+P を
+// 開く操作は、面を閉じて保存してから開く。
+void verify_open_closes_input()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::OpenCommandPalette{}));
+    static_cast<void>(controller.apply(app::CommandText{"colorscheme neutral"}));
+    const auto opened = controller.apply_frame(app::OpenSettings{});
+    expect(opened.settings_panel.has_value() && !opened.command_palette.has_value() &&
+               !opened.command_line.has_value(),
+           "opening the panel closes the Ctrl+P panel and the input line");
+    focus_on(controller, core::EditorFeature::guide);
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    const auto palette = controller.apply_frame(app::OpenCommandPalette{});
+    expect(!palette.settings_panel.has_value() && palette.command_palette.has_value() &&
+               editing.settings().writes() == 1,
+           "opening Ctrl+P while the panel is open closes and saves it first");
+}
+
+// 本文や面を送るだけの意図は面を閉じない。本文のクリックは閉じて保存する（R8）。
+void verify_scrolls_keep_open()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    std::string text;
+    for (int line = 0; line < 50; ++line)
+    {
+        text += "line\n";
+    }
+    static_cast<void>(controller.apply(app::VisibleLines{10, core::TextViewGeometry{400, 20, 96}}));
+    static_cast<void>(controller.apply(app::InsertText{text}));
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    focus_on(controller, core::EditorFeature::guide);
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    const auto scrolled = controller.apply_frame(app::ScrollLines{-5});
+    static_cast<void>(controller.apply(app::ScrollPane{3}));
+    static_cast<void>(controller.apply(app::ScrollExplorer{2}));
+    static_cast<void>(controller.apply(app::ScrollTabs{1}));
+    static_cast<void>(controller.apply(app::PointMinimap{app::MinimapPointing::pressed, 0}));
+    expect(scrolled.settings_panel.has_value() && controller.settings_open() &&
+               editing.settings().writes() == 0,
+           "scrolling the body, the other pane, the explorer, the tabs and the minimap keeps the "
+           "panel open");
+    static_cast<void>(controller.apply(
+        app::PointText{10.0F, 0, core::SelectionAnchoring::collapse, app::PointerClicks::single}));
+    expect(!controller.settings_open() && editing.settings().writes() == 1,
+           "a click in the body closes the panel and saves");
+}
+
+// 言語サーバーを面で切り替えると、`:set lsp` と同じく起動と停止の道を通る（R7）。
+void verify_language_server_switch()
+{
+    auto settings = core::default_editor_settings();
+    settings.lsp_commands = {{"cpp", std::string{R"("C:\LLVM\bin\clangd.exe" --log=error)"}}};
+    Editing editing{SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}}};
+    auto &controller = editing.controller();
+    editing.files().hold_at(std::string("C:\\work\\main.cpp"),
+                            Bytes{std::string("int main() {}\n")});
+    static_cast<void>(
+        controller.apply(app::OpenDocument{core::FilePath::parse("C:\\work\\main.cpp").value()}));
+    auto &server = editing.language_server();
+    expect(server.launches().empty(), "the server is off at start");
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    focus_on(controller, core::EditorFeature::lsp);
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    expect(server.launches().size() == 1 && editing.settings().writes() == 0,
+           "turning the server on in the panel starts it without saving");
+    static_cast<void>(controller.apply(app::RevertSettings{}));
+    expect(server.stops() == 1 && !controller.frame().settings.lsp,
+           "reverting turns it off and stops it");
+    static_cast<void>(controller.apply(app::CloseSettings{}));
+    expect(editing.settings().writes() == 0, "nothing is written after the revert");
+}
+
+// 60 行・8 行の窓・so=4 の Vim の窓（VimViewTests の #1524 の窓と同じ）で `3<C-e>` の後の窓。
+[[nodiscard]] std::pair<std::size_t, std::size_t> wrap_switched(bool through_panel)
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{8, core::TextViewGeometry{400, 20, 96}}));
+    std::string text;
+    for (std::size_t number = 1; number <= 60; ++number)
+    {
+        text += std::string(number < 10 ? "0" : "") + std::to_string(number) +
+                (number < 60 ? "\n" : "");
+    }
+    static_cast<void>(controller.apply(app::InsertText{text}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    static_cast<void>(run_ex(controller, "set so=4"));
+    static_cast<void>(
+        controller.apply(app::PlaceCaret{core::TextPosition{core::LineNumber{57}, core::Column{1}},
+                                         core::SelectionAnchoring::collapse}));
+    const auto current = static_cast<std::int64_t>(controller.frame().first_visible.value);
+    static_cast<void>(controller.apply(app::ScrollLines{static_cast<std::int32_t>(53 - current)}));
+    for (const auto &key : vim_keys_of("3<C-e>"))
+    {
+        static_cast<void>(controller.apply(app::VimKeyPress{key}));
+    }
+    if (through_panel)
+    {
+        static_cast<void>(controller.apply(app::OpenSettings{}));
+        focus_on(controller, core::EditorFeature::wrap);
+        static_cast<void>(controller.apply(app::ChangeSetting{true}));
+        static_cast<void>(controller.apply(app::CloseSettings{}));
+    }
+    else
+    {
+        static_cast<void>(run_ex(controller, "set nowrap"));
+    }
+    for (const auto &key : vim_keys_of("j"))
+    {
+        static_cast<void>(controller.apply(app::VimKeyPress{key}));
+    }
+    const auto frame = controller.frame();
+    return {frame.first_visible.value, frame.caret.position.line.value};
+}
+
+// Vim のモードで面から wrap を切り替えたときの窓の決め直しは `:set nowrap` と同じ（レビュー L1・
+// #1524）。
+void verify_vim_wrap_window()
+{
+    const auto by_ex = wrap_switched(false);
+    expect(by_ex == std::pair<std::size_t, std::size_t>{55, 60},
+           "#1524 :set nowrap re-decides the window before the next key");
+    expect(wrap_switched(true) == by_ex,
+           "switching wrap in the panel re-decides the Vim window like :set nowrap");
+}
 } // namespace
 
 void verify_settings_modal_scope()
@@ -272,5 +532,12 @@ void verify_settings_modal_scope()
     verify_presets();
     verify_immediate_look();
     verify_failure();
+    verify_full_preview();
+    verify_signals_and_session();
+    verify_retry_at_session_end();
+    verify_open_closes_input();
+    verify_scrolls_keep_open();
+    verify_language_server_switch();
+    verify_vim_wrap_window();
 }
 } // namespace nenenib::tests

@@ -4,6 +4,8 @@
 // その場で状態の設定に置き（adopt_settings・保存はしない）、ファイルへは閉じるときに 1 回だけ書く。
 #include "EditorController.hpp"
 
+#include "CancelCommand.hpp"
+#include "CancelComposition.hpp"
 #include "ChangeSetting.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "CloseSettings.hpp"
@@ -16,8 +18,13 @@
 #include "FilterSettings.hpp"
 #include "JumpSettingsSection.hpp"
 #include "OpenSettings.hpp"
+#include "PointMinimap.hpp"
 #include "ResolvedLanguage.hpp"
 #include "RevertSettings.hpp"
+#include "ScrollExplorer.hpp"
+#include "ScrollLines.hpp"
+#include "ScrollPane.hpp"
+#include "ScrollTabs.hpp"
 #include "SettingsOpen.hpp"
 #include "SettingsRowView.hpp"
 #include "SettingsRows.hpp"
@@ -26,6 +33,7 @@
 #include "SettingsValue.hpp"
 #include "SettingsView.hpp"
 #include "StepSettings.hpp"
+#include "ThemeChoice.hpp"
 #include "UiMessage.hpp"
 
 #include <algorithm>
@@ -42,17 +50,24 @@ namespace nenenib::application
 {
 namespace
 {
-// 面の意図（開いたまま受ける側）。
-[[nodiscard]] bool is_settings_intent(const EditorIntent &intent) noexcept
+// 本文や面を送るだけで、文書もキャレットの置き場も選びも変えない意図（#1835 のレビュー R8・施主決定
+// D102 の引き出しは本文を隠さないので、効き目を見るために本文を送っても面を閉じない）。本文の
+// ホイール・もう 1 つの枠のホイール・ミニマップの押しとドラッグ・エクスプローラーのホイール・帯の
+// ホイール。本文のクリック・打鍵・編集・タブの切り替えはここに書かない（閉じて保存する）。
+[[nodiscard]] bool only_scrolls(const EditorIntent &intent) noexcept
 {
-    return std::holds_alternative<OpenSettings>(intent) ||
-           std::holds_alternative<CloseSettings>(intent) ||
-           std::holds_alternative<RevertSettings>(intent) ||
-           std::holds_alternative<StepSettings>(intent) ||
-           std::holds_alternative<ChangeSetting>(intent) ||
-           std::holds_alternative<ChooseSettingsPreset>(intent) ||
-           std::holds_alternative<FilterSettings>(intent) ||
-           std::holds_alternative<JumpSettingsSection>(intent);
+    return std::holds_alternative<ScrollLines>(intent) ||
+           std::holds_alternative<ScrollPane>(intent) ||
+           std::holds_alternative<PointMinimap>(intent) ||
+           std::holds_alternative<ScrollExplorer>(intent) ||
+           std::holds_alternative<ScrollTabs>(intent);
+}
+
+// 面を開いたまま受ける意図（面の意図・使う人の操作でない意図・送るだけの意図）。
+[[nodiscard]] bool keeps_settings_open(const EditorIntent &intent) noexcept
+{
+    return detail::is_settings_intent(intent) || detail::not_user_operation(intent) ||
+           only_scrolls(intent);
 }
 
 // 節の札の 6 つ（宣言の順）。
@@ -74,31 +89,46 @@ constexpr std::array<core::SettingsSection, 6> section_order{
                          {},
                          std::nullopt,
                          false};
-    if (std::holds_alternative<core::EditorFeature>(row.subject))
-    {
-        const auto feature = std::get<core::EditorFeature>(row.subject);
-        view.on = core::feature_enabled(settings, feature);
-        view.switchable = core::feature_switchable(feature);
-        view.tier = core::feature_tier(feature);
-        view.background = view.tier.has_value() && core::feature_cost(feature).background;
-        return view;
-    }
-    view.value = core::settings_value_text(settings, std::get<core::SettingsValue>(row.subject));
+    // 選択肢を足すと else の枝が新しい型を値の関数に渡せずコンパイルが落ちる（CPP-002）。
+    std::visit(
+        [&view, &settings](auto subject)
+        {
+            if constexpr (std::is_same_v<decltype(subject), core::EditorFeature>)
+            {
+                view.on = core::feature_enabled(settings, subject);
+                view.switchable = core::feature_switchable(subject);
+                view.tier = core::feature_tier(subject);
+                view.background = view.tier.has_value() && core::feature_cost(subject).background;
+            }
+            else
+            {
+                view.value = core::settings_value_text(settings, subject);
+            }
+        },
+        row.subject);
     return view;
 }
 
 // 焦点の行の設定を変えた値（スイッチは切り替え・値は送る・切れない機能はそのまま）。
+// 配色の送りは面を開いたときの配色を列に残す（kept・利用者のテーマへ戻れる・R5）。
 [[nodiscard]] core::EditorSettings changed_settings(const core::SettingsRow &row,
-                                                    core::EditorSettings settings, bool forward)
+                                                    core::EditorSettings settings, bool forward,
+                                                    const std::optional<core::ThemeChoice> &kept)
 {
-    if (std::holds_alternative<core::EditorFeature>(row.subject))
-    {
-        const auto feature = std::get<core::EditorFeature>(row.subject);
-        const bool on = core::feature_enabled(settings, feature);
-        return core::feature_set(std::move(settings), feature, !on);
-    }
-    return core::settings_value_stepped(std::move(settings),
-                                        std::get<core::SettingsValue>(row.subject), forward);
+    return std::visit(
+        [&settings, forward, &kept](auto subject)
+        {
+            if constexpr (std::is_same_v<decltype(subject), core::EditorFeature>)
+            {
+                const bool on = core::feature_enabled(settings, subject);
+                return core::feature_set(std::move(settings), subject, !on);
+            }
+            else
+            {
+                return core::settings_value_stepped(std::move(settings), subject, forward, kept);
+            }
+        },
+        row.subject);
 }
 } // namespace
 
@@ -107,12 +137,24 @@ bool EditorController::settings_open() const noexcept
     return settings_.has_value();
 }
 
+// 開く前に、Ctrl+P の面・`:` の入力行（配色の仮当てごと）・変換・右クリックのメニューを閉じる
+// （#1835 のレビュー R2・面と入力行を重ねない・決定 5 の「IME は閉じる」）。メニューは入口の
+// close_context_menu_before が既に閉じている。
 void EditorController::accept(const OpenSettings &)
 {
     if (settings_.has_value())
     {
         return;
     }
+    if (state_.composition().has_value())
+    {
+        accept(CancelComposition{});
+    }
+    if (state_.command_input().has_value())
+    {
+        accept(CancelCommand{});
+    }
+    context_menu_.reset();
     settings_ = SettingsOpen{state_.settings(), {}, 0};
 }
 
@@ -158,12 +200,18 @@ void EditorController::accept(const StepSettings &intent)
 void EditorController::accept(const ChangeSetting &intent)
 {
     const auto focused = focused_settings_row();
-    if (!focused.has_value())
+    if (!settings_.has_value() || !focused.has_value())
     {
         return;
     }
     const auto &row = core::settings_rows.at(focused.value());
-    preview_settings(changed_settings(row, state_.settings(), intent.forward));
+    auto changed =
+        changed_settings(row, state_.settings(), intent.forward, settings_.value().opened.theme);
+    // 切れない機能の行と字体の行は値が変わらないので、同期を通さない（レビュー L3）。
+    if (!core::same_settings(changed, state_.settings()))
+    {
+        preview_settings(std::move(changed));
+    }
 }
 
 void EditorController::accept(const ChooseSettingsPreset &intent)
@@ -205,19 +253,20 @@ void EditorController::accept(const JumpSettingsSection &intent)
     }
 }
 
-// 入口の 1 か所（apply の begin_intent の後）。面が開いていて、意図が面の意図でも使う人の操作で
-// ない意図でもなければ、写す前に閉じて保存する（窓を閉じる EndSession・タブの操作・本文の
-// クリック…・追補 2）。
+// 入口の 1 か所（apply の begin_intent の後）。面が開いていて、面を開いたまま受ける意図でなければ、
+// 写す前に閉じて保存する（窓を閉じる EndSession・タブの操作・本文のクリック・打鍵…・追補 2）。
 void EditorController::close_settings_before(const EditorIntent &intent)
 {
-    if (settings_.has_value() && !is_settings_intent(intent) && !detail::not_user_operation(intent))
+    if (settings_.has_value() && !keeps_settings_open(intent))
     {
         close_settings();
     }
 }
 
-// 閉じて、開いたときの写しと違えば 1 回だけ書く（決定 6・追補 2）。書けなければ状態の設定は
-// 変えたまま、失敗を状態に置いて 1 行知らせる（ADR 0114 の規則）。
+// 閉じて、開いたときの写しと違えば 1 回だけ書く（決定 6・追補 2）。書くのは write_settings の
+// 1 本（persist_settings と同じ）。書けなければ状態の設定は変えたまま、1 行知らせて「まだ書けて
+// いない設定がある」を覚え、窓を閉じるとき（EndSession）にもう 1 回だけ書く（#1835 のレビュー
+// R1）。
 void EditorController::close_settings()
 {
     if (!settings_.has_value())
@@ -226,18 +275,28 @@ void EditorController::close_settings()
     }
     const core::EditorSettings opened = std::move(settings_).value().opened;
     settings_.reset();
-    if (core::same_settings(opened, state_.settings()) && !state_.settings_failure().has_value())
+    if (core::same_settings(opened, state_.settings()) && !state_.settings_failure().has_value() &&
+        !settings_unsaved_)
     {
         return;
     }
-    const auto saved = ports_.settings.write(state_.settings());
-    if (!saved)
+    settings_unsaved_ = !write_settings(state_.settings());
+    if (settings_unsaved_)
     {
-        state_ = state_.with_settings_failure(saved.error())
-                     .with_command_message(ui_notice(core::UiMessage::settings_unsaved));
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::settings_unsaved));
+    }
+}
+
+// 窓を閉じるときの書き直し（R1）。面で変えた設定が書けていなければ 1 回だけ書く。2 回目も失敗
+// すれば `:set` の失敗と同じく失敗を状態に置くだけ（write_settings）。
+void EditorController::retry_unsaved_settings()
+{
+    if (!settings_unsaved_)
+    {
         return;
     }
-    state_ = state_.with_settings_failure(std::nullopt);
+    settings_unsaved_ = false;
+    static_cast<void>(write_settings(state_.settings()));
 }
 
 // 面の切り替えをその場で効かせる（保存しない・追補 2）。persist_settings の書いた後の同期と同じ
@@ -252,6 +311,12 @@ void EditorController::preview_settings(core::EditorSettings settings)
         language_server_.failures = 0;
         language_server_.given_up = false;
         language_server_.considered.reset();
+    }
+    // Vim が窓を決め直す option（`wrap`・#1524）は、`:set wrap` と同じく設定を写す前に今の
+    // キャレットの決め直しを頼む（レビュー L1・follow_window_setting の 1 本）。
+    if (settings.wrapping != before.wrapping)
+    {
+        follow_window_setting();
     }
     adopt_settings(std::move(settings));
     if (language_changed)
