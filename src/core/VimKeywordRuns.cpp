@@ -4,6 +4,7 @@
 #include "VimCharacterBoundary.hpp"
 #include "VimWordClass.hpp"
 #include "VimWordMotion.hpp"
+#include "VirtualColumn.hpp"
 
 namespace nenenib::core
 {
@@ -11,25 +12,53 @@ namespace
 {
 constexpr std::uint32_t blank_group = 0;
 
+// ASCII の上限（これより小さいバイトは 1 バイトの code point）。
+constexpr unsigned char ascii_end = 0x80U;
+
+// line の at から始まる code point（ASCII は decode を呼ばずにそのバイト）。
+[[nodiscard]] char32_t code_at(std::string_view line, std::size_t at) noexcept
+{
+    const auto byte = static_cast<unsigned char>(line[at]);
+    return byte < ascii_end ? char32_t{byte} : code_point_at(line, Offset{at});
+}
+
+// line の at の次の code point の先頭。
+[[nodiscard]] std::size_t after(std::string_view line, std::size_t at) noexcept
+{
+    return static_cast<unsigned char>(line[at]) < ascii_end
+               ? at + 1
+               : next_code_point(line, Offset{at}).value;
+}
+
 // 1 行（改行を含まない）の語を runs に足す。base は content の中の行の始まり。
+// code point は 1 回だけ読む。行頭でない幅 0 の code point は手前の 1 文字に付け
+// （vim_character_end と同じ切れ方）、1 文字の種類はその最初の code point で決める（#1872）。
 void add_line_runs(std::string_view line, std::size_t base, std::vector<OffsetRange> &runs)
 {
-    std::size_t at = 0;
-    while (at < line.size())
+    std::uint32_t open = blank_group;
+    std::size_t start = 0;
+    for (std::size_t at = 0; at < line.size(); at = after(line, at))
     {
-        const std::uint32_t group = vim_keyword_class_at(line, at);
-        std::size_t end = vim_character_end(line, Offset{at}).value;
-        if (!vim_keyword_group(group))
+        const char32_t code = code_at(line, at);
+        if (at > 0 && display_width(code) == DisplayWidth::zero)
         {
-            at = end;
             continue;
         }
-        while (end < line.size() && vim_keyword_class_at(line, end) == group)
+        const std::uint32_t group = vim_character_class(code, VimWordClass::word);
+        if (group == open)
         {
-            end = vim_character_end(line, Offset{end}).value;
+            continue;
         }
-        runs.push_back(OffsetRange{Offset{base + at}, Offset{base + end}});
-        at = end;
+        if (vim_keyword_group(open))
+        {
+            runs.push_back(OffsetRange{Offset{base + start}, Offset{base + at}});
+        }
+        open = group;
+        start = at;
+    }
+    if (vim_keyword_group(open))
+    {
+        runs.push_back(OffsetRange{Offset{base + start}, Offset{base + line.size()}});
     }
 }
 } // namespace
