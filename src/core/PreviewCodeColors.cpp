@@ -11,6 +11,18 @@ namespace nenenib::core
 {
 namespace
 {
+// 区間を足す。直前の区間と同じ役で間が空いていなければ 1 つに畳む（間に文字をはさむ区間は
+// 畳まない・#1860 のレビュー M1）。
+void place(std::vector<PreviewCodeColor> &colors, PreviewCodeColor color)
+{
+    if (!colors.empty() && colors.back().role == color.role && colors.back().end == color.begin)
+    {
+        colors.back().end = color.end;
+        return;
+    }
+    colors.push_back(color);
+}
+
 // 1 行（line・行頭が text の begin）の色の区間を、桁（code point の序数・1 始まり）から text の
 // バイト位置に写して足す。区間は桁の昇順なので、行を前から 1 回だけ歩く。
 void append_line(std::vector<PreviewCodeColor> &colors, std::string_view line, std::size_t begin,
@@ -33,7 +45,7 @@ void append_line(std::vector<PreviewCodeColor> &colors, std::string_view line, s
         const auto to = advance_to(span.end.value);
         if (to > from)
         {
-            colors.push_back(PreviewCodeColor{Offset{begin + from}, Offset{begin + to}, span.role});
+            place(colors, PreviewCodeColor{Offset{begin + from}, Offset{begin + to}, span.role});
         }
     }
 }
@@ -52,10 +64,15 @@ void append_line(std::vector<PreviewCodeColor> &colors, std::string_view line, s
 
 std::optional<Language> preview_code_language(std::string_view word)
 {
+    // `rust,ignore` `cpp,linenos` は `,` の前だけを見る（#1860 のレビュー L2）。
     std::string folded;
     folded.reserve(word.size());
     for (const char byte : word)
     {
+        if (byte == ',')
+        {
+            break;
+        }
         folded.push_back(static_cast<char>(ascii_folded(byte)));
     }
     const auto language = language_of_label(folded);
@@ -76,7 +93,9 @@ std::optional<std::vector<PreviewCodeColor>> preview_code_colors(Language langua
         return std::nullopt;
     }
     std::vector<PreviewCodeColor> colors;
-    auto state = lex_start_state(language, true);
+    // 囲みは文書の断片なので、遡りの途中から読むときの始まりの状態で読む（PHP は `<?php` が
+    // 無くても PHP の中から・ほかの言語は LexState{} で同じ・#1860 のレビュー R3）。
+    auto state = lex_start_state(language, false);
     std::size_t begin = 0;
     while (begin < text.size())
     {
@@ -90,6 +109,10 @@ std::optional<std::vector<PreviewCodeColor>> preview_code_colors(Language langua
         append_line(colors, line, begin, lexed.spans);
         state = lexed.out;
         begin = end + 1U;
+        if (colors.size() > preview_code_color_count_limit)
+        {
+            return std::nullopt;
+        }
     }
     return colors;
 }

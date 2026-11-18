@@ -2,6 +2,8 @@
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
 #include "Language.hpp"
+#include "LanguageTable.hpp"
+#include "Lexer.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
@@ -76,7 +78,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .spans = {},
                         .task = std::nullopt,
                         .table = std::nullopt,
-                        .alert = std::nullopt};
+                        .alert = std::nullopt,
+                        .code_colors = std::nullopt};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -441,14 +444,71 @@ void verify_code_blocks()
                block.code_colors.value().end();
 }
 
-[[nodiscard]] std::string fenced_lines(std::string_view language, std::size_t lines)
+[[nodiscard]] std::string fenced_lines(std::string_view language, std::size_t lines,
+                                       std::string_view row = "x = 1")
 {
     std::string input = "```" + std::string(language) + "\n";
     for (std::size_t line = 0; line < lines; ++line)
     {
-        input += "x = 1\n";
+        input += row;
+        input += "\n";
     }
     return input + "```\n";
+}
+
+// 区間の数の上限（#1860 のレビュー M1）と、隣り合う同じ役の区間を畳むこと。
+void verify_code_color_count()
+{
+    const auto full = first_block(fenced_lines("py", core::preview_code_color_count_limit, "1"));
+    expect(full.code_colors.has_value() &&
+               full.code_colors.value_or(std::vector<core::PreviewCodeColor>{}).size() ==
+                   core::preview_code_color_count_limit,
+           "a fence with as many colours as the limit is coloured");
+    expect(!first_block(fenced_lines("py", core::preview_code_color_count_limit + 1U, "1"))
+                .code_colors.has_value(),
+           "a fence with more colours than the limit keeps one colour");
+    expect(!first_block(fenced_lines("json", 1000U, "[1,2,3,4,5,6,7,8,9]")).code_colors.has_value(),
+           "a dense JSON fence over the colour limit keeps one colour");
+    const auto joined = first_block("```py\n\"a\"\"b\" \"c\"\n```");
+    expect(joined.code_colors == std::optional{std::vector<core::PreviewCodeColor>{
+                                     {Offset{0U}, Offset{6U}, core::SyntaxRole::string},
+                                     {Offset{7U}, Offset{10U}, core::SyntaxRole::string}}},
+           "adjacent spans of one role are joined, spans across a space are not");
+}
+
+// 囲みの始まりの状態（#1860 のレビュー R3）と、引用・リスト・CRLF・Tab・行をまたぐ文字列。
+void verify_code_color_places()
+{
+    expect(colored(first_block("```php\n$x = 1; // c\n```"), 8U, 12U, core::SyntaxRole::comment),
+           "a php fence without <?php is read as php");
+    for (const auto name : core::all_language_names())
+    {
+        const auto language = core::language_of_name(name).value_or(core::Language::plain);
+        expect(language == core::Language::php ||
+                   core::lex_start_state(language, false) == core::lex_start_state(language, true),
+               "only php starts a fence in another state");
+    }
+    expect(colored(first_block("```rust,ignore\n// c\n```"), 0U, 4U, core::SyntaxRole::comment),
+           "a comma ends the language word");
+    for (const std::string_view input :
+         {"```py\r\n# c\r\n```\r\n", "> ```py\n> # c\n> ```", "- ```py\n  # c\n  ```"})
+    {
+        expect(colored(first_block(input), 0U, 3U, core::SyntaxRole::comment),
+               "a fence after CRLF, in a quote or in an item colours its own text");
+    }
+    // md4c は行頭の Tab を空白 4 つにして渡すので、色は要素の text（空白）の位置に立つ。
+    const auto tabbed = first_block("```py\n\tx = 1  # c\n```");
+    expect(tabbed.text == "    x = 1  # c\n" &&
+               colored(tabbed, 11U, 14U, core::SyntaxRole::comment),
+           "a leading tab keeps the colours on the element text");
+    const auto raw = first_block("```cpp\nR\"(a\nb)\" x\n```");
+    expect(colored(raw, 0U, 4U, core::SyntaxRole::string) &&
+               colored(raw, 5U, 8U, core::SyntaxRole::string),
+           "a raw string carries over the line");
+    const auto triple = first_block("```py\n\"\"\"a\nb\"\"\"\n```");
+    expect(colored(triple, 0U, 4U, core::SyntaxRole::string) &&
+               colored(triple, 5U, 9U, core::SyntaxRole::string),
+           "a triple quoted string carries over the line");
 }
 
 // 囲みのコードの構文の色（#1858）。言語は info string の最初の語で本文と同じ表から引き、色の区間
@@ -477,10 +537,10 @@ void verify_code_colors()
         expect(block.kind == code && !block.code_colors.has_value(),
                "an unknown, missing, markdown or plain language keeps one colour");
     }
-    expect(first_block(fenced_lines("py", core::preview_code_color_line_limit))
+    expect(first_block(fenced_lines("py", core::preview_code_color_line_limit, "x"))
                .code_colors.has_value(),
            "a fence at the line limit is coloured");
-    expect(!first_block(fenced_lines("py", core::preview_code_color_line_limit + 1U))
+    expect(!first_block(fenced_lines("py", core::preview_code_color_line_limit + 1U, "x"))
                 .code_colors.has_value(),
            "a fence over the line limit keeps one colour");
     const std::string wide =
@@ -882,6 +942,8 @@ void verify_markdown_scope()
     verify_quotes();
     verify_code_blocks();
     verify_code_colors();
+    verify_code_color_count();
+    verify_code_color_places();
     verify_rules();
     verify_entities();
     verify_html5_entities();

@@ -103,6 +103,7 @@ void window_command(app::EditorController &controller, std::string_view key)
                                                  {},
                                                  std::nullopt,
                                                  std::nullopt,
+                                                 std::nullopt,
                                                  std::nullopt});
     return app::MarkdownOutcome{ticket, std::move(document)};
 }

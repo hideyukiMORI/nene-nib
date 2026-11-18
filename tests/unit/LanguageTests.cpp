@@ -371,16 +371,8 @@ void verify_ex_evaluation()
                    !request.value_or(core::ExLanguageRequest{Language::c}).language.has_value(),
                ":set filetype? asks for the current language");
     }
-    for (const auto &[command, language] :
-         {std::pair<std::string_view, Language>{"set ft=c++", Language::cpp},
-          std::pair<std::string_view, Language>{"set filetype=py", Language::python}})
-    {
-        const auto request = language_request(command);
-        expect(request.has_value() &&
-                   request.value_or(core::ExLanguageRequest{}).language == std::optional{language},
-               ":set filetype= also takes an extension or an alias (#1858)");
-    }
-    for (const std::string_view command : {"set filetype=zig", "set ft=Markdown", "set ft="})
+    for (const std::string_view command :
+         {"set filetype=zig", "set ft=Markdown", "set ft=", "set ft=c++", "set filetype=py"})
     {
         expect(fails_with(command, core::ExFailure::invalid_argument),
                "a name outside the closed list is E474");

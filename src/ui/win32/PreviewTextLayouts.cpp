@@ -47,7 +47,8 @@ constexpr float unbounded_height = 1.0e7F;
                               .spans = {},
                               .task = std::nullopt,
                               .table = std::nullopt,
-                              .alert = std::nullopt};
+                              .alert = std::nullopt,
+                              .code_colors = std::nullopt};
     for (const auto &row : rows)
     {
         if (!joined.text.empty())
@@ -416,8 +417,12 @@ HRESULT PreviewTextLayouts::ink(PreviewTextLayout &entry, const core::PreviewBlo
 
 HRESULT PreviewTextLayouts::ink_colors(PreviewTextLayout &entry, const PreviewBrushes &brushes)
 {
-    static const std::vector<core::PreviewCodeColor> none;
-    const auto &colors = entry.colors.has_value() ? entry.colors.value() : none;
+    if (!entry.colors.has_value())
+    {
+        entry.inked = brushes.generation();
+        return S_OK;
+    }
+    const auto &colors = entry.colors.value();
     for (std::size_t index = 0; index < colors.size() && index < entry.color_ranges.size(); ++index)
     {
         const auto range = entry.color_ranges.at(index);

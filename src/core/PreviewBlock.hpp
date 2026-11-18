@@ -38,7 +38,7 @@ struct PreviewBlock
     std::optional<MarkdownTask> task;
     std::optional<PreviewTableRow> table;
     std::optional<PreviewAlert> alert;
-    std::optional<std::vector<PreviewCodeColor>> code_colors = std::nullopt;
+    std::optional<std::vector<PreviewCodeColor>> code_colors;
 };
 
 [[nodiscard]] inline bool operator==(const PreviewBlock &left, const PreviewBlock &right)

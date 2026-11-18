@@ -90,6 +90,7 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
                               std::move(spans),
                               std::nullopt,
                               std::nullopt,
+                              std::nullopt,
                               std::nullopt};
 }
 
@@ -1542,6 +1543,61 @@ void check_many_tables_kept()
     return layout.has_value() && effect_is(*layout.value().Get(), 0U, brush);
 }
 
+// 文書（大きな囲み 1 つ）を 400 × 200 に描き、最初の描画で置いた色の数が inks で、描き直しと
+// 送りで layout の生成も色の置き直しも 0。
+void check_fence_paint(const core::MarkdownDocument &document, std::size_t inks)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the large fence check prepares a target and brushes");
+        return;
+    }
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const auto scene_at = [&](float scroll)
+    {
+        return win32::PreviewScene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200},
+                                   scroll,   std::nullopt};
+    };
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
+    const auto painted = layout_counts(layouts);
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(4000.0F)));
+    expect(!failure.has_value() && std::get<0>(painted) == 1U && std::get<1>(painted) == inks &&
+               layout_counts(layouts) == painted,
+           "a large fence is laid out and coloured once, and repaints and scrolls redo nothing");
+}
+
+// lines 行の row の囲み（language）を 400 × 200 に描き、2 回目の描画と送りで layout の生成と色の
+// 置き直しが 0 で、最初の描画で置いた色の数が inks であることを確かめる。
+void check_fence_cost(std::size_t lines, std::string_view language, std::string_view row,
+                      std::size_t inks)
+{
+    std::string text = "```" + std::string(language) + "\n";
+    for (std::size_t line = 0; line < lines; ++line)
+    {
+        text += row;
+        text += "\n";
+    }
+    const auto parsed = core::parse_markdown(text + "```\n", core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.front().code_colors.has_value() != (inks != 0U))
+    {
+        expect(false, "a large fence parses with colours only under the colour limit");
+        return;
+    }
+    check_fence_paint(parsed.value(), inks);
+}
+
 // 囲みのコードの構文の色（#1858）: 言語の分かった囲みは本文の字句器の役割の色を 1 回だけ置き、
 // 描き直しは layout を作らず色も置き直さない。知らない言語の囲みは色を置かない（1 色）。
 void check_code_colors()
@@ -1584,54 +1640,14 @@ void check_code_colors()
            "a repaint of a coloured fence makes no layout and sets no colour");
 }
 
-// 上限いっぱいの囲み（preview_code_color_line_limit 行）の色は最初に描くときに 1 回だけ置き、
-// 描き直しも画面の送りも字句解析と色の置き直しをしない（色の区間は要素が持つ）。
+// 区間の数が上限いっぱいの囲み（1 行に数 1 つ）の色は最初に描くときに区間の数だけ 1 回置き、
+// 描き直しも画面の送りも色を置き直さない（色の区間は要素が持つ）。上限を超える密な JSON の囲みは
+// 1 色で、layout に置く effect は 0（#1860 のレビュー M1）。
 void check_large_fence_cost()
 {
-    std::string text = "```py\n";
-    for (std::size_t line = 0; line < core::preview_code_color_line_limit; ++line)
-    {
-        text += "x = 1  # c\n";
-    }
-    const auto parsed = core::parse_markdown(text + "```\n", core::MarkdownStop::never());
-    if (!parsed || !parsed.value().blocks.front().code_colors.has_value())
-    {
-        expect(false, "a fence at the line limit parses with colours");
-        return;
-    }
-    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
-    const auto target = wic_target(bitmap);
-    const auto catalog = core::ThemeCatalog::builtins();
-    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
-    win32::PreviewBrushes brushes;
-    PreviewTextLayouts layouts;
-    const auto style = style_of();
-    const auto tops = win32::PreviewBlockTops::measure(parsed.value(), layouts, style,
-                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
-    if (target == nullptr || !theme || !tops ||
-        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
-    {
-        expect(false, "the large fence check prepares a target and brushes");
-        return;
-    }
-    std::optional<win32::RenderFailure> failure;
-    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
-    const auto scene_at = [&](float scroll)
-    {
-        return win32::PreviewScene{parsed.value(), tops.value(),
-                                   style,          core::LayoutRect{0, 0, 400, 200},
-                                   scroll,         std::nullopt};
-    };
-    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
-    const auto painted = layout_counts(layouts);
-    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
-    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(4000.0F)));
-    const std::vector<core::PreviewCodeColor> none;
-    expect(!failure.has_value() && std::get<0>(painted) == 1U &&
-               std::get<1>(painted) ==
-                   parsed.value().blocks.front().code_colors.value_or(none).size() &&
-               layout_counts(layouts) == painted,
-           "a large fence is laid out and coloured once, and repaints and scrolls redo nothing");
+    check_fence_cost(core::preview_code_color_count_limit, "py", "1",
+                     core::preview_code_color_count_limit);
+    check_fence_cost(1000U, "json", "[1,2,3,4,5,6,7,8,9]", 0U);
 }
 } // namespace
 

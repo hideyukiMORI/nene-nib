@@ -648,6 +648,7 @@ PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)
         .task = std::exchange(task_, std::nullopt),
         .table = std::nullopt,
         .alert = std::nullopt,
+        .code_colors = std::nullopt,
     };
 }
 
