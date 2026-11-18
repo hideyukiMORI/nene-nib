@@ -19,6 +19,7 @@
 #include "GridLineRows.hpp"
 #include "GridLineSource.hpp"
 #include "ImeStance.hpp"
+#include "InsertCompletion.hpp"
 #include "LastResortPlan.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "MatchParen.hpp"
@@ -48,6 +49,7 @@
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWantedColumn.hpp"
+#include "WordTable.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -757,6 +759,21 @@ PaneSource EditorController::framed_source(const core::VimPattern *pattern) cons
 {
     return drawn_source(PaneSource{state_, highlighted_range(), block_selection(), pattern,
                                    state_.autosave_ids().at(state_.active_tab())});
+}
+
+const std::optional<core::WordTable> &EditorController::word_table() const noexcept
+{
+    return state_.word_table();
+}
+
+core::CompletionList EditorController::insert_completion(core::CompletionDirection direction)
+{
+    if (!state_.word_table().has_value() &&
+        state_.text().size_bytes() <= core::word_table_byte_limit)
+    {
+        state_ = state_.with_word_table();
+    }
+    return insert_completion_list(state_, direction);
 }
 
 const core::VimState &EditorController::vim_state() const noexcept
