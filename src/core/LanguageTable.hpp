@@ -22,6 +22,11 @@ namespace nenenib::core
 [[nodiscard]] std::string_view language_name(Language language) noexcept;
 // language_name の逆引き。名前は小文字だけを受け、引けなければ空（決定 4）。
 [[nodiscard]] std::optional<Language> language_of_name(std::string_view name) noexcept;
+// 言語の呼び名から引く（#1858）。名前の表（language_of_name）・拡張子の表の拡張子・別名の表
+// （`c++` `shell` `powershell` `pwsh` `golang` `csharp` `c#` `docker`）の順に引き、どれにも
+// 無ければ空。小文字だけを受ける（呼び手が畳む）。Ex の `:set filetype=` と Markdown の囲みの
+// コードの info string が読む。設定の `lsp.<language>.command` は language_of_name のまま。
+[[nodiscard]] std::optional<Language> language_of_label(std::string_view label) noexcept;
 // 名前の表そのもの（Language の宣言の順）。補完の候補が並べる。
 [[nodiscard]] std::span<const std::string_view> all_language_names() noexcept;
 // 拡張子の表の拡張子だけ（ADR 0154 の追補 2026-10-28・#849）。表の順に、先頭の '.' を除いた小文字の

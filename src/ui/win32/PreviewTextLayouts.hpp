@@ -127,6 +127,9 @@ class PreviewTextLayouts final
     // 装飾の色を entry の layout に置く。
     [[nodiscard]] HRESULT ink(PreviewTextLayout &entry, const core::PreviewBlock &block,
                               const PreviewBrushes &brushes);
+    // 囲みのコードの構文の色を entry の layout に置き（#1858・entry の colors と color_ranges）、
+    // entry に色を置いた brush の回を覚える（ink の最後の一歩）。
+    [[nodiscard]] HRESULT ink_colors(PreviewTextLayout &entry, const PreviewBrushes &brushes);
     // 鍵で引いて最近使った順の末尾へ回し、無ければ作って保持する。
     [[nodiscard]] std::expected<std::vector<PreviewTextLayout>::iterator, RenderFailure>
     hold(const core::PreviewBlock &block, float width, const PreviewTextStyle &style,

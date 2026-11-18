@@ -1,6 +1,7 @@
 // parse_markdown（ADR 0151 の決定 5〜8・#765）。入力は CommonMark 0.31 の例を 8 つの構文
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
+#include "Language.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
@@ -10,13 +11,17 @@
 #include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColor.hpp"
+#include "PreviewCodeColors.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
 #include "PreviewTableRow.hpp"
 #include "Scopes.hpp"
+#include "SyntaxRole.hpp"
 #include "TestSupport.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -419,6 +424,71 @@ void verify_code_blocks()
                   "an empty code block begins on its fence line after the blank line");
 }
 
+// 囲みの最初の要素（無ければ空の要素）。
+[[nodiscard]] PreviewBlock first_block(std::string_view input)
+{
+    const auto parsed = core::parse_markdown(input, MarkdownStop::never());
+    return parsed.has_value() && !parsed.value().blocks.empty() ? parsed.value().blocks.front()
+                                                                : leaf(paragraph, "", 0U);
+}
+
+[[nodiscard]] bool colored(const PreviewBlock &block, std::size_t begin, std::size_t end,
+                           core::SyntaxRole role)
+{
+    return block.code_colors.has_value() &&
+           std::ranges::find(block.code_colors.value(),
+                             core::PreviewCodeColor{Offset{begin}, Offset{end}, role}) !=
+               block.code_colors.value().end();
+}
+
+[[nodiscard]] std::string fenced_lines(std::string_view language, std::size_t lines)
+{
+    std::string input = "```" + std::string(language) + "\n";
+    for (std::size_t line = 0; line < lines; ++line)
+    {
+        input += "x = 1\n";
+    }
+    return input + "```\n";
+}
+
+// 囲みのコードの構文の色（#1858）。言語は info string の最初の語で本文と同じ表から引き、色の区間
+// は本文と同じ字句器の答えを要素の text のバイト位置で持つ。
+void verify_code_colors()
+{
+    const auto cpp = first_block("```cpp\nint x; // c\n```");
+    expect(cpp.kind == code && cpp.text == "int x; // c\n" && cpp.source_begin == Offset{7U} &&
+               colored(cpp, 7U, 11U, core::SyntaxRole::comment),
+           "a cpp fence colours the comment with the body lexer");
+    expect(cpp.code_colors == core::preview_code_colors(core::Language::cpp, cpp.text),
+           "the colours are the lexer's answer for the code text");
+    const auto python = first_block("```Python\n\"\xE3\x81\x82\" # x\n```");
+    expect(colored(python, 0U, 5U, core::SyntaxRole::string) &&
+               colored(python, 6U, 9U, core::SyntaxRole::comment),
+           "a folded name colours by byte offsets past a multibyte character");
+    const auto comment = first_block("```c++ title=\"x\"\n/* a\nb */ 1\n```");
+    expect(colored(comment, 0U, 4U, core::SyntaxRole::comment) &&
+               colored(comment, 5U, 9U, core::SyntaxRole::comment),
+           "an alias with more words carries a block comment over the line");
+    for (const std::string_view input :
+         {"```zig\nconst x = 1;\n```", "```\nint x;\n```", "    int x;\n", "```markdown\n# a\n```",
+          "```md\n# a\n```", "```text\nint x;\n```", "```{.cpp}\nint x;\n```"})
+    {
+        const auto block = first_block(input);
+        expect(block.kind == code && !block.code_colors.has_value(),
+               "an unknown, missing, markdown or plain language keeps one colour");
+    }
+    expect(first_block(fenced_lines("py", core::preview_code_color_line_limit))
+               .code_colors.has_value(),
+           "a fence at the line limit is coloured");
+    expect(!first_block(fenced_lines("py", core::preview_code_color_line_limit + 1U))
+                .code_colors.has_value(),
+           "a fence over the line limit keeps one colour");
+    const std::string wide =
+        "```py\n" + std::string(core::preview_code_color_byte_limit, 'a') + "\n```\n";
+    expect(!first_block(wide).code_colors.has_value(),
+           "a fence over the byte limit keeps one colour");
+}
+
 void verify_rules()
 {
     expect_blocks("***\n---\n___", {leaf(rule, "", 0U), leaf(rule, "", 0U), leaf(rule, "", 0U)},
@@ -811,6 +881,7 @@ void verify_markdown_scope()
     verify_tasks();
     verify_quotes();
     verify_code_blocks();
+    verify_code_colors();
     verify_rules();
     verify_entities();
     verify_html5_entities();

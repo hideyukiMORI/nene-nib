@@ -4,6 +4,7 @@
 #include "MarkdownImage.hpp"
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
+#include "PreviewCodeColors.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewTableCell.hpp"
 #include "PreviewTableRow.hpp"
@@ -409,6 +410,12 @@ void MarkdownBuilder::open_leaf(PreviewBlockKind kind, std::uint8_t level)
     static_cast<void>(opened(kind, level));
 }
 
+void MarkdownBuilder::open_code(std::optional<Language> language)
+{
+    open_leaf(PreviewBlockKind::code, 0U);
+    code_language_ = language;
+}
+
 void MarkdownBuilder::close_leaf()
 {
     if (!leaf_.has_value())
@@ -433,6 +440,11 @@ void MarkdownBuilder::close_leaf()
         block.source_begin = Offset{unlocated_begin()};
     }
     mark_alert(block);
+    if (block.kind == PreviewBlockKind::code && code_language_.has_value())
+    {
+        block.code_colors = preview_code_colors(code_language_.value(), block.text);
+    }
+    code_language_.reset();
     // `~` 1 つの打ち消しは装飾を外す（番号の大きい方から）。
     std::ranges::sort(single_strikes_, std::greater{});
     for (const auto span : single_strikes_)

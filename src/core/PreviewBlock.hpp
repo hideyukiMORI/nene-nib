@@ -4,6 +4,7 @@
 #include "Offset.hpp"
 #include "PreviewAlert.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColor.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewTableRow.hpp"
 
@@ -21,7 +22,9 @@ namespace nenenib::core
 // 文字で、ハードブレークは "\n"、段落の中の改行は空白 1 つ。task はタスクリストの項目の
 // 最初の要素だけが持つチェックボックス（ADR 0155 の追補 22・ほかは nullopt）。table は
 // 表の行（table_row）だけが持つ升と揃え、alert は GitHub の alert の引用の中の要素が持つ
-// 種類（#1848・ほかは nullopt）。
+// 種類（#1848・ほかは nullopt）。code_colors は言語の分かった囲みのコードだけが持つ構文の色の
+// 区間（#1858・text のバイト位置）で、nullopt の要素は 1 色で描く（空の列は色の区間の無い
+// 囲み・文字は本文の色）。
 struct PreviewBlock
 {
     PreviewBlockKind kind;
@@ -35,6 +38,7 @@ struct PreviewBlock
     std::optional<MarkdownTask> task;
     std::optional<PreviewTableRow> table;
     std::optional<PreviewAlert> alert;
+    std::optional<std::vector<PreviewCodeColor>> code_colors = std::nullopt;
 };
 
 [[nodiscard]] inline bool operator==(const PreviewBlock &left, const PreviewBlock &right)
@@ -43,6 +47,7 @@ struct PreviewBlock
            left.quote_depth == right.quote_depth && left.list_depth == right.list_depth &&
            left.marker == right.marker && left.source_begin == right.source_begin &&
            left.text == right.text && left.spans == right.spans && left.task == right.task &&
-           left.table == right.table && left.alert == right.alert;
+           left.table == right.table && left.alert == right.alert &&
+           left.code_colors == right.code_colors;
 }
 } // namespace nenenib::core

@@ -4,6 +4,7 @@
 #include "MarkdownEntity.hpp"
 #include "MarkdownTask.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColors.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
 
@@ -42,6 +43,19 @@ constexpr std::string_view replacement_character = "�";
 [[nodiscard]] std::uint8_t heading_level(const void *detail) noexcept
 {
     return static_cast<std::uint8_t>(static_cast<const MD_BLOCK_H_DETAIL *>(detail)->level);
+}
+
+// 囲みのコードの言語（#1858）。md4c の lang は info string の最初の語（字下げのコードと info string
+// の無い囲みは空）。実体参照は解かずに綴りのまま引く（`{.cpp}` の形も綴りのままで、表に無いので
+// 1 色）。
+[[nodiscard]] std::optional<Language> code_language(const void *detail)
+{
+    const auto &lang = static_cast<const MD_BLOCK_CODE_DETAIL *>(detail)->lang;
+    if (lang.text == nullptr || lang.size == 0U)
+    {
+        return std::nullopt;
+    }
+    return preview_code_language(std::string_view(lang.text, lang.size));
 }
 
 // タスクリストの項目のチェックボックス（ADR 0155 の追補 22）。task_mark_offset は本文の
@@ -144,7 +158,7 @@ void entered_block(MarkdownBuilder &builder, MD_BLOCKTYPE type, const void *deta
         builder.open_leaf(PreviewBlockKind::heading, heading_level(detail));
         return;
     case MD_BLOCK_CODE:
-        builder.open_leaf(PreviewBlockKind::code, 0U);
+        builder.open_code(code_language(detail));
         return;
     case MD_BLOCK_HTML:
         builder.open_leaf(PreviewBlockKind::html, 0U);

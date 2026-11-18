@@ -286,7 +286,8 @@ constexpr std::array<std::string_view, 2> language_options{"filetype", "ft"};
                     .language = ExLanguageRequest{language}};
 }
 
-// `filetype=<名前>` `ft=<名前>` と `filetype?` `ft?`。名前が言語の表に無ければ E474（Vim は任意の
+// `filetype=<名前>` `ft=<名前>` と `filetype?` `ft?`。名前は言語の呼び名（language_of_label・
+// 拡張子と別名も受ける・#1858）で、引けなければ E474（Vim は任意の
 // 文字列を受けるが、Nib の言語は閉じている・決定 4 と 8）。言語の option でなければ空。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 language_option(std::string_view option)
@@ -306,7 +307,7 @@ language_option(std::string_view option)
         {
             continue;
         }
-        const auto language = language_of_name(rest.substr(1));
+        const auto language = language_of_label(rest.substr(1));
         if (!language.has_value())
         {
             return std::unexpected(ExFailure::invalid_argument);

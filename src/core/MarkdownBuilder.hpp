@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DisplayLanguage.hpp"
+#include "Language.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownImage.hpp"
 #include "MarkdownStop.hpp"
@@ -68,6 +69,10 @@ class MarkdownBuilder final
     void enter_row();
     void enter_cell(PreviewTableAlign align, bool header);
     void open_leaf(PreviewBlockKind kind, std::uint8_t level);
+    // 囲みのコードを開く（#1858）。language は info string の最初の語から引いた言語
+    // （preview_code_language・無ければ nullopt で 1 色）。閉じる close_leaf が 1
+    // 回だけ色の区間を作る。
+    void open_code(std::optional<Language> language);
     void close_leaf();
     // style が nullopt の装飾（数式など）は積みの対だけを保つ。
     void enter_span(std::optional<PreviewStyle> style);
@@ -136,6 +141,8 @@ class MarkdownBuilder final
     // いちばん外の引用（リストの外）の最初の要素の番号と、その引用が alert ならその種類。
     std::optional<std::size_t> alert_start_;
     std::optional<PreviewAlert> alert_;
+    // 開いている囲みのコードの言語（open_code・閉じたら空）。
+    std::optional<Language> code_language_;
     bool stopped_ = false;
     bool exhausted_ = false;
 };

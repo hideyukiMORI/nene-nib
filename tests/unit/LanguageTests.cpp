@@ -320,6 +320,36 @@ void verify_names()
            "language_of_name accepts only the lower-case names of the closed list");
 }
 
+// 呼び名（#1858）。名前・拡張子・別名の順に引き、小文字だけを受ける。
+void verify_language_labels()
+{
+    const std::array<std::pair<std::string_view, Language>, 12> labels{{
+        {"cpp", Language::cpp},
+        {"cxx", Language::cpp},
+        {"c++", Language::cpp},
+        {"js", Language::javascript},
+        {"ts", Language::typescript},
+        {"py", Language::python},
+        {"bash", Language::shell},
+        {"shell", Language::shell},
+        {"pwsh", Language::powershell},
+        {"yml", Language::yaml},
+        {"c#", Language::cs},
+        {"text", Language::plain},
+    }};
+    for (const auto &[label, language] : labels)
+    {
+        expect(core::language_of_label(label) == std::optional{language},
+               "language_of_label reads names, extensions and aliases");
+    }
+    expect(!core::language_of_label("C++").has_value() &&
+               !core::language_of_label("zig").has_value() &&
+               !core::language_of_label("").has_value(),
+           "language_of_label accepts only lower-case labels it knows");
+    expect(!core::language_of_name("c++").has_value() && !core::language_of_name("py").has_value(),
+           "language_of_name keeps reading the names only");
+}
+
 // Ex の評価（決定 4）。言語は設定に載らず、名前の外は E474。
 void verify_ex_evaluation()
 {
@@ -340,6 +370,15 @@ void verify_ex_evaluation()
         expect(request.has_value() &&
                    !request.value_or(core::ExLanguageRequest{Language::c}).language.has_value(),
                ":set filetype? asks for the current language");
+    }
+    for (const auto &[command, language] :
+         {std::pair<std::string_view, Language>{"set ft=c++", Language::cpp},
+          std::pair<std::string_view, Language>{"set filetype=py", Language::python}})
+    {
+        const auto request = language_request(command);
+        expect(request.has_value() &&
+                   request.value_or(core::ExLanguageRequest{}).language == std::optional{language},
+               ":set filetype= also takes an extension or an alias (#1858)");
     }
     for (const std::string_view command : {"set filetype=zig", "set ft=Markdown", "set ft="})
     {
@@ -595,6 +634,7 @@ void verify_language_scope()
     verify_batch4_extensions();
     verify_extension_additions();
     verify_names();
+    verify_language_labels();
     verify_dialog_pattern();
     verify_ex_evaluation();
     verify_completion();

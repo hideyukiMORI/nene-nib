@@ -84,9 +84,9 @@ template <typename Target> class PreviewPainter final
                            static_cast<float>(area.right), static_cast<float>(area.bottom));
     }
 
-    // 要素の文字の色（見出しは keyword・コードは string・HTML と水平線と front matter は comment・
-    // 引用の中の段落と項目と表の行は comment（alert の引用の中は foreground・#1848）・
-    // ほかは foreground）。
+    // 要素の文字の色（見出しは keyword・コードは string（言語の分かった囲みは foreground）・HTML
+    // と水平線と front matter は comment・ 引用の中の段落と項目と表の行は comment（alert
+    // の引用の中は foreground・#1848）・ ほかは foreground）。
     [[nodiscard]] static PreviewInk ink_of(const core::PreviewBlock &block) noexcept
     {
         switch (block.kind)
@@ -94,7 +94,8 @@ template <typename Target> class PreviewPainter final
         case core::PreviewBlockKind::heading:
             return PreviewInk::keyword;
         case core::PreviewBlockKind::code:
-            return PreviewInk::string;
+            // 言語の分かった囲みは本文と同じく区間の外を文字の色で描く（#1858）。
+            return block.code_colors.has_value() ? PreviewInk::foreground : PreviewInk::string;
         case core::PreviewBlockKind::html:
         case core::PreviewBlockKind::rule:
         case core::PreviewBlockKind::front_matter:
