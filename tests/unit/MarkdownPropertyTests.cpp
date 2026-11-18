@@ -10,6 +10,7 @@
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
+#include "MarkdownTask.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewSpan.hpp"
@@ -571,6 +572,94 @@ void verify_markdown_size_boundary()
            "markdown_size_fits takes the md4c size type exactly and refuses one byte more");
 }
 
+// front matter の族（#1840 のレビュー）: 先頭の `---` と閉じる `---` の間と後ろに断片を置く。
+std::string markdown_fronted(Random &random)
+{
+    return "---\n" + composed(random, markdown_fragments) + "\n---\n" +
+           composed(random, markdown_fragments);
+}
+
+// 位置の対応: task の印は本文の `[` と `]` の間の 1 バイトを指す（front matter の分だけずれない）。
+[[nodiscard]] std::string_view fronted_violation(std::string_view input)
+{
+    const std::string_view broken = markdown_violation(input);
+    if (!broken.empty())
+    {
+        return broken;
+    }
+    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
+    for (const auto &block : parsed.value().blocks)
+    {
+        const auto mark =
+            block.task.transform([](const core::MarkdownTask &task) { return task.mark_offset; });
+        if (mark.has_value() &&
+            (mark.value() == 0U || mark.value() + 1U >= input.size() ||
+             input[mark.value() - 1U] != '[' || input[mark.value() + 1U] != ']'))
+        {
+            return "a task mark does not point between brackets of the body";
+        }
+    }
+    return {};
+}
+
+// `~` 1 つを含む文書の断片（#1840 のレビュー）。`~~` と囲みの印 ```` ``` ```` を作らない（囲みの
+// info string の `~` は文字に出ない）。リンク・画像・HTML・実体参照は入れない（行き先や綴りの `~`
+// は文字に出ない）。
+constexpr std::array<std::string_view, 16> tilde_fragments{{
+    "~",
+    "a",
+    " ",
+    "*",
+    "**",
+    "_",
+    "`",
+    "\\",
+    "\n",
+    "\n\n",
+    "10時~12時",
+    "> ",
+    "- ",
+    "# ",
+    "x~y",
+    "~b~",
+}};
+
+std::string markdown_tilded(Random &random)
+{
+    auto text = composed(random, tilde_fragments);
+    for (auto at = text.find("~~"); at != std::string::npos; at = text.find("~~"))
+    {
+        text.replace(at, 2U, "~ ~");
+    }
+    for (auto at = text.find("```"); at != std::string::npos; at = text.find("```"))
+    {
+        text.replace(at, 3U, "`` `");
+    }
+    return text;
+}
+
+[[nodiscard]] std::size_t tildes_in(std::string_view text)
+{
+    return static_cast<std::size_t>(std::ranges::count(text, '~'));
+}
+
+// `~` 1 つは打ち消しにしないので、出る文字の `~` の数は入力の数と同じ（`~` が消えない）。
+[[nodiscard]] std::string_view tilde_violation(std::string_view input)
+{
+    const std::string_view broken = markdown_violation(input);
+    if (!broken.empty())
+    {
+        return broken;
+    }
+    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
+    std::size_t shown = 0U;
+    for (const auto &block : parsed.value().blocks)
+    {
+        shown += tildes_in(block.text);
+    }
+    return shown == tildes_in(input) ? std::string_view{} : "a single tilde is lost from the text";
+}
+
 void verify_markdown_properties()
 {
     verify_family("parse_markdown holds on random bytes", 8711U, markdown_bytes,
@@ -583,6 +672,10 @@ void verify_markdown_properties()
                   markdown_violation);
     verify_family("a stopping predicate is stopped or the whole document", 8715U, markdown_composed,
                   stop_violation);
+    verify_family("parse_markdown keeps positions after a front matter", 8717U, markdown_fronted,
+                  fronted_violation);
+    verify_family("parse_markdown keeps every single tilde in the text", 8718U, markdown_tilded,
+                  tilde_violation);
     verify_stops_happen();
     verify_markdown_depths();
     verify_markdown_size_boundary();

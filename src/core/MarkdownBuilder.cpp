@@ -98,6 +98,8 @@ constexpr std::size_t depth_limit = 255U;
     return line;
 }
 
+constexpr std::string_view replacement = "\xEF\xBF\xBD";
+
 // [from, to) の改行を LF にそろえる（CRLF と CR だけの改行も LF・md4c のコードブロックと同じ形）。
 [[nodiscard]] std::string lf_text(std::string_view input, std::size_t from, std::size_t to)
 {
@@ -106,18 +108,50 @@ constexpr std::size_t depth_limit = 255U;
     for (; from < to; ++from)
     {
         const bool crlf = input[from] == '\r' && from + 1U < to && input[from + 1U] == '\n';
-        if (!crlf)
+        if (crlf)
         {
-            text.push_back(input[from] == '\r' ? '\n' : input[from]);
+            continue;
         }
+        // NUL は本文と同じく U+FFFD（md4c の MD_TEXT_NULLCHAR と同じ・#1840 のレビュー）。
+        if (input[from] == '\0')
+        {
+            text.append(replacement);
+            continue;
+        }
+        text.push_back(input[from] == '\r' ? '\n' : input[from]);
     }
     return text;
 }
 
-// line から始まる行の中身（改行を除く）が word だけか。
+// line から始まる行の中身（改行と後ろの空白・Tab を除く）が word だけか（Jekyll と同じ・#1840 の
+// レビュー）。
 [[nodiscard]] bool line_is(std::string_view input, std::size_t line, std::string_view word) noexcept
 {
-    return input.substr(line, line_end(input, line) - line) == word;
+    auto end = line_end(input, line);
+    while (end > line && blank(input[end - 1U]))
+    {
+        --end;
+    }
+    return input.substr(line, end - line) == word;
+}
+
+// 打ち消しの開く記号の `~` の数。at は span の中の最初の文字の本文の位置で、その前の入れ子の
+// 開く記号（強調・コード・リンク・画像・自動リンク・エスケープ）を飛ばして `~` の並びを数える。
+// 読めない形は 2（打ち消しのまま）。
+[[nodiscard]] std::size_t opening_tildes(std::string_view input, std::size_t at) noexcept
+{
+    constexpr std::string_view openers = "*_`[!<\\";
+    while (at > 0U && openers.contains(input[at - 1U]))
+    {
+        --at;
+    }
+    std::size_t count = 0U;
+    while (at > 0U && input[at - 1U] == '~')
+    {
+        --at;
+        ++count;
+    }
+    return count == 0U ? 2U : count;
 }
 
 // line から始めて、`---` か `...` だけの最初の行の行頭
@@ -367,6 +401,14 @@ void MarkdownBuilder::close_leaf()
         block.source_begin = Offset{unlocated_begin()};
     }
     mark_alert(block);
+    // `~` 1 つの打ち消しは装飾を外す（番号の大きい方から）。
+    std::ranges::sort(single_strikes_, std::greater{});
+    for (const auto span : single_strikes_)
+    {
+        block.spans.erase(block.spans.begin() + static_cast<std::ptrdiff_t>(span));
+    }
+    single_strikes_.clear();
+    pending_strikes_.clear();
     blocks_.push_back(std::move(block));
     leaf_begin_.reset();
     implicit_leaf_ = false;
@@ -390,6 +432,47 @@ void MarkdownBuilder::enter_span(std::optional<PreviewStyle> style)
     }
 }
 
+void MarkdownBuilder::enter_strike()
+{
+    enter_span(PreviewStyle::strikethrough);
+    const auto &block = ensure_leaf();
+    pending_strikes_.emplace_back(block.spans.size() - 1U, block.text.size());
+}
+
+void MarkdownBuilder::settle_strikes(std::optional<std::size_t> at)
+{
+    for (const auto &[span, begin] : pending_strikes_)
+    {
+        if (at.has_value() && opening_tildes(input_, at.value()) == 1U)
+        {
+            restore_opening(span, begin);
+        }
+    }
+    pending_strikes_.clear();
+}
+
+void MarkdownBuilder::restore_opening(std::size_t span, std::size_t begin)
+{
+    // 開く `~` を始まりへ戻し、打ち消しの後に開いた装飾（入れ子）と画像の節を 1 つずらす。
+    auto &block = ensure_leaf();
+    block.text.insert(begin, 1U, '~');
+    for (std::size_t other = span + 1U; other < block.spans.size(); ++other)
+    {
+        auto &moved = block.spans.at(other);
+        if (moved.begin.value >= begin)
+        {
+            moved.begin = Offset{moved.begin.value + 1U};
+            moved.end = Offset{std::max(moved.end.value + 1U, moved.begin.value)};
+        }
+    }
+    for (const auto image : open_images_)
+    {
+        auto &node = images_.at(image);
+        node.begin = Offset{node.begin.value + (node.begin.value >= begin ? 1U : 0U)};
+    }
+    single_strikes_.push_back(span);
+}
+
 void MarkdownBuilder::leave_span()
 {
     if (spans_.empty())
@@ -400,12 +483,19 @@ void MarkdownBuilder::leave_span()
     spans_.pop_back();
     if (index.has_value() && leaf_.has_value())
     {
+        std::erase_if(pending_strikes_,
+                      [&index](const auto &pending) { return pending.first == index.value(); });
         auto &block = leaf_.value();
         auto &span = block.spans.at(index.value());
         const bool image = span.style == PreviewStyle::image;
         if (image)
         {
             block.text.append(image_closing_);
+        }
+        // `~` 1 つの打ち消しは閉じる `~` も文字に戻す。
+        if (std::ranges::contains(single_strikes_, index.value()))
+        {
+            block.text.push_back('~');
         }
         span.end = Offset{block.text.size()};
         if (image)
@@ -447,6 +537,10 @@ void MarkdownBuilder::text(std::string_view shown, std::string_view source)
                              '\t', ' ');
     }
     const auto at = located(source);
+    if (!pending_strikes_.empty())
+    {
+        settle_strikes(at);
+    }
     if (!at.has_value())
     {
         return;

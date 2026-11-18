@@ -474,15 +474,31 @@ void verify_html5_entities()
                   "unknown names and names without a semicolon keep their spelling");
 }
 
-// 打ち消し線（MD_FLAG_STRIKETHROUGH・#1840）。記号は文字に入らず、装飾が範囲を持つ。md4c は GFM と
-// 同じく 1 つと 2 つの `~` を打ち消しにし、3 つ以上と数の合わない対は文字のまま。
+// 打ち消し線（MD_FLAG_STRIKETHROUGH・#1840）。記号は文字に入らず、装飾が範囲を持つ。打ち消しは
+// `~~` だけで、md4c が打ち消しにする `~` 1 つの対は文字のまま元の位置に戻す（日本語の範囲の `~`・
+// #1840 のレビュー）。3 つ以上と数の合わない対も文字のまま。
 void verify_strikethrough()
 {
     const PreviewStyle struck = PreviewStyle::strikethrough;
     expect_blocks("~~a~~", {styled(leaf(paragraph, "a", 2U), {span(0U, 1U, struck)})},
                   "double tildes strike through and drop the marks");
-    expect_blocks("~a~", {styled(leaf(paragraph, "a", 1U), {span(0U, 1U, struck)})},
-                  "single tildes strike through as GFM does");
+    expect_blocks("~a~", {leaf(paragraph, "~a~", 1U)}, "single tildes are text");
+    expect_blocks("10時~12時、14時~16時", {leaf(paragraph, "10時~12時、14時~16時", 0U)},
+                  "tildes for ranges keep the text between them as it is");
+    expect_blocks("*~a~*", {styled(leaf(paragraph, "~a~", 2U), {span(0U, 3U, emphasis)})},
+                  "single tildes inside emphasis keep the emphasis around them");
+    expect_blocks("~a **b** c~", {styled(leaf(paragraph, "~a b c~", 1U), {span(3U, 4U, strong)})},
+                  "strong inside single tildes moves by the opening tilde");
+    expect_blocks("~**b** c~", {styled(leaf(paragraph, "~b c~", 3U), {span(1U, 2U, strong)})},
+                  "strong right after a single tilde moves by the tilde");
+    expect_blocks("~~a ~b~ c~~", {styled(leaf(paragraph, "a ~b~ c", 2U), {span(0U, 7U, struck)})},
+                  "single tildes inside a strike through are text inside it");
+    expect_blocks("~a~\nb~c~", {leaf(paragraph, "~a~ b~c~", 1U)},
+                  "single tildes at the start and the end of lines are text");
+    expect_blocks("\\~a~", {leaf(paragraph, "~a~", 1U)},
+                  "an escaped tilde and a lone tilde are text");
+    expect_blocks("`~a~`", {styled(leaf(paragraph, "~a~", 1U), {span(0U, 3U, inline_code)})},
+                  "single tildes in a code span are text");
     expect_blocks("x ~~~a~~~ y", {leaf(paragraph, "x ~~~a~~~ y", 0U)}, "three tildes are text");
     expect_blocks("x ~~a~ y", {leaf(paragraph, "x ~~a~ y", 0U)},
                   "tildes that do not pair are text");
@@ -557,8 +573,13 @@ void verify_front_matter()
                   "a blank line before the opening line reads as before");
     expect_blocks("----\na\n----", {leaf(rule, "", 0U), titled(2U, "a", 5U)},
                   "an opening line other than --- reads as before");
-    expect_blocks("--- \na\n---", {leaf(rule, "", 0U), titled(2U, "a", 5U)},
-                  "an opening line with a trailing space reads as before");
+    expect_blocks("--- \na\n---\t\nb", {front("a\n"), leaf(paragraph, "b", 12U)},
+                  "spaces and tabs after the opening and closing lines are allowed (Jekyll)");
+    expect_blocks(std::string_view("---\na\0b\n---\nx", 13U),
+                  {front("a\xEF\xBF\xBD"
+                         "b\n"),
+                   leaf(paragraph, "x", 12U)},
+                  "a NUL in a front matter becomes U+FFFD like the body");
     expect_blocks("---", {leaf(rule, "", 0U)}, "a lone --- is a thematic break");
 }
 

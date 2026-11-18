@@ -320,6 +320,11 @@ int on_leave_block(MD_BLOCKTYPE type, void * /*detail*/, void *userdata)
 // ので、コールバックの中で std::string に写す。
 void entered_span(MarkdownBuilder &builder, MD_SPANTYPE type, const void *detail)
 {
+    if (type == MD_SPAN_DEL)
+    {
+        builder.enter_strike();
+        return;
+    }
     if (type != MD_SPAN_IMG)
     {
         builder.enter_span(span_style(type));
@@ -369,7 +374,18 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
     MarkdownBuilder builder(text, stop, language);
     // 先頭の front matter は md4c に渡さない（#1840）。要素の位置は本文を
     // 指す pointer から引くので、後ろだけを渡しても本文の中の位置のまま。
-    const std::string_view parsed = text.substr(builder.front_matter());
+    // front matter の確保の失敗も md4c のコールバックと同じく
+    // insufficient_memory（ARC-010・#817）。
+    std::size_t parsed_from = 0;
+    try
+    {
+        parsed_from = builder.front_matter();
+    }
+    catch (const std::bad_alloc &)
+    {
+        return std::unexpected(MarkdownFailure::insufficient_memory);
+    }
+    const std::string_view parsed = text.substr(parsed_from);
     if (parsed.empty())
     {
         return std::move(builder).finished();

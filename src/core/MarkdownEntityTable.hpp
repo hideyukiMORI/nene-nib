@@ -1,6 +1,6 @@
 // clang-format off
 // 生成物。手で編集しない。python eng/markdown-entities.py --write
-// HTML5 の名前つきの実体参照（Python 3.12 の html.entities.html5 の末尾が ; の名前・; を除いた名前のバイト順）
+// HTML5 の名前つきの実体参照（Python の html.entities.html5 の末尾が ; の名前・; を除いた名前のバイト順）
 #pragma once
 
 #include <array>

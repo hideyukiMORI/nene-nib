@@ -70,6 +70,10 @@ constexpr char32_t last_surrogate = 0xDFFFU;
     return value;
 }
 
+// 生成物の表は名前のバイト順（二分探索の前提・生成器を直したときにコンパイルで落とす）。
+static_assert(std::ranges::is_sorted(markdown_named_entities, {},
+                                     &std::pair<std::string_view, std::u32string_view>::first));
+
 // 名前つきは HTML5 の全表（生成物 MarkdownEntityTable.hpp・名前のバイト順）を二分探索で引く。
 [[nodiscard]] std::optional<std::u32string_view> named_value(std::string_view name) noexcept
 {

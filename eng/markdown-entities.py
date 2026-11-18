@@ -45,8 +45,8 @@ def markdown_entities_header() -> str:
     rows = "\n".join(f'    {{"{name}", {value_literal(value)}}},' for name, value in pairs)
     return ("// clang-format off\n"
             f"{BANNER}\n"
-            f"// HTML5 の名前つきの実体参照（Python {sys.version_info.major}.{sys.version_info.minor} の "
-            "html.entities.html5 の末尾が ; の名前・; を除いた名前のバイト順）\n"
+            "// HTML5 の名前つきの実体参照（Python の html.entities.html5 の末尾が ; の名前・; を除いた"
+            "名前のバイト順）\n"
             "#pragma once\n"
             "\n"
             "#include <array>\n"

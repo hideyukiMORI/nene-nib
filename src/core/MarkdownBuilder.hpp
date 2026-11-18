@@ -67,8 +67,12 @@ class MarkdownBuilder final
     void enter_cell(PreviewTableAlign align, bool header);
     void open_leaf(PreviewBlockKind kind, std::uint8_t level);
     void close_leaf();
-    // style が nullopt の装飾（打ち消しなど）は積みの対だけを保つ。
+    // style が nullopt の装飾（数式など）は積みの対だけを保つ。
     void enter_span(std::optional<PreviewStyle> style);
+    // 打ち消し（md4c の DEL）を開く。打ち消しは `~~` だけで、開く記号が `~` 1 つなら装飾を付けず、
+    // 開く `~` と閉じる `~` を文字として元の位置に戻す（日本語の範囲の `~`・#1840 のレビュー）。
+    // 記号の数は span の中の最初の文字の本文の位置から前を読んで決める。
+    void enter_strike();
     // 画像の装飾を開き、画像の節を覚える（ADR 0155 の追補 47）。source と title は実体参照を解いた
     // md4c の属性。閉じる leave_span が alt と範囲の終わりを書く。
     void enter_image(std::string source, std::string title);
@@ -89,6 +93,10 @@ class MarkdownBuilder final
     // 開いている画像の節のいちばん内側を、要素の text の今の終わりで閉じる。closed は閉じの「]」を
     // 足した後か。
     void finish_image(const PreviewBlock &block, bool closed);
+    // 開いたままの打ち消しの記号の数を、span の中の最初の文字の本文の位置 at から決める。
+    void settle_strikes(std::optional<std::size_t> at);
+    // 装飾 span の打ち消しを `~` 1 つと決め、要素の text の begin に開く `~` を戻す。
+    void restore_opening(std::size_t span, std::size_t begin);
     // 閉じる要素に alert の種類を置く。いちばん外の引用の最初の要素なら、その段落の 1 行目が
     // alert の印の行かを見て、印を種類の名前に置き換える（#1848）。
     void mark_alert(PreviewBlock &block);
@@ -111,6 +119,10 @@ class MarkdownBuilder final
     // md4c に渡した本文の先頭の、本文の中の位置（front_matter の後ろ・無ければ 0）。
     std::size_t parsed_from_ = 0;
     std::vector<std::optional<std::size_t>> spans_;
+    // 記号の数がまだ決まっていない打ち消しの装飾の番号と、要素の text の中の始まり。
+    std::vector<std::pair<std::size_t, std::size_t>> pending_strikes_;
+    // 記号が `~` 1 つと決まった打ち消しの装飾の番号（要素を閉じるときに装飾から外す）。
+    std::vector<std::size_t> single_strikes_;
     std::vector<MarkdownImage> images_;
     // 開いている画像の節の images_ の番号（入れ子は外側が先）。
     std::vector<std::size_t> open_images_;
