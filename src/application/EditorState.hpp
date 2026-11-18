@@ -141,9 +141,13 @@ class EditorState final
                                         core::EditHistory history, Document document) &&;
     // 語の表（ADR 0169 の決定 1）を、今の本文に edit を当てた後の表にする。本文はまだ変えない
     // （続けて with_edit を呼ぶ）。本文を編集で変える 3 か所（controller の replace・undo・redo）が
-    // with_edit の直前に呼ぶ。表を作っていない文書（16 MiB 超）は何も変えない。
+    // with_edit の直前に呼ぶ。表を作っていない文書は何も変えない（費用 0）。消える＋入るが
+    // core::word_table_edit_limit を超える編集と、上限を超える本文では表を捨てる。
     [[nodiscard]] EditorState with_words_edited(const core::Edit &edit) const &;
     [[nodiscard]] EditorState with_words_edited(const core::Edit &edit) &&;
+    // 語の表が無ければ今の本文から作る（1 MiB 超は作らない）。作るのは最初に補完を使ったときの
+    // 1 か所（controller の insert_completion）だけで、開く・切り替える・戻す道は作らない。
+    [[nodiscard]] EditorState with_word_table() const;
     // アクティブな文書の語の表（作っていなければ空）。
     [[nodiscard]] const std::optional<core::WordTable> &word_table() const noexcept;
     // 読み込み済みの他のタブの語の表（帯の順・ADR 0169 の決定 1）。まだ読んでいない文書と表を

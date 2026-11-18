@@ -55,7 +55,10 @@ using Collected = std::pair<CompletionList, std::vector<std::string>>;
 [[nodiscard]] bool run_matches(std::string_view content, const OffsetRange &run,
                                std::string_view prefix)
 {
-    if (!content.substr(run.begin.value).starts_with(prefix))
+    // 接頭辞の終わりが本文の Vim の 1 文字の途中なら当たらない（`aa` は `aá` の頭に当たらない）。
+    if (!content.substr(run.begin.value).starts_with(prefix) ||
+        (!prefix.empty() &&
+         vim_character_continues(content, Offset{run.begin.value + prefix.size()})))
     {
         return false;
     }
@@ -145,6 +148,10 @@ void offer_table(const WordTable &table, std::string_view prefix,
     const std::size_t wanted = completion_candidate_limit + collected.second.size() + 1;
     for (const WordCount &entry : table.prefixed(prefix, wanted))
     {
+        if (vim_character_continues(entry.word, Offset{prefix.size()}))
+        {
+            continue;
+        }
         const std::int64_t count = entry.count - (entry.word == skipped.second ? 1 : 0);
         if (count > 0 && !offer(entry.word, skipped.first, collected))
         {
@@ -153,19 +160,38 @@ void offer_table(const WordTable &table, std::string_view prefix,
     }
 }
 
-// 照合に当たった語の頭（本文の順）。接頭辞が空でなければ、接頭辞の位置 start から始まる語（打って
-// いる語そのもの）は除く。空の接頭辞ではキャレットから始まる語も候補で、キャレットの後ろに数える
-// （oracle の実測。Vim は検索を接頭辞の 1 文字手前から始める）。
-[[nodiscard]] std::vector<OffsetRange> matched_runs(std::string_view content,
-                                                    std::span<const OffsetRange> runs,
-                                                    std::size_t start, std::string_view prefix)
+// 照合が食う所の終わり。空の接頭辞の `\<\k\k` は 2 文字、ほかは接頭辞の長さ。Vim の検索は
+// 当たった所の後ろから次を探す（cpoptions の c）ので、その内側から始まる語は当たらない。
+[[nodiscard]] std::size_t consumed_end(std::string_view content, const OffsetRange &run,
+                                       std::string_view prefix) noexcept
 {
+    if (!prefix.empty())
+    {
+        return run.begin.value + prefix.size();
+    }
+    return vim_character_end(content, vim_character_end(content, run.begin)).value;
+}
+
+// 照合に当たった語の頭（本文の順・oracle の実測）。打っている語（接頭辞の位置から始まる語）は
+// 候補にせず、その代わりにキャレットから後ろ（打っている語の残り）を語の頭として 1 回照合する
+// （`fo|fooqux` は `fooqux`）。空の接頭辞ではキャレットから始まる語も候補で、キャレットの後ろに
+// 数える。当たった所が食った文字の内側から始まる語は当たらない（`日本語の補完` の `補完`）。
+[[nodiscard]] std::vector<OffsetRange>
+matched_runs(std::string_view content, std::span<const OffsetRange> runs, const OffsetRange &typed)
+{
+    const std::string_view prefix =
+        content.substr(typed.begin.value, typed.end.value - typed.begin.value);
     std::vector<OffsetRange> matched;
+    std::size_t consumed = 0;
     for (const OffsetRange &run : runs)
     {
-        if ((prefix.empty() || run.begin.value != start) && run_matches(content, run, prefix))
+        const OffsetRange tried =
+            !prefix.empty() && run.begin == typed.begin ? OffsetRange{typed.end, run.end} : run;
+        if (tried.begin.value >= consumed && tried.begin.value < tried.end.value &&
+            run_matches(content, tried, prefix))
         {
-            matched.push_back(run);
+            matched.push_back(tried);
+            consumed = consumed_end(content, tried, prefix);
         }
     }
     return matched;
@@ -196,13 +222,10 @@ CompletionList completion_list(const TextBuffer &text, Offset caret, CompletionD
     const std::size_t start = prefix_start(content, at);
     const std::string prefix{content.substr(start, at - start)};
     Collected collected{CompletionList{OffsetRange{Offset{from + first + start}, caret}, {}}, {}};
-    if (tables.own == nullptr)
-    {
-        return std::move(collected.first);
-    }
     const std::vector<OffsetRange> runs = whole_runs(content, from > 0, upto < text.size_bytes());
-    offer_runs(content, matched_runs(content, runs, start, prefix), {start, direction}, collected);
-    if (!whole)
+    offer_runs(content, matched_runs(content, runs, OffsetRange{Offset{start}, Offset{at}}),
+               {start, direction}, collected);
+    if (tables.own != nullptr && !whole)
     {
         const std::string_view typed =
             prefix.empty() ? std::string_view{} : word_at(content, runs, start);

@@ -22,13 +22,13 @@ inline constexpr std::size_t completion_scan_bytes = std::size_t{256} * 1024U;
 // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 2・Vim の insexpand.c の oracle の実測）。
 //
 // 接頭辞はキャレットの直前の 1 文字と同じ種類の語の文字の連なり（直前が語の文字でなければ空）。
-// 今の文書の語は、語の頭のうち接頭辞で始まり（接頭辞が 0〜1 文字なら続く 1 文字も語の文字・
-// Vim の `\<\k\k` と `\<x\k`）、打っている語（接頭辞の位置から始まる語・空の接頭辞では除かない）
-// でないもの。forward はキャレットの後ろから末尾、折り返して先頭から接頭辞の手前、backward は
-// その逆の順に並べる。重複は先に出た 1 つ。
+// 今の文書の語は、語の頭のうち接頭辞で始まり（終わりが Vim の 1 文字の境・接頭辞が 0〜1 文字なら
+// 続く 1 文字も語の文字・Vim の `\<\k\k` と `\<x\k`）、打っている語でないもの（その代わりに
+// キャレットから後ろを 1 回照合する・照合が食った文字の内側の語は当たらない・matched_runs）。
+// forward はキャレットの後ろから末尾、折り返して先頭から接頭辞の手前、backward はその逆の順に
+// 並べる。重複は先に出た 1 つ。窓の外の語は tables.own から足す（表が無ければ足さない）。
 // 次に他のタブの語（tables.others の順・表の中は語の順）。全部で completion_candidate_limit
-// 個まで。 tables.own が無い（16 MiB 超で表を作っていない）文書では本文の語を使わない（決定 1
-// の限界）。
+// 個まで。
 [[nodiscard]] CompletionList completion_list(const TextBuffer &text, Offset caret,
                                              CompletionDirection direction,
                                              const CompletionTables &tables);
