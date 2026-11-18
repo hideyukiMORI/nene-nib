@@ -47,4 +47,39 @@ inline constexpr std::array<KeyVimSpecial, 12> vim_specials{
     }
     return std::nullopt;
 }
+
+// Vim の INSERT の補完の鍵（#1845・ADR 0169 の決定 3）。`Ctrl+N` は Vim の INSERT で常に
+// engine の `Ctrl-n`（補完を始める・次の候補）。`Ctrl+P` `Ctrl+E` `Ctrl+Y` は補完の面が
+// 見えている間だけ engine の鍵で、見えていなければ空を返して今までの道へ流す（`Ctrl+P` は
+// ファイルの一覧・`Ctrl+E` `Ctrl+Y` は通常モードの表）。言語サーバーの答えを待っているだけで
+// 面がまだ見えていない間も、見えていない側（#1850 の S2）。
+// control は Ctrl だけを押していること（Shift か Alt を組んだ鍵は写さない）。
+// inserting は Vim の INSERT で本文に焦点があること。face_shown は補完の面が見えていること。
+[[nodiscard]] constexpr std::optional<core::VimSpecialKey>
+vim_completion_key(WPARAM key, bool control, bool inserting, bool face_shown) noexcept
+{
+    if (!control || !inserting)
+    {
+        return std::nullopt;
+    }
+    if (key == 'N')
+    {
+        return core::VimSpecialKey::control_n;
+    }
+    if (!face_shown)
+    {
+        return std::nullopt;
+    }
+    constexpr std::array<KeyVimSpecial, 3> open_keys{{{'P', core::VimSpecialKey::control_p},
+                                                      {'E', core::VimSpecialKey::control_e},
+                                                      {'Y', core::VimSpecialKey::control_y}}};
+    for (const KeyVimSpecial entry : open_keys)
+    {
+        if (entry.key == key)
+        {
+            return entry.special;
+        }
+    }
+    return std::nullopt;
+}
 } // namespace nenenib::ui::win32

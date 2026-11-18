@@ -40,6 +40,11 @@ enum class VimSpecialKey : std::uint8_t
     // `<Del>`（#1325）。NORMAL は `x`・回数を打っている途中は回数の最後の桁を消す（Vim の
     // normal_cmd_get_count）・VISUAL は `x`・オペレータの後は失敗（nv_abbrev → nv_optrans の
     // checkclearopq）・INSERT は前方の Vim の 1 文字か行末で次の行とつなぐ（ins_del）。
-    delete_key
+    delete_key,
+    // `Ctrl-n` `Ctrl-p`（#1845・ADR 0169 の決定 3）。INSERT は補完を始める・次 / 前の候補へ動く
+    // （VimStepCompletion.cpp）。NORMAL と VISUAL は `j` `k` と同じ（Vim の nv_down / nv_up）。窓は
+    // Vim の INSERT でだけ写す（`Ctrl+P` は補完の面が開いている間だけ）。
+    control_n,
+    control_p
 };
 } // namespace nenenib::core

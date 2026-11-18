@@ -673,6 +673,8 @@ static_assert(
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return std::nullopt;
     }
     std::unreachable();
@@ -708,6 +710,8 @@ static_assert(
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return std::nullopt;
     }
     std::unreachable();

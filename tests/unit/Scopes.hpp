@@ -66,6 +66,8 @@ void verify_insert_completion_scope();
 // CompletionFaceTests.cpp（#1833・ADR 0190 の決定 5・補完の面の表と通常モードの道）
 void verify_completion_face_contracts();
 void verify_completion_face_scope();
+// 契約 --completion-face の Vim の INSERT の側（#1845・VimInsertCompletionTests.cpp）。
+void verify_vim_insert_completion();
 
 // HistoryTests.cpp
 void verify_history_contracts();

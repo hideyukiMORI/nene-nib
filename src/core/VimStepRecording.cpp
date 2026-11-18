@@ -699,6 +699,26 @@ namespace
     return key;
 }
 
+// 何も消せない消す鍵か、端で動かない矢印か（ビープ）。
+[[nodiscard]] bool beeped(const VimKey &key, const VimEffect &effect) noexcept
+{
+    return erased_nothing(key, effect) || moved_nothing(key, effect);
+}
+
+// 補完の鍵の後の記録（#1845）。補完の鍵は記録に残さない（Vim の redo は確定した語を打った本文として
+// 持つ・completion_recording）。区切った後の最初の鍵なら `i` から取り直す（Vim の ins_complete も
+// stop_arrow を呼ぶ）。補完の鍵でなければ空。
+[[nodiscard]] std::optional<VimRepeatRecord>
+completion_kept(const VimState &before, const VimRepeatRecord &record, const VimKey &key)
+{
+    auto kept = detail::completion_recording(before, record, key);
+    if (kept.has_value() && arrow_pending(before))
+    {
+        return restarted_insert();
+    }
+    return kept;
+}
+
 // INSERT の記録（決定 4）。Esc で 1 つの変更として確定する。区切った後に何も打たずに Esc すれば
 // 記録は区切る前のまま（`ix<Left><Esc>.` は `x` を・`vlcZ<Home><Esc>.`
 // は大きさごと繰り返す・#1137）。 VISUAL から入った挿入は記録を持たないので、確定もしない（決定
@@ -726,9 +746,14 @@ namespace
         next.recording = waited_recording(before, std::move(record), next, effect);
         return next;
     }
-    if (erased_nothing(key, effect) || moved_nothing(key, effect))
+    if (beeped(key, effect))
     {
         return beeped_recording(before, std::move(next));
+    }
+    if (auto kept = completion_kept(before, record, key))
+    {
+        next.recording = std::move(kept).value();
+        return next;
     }
     if (next.mode == VimMode::normal)
     {
