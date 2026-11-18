@@ -11,6 +11,11 @@
 #include "CommandChoice.hpp"
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
+#include "CompletionDirection.hpp"
+#include "CompletionEntry.hpp"
+#include "CompletionList.hpp"
+#include "CompletionSession.hpp"
+#include "CompletionView.hpp"
 #include "CompositionView.hpp"
 #include "ContextMenuItem.hpp"
 #include "ContextMenuMode.hpp"
@@ -78,13 +83,21 @@
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
+#include "LandingPlace.hpp"
 #include "Language.hpp"
+#include "LanguageAnswers.hpp"
+#include "LanguageQueryKind.hpp"
+#include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LspCompletionList.hpp"
+#include "LspLocation.hpp"
 #include "LspNotification.hpp"
+#include "LspPosition.hpp"
 #include "LspRequest.hpp"
+#include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
 #include "MapTimer.hpp"
@@ -100,6 +113,7 @@
 #include "PaletteProjectSearch.hpp"
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
+#include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
 #include "PointerClicks.hpp"
 #include "PreviewAnchor.hpp"
@@ -123,6 +137,8 @@
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "Session.hpp"
+#include "SettingsOpen.hpp"
+#include "SettingsView.hpp"
 #include "SplitState.hpp"
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
@@ -227,8 +243,22 @@ class EditorController final
     // 本文の右クリックのメニューが開いているか（ADR 0078 の追補 #1051）。窓が鍵とマウスの行き先を
     // 決めるための安い読みで、frame を作らない。
     [[nodiscard]] bool context_menu_active() const noexcept;
+    // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
+    // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
+    [[nodiscard]] bool settings_open() const noexcept;
+    // 設定の面の表示値（開いていなければ値なし）。frame に載る値と同じで、窓が鍵とマウスの後に
+    // 焦点の行と送りを読む口（本文の frame を作らない・#1836）。
+    [[nodiscard]] std::optional<SettingsView> settings_view() const;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
+    // 補完の面が見えているか（ADR 0190 の決定 5）。窓が上下・Enter・Tab・Esc の行き先を決めるための
+    // 安い読みで、frame を作らない。completion_open は面の状態があるか（LSP の答えを待っていて
+    // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
+    [[nodiscard]] bool completion_active() const noexcept;
+    [[nodiscard]] bool completion_open() const noexcept;
+    // 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。窓が Enter と
+    // Tab を 面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
+    [[nodiscard]] bool completion_commits() const;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -262,6 +292,13 @@ class EditorController final
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
+    // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 1・2）。アクティブな文書の語の表が
+    // 無ければ（1 MiB 以下なら）ここで 1 回作って状態に置き（表を作るのはこの 1 か所・設計席の追補
+    // 2026-11-18）、キャレットで insert_completion_list を呼ぶ。面と鍵（#1008 の段 B）が呼ぶ口。
+    [[nodiscard]] core::CompletionList insert_completion(core::CompletionDirection direction);
+    // アクティブな文書の語の表（作っていなければ空）。性質の試験が「状態の表＝本文から作り直した
+    // 表」を確かめるための読む口で、状態を変えない。
+    [[nodiscard]] const std::optional<core::WordTable> &word_table() const noexcept;
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;
@@ -309,6 +346,25 @@ class EditorController final
     // 読みの取消・言語サーバーには触れない（accept(EndSession) を通さない）。頼んだ退避が全部
     // 書けたら真（上限を超えて書かない文書・flush の時間切れ・書けなかった結果があれば偽）。
     [[nodiscard]] bool back_up_before_defect();
+    // 言語サーバーへの文脈つきの要求（ADR 0190 の決定 1〜3）。段 B / C の意図（補完の面・`K`・
+    // `gd`・F12）が呼ぶ口で、それまでは試験が直に呼ぶ。本体は
+    // EditorControllerLanguageRequests.cpp。サーバーが running で、その能力を持ち、アクティブな
+    // 文書を `didOpen` してあるときだけ、未送信の変更を流してから送り、同じ種類の古い要求は
+    // `$/cancelRequest` で取り消す。送れたら真。
+    // session は補完の面の通し番号、trigger はその要求を起こした `triggerCharacters` の 1 つ（手で
+    // 開いたなら値なし）。
+    [[nodiscard]] bool request_completion(std::uint64_t session,
+                                          std::optional<std::string_view> trigger = std::nullopt);
+    [[nodiscard]] bool request_hover();
+    [[nodiscard]] bool request_definition();
+    // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
+    [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
+    // `initialize` の答えから読んだサーバーの能力（決定 3）。段 B の `triggerCharacters` の照合と
+    // 試験が読む口で、子が居なければ空。
+    [[nodiscard]] const ServerAbilities &language_server_abilities() const noexcept
+    {
+        return language_server_.abilities;
+    }
 
   private:
     // 意図の前に 1 意図ぶんだけの表示（失敗・報せ）を消す。keeps_message は報せを残す意図。
@@ -608,6 +664,11 @@ class EditorController final
     // 開いた当たりの文書がアクティブならキャレットを置く（`''` を置いてから
     // PlaceCaret）。開く要求が 消えていれば（開けなかった）置く先を捨てる。
     void land_project_hit();
+    // 着地の位置 → アクティブな本文の行と桁（選択肢ごとの写し先を std::visit で引く・言語
+    // サーバーの Position は lsp_offset_of の 1 本）。
+    [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
+    [[nodiscard]] core::TextPosition landed_position(const core::TextPosition &position) const;
+    [[nodiscard]] core::TextPosition landed_position(const core::LspPosition &position) const;
     // 進み具合の表示値（面が `!` の出どころのときだけ）。
     [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
     // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
@@ -833,7 +894,8 @@ class EditorController final
     void stop_language_server();
     void shut_language_server();
     void send_lsp_request(LspRequestKind kind, std::string_view method,
-                          const core::JsonValue &params);
+                          const core::JsonValue &params, PendingLspContext context = {});
+    void send_lsp_cancel(std::int64_t id);
     void language_server_failed(core::UiMessage message);
     void collect_language_server();
     void receive_server(const ServerStarted &started);
@@ -869,6 +931,41 @@ class EditorController final
     void receive_diagnostics(const core::LspNotification &notification);
     void place_diagnostics(AutosaveId tab, std::vector<core::Diagnostic> diagnostics,
                            std::uint64_t version, core::DiagnosticsCount count);
+    // 文脈つきの要求と答え（ADR 0190 の決定 1〜3）。本体は EditorControllerLanguageRequests.cpp。
+    // requestable は要求を出せるアクティブな文書（running・能力あり・`didOpen` 済み・URI が今の
+    // まま）で、未送信の変更を流してから返す。send_language_request は同じ種類の古い要求を
+    // 取り消して送る。receive_answer は文脈を照合して答えを状態に置く（合わなければ捨てる・
+    // 知らせない）。
+    [[nodiscard]] LanguageServerDocument *requestable_document(bool ability);
+    void send_language_request(LspRequestKind kind, std::string_view method, core::JsonValue params,
+                               PendingLspContext context);
+    void cancel_lsp_requests(LspRequestKind kind);
+    [[nodiscard]] core::LspPosition request_position() const;
+    [[nodiscard]] LspRequestContext request_context() const;
+    void receive_answer(const PendingLspRequest &request, const core::LspResponse &response);
+    // 問いと答えの使い方（ADR 0190 の決定 6〜8）。本体は EditorControllerLanguageQueries.cpp。
+    // query_language は操作（F12・情報を表示）と Vim の `gd` `K` の効果が入る 1 本で、出せたら真。
+    // settle_language_answers は答えが届く合図の道の中で、空の hover を知らせ、定義の答えを 1 回
+    // 使って消す。hover の札は答えを状態に置いたまま shown_hover が frame に写し、消すのは入口の
+    // settle_hover（使う人の操作の意図）と WindowDeactivated の 2 か所。
+    void accept(const QueryLanguage &intent);
+    void accept(const WindowDeactivated &);
+    void perform(const core::VimLanguageQuery &effect);
+    [[nodiscard]] bool query_language(core::LanguageQueryKind kind);
+    void settle_hover(const EditorIntent &intent);
+    void drop_hover();
+    [[nodiscard]] std::optional<std::string> shown_hover() const;
+    void settle_language_answers(LspRequestKind kind);
+    void settle_hover_answer();
+    void settle_definition_answer();
+    void land_definition(const std::vector<core::LspLocation> &locations);
+    // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
+    // メニュー・IME の変換・補完の面が開いていない。awaits_nothing
+    // は問いを出したときと同じ「何も待って いない」状態（Vim は NORMAL
+    // でオペレータ・回数・レジスタ・次の鍵の待ちが無い／通常モードは
+    // 選択の起点が問いのときのまま）。
+    [[nodiscard]] bool faces_closed() const noexcept;
+    [[nodiscard]] bool awaits_nothing() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -1046,6 +1143,12 @@ class EditorController final
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
+    // 設定を状態に置いて後ろの同期（エクスプローラー・ミニマップ・map の表・追従）を通す 1 本。
+    // persist_settings が書いた後と、設定の面の切り替え（保存しない）が共用する。
+    void adopt_settings(core::EditorSettings settings);
+    // 設定を port に書く 1 本（persist_settings と設定の面の閉じが共用）。失敗は状態に置いて偽、
+    // 成功は失敗を消して真。状態の設定は変えない。
+    [[nodiscard]] bool write_settings(const core::EditorSettings &settings);
     // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
     void follow_after_settings(bool reshaped);
     // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
@@ -1095,6 +1198,68 @@ class EditorController final
     // F1 の一覧から選んだ操作。Vim の NORMAL / VISUAL の 5 つはメニューと同じ Vim の鍵の列。
     void run_listed_operation(core::EditorOperation operation);
     [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
+
+    // ---------------------------------------------------------------- 補完の面（ADR 0190 / 0169）
+    // EditorControllerCompletion.cpp の群だけが読み書きする。
+    void accept(const OpenCompletion &);
+    void accept(const StepCompletion &intent);
+    void accept(const ChooseCompletion &intent);
+    void accept(const CloseCompletion &);
+    void accept(const ScrollCompletion &intent);
+    // 入口の 1 か所（apply）。面が開いていて、開いたまま受ける意図でなければ、写す前に閉じる。
+    void close_completion_before(const EditorIntent &intent);
+    // 出口の 1 か所（apply）。成り立たなくなった面を閉じ、届いた答えを足し、打った分で絞り直す。
+    void settle_completion();
+    // 通常モードで `triggerCharacters` の 1 つを打ち終えたら開く。呼ぶのは言語サーバーが running の
+    // ときだけ（accept(InsertText) の 1 か所）。
+    void open_triggered_completion(std::string_view typed);
+    // 面を開く 1 か所。trigger が無ければ手で開いた面、あれば自動の面。
+    void start_completion(std::optional<std::string_view> trigger);
+    [[nodiscard]] bool completion_startable() const;
+    [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
+    void refresh_completion(CompletionSession &session);
+    [[nodiscard]] bool take_completion_answer(CompletionSession &session);
+    void merge_completion_answer(CompletionSession &session,
+                                 const core::LspCompletionList &list) const;
+    // キャレットの直前の語の頭（接頭辞の始まり・本文の語は集めない）。
+    [[nodiscard]] core::Offset completion_word_start() const;
+    // row 番目の候補を確定したときの編集（置き換える範囲と入れる平文）。
+    [[nodiscard]] std::pair<core::OffsetRange, std::string>
+    completion_edit(const CompletionSession &session, std::size_t row) const;
+    // 面を閉じる 1 か所（待っている要求の取り消しと、届いていた補完の答えの消去）。
+    void close_completion();
+    void forget_completion_answer();
+    [[nodiscard]] core::OffsetRange completion_range(core::Offset origin,
+                                                     const core::CompletionEntry &entry) const;
+    [[nodiscard]] std::optional<CompletionView> completion_view() const;
+    // ---------------------------------------------------------------- 設定の面（ADR 0170・#1016）
+    // EditorControllerSettings.cpp の群だけが settings_ を読み書きする（2026-11-18 の追補 2）。
+    void accept(const OpenSettings &);
+    void accept(const CloseSettings &);
+    void accept(const RevertSettings &);
+    void accept(const StepSettings &intent);
+    void accept(const ChangeSetting &intent);
+    void accept(const ChooseSettingsPreset &intent);
+    void accept(const FilterSettings &intent);
+    void accept(const JumpSettingsSection &intent);
+    void accept(const FocusSettingsRow &intent);
+    void accept(const ScrollSettings &intent);
+    // 入口の 1
+    // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
+    // 写す前に閉じて保存する。
+    void close_settings_before(const EditorIntent &intent);
+    // 写す前の片付けの 3 つ（設定の面・待ちの鍵・`:s///c` の問い）を順に呼ぶ。
+    void settle_before(const EditorIntent &intent);
+    // 閉じて、開いたときの写しと違えば 1 回だけ書く（失敗は状態と 1 行の知らせと覚え）。
+    void close_settings();
+    // 窓を閉じるとき（EndSession）に、面で変えて書けなかった設定をもう 1 回だけ書く。
+    void retry_unsaved_settings();
+    // 面の切り替えをその場で効かせる（保存しない）。
+    void preview_settings(core::EditorSettings settings);
+    [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
+    [[nodiscard]] std::optional<std::size_t> focused_settings_row() const;
+    // 配達に載せる IME の構え（面が開いている間は閉じ直さない・#1836）。
+    [[nodiscard]] ImeStance shown_ime_stance() const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
@@ -1553,6 +1718,20 @@ class EditorController final
     std::optional<std::size_t> start_selection_;
     // 開いている右クリックのメニュー（ADR 0078 の追補 #1051）。
     std::optional<ContextMenuOpen> context_menu_;
+    // 開いている補完の面と、面の通し番号（ADR 0190 の決定 1・5）。
+    std::optional<CompletionSession> completion_;
+    std::uint64_t completion_sessions_ = 0;
+    // 開いている設定の面（ADR 0170 の 2026-11-18 の追補 2）。
+    std::optional<SettingsOpen> settings_;
+    // 面を閉じたときの書き込みが失敗し、状態の設定がまだファイルに無い（R1）。書けたとき・窓を
+    // 閉じるときの書き直しの後に落とす。
+    bool settings_unsaved_ = false;
+    // いまの意図の入口（close_settings_before）で面を閉じて書けなかった。同じ意図の中の
+    // retry_unsaved_settings を飛ばす（書き込みは 1 回だけ・#1835 の再確認 R-b1）。
+    bool settings_write_failed_now_ = false;
+    // いまの意図の入口で面を閉じた（面が開いていた）。同じ意図は補完の面も hover の札も出さず、
+    // 定義の問いも出さない（面どうしの排他・ADR 0190 の決定 5・6 と ADR 0170）。
+    bool settings_closed_now_ = false;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;
@@ -1590,6 +1769,11 @@ class EditorController final
     // この意図が頼む待ちのタイマー（EditorDelivery.map_timer）。apply の入口で空に戻し、待ちを
     // 積む・流す所だけが置く。
     std::optional<MapTimer> map_timer_;
+    // 窓が非アクティブか（WindowDeactivated で真・使う人の操作の意図で偽）。非アクティブの間に
+    // 届いた hover の答えは札にしない（#1843 のレビュー R3）。
+    bool window_inactive_ = false;
+    // 定義の問いを出したときの選択の起点（答えが届いたときに同じなら跳ぶ・R1）。
+    std::optional<core::Offset> definition_anchor_;
     // この意図が頼むタブの札の待ちのタイマー（EditorDelivery.tab_tip_timer・#1789）。apply の
     // 入口で空に戻し、札の段を変える所（帯の hover・合図・入口の消す 1 か所）だけが置く。
     std::optional<TabTipTimer> tab_tip_timer_;

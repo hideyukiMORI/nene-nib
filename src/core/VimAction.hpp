@@ -210,10 +210,15 @@ enum class VimAction : std::uint8_t
     // surround の `S{char}` に充てるので何もしない（ADR 0018 の追補・ADR 0165 の決定 5）。
     substitute_line,
     // `\`（ADR 0163 の決定 1）。次の `\` を待ち、その次の鍵がイージーモーションの動作。
-    prefix_leader
+    prefix_leader,
+    // `gd` と `K`（ADR 0190 の決定 8）。言語サーバーへ定義と情報を問う。NORMAL で回数もオペレータ
+    // も無いときだけ問いの効果を添え、状態と失敗の印は表に行が無かったときのまま（Vim の局所の
+    // `gd` と `keywordprg` は入れない）。VISUAL・回数つき・オペレータの後ろは今までどおり。
+    language_definition,
+    language_hover
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::prefix_leader) + 1;
+constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::language_hover) + 1;
 } // namespace nenenib::core

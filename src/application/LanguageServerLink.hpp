@@ -5,6 +5,7 @@
 #include "LanguageServerPhase.hpp"
 #include "LspPositionEncoding.hpp"
 #include "PendingLspRequest.hpp"
+#include "ServerAbilities.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -36,8 +37,8 @@ inline constexpr std::size_t language_server_kept_revisions = 16;
 // ときに起こすかを決めた言語（同じ言語では打鍵ごとに設定を引き直さない・止めると空に戻る）、
 // generation は stop のたびに進む数（止めた後の同じ集めの残りを読まない）。root_uri は起こした
 // ときの作業フォルダの URI（`initialize` の rootUri・ADR 0161 の決定 1）、documents は `didOpen`
-// した文書（ADR 0161 の決定 1・running の間だけ・止めると空）。公開 aggregate
-// （CPP-003）。
+// した文書（ADR 0161 の決定 1・running の間だけ・止めると空）。abilities は `initialize` の答えから
+// 読んだサーバーの能力（ADR 0190 の決定 3・止めると空）。公開 aggregate（CPP-003）。
 struct LanguageServerLink
 {
     LanguageServerPhase phase = LanguageServerPhase::idle;
@@ -52,5 +53,6 @@ struct LanguageServerLink
     std::uint64_t generation = 0;
     std::string root_uri = {};
     std::vector<LanguageServerDocument> documents = {};
+    ServerAbilities abilities = {};
 };
 } // namespace nenenib::application

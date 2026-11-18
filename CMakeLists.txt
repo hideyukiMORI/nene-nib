@@ -51,13 +51,13 @@ nenenib_target(nenenib_core core STATIC
     src/core/ThemeCatalog.cpp src/core/ThemeLookupFailure.cpp src/core/ExEvaluationFailure.cpp
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
-    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/ExLineCommand.cpp src/core/FontSize.cpp
+    src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/FeatureCosts.cpp src/core/SettingsRows.cpp src/core/SettingsPanel.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/ExLineCommand.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
     src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp src/core/ContextMenu.cpp src/core/FinderPreview.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
     src/core/LiteralPattern.cpp src/core/ProjectSearchRules.cpp src/core/ProjectQuery.cpp src/core/ProjectHits.cpp src/core/ProjectHitRows.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/SubstituteReplacement.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
-    src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTip.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
+    src/core/TabDestination.cpp src/core/TabKeyTable.cpp src/core/TabRecency.cpp src/core/TabTip.cpp src/core/HoverTip.cpp src/core/TabTitle.cpp src/core/TextBuffer.cpp src/core/TextEncoding.cpp
     src/core/TitleBarLayout.cpp src/core/UnlistedExtensions.cpp src/core/Utf16.cpp src/core/Utf8.cpp
     src/core/VimBlockRange.cpp src/core/VimCaret.cpp src/core/VimCase.cpp src/core/VimCharacterBoundary.cpp src/core/VimClipboardText.cpp src/core/VimJumpLists.cpp src/core/VimKeyTable.cpp src/core/VimMarkEdits.cpp src/core/VimMatchingPair.cpp src/core/VimNumber.cpp src/core/VimPattern.cpp src/core/VimPatternCapture.cpp src/core/VimPatternCompiler.cpp src/core/VimPatternEvaluation.cpp src/core/VimPatternMachine.cpp src/core/VimPatternTrace.cpp src/core/VimRegisterSnapshot.cpp src/core/VimRegisterText.cpp src/core/VimKeyNotation.cpp src/core/VimLineColumns.cpp
     src/core/VimSearch.cpp src/core/VimSearchNotice.cpp src/core/VimSearchObject.cpp src/core/VimSearchWalk.cpp src/core/VimSearchSnapshot.cpp src/core/VimRecordedKeys.cpp
@@ -67,7 +67,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/VimScreenGeometry.cpp src/core/VimCursorCorrect.cpp src/core/VimScreenLine.cpp src/core/VimToplineUpdate.cpp src/core/VimScreenRows.cpp src/core/VimHorizontalScroll.cpp
     src/core/VimTextObjectRange.cpp src/core/VimParagraphObject.cpp src/core/VimParagraphStart.cpp src/core/VimSentenceObject.cpp src/core/VimTagObject.cpp
     src/core/VimVisualRange.cpp src/core/VimVisualReselect.cpp
-    src/core/VimWordMotion.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
+    src/core/VimWordMotion.cpp src/core/VimKeywordRuns.cpp src/core/WordTable.cpp src/core/CompletionCandidates.cpp src/core/CompletionEntries.cpp src/core/CompletionFace.cpp src/core/VirtualColumn.cpp src/core/VirtualColumnIndex.cpp
     src/core/Grid.cpp src/core/GiantLine.cpp src/core/DisplayFormLabel.cpp src/core/SaveQuestionText.cpp src/core/LanguageTable.cpp
     src/core/ResolvedLanguage.cpp src/core/UiTexts.cpp
     src/core/DisplayLanguageNames.cpp src/core/QuantityText.cpp
@@ -79,6 +79,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
+    src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
 # 版を core へ渡すのはこの 1 行だけ（AppIdentity.cpp の翻訳単位だけ・D90・#1677・CNF-007 が照合する）。
 set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES
@@ -95,12 +96,14 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp src/application/EditorControllerFinderPreview.cpp src/application/PreviewLines.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
-    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
+    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerSettings.cpp src/application/EditorControllerCompletion.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
+    src/application/EditorControllerLanguageRequests.cpp src/application/InsertCompletion.cpp
+    src/application/EditorControllerLanguageQueries.cpp
     src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
@@ -194,6 +197,8 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/SplitTests.cpp
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp
+    tests/unit/InsertCompletionTests.cpp
+    tests/unit/CompletionFaceTests.cpp
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OpenAsyncTests.cpp
@@ -206,6 +211,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/UiLanguageTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/SubstituteConfirmTests.cpp tests/unit/ExLinesTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
     tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
+    tests/unit/FeatureCostsTests.cpp tests/unit/SettingsModalTests.cpp tests/unit/SettingsPanelTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
@@ -238,6 +244,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspFramesPropertyTests.cpp
     tests/unit/SubstitutePropertyTests.cpp
     tests/unit/LspDiagnosticsTests.cpp
+    tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp
@@ -493,11 +500,11 @@ add_test(NAME nib_adapters_last_resort COMMAND nib_last_resort_tests $<TARGET_FI
 set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
 
 nenenib_target(nenenib_window ui_win32 STATIC
-    src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/Direct2DRendererContextMenu.cpp src/ui/win32/Direct2DRendererPreview.cpp src/ui/win32/Direct2DRendererTitleBar.cpp src/ui/win32/Direct2DRendererDetail.cpp src/ui/win32/Direct2DRendererMotionLabels.cpp src/ui/win32/MotionLabelBox.cpp src/ui/win32/TabTipLayout.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
-    src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
+    src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/Direct2DRendererContextMenu.cpp src/ui/win32/Direct2DRendererSettings.cpp src/ui/win32/Direct2DRendererCompletion.cpp src/ui/win32/Direct2DRendererPreview.cpp src/ui/win32/Direct2DRendererTitleBar.cpp src/ui/win32/Direct2DRendererDetail.cpp src/ui/win32/Direct2DRendererMotionLabels.cpp src/ui/win32/MotionLabelBox.cpp src/ui/win32/TabTipLayout.cpp src/ui/win32/HoverTipLayout.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
+    src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowSettings.cpp src/ui/win32/SettingsInput.cpp src/ui/win32/EditorWindowCompletion.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/SettingsPanelPainter.cpp src/ui/win32/SettingsPanelFormats.cpp src/ui/win32/CompletionPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
     src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
@@ -531,14 +538,16 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/CaptionPressTests.cpp tests/ui/WindowHitTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
-    tests/ui/MatchParenOutlineTests.cpp tests/ui/MotionLabelPaintTests.cpp tests/ui/TabTipPaintTests.cpp tests/ui/SaveQuestionTests.cpp tests/ui/SubstituteConfirmPaintTests.cpp
+    tests/ui/MatchParenOutlineTests.cpp tests/ui/MotionLabelPaintTests.cpp tests/ui/TabTipPaintTests.cpp tests/ui/HoverTipPaintTests.cpp tests/ui/SaveQuestionTests.cpp tests/ui/SubstituteConfirmPaintTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
     tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp tests/ui/MinimapPressTests.cpp
     tests/ui/StandardKeyTests.cpp
     tests/ui/WordDeletionKeyTests.cpp tests/ui/PreviewImagePaintTests.cpp
     tests/ui/StartScreenPaintTests.cpp tests/ui/WindowCornerTests.cpp tests/ui/WindowBackdropTests.cpp
     tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
-    tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp)
+    tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp
+    tests/ui/CompletionPaintTests.cpp
+    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -556,6 +565,16 @@ nenenib_link(nib_preview_capture nenenib_window)
 nenenib_link(nib_preview_capture nenenib_adapters)
 foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
     nenenib_system_link(nib_preview_capture ${library})
+endforeach()
+
+# #1836: 設定の面（右の引き出し）を offscreen に描いて PNG に落とす確かめの道具（nib_preview_capture と
+# 同じ土台・製品の旗は足さず、CTest に登録しない）。
+nenenib_target(nib_settings_capture preview_tests EXECUTABLE tests/preview/SettingsCapture.cpp)
+nenenib_link(nib_settings_capture nenenib_core)
+nenenib_link(nib_settings_capture nenenib_application)
+nenenib_link(nib_settings_capture nenenib_window)
+foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
+    nenenib_system_link(nib_settings_capture ${library})
 endforeach()
 
 nenenib_target(NeNeNib app EXECUTABLE src/app/Main.cpp src/app/NeNeNib.rc)

@@ -487,10 +487,14 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     preview_layouts_.clear();
     tab_layouts_.clear();
     tab_tip_layout_.clear();
+    hover_tip_layout_.clear();
     explorer_layouts_.clear();
     explorer_shapes_.clear();
     start_layouts_.clear();
     context_menu_layouts_.clear();
+    completion_layouts_.clear();
+    settings_layouts_.clear();
+    settings_formats_.reset();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -623,6 +627,7 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
     tab_layouts_.clear();
     start_layouts_.clear();
     context_menu_layouts_.clear();
+    completion_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -2518,8 +2523,13 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     draw_status_guide(
         frame, core::status_guide_fitted(guide, status, dpi_, draw_status_bar(frame, status)));
     draw_open_palette(frame, width, height);
+    // 補完の面は本文とステータスバーの上・札とメニューの下（面が開いている間は入力行も Ctrl+P の
+    // 面も無い・ADR 0190 の決定 5）。
+    draw_completion(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
+    draw_settings(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
     // 札は面の上・右クリックのメニューの下（メニューが開いている間は出ない・#1789）。
     draw_tab_tip(frame, title);
+    draw_hover_tip(frame, minimap.body);
     draw_context_menu(frame, width, height);
     gutter_layouts_.end();
     D2D1_TAG failed_first = 0;

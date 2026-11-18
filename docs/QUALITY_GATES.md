@@ -297,11 +297,11 @@ C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つ�
 
 - 機械強制: **active**（正例・反例は `tests/conformance` の `TranslationUnitSizeChecks` がゲートで回る。2026-10-28・Issue #992・PR #1053。分けた直後の最大は `EditorWindow.cpp` の 2,906 行）
 
-### CNF-015 — 機能の表のベンチの実在（planned・ADR 0170）
+### CNF-015 — 機能の表のベンチの実在と測った数字の一致（ADR 0170）
 
-機械強制: **planned**（設定モーダルの S2 の PR で active にする）。
+core の `feature_costs` の表（`src/core/FeatureCosts.hpp`）の測った行（`bench` が空でない行）について、`eng/conformance.py` の `feature_cost_checks` が次を確かめる（[ADR 0170](adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md) の決定 2・7・2026-11-18 の追補 3・Issue #1016 / #1828）。(1) `bench` が `eng/measure-speed.py` の `OPTIONAL_BENCHES` に在る（script は実行せず、module の代入を `ast` で辿る）。(2) `docs/quality/feature-costs.md` の表の「機能・ベンチ・1 打鍵の増分 µs」の 3 列の行の集合が、表の測った行の `name` `bench` `single_key_delta_us` の集合と同じ。(3) 読めた表の行の数が `std::array<FeatureCost, N>` の N と同じ（行の形が変わって読めない行を見落とさない）。外れたら `CNF-015: <path>: …`。
 
-core の `feature_costs` の表の各行が名指す任意のベンチ（`bench`）が `eng/measure-speed.py` の `OPTIONAL_BENCHES` に在り、`docs/quality/feature-costs.md` の行と表の数字が一致する（[ADR 0170](adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)・Issue #1016）。検査は設定モーダルの S2 の PR で足し、そのとき状態を active にする。
+- 機械強制: **active**（正例・反例は `tests/conformance` の `FeatureCostChecks`。2026-11-18・Issue #1828）。守れていない部分: 数字が品質の記録（出典の文書）の値と同じかは見ない（写すときのレビュー事項）・表の行の機能が段の印を持つべきか（測ったのに `bench` を空にした行）は見ない
 
 ### CNF-016 — 画面の文のリテラルは文の表の外に書かない（ADR 0123）
 
@@ -381,7 +381,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |
 | CNF-014 | active | eng/conformance.py / tests/conformance（ADR 0158・3,000 行・PR #1053） |
-| CNF-015 | planned | eng/conformance.py（ADR 0170・設定モーダルの S2 の PR で active） |
+| CNF-015 | active | eng/conformance.py の `feature_cost_checks`（ADR 0170・`tests/conformance` の反例・#1828） |
 | CNF-016 | active | eng/conformance.py / tests/conformance（ADR 0123 の 2026-11-13 の追補・許した場所と表の在りかは eng/conformance-rules.json・#1602） |
 
 ---

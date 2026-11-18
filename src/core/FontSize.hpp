@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <string>
 #include <string_view>
 
 namespace nenenib::core
@@ -29,6 +30,9 @@ class FontSize final
 [[nodiscard]] FontSize default_font_size();
 [[nodiscard]] FontSize adjusted_font_size(FontSize current, FontSizeAdjustment adjustment,
                                           std::size_t steps);
+// 字の大きさの 10 進（小数 1 桁まで・FontSize::parse が読める形）。`:set fontsize?` と設定の面の
+// 値の行が共用する 1 本。core は libm を呼ばないので 0.1 pt の整数で丸める。
+[[nodiscard]] std::string font_size_text(FontSize size);
 [[nodiscard]] float font_size_dips(FontSize size) noexcept;
 [[nodiscard]] float font_size_ratio(FontSize size) noexcept;
 } // namespace nenenib::core

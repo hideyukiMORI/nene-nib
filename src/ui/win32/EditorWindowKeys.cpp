@@ -35,6 +35,7 @@
 #include "VimSpecialKey.hpp"
 #include "VimSpecialKeys.hpp"
 #include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WordDeletionKey.hpp"
 
 #include <algorithm>
@@ -143,10 +144,37 @@ constexpr char32_t tab_character = U'\t';
 }
 } // namespace
 
+// 窓が焦点を失ったとき（WM_KILLFOCUS）の片付け。
+void EditorWindow::lose_focus()
+{
+    end_selection_drag();
+    settle_tab_walk();
+    // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
+    // WM_MOUSEMOVE が載せ直す。
+    hover(std::nullopt);
+    // 補完の面も閉じる（ADR 0190 の決定 5）。
+    close_completion_outside();
+    // hover の札も消す（ADR 0190 の決定 6）。使う人の操作ではない知らせで、札が無ければ何も
+    // 変えない。
+    send(application::WindowDeactivated{});
+    // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
+    zoom_wheel_remainder_ = 0;
+}
+
+// 開いている面が先に受ける鍵と文字（受けたら真・key_message の複雑さの上限のため分けた）。
+// - 右クリックのメニューが開いている間の鍵と文字はメニューへ（#1051）。
+// - 設定の面が開いている間の鍵と文字は面へ（本文へ通さない・#1836）。
+// - 補完の面が見えている間の上下・Enter・Tab・Esc は面へ（ADR 0190 の決定 5）。ほかの鍵と文字は
+//   本文へ通す。設定の面と補完の面は同時に開かない。
+bool EditorWindow::take_face_key(UINT message, WPARAM word, LPARAM data)
+{
+    return take_context_menu_key(message, word) || take_settings_key(message, word, data) ||
+           take_completion_key(message, word);
+}
+
 LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
 {
-    // 右クリックのメニューが開いている間の鍵と文字はメニューへ（#1051）。
-    if (take_context_menu_key(message, word))
+    if (take_face_key(message, word, data))
     {
         return 0;
     }
@@ -164,7 +192,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         end_selection_drag();
         timing_.mark(core::Milestone::input_received);
         if (!press_bookmark_key(word, data) && !press_function_key(word, data) &&
-            !press_mode_key(word, data))
+            !press_mode_key(word, data) && !swallow_repeated_settings_key(word, data))
         {
             press_key(word);
         }
@@ -183,13 +211,7 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         }
         break;
     case WM_KILLFOCUS:
-        end_selection_drag();
-        settle_tab_walk();
-        // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
-        // WM_MOUSEMOVE が載せ直す。
-        hover(std::nullopt);
-        // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
-        zoom_wheel_remainder_ = 0;
+        lose_focus();
         break;
     default:
         break;
@@ -329,6 +351,19 @@ bool EditorWindow::press_mode_key(WPARAM word, LPARAM data)
         run_operation(core::EditorOperation::toggle_mode);
     }
     return true;
+}
+
+// 面の外で Ctrl+, を押し続けたときの反復は捨てる（開いて、すぐ面の鍵が閉じて…を繰り返さない）。
+bool EditorWindow::swallow_repeated_settings_key(WPARAM word, LPARAM data) const
+{
+    constexpr LPARAM repeated_key_bit = LPARAM{1} << 30;
+    if ((data & repeated_key_bit) == 0)
+    {
+        return false;
+    }
+    const auto chord = held_chord(word);
+    return chord.has_value() && core::operation_for(chord.value(), mode_) ==
+                                    std::optional{core::EditorOperation::open_settings};
 }
 
 void EditorWindow::press_key(WPARAM word)
