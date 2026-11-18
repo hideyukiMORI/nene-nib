@@ -97,3 +97,15 @@ md4c は SAX 型（`enter_block / leave_block / enter_span / leave_span / text` 
 - `md4c.h` の include は `src/core/MarkdownParse.cpp` の 1 か所。CNF-009 と同じ字句検査（`eng/conformance.py` の `concurrency_and_simd`）が `src/` の中のほかのファイルの include を ARC-002 で拒否する。ヘッダ名と許す path は `eng/conformance-rules.json` の `markdownParserHeader` / `markdownParserAllowedPath`、正例・反例は `tests/conformance/test_conformance.py`（#765）。
 
 追補（2026-11-11・#1477）: 決定 16 の「`PreviewTextLayouts::measure` は layout を保持しない」と、決定 17 の「drawing effect は描くたびに置き直す」は、ADR 0155 の追補 69〜72 で改めた（保持した layout は描くときに書式を変えず位置も問わない・色と面の矩形は entry が 1 回だけ置いて持つ・`measure` も保持する）。
+
+## 追補（2026-11-18・#1851・設計席）: 打ち消し線・裸の URL・実体参照の全表・front matter・表・alert（#1839・施主決定 D103）
+
+PR #1846（#1840）と PR #1852（#1848）の実装と独立レビュー（`D:/NeNeNib/outputs/20261118/review-1846.md` `review-1852.md`）で決めた形。md4c のソースは 1 バイトも変えていない（flag を足しただけ）。
+
+1. **打ち消し線は `~~` だけ。** md4c の `MD_FLAG_STRIKETHROUGH` は `~` 1 つでも打ち消しにするが、日本語の文の「10時~12時、14時~16時」が打ち消しになるので、開く記号が `~` 1 つのときは開く `~` と閉じる `~` を文字として元の位置に戻す。中に文字の無い `~` 1 つの形（`~` の間が画像だけ）は打ち消しのまま残る（限界）。
+2. **裸の URL** は md4c の permissive の autolink（URL・`www.`・メール）で受ける。
+3. **実体参照は HTML5 の全表**（`;` で終わる名前の全部・生成物）。表は名前の順に並べて二分探索で引き、整列は `static_assert` で確かめる。表は道具が作り、手で書かない（CNF-010）。生成物に Python の版を書かない。
+4. **front matter** は文書の先頭の `---` の行から次の `---` の行までで、md4c には後ろだけを渡し、位置の対応は front matter の長さの分だけずらす。閉じる行が無い間は今までどおり（front matter にしない）。開く行と閉じる行は後ろの空白と Tab を許す。中の NUL は U+FFFD。
+5. **表は 1 行 = 要素 1 つ。** 文字は升を Tab でつないだ 1 本で、位置の対応・スクロールの錨・選択とコピー（升の間が Tab・行の間が改行）は今までの「要素の列」の作りに載る。描くのは升ごとの文字組みで、本文とは別の保持に入れる。列の幅は表ごとに 1 回だけ測り、表の前を打っても測り直さない。見た目は横の罫だけ（D103）。升の中の画像は文字のまま・枠より広い表は右を切るだけ（後続）。
+6. **alert**（`[!NOTE]` `[!TIP]` `[!IMPORTANT]` `[!WARNING]` `[!CAUTION]`）は、いちばん外の引用で最初の段落の 1 行目が印だけのとき。左の線と種類の名前を種類の色にし、本文は foreground（D103）。色は `PreviewInk` に足した値だけで、テーマのトークンは足さない。種類が違う隣の引用とは線をつながない。
+7. **限界。** エスケープした印（`> \[!NOTE]`）は alert にしない。印の後ろが Tab の行と、リストの中の引用（`- > [!NOTE]`）は alert にしない。md4c の限界として、段落の直後（空行なし）の表は表にならず、升の中のコードの `\|` は `\` が残る。見えている升が保持の上限を超える表は毎 frame 作り直す（正しく描くが遅い）。

@@ -142,7 +142,7 @@ records in `docs/quality/`.
   [ADR 0067](docs/adr/0067-ex-filenames-share-atomic-save-policy.md).
   Not yet: uppercase marks `'A`-`'Z` and `:marks`, `:sort` and the other `:g` `:v` commands (FR-027), read-only registers
   `". ": "/ "%`, NORMAL `R` and VISUAL `S` (reserved for surround; Vim changes the lines), dragging into VISUAL with the mouse in Vim mode,
-  commentary, surround and INSERT completion (FR-024).
+  commentary and surround (FR-024).
 - **FR-004 one toggle** — the status bar switches "通常 | Vim" ("Basic | Vim" in English and "标准 | Vim" in
   Simplified Chinese, decision D89), and so does `Ctrl+Shift+Space` in either mode (D61). Done.
 - **FR-005 tabs in the title bar** — several tabs in the band: click to switch, × and middle click to close, `+` to
@@ -180,6 +180,9 @@ records in `docs/quality/`.
   cycles closed → side pane → full view → closed (D77). Parsing uses md4c 0.5.2 (CommonMark) and the drawing is
   the editor's own ([look](docs/design/2026-10-21-markdown-preview-look.md),
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
+  Tables (horizontal rules only, column alignment), GitHub alerts (`> [!NOTE]` and the other four kinds, a colored
+  bar and title; D103), `~~strikethrough~~`, bare URLs, every HTML5 named entity and a front matter block are drawn
+  ([look](docs/design/2026-11-18-markdown-table-and-alert-look.md)); a table wider than the pane is cut at the right.
   Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
   `[画像: alt]` (`[Image: alt]` in English, `[图片：alt]` in Simplified Chinese). A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
@@ -259,7 +262,12 @@ records in `docs/quality/`.
   switches it, and untitled documents are not sent
   ([ADR 0160](docs/adr/0160-language-server-io-is-one-port-with-overlapped-pipes-and-a-core-json-rpc-framer.md),
   [ADR 0161](docs/adr/0161-language-server-diagnostics-are-document-values-drawn-as-underlines.md)).
-  Completion, hover and go-to-definition are planned.
+  With the server running, completion opens as you type a trigger character or on Ctrl+Space (Ctrl+I also works in
+  ordinary mode, D104), `K` or the F1 operation shows hover information, and `gd` / F12 go to the
+  definition ([ADR 0190](docs/adr/0190-language-server-completion-hover-and-definition-share-one-request-table.md)).
+  In Vim INSERT mode Ctrl-n / Ctrl-p complete from the words of the open documents and the server, with Ctrl-e to
+  cancel and Ctrl-y to accept; Ctrl+P is the completion key only while the list is shown
+  ([ADR 0169](docs/adr/0169-insert-completion-is-a-per-document-word-table-shown-in-the-palette-face.md)).
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
@@ -279,7 +287,7 @@ records in `docs/quality/`.
   16 MiB and files with a NUL in their first 8 KiB are skipped, and lines that are not valid UTF-8 (such as
   Shift_JIS files) are not matched
   ([ADR 0167](docs/adr/0167-project-search-runs-on-the-worker-and-streams-hits-into-the-palette.md)).
-  Planned: commentary, surround, autopairs and INSERT completion (FR-024), changed-line markers, indent guides
+  Planned: commentary, surround and autopairs (FR-024), changed-line markers, indent guides
   and a yank flash (FR-025), replacing in search results and `.gitignore` (FR-026) and the rest of the `:s`
   family (FR-027: the typing preview, the other `:g` `:v` commands and `:sort`; `:s` itself is under FR-003,
   and the `c` flag, `:d` `:y` and `:g` `:v` with `d` and `s` are *new in 1.1.0*).
@@ -292,7 +300,10 @@ records in `docs/quality/`.
   Japanese or Chinese text outside those tables fail the conformance check CNF-016
   ([ADR 0123](docs/adr/0123-ui-language-is-a-versioned-setting.md)). The Chinese text is a machine
   translation; corrections are welcome ([docs/i18n/REVIEW.md](docs/i18n/REVIEW.md)).
-- **FR-028 / FR-030** — a settings dialog with measured speed costs is planned. A first
+- **FR-028 / FR-030** — Ctrl+, opens the settings drawer at the right (D102): a search box, six sections, switches
+  and choices that apply at once, the estimated cost of one keystroke for the features that are on, and three
+  presets; closing it saves ([look](docs/design/2026-11-18-settings-modal-look.md),
+  [ADR 0170](docs/adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)). A first
   minimap (a retained bitmap at the right edge, `:set minimap`, off by default) shows the document with its
   visible range shaded and edged in the accent color; a click on it scrolls that line to the middle of the
   screen and a drag follows the pointer, without moving the caret
