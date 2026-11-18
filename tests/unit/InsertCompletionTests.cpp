@@ -216,6 +216,14 @@ void verify_lazy_table()
     const core::Edit small{Offset{0}, std::string{}, "zeta ", Offset{0}};
     expect(!opened.with_words_edited(small).word_table().has_value(),
            "editing a document without a table costs nothing and builds none");
+    const std::string near_limit(core::word_table_byte_limit - 4, 'a');
+    const auto full = app::EditorState::create(core::Appearance::dark, core::EditMode::ordinary)
+                          .with_opened(buffer_of(near_limit), app::Document{})
+                          .with_word_table();
+    const core::Edit growing{Offset{0}, std::string{}, "abcdefgh ", Offset{0}};
+    expect(full.word_table().has_value() &&
+               !full.with_words_edited(growing).word_table().has_value(),
+           "an edit that takes the text over 1 MiB drops the table");
 }
 
 // 本文の code point の境の列（0 と末尾を含む）。
@@ -377,6 +385,27 @@ void verify_empty_prefix_chain()
     expect(backward_is(text, text.size(), backward), "the same chain holds for Ctrl-p");
     expect(forward_is("\xE6\x97\xA5_a ", 6, {"\xE6\x97\xA5"}),
            "a one-character word swallows the first character of the next word");
+    // 別の行の食われた語は、Vim の complete の `i` が拾い直して列の最後に足す。
+    const std::string other_line = text + "\n ";
+    std::vector<std::string> appended = forward;
+    appended.insert(appended.end(), {"\xE8\xA3\x9C\xE5\xAE\x8C", "\xE4\xBE\xBF\xE5\x88\xA9"});
+    expect(forward_is(other_line, other_line.size(), appended),
+           "words swallowed on another line come back at the end of the list");
+    std::vector<std::string> reversed = backward;
+    reversed.insert(reversed.end(), {"\xE4\xBE\xBF\xE5\x88\xA9", "\xE8\xA3\x9C\xE5\xAE\x8C"});
+    expect(backward_is(other_line, other_line.size(), reversed),
+           "Ctrl-p appends them in reverse text order");
+    const std::string around = "\xE3\x81\xAE\xE8\xA3\x9C\xE5\xAE\x8C\n \n"
+                               "\xE3\x81\xAF\xE4\xBE\xBF\xE5\x88\xA9";
+    expect(forward_is(around, 11,
+                      {"\xE3\x81\xAF", "\xE3\x81\xAE", "\xE8\xA3\x9C\xE5\xAE\x8C",
+                       "\xE4\xBE\xBF\xE5\x88\xA9"}) &&
+               backward_is(around, 11,
+                           {"\xE3\x81\xAE", "\xE3\x81\xAF", "\xE4\xBE\xBF\xE5\x88\xA9",
+                            "\xE8\xA3\x9C\xE5\xAE\x8C"}),
+           "the words picked up again are in text order from the top, before and after the caret");
+    expect(forward_is("b\xCC\x81 x\nb", 7, {"b\xCC\x81"}),
+           "a one-character prefix matches a character with a combining mark (\\<b\\k)");
 }
 
 void verify_non_ascii()
