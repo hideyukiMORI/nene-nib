@@ -9,6 +9,8 @@
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
+#include "CompletionFaceLayout.hpp"
+#include "CompletionPainter.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuPainter.hpp"
 #include "DeviceWarmup.hpp"
@@ -115,6 +117,11 @@ class Direct2DRenderer final
     [[nodiscard]] std::optional<std::size_t> context_menu_row_at(std::int32_t x,
                                                                  std::int32_t y) const;
     [[nodiscard]] bool context_menu_covers(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた補完の面の点（クライアントの物理画素）の下の候補（今の接頭辞に当たる候補の中の
+    // 位置）と、面の中か（ADR 0190 の決定 5・#1844 の R1）。面を描いていなければ無し・偽。
+    [[nodiscard]] std::optional<std::size_t> completion_row_at(std::int32_t x,
+                                                               std::int32_t y) const;
+    [[nodiscard]] bool completion_covers(std::int32_t x, std::int32_t y) const;
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
@@ -433,6 +440,9 @@ class Direct2DRenderer final
     // 右クリックのメニュー（#1051）。ほかの全部の上に描き、描いた配置を当たりのために覚える。
     void draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
                            std::int32_t height);
+    // 補完の面（ADR 0169 の決定 4・ADR 0190 の決定 5）。本文と面とステータスバーの上・タブの札と
+    // 右クリックのメニューの下に描く。bounds は面を収める矩形。
+    void draw_completion(const application::EditorFrame &frame, const core::LayoutRect &bounds);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
     // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
@@ -524,6 +534,12 @@ class Direct2DRenderer final
     // （メニューを閉じたときも）。
     PaletteRowLayouts context_menu_layouts_{ContextMenuPainter::retained};
     std::optional<core::ContextMenuLayout> context_menu_layout_;
+    // 補完の面の文字組みと、面の左端の覚え（面の通し番号と、開いたときのキャレットの左・ADR 0190 の
+    // 決定 5）。捨てる時は context_menu_layouts_ と同じ（面を閉じたときも）。
+    PaletteRowLayouts completion_layouts_{CompletionPainter::retained};
+    std::optional<std::pair<std::uint64_t, std::int32_t>> completion_anchor_;
+    // 最後に描いた補完の面の配置と、その表示値の first（当たりが描画と同じ値を読む）。
+    std::optional<std::pair<core::CompletionFaceLayout, std::size_t>> completion_layout_;
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;

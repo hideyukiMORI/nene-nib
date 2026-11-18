@@ -1907,7 +1907,7 @@ void verify_operation_list_opens()
     auto frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
-               frame.command_palette.value_or(app::CommandPaletteView{}).total == 48 &&
+               frame.command_palette.value_or(app::CommandPaletteView{}).total == 49 &&
                operation_row(frame, 0) == core::EditorOperation::open_file,
            "the operation list opens behind the question mark on the first row");
     expect(!frame.command_message.has_value(), "the operation list clears the one-line message");

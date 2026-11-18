@@ -405,6 +405,7 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::delete_selection, &EditorWindow::run_delete_selection},
         {core::EditorOperation::select_all, &EditorWindow::run_select_all},
         {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
+        {core::EditorOperation::complete, &EditorWindow::run_complete},
         {core::EditorOperation::go_to_definition, &EditorWindow::run_go_to_definition},
         {core::EditorOperation::show_information, &EditorWindow::run_show_information},
     }};

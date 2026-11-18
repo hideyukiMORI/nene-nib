@@ -309,7 +309,7 @@ void verify_packaged()
         applied(controller, app::CancelCommand{});
         return shell_row ? std::size_t{0} : palette.total;
     };
-    expect(listed() == 46, "the packaged ordinary list has no registration rows");
+    expect(listed() == 47, "the packaged ordinary list has no registration rows");
     applied(controller, app::InsertText{"ab"});
     expect(applied(controller, app::RegisterShell{}) == "ab" &&
                notice(controller.frame()) == "Store 版では右クリックへの登録は使えません" &&

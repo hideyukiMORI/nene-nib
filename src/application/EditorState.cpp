@@ -170,7 +170,7 @@ EditorState::EditorState(core::Appearance appearance, core::EditMode mode, Docum
                        core::VimRegister{std::string{}, core::VimRegisterKind::uninitialized})),
       document_(std::move(untitled.document)), vim_marks_(untitled.marks),
       vim_eol_(untitled.vim_eol.value_or(vim_end_of_line_decided(text_, 0))),
-      settings_(core::default_editor_settings())
+      words_(untitled.words), settings_(core::default_editor_settings())
 {
     refresh_vim_text(true);
 }
@@ -555,6 +555,59 @@ EditorState EditorState::with_edit(core::TextBuffer text, core::Selection select
     return std::move(*this);
 }
 
+EditorState EditorState::with_words_edited(const core::Edit &edit) const &
+{
+    return EditorState(*this).with_words_edited(edit);
+}
+
+EditorState EditorState::with_words_edited(const core::Edit &edit) &&
+{
+    if (!words_.has_value())
+    {
+        return std::move(*this);
+    }
+    // 大きな編集（消える＋入るが 64 KiB 超）と、上限を超える本文は表を捨てる（設計席の追補
+    // 2026-11-18）。次に補完を使ったときに with_word_table が作り直す。
+    const std::size_t touched = edit.removed.size() + edit.inserted.size();
+    const std::size_t after = text_.size_bytes() - edit.removed.size() + edit.inserted.size();
+    if (touched > core::word_table_edit_limit || after > core::word_table_byte_limit)
+    {
+        words_.reset();
+        return std::move(*this);
+    }
+    words_ = words_.value().edited(text_, edit);
+    return std::move(*this);
+}
+
+EditorState EditorState::with_word_table() const
+{
+    EditorState next(*this);
+    if (!next.words_.has_value())
+    {
+        next.words_ = core::WordTable::of(text_);
+    }
+    return next;
+}
+
+const std::optional<core::WordTable> &EditorState::word_table() const noexcept
+{
+    return words_;
+}
+
+std::vector<const core::WordTable *> EditorState::parked_word_tables() const
+{
+    std::vector<const core::WordTable *> tables;
+    for (std::size_t position = 0; position < tab_count(); ++position)
+    {
+        const DocumentState *bundle = parked_bundle_at(position);
+        if (bundle != nullptr && bundle->words.has_value())
+        {
+            tables.push_back(&bundle->words.value());
+        }
+    }
+    return tables;
+}
+
 EditorState EditorState::with_history(core::EditHistory history) const &
 {
     return EditorState(*this).with_history(std::move(history));
@@ -632,6 +685,8 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
         core::vim_marks_opened(core::VimMarkPosition{core::LineNumber{first_line}, 0});
     // 開いたときに旗を決める（ADR 0188 の決定 1）。
     next.vim_eol_ = vim_end_of_line_decided(next.text_, vim_entries_);
+    // 語の表は開く道で作らない（最初に補完を使ったときに作る・設計席の追補 2026-11-18）。
+    next.words_.reset();
     next.refresh_vim_text(true);
     return next;
 }
@@ -1014,7 +1069,8 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
                                                                diagnostics_,
                                                                diagnostics_version_,
                                                                diagnostics_count_,
-                                                               vim_eol_});
+                                                               vim_eol_,
+                                                               words_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -1041,6 +1097,7 @@ void EditorState::spread(const DocumentState &tab)
     vim_eol_ = tab.vim_eol.has_value() && tab.vim_eol.value().entry == vim_entries_
                    ? tab.vim_eol.value()
                    : vim_end_of_line_decided(text_, vim_entries_);
+    words_ = tab.words;
     refresh_vim_text(true);
 }
 

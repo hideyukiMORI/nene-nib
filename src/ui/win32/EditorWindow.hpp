@@ -181,6 +181,20 @@ class EditorWindow final
     // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
     void press_context_menu_key(WPARAM word);
+    // 補完の面（ADR 0190 の決定 5・EditorWindowCompletion.cpp）。面が見えている間の上下・PageUp /
+    // PageDown・Enter・Tab・Esc を面が受けたら真。窓が非アクティブになったら閉じる。
+    [[nodiscard]] bool take_completion_key(UINT message, WPARAM word);
+    // Enter と Tab。確定が本文を変えなければ面を閉じて偽（鍵は本文へ通す）。
+    [[nodiscard]] bool commit_completion();
+    void close_completion_outside();
+    // 窓が焦点を失ったときの片付け（選択のドラッグ・Ctrl+Tab の歩き・帯の hover・補完の面・hover の
+    // 札・字の大きさのホイールの残り）。
+    void lose_focus();
+    // 面の行のクリック（押した行と離した行が同じときだけ確定）と面の上のホイール（#1844 の R1）。
+    // 面が受けたら真で、本文へ渡さない。
+    [[nodiscard]] bool press_completion(LPARAM data);
+    [[nodiscard]] bool release_completion(LPARAM data);
+    [[nodiscard]] bool scroll_completion(std::int32_t delta, LPARAM data);
     [[nodiscard]] bool in_text_body(POINT point) const;
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
     // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
@@ -411,6 +425,7 @@ class EditorWindow final
     void run_delete_selection();
     void run_select_all();
     void run_cycle_finder_preview();
+    void run_complete();
     void run_go_to_definition();
     void run_show_information();
     void run_choose_line_ending();
@@ -493,6 +508,9 @@ class EditorWindow final
     // （#1051）。
     std::optional<POINT> right_pressed_;
     bool context_menu_pressed_ = false;
+    // 補完の面の上で押した行（離すまで・面の余白の押しは値なし）と、面のホイールの余り。
+    std::optional<std::size_t> completion_pressed_;
+    std::int32_t completion_wheel_remainder_ = 0;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。

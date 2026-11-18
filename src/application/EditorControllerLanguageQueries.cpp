@@ -126,16 +126,18 @@ void EditorController::settle_language_answers(LspRequestKind kind)
     }
 }
 
-// 入力行・面・右クリックのメニュー・IME の変換が開いていない。
+// 入力行・面・右クリックのメニュー・IME の変換・補完の面（答えを待っていてまだ見えていない面を
+// 含む）が開いていない。補完の面と hover の札は同時に出さず、補完の面が開いている間は定義の答えで
+// 跳ばない（ADR 0190 の決定 5・6）。
 bool EditorController::faces_closed() const noexcept
 {
     return !state_.command_input().has_value() && !context_menu_active() &&
-           !state_.composition().has_value();
+           !state_.composition().has_value() && !completion_open();
 }
 
 // 問いを出したときと同じ「何も待っていない」状態か。Vim は NORMAL で、オペレータ・回数・レジスタの
-// 指定・次の鍵の待ち（`g` `f` `"` `m` …）・`map` の待ちの鍵・印・`Ctrl-o` の待ちが無い。通常モードは選択の起点が問いのときのまま
-// （キャレットは答えの文脈が照合済み）。
+// 指定・次の鍵の待ち（`g` `f` `"` `m` …）・`map` の待ちの鍵・印・`Ctrl-o`
+// の待ちが無い。通常モードは選択の起点が問いのときのまま （キャレットは答えの文脈が照合済み）。
 bool EditorController::awaits_nothing() const noexcept
 {
     switch (state_.mode())

@@ -11,6 +11,11 @@
 #include "CommandChoice.hpp"
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
+#include "CompletionDirection.hpp"
+#include "CompletionEntry.hpp"
+#include "CompletionList.hpp"
+#include "CompletionSession.hpp"
+#include "CompletionView.hpp"
 #include "CompositionView.hpp"
 #include "ContextMenuItem.hpp"
 #include "ContextMenuMode.hpp"
@@ -87,6 +92,7 @@
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LspCompletionList.hpp"
 #include "LspLocation.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
@@ -237,6 +243,14 @@ class EditorController final
     [[nodiscard]] bool context_menu_active() const noexcept;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
+    // 補完の面が見えているか（ADR 0190 の決定 5）。窓が上下・Enter・Tab・Esc の行き先を決めるための
+    // 安い読みで、frame を作らない。completion_open は面の状態があるか（LSP の答えを待っていて
+    // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
+    [[nodiscard]] bool completion_active() const noexcept;
+    [[nodiscard]] bool completion_open() const noexcept;
+    // 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。窓が Enter と
+    // Tab を 面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
+    [[nodiscard]] bool completion_commits() const;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -270,6 +284,13 @@ class EditorController final
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
+    // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 1・2）。アクティブな文書の語の表が
+    // 無ければ（1 MiB 以下なら）ここで 1 回作って状態に置き（表を作るのはこの 1 か所・設計席の追補
+    // 2026-11-18）、キャレットで insert_completion_list を呼ぶ。面と鍵（#1008 の段 B）が呼ぶ口。
+    [[nodiscard]] core::CompletionList insert_completion(core::CompletionDirection direction);
+    // アクティブな文書の語の表（作っていなければ空）。性質の試験が「状態の表＝本文から作り直した
+    // 表」を確かめるための読む口で、状態を変えない。
+    [[nodiscard]] const std::optional<core::WordTable> &word_table() const noexcept;
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;
@@ -931,8 +952,9 @@ class EditorController final
     void settle_definition_answer();
     void land_definition(const std::vector<core::LspLocation> &locations);
     // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
-    // メニュー・IME の変換が開いていない。awaits_nothing は問いを出したときと同じ「何も待って
-    // いない」状態（Vim は NORMAL でオペレータ・回数・レジスタ・次の鍵の待ちが無い／通常モードは
+    // メニュー・IME の変換・補完の面が開いていない。awaits_nothing
+    // は問いを出したときと同じ「何も待って いない」状態（Vim は NORMAL
+    // でオペレータ・回数・レジスタ・次の鍵の待ちが無い／通常モードは
     // 選択の起点が問いのときのまま）。
     [[nodiscard]] bool faces_closed() const noexcept;
     [[nodiscard]] bool awaits_nothing() const noexcept;
@@ -1162,6 +1184,40 @@ class EditorController final
     // F1 の一覧から選んだ操作。Vim の NORMAL / VISUAL の 5 つはメニューと同じ Vim の鍵の列。
     void run_listed_operation(core::EditorOperation operation);
     [[nodiscard]] std::optional<ContextMenuView> context_menu_view() const;
+
+    // ---------------------------------------------------------------- 補完の面（ADR 0190 / 0169）
+    // EditorControllerCompletion.cpp の群だけが読み書きする。
+    void accept(const OpenCompletion &);
+    void accept(const StepCompletion &intent);
+    void accept(const ChooseCompletion &intent);
+    void accept(const CloseCompletion &);
+    void accept(const ScrollCompletion &intent);
+    // 入口の 1 か所（apply）。面が開いていて、開いたまま受ける意図でなければ、写す前に閉じる。
+    void close_completion_before(const EditorIntent &intent);
+    // 出口の 1 か所（apply）。成り立たなくなった面を閉じ、届いた答えを足し、打った分で絞り直す。
+    void settle_completion();
+    // 通常モードで `triggerCharacters` の 1 つを打ち終えたら開く。呼ぶのは言語サーバーが running の
+    // ときだけ（accept(InsertText) の 1 か所）。
+    void open_triggered_completion(std::string_view typed);
+    // 面を開く 1 か所。trigger が無ければ手で開いた面、あれば自動の面。
+    void start_completion(std::optional<std::string_view> trigger);
+    [[nodiscard]] bool completion_startable() const;
+    [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
+    void refresh_completion(CompletionSession &session);
+    [[nodiscard]] bool take_completion_answer(CompletionSession &session);
+    void merge_completion_answer(CompletionSession &session,
+                                 const core::LspCompletionList &list) const;
+    // キャレットの直前の語の頭（接頭辞の始まり・本文の語は集めない）。
+    [[nodiscard]] core::Offset completion_word_start() const;
+    // row 番目の候補を確定したときの編集（置き換える範囲と入れる平文）。
+    [[nodiscard]] std::pair<core::OffsetRange, std::string>
+    completion_edit(const CompletionSession &session, std::size_t row) const;
+    // 面を閉じる 1 か所（待っている要求の取り消しと、届いていた補完の答えの消去）。
+    void close_completion();
+    void forget_completion_answer();
+    [[nodiscard]] core::OffsetRange completion_range(core::Offset origin,
+                                                     const core::CompletionEntry &entry) const;
+    [[nodiscard]] std::optional<CompletionView> completion_view() const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
@@ -1620,6 +1676,9 @@ class EditorController final
     std::optional<std::size_t> start_selection_;
     // 開いている右クリックのメニュー（ADR 0078 の追補 #1051）。
     std::optional<ContextMenuOpen> context_menu_;
+    // 開いている補完の面と、面の通し番号（ADR 0190 の決定 1・5）。
+    std::optional<CompletionSession> completion_;
+    std::uint64_t completion_sessions_ = 0;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

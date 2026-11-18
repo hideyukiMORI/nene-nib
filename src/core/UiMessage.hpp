@@ -116,6 +116,8 @@ enum class UiMessage : std::uint16_t
     operation_select_all_description,
     operation_cycle_finder_preview_name,
     operation_cycle_finder_preview_description,
+    operation_complete_name,
+    operation_complete_description,
     // 言語サーバーへの問いの 2 つの操作（ADR 0190 の決定 8・9）。
     operation_go_to_definition_name,
     operation_go_to_definition_description,
@@ -258,6 +260,7 @@ enum class UiMessage : std::uint16_t
     start_new_file_detail,
     start_open_folder,
     start_open_folder_detail,
+    notice_completion_none,
     // 言語サーバーへの問いの知らせ（ADR 0190 の決定 9）。
     notice_language_server_not_running,
     notice_definition_not_found,

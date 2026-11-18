@@ -3,6 +3,7 @@
 // 上限 3・tick の古さ・設定の on / off で start / stop・`:set lsp` の要求を確かめる。本物の
 // clangd も窓も使わない。
 #include "CancelCommand.hpp"
+#include "CloseCompletion.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "CommandText.hpp"
@@ -37,6 +38,7 @@
 #include "LspDiagnostics.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenCompletion.hpp"
 #include "OpenContextMenu.hpp"
 #include "OpenDocument.hpp"
 #include "OperationBindings.hpp"
@@ -1786,8 +1788,39 @@ void verify_definition_in_unread_tab()
            "a definition in a tab not read yet reads the tab and lands in it");
 }
 
+// 補完の面と hover の札は同時に出ない。補完の面が開いている間は定義の答えで跳ばない。
+void verify_queries_yield_to_completion()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    static_cast<void>(
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::hover}));
+    const auto tip = answered_frame(editing, last_request(editing, "textDocument/hover"),
+                                    R"({"contents":"doc"})");
+    const auto opened = editing.controller().apply_frame(app::OpenCompletion{});
+    expect(tip.hover.has_value() && editing.controller().completion_open() &&
+               !opened.hover.has_value() &&
+               !editing.controller().language_answers().hover.has_value(),
+           "opening the completion face drops the hover tip");
+    static_cast<void>(editing.controller().apply_frame(app::CloseCompletion{}));
+    static_cast<void>(
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::hover}));
+    const std::int64_t hover = last_request(editing, "textDocument/hover");
+    static_cast<void>(
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition}));
+    const std::int64_t definition = last_request(editing, "textDocument/definition");
+    static_cast<void>(editing.controller().apply_frame(app::OpenCompletion{}));
+    const auto late = answered_frame(editing, hover, R"({"contents":"doc"})");
+    static_cast<void>(answered_frame(editing, definition, two_location));
+    expect(editing.controller().completion_open() && !late.hover.has_value() &&
+               !editing.controller().language_answers().hover.has_value() &&
+               active_path(editing) == source_path,
+           "answers that arrive while the completion face is open show no tip and do not jump");
+}
+
 void verify_language_query_reviews()
 {
+    verify_queries_yield_to_completion();
     verify_definition_waits_for_nothing();
     verify_hover_answer_needs_a_free_window();
     verify_queries_in_replays();

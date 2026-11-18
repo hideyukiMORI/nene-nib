@@ -76,6 +76,10 @@ enum class EditorOperation : std::uint8_t
     // Ctrl+Shift+P（ui の入力行の鍵）・見出しの右端の印・F1 の一覧から。面が閉じているときの
     // Ctrl+Shift+P は面を開く行（list_files）が先に当たるので、表の行は鍵なし。
     cycle_finder_preview,
+    // 補完の面を開く（ADR 0190 の決定 5）。鍵は通常モードの Ctrl+Space だけ（VS Code・Visual Studio
+    // と 同じ・D82）。Vim の INSERT の Ctrl+Space（Ctrl-@）は譲るので、Vim には行を置かない（INSERT
+    // の Ctrl-n / Ctrl-p は engine の鍵・ADR 0169）。
+    complete,
     // 言語サーバーへの問いの 2 つ（ADR 0190 の決定 8）。「定義へ移動」は F12 で両モード（Vim の
     // NORMAL の `gd` と同じ問い）、「情報を表示」は鍵なしで F1 の一覧から（Vim の NORMAL の `K` と
     // 同じ問い）。言語サーバーが動いていない文書では 1 行知らせる。
