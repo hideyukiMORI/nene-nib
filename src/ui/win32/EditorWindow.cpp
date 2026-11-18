@@ -253,6 +253,8 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         cancel_ime_composition();
     }
+    // 設定の面が閉じたら、探す欄の変換を IME の側に残さない（#1836 のレビュー M1）。
+    follow_settings_closing();
     // 閉じたいタブは意図を送った結果の delivery にだけ載る（ADR 0057 の決定 6）。下で delivery を
     // 作り直す前に読んでおく。
     const auto close_request = delivery.close_request;

@@ -1013,19 +1013,6 @@ constexpr std::array<NumberOption, 3> number_options{{
 // 既定値へ戻す接尾辞（Vim 9.1 の実測: `&` `&vim` `&vi` はどれも既定値へ戻す）。
 constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
 
-// 字の大きさの 10 進（小数 1 桁まで・FontSize::parse が読める形）。core は libm を呼ばないので
-// 0.1 pt の整数で丸める。
-[[nodiscard]] std::string points_text(FontSize size)
-{
-    const auto tenths = static_cast<std::int64_t>((size.points() * 10.0F) + 0.5F);
-    std::string text = std::to_string(tenths / 10);
-    if (tenths % 10 != 0)
-    {
-        text += "." + std::to_string(tenths % 10);
-    }
-    return text;
-}
-
 // 既定値へ戻す名前。真偽の `no{name}&` も `{name}` の既定値へ戻す（Vim 9.1 の実測・#1561。数の
 // `no{name}&` は E474 のまま）。
 [[nodiscard]] std::string_view reset_name(std::string_view name) noexcept
@@ -1074,7 +1061,7 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     }
     if (name == "fontsize")
     {
-        return "fontsize=" + points_text(defaults.font_size);
+        return "fontsize=" + font_size_text(defaults.font_size);
     }
     if (name == "language")
     {
@@ -1088,7 +1075,7 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     if (name == "guifont")
     {
         return "guifont=" + std::string(defaults.font_family.text()) + ":h" +
-               points_text(defaults.font_size);
+               font_size_text(defaults.font_size);
     }
     return std::nullopt;
 }

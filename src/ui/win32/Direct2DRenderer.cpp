@@ -493,6 +493,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     start_layouts_.clear();
     context_menu_layouts_.clear();
     completion_layouts_.clear();
+    settings_layouts_.clear();
+    settings_formats_.reset();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -2524,6 +2526,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // 補完の面は本文とステータスバーの上・札とメニューの下（面が開いている間は入力行も Ctrl+P の
     // 面も無い・ADR 0190 の決定 5）。
     draw_completion(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
+    draw_settings(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
     // 札は面の上・右クリックのメニューの下（メニューが開いている間は出ない・#1789）。
     draw_tab_tip(frame, title);
     draw_hover_tip(frame, minimap.body);

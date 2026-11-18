@@ -23,8 +23,11 @@ D67 で機能が 20 本近く増える。hide の要望は「どの機能がど�
 
 ## 強制
 
-- 表の網羅性と `bench` の存在（CNF-015）: **planned**（S2 で active）。
-- `docs/quality/feature-costs.md` と表の一致: **planned**（S2 で active）。
+- 表の網羅性と `bench` の存在（CNF-015）: **active**（`eng/conformance.py` の `feature_cost_checks`・反例は `tests/conformance` の `FeatureCostChecks`・表の宣言の順は core の consteval の照合・#1828）。
+- `docs/quality/feature-costs.md` と表の一致: **active**（同じ `feature_cost_checks`・#1828）。
+- core と application の契約（`nib_tests --feature-costs` `--settings-modal`）: **active**（CTest の `nib_unit` と `nib_unit_scopes`・#1828）。
+- 面の配置と当たり（`nib_tests --settings-panel`）と、面の画素と鍵の表（`nib_window_tests --settings-panel`）: **active**（CTest の `nib_unit` `nib_unit_scopes` `nib_window`・#1836）。
+- 実機の窓での検査（決定 7 の `eng/verify-window.py --settings`）: **planned**（未実装。窓を最前面に出す道具なので施主の了承の後）。
 - 8 本の速さ: **active**（QLT-014）。
 - 設定の版の移行の規則（ADR 0114）: **active**。
 

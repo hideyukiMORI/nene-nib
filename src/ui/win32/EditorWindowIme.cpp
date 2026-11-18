@@ -166,6 +166,11 @@ clauses_of(const std::vector<std::size_t> &boundaries, const std::vector<std::ui
 // 来る＝ vim_specials の表に無いので Vim の鍵にならない（決定 5・既存の形のまま）。
 LRESULT EditorWindow::compose_message(UINT message, WPARAM word, LPARAM data)
 {
+    // 設定の面が開いている間は OS の変換の窓に任せ、確定を探す欄が WM_CHAR で受ける（#1836）。
+    if (const auto handled = compose_settings(message, word, data); handled.has_value())
+    {
+        return handled.value();
+    }
     switch (message)
     {
     case WM_IME_STARTCOMPOSITION:

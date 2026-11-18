@@ -86,6 +86,7 @@ namespace
     case EditorOperation::complete:
     case EditorOperation::go_to_definition:
     case EditorOperation::show_information:
+    case EditorOperation::open_settings:
         return std::nullopt;
     }
     std::unreachable();

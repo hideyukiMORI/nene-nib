@@ -1,5 +1,7 @@
 #include "Minimap.hpp"
 
+#include "EditorFeature.hpp"
+#include "FeatureCosts.hpp"
 #include "Offset.hpp"
 #include "Utf8.hpp"
 #include "VirtualColumn.hpp"
@@ -48,18 +50,12 @@ void append_block(MinimapRow &row, std::size_t column, std::size_t width,
 
 bool minimap_shown(const EditorSettings &settings) noexcept
 {
-    return std::ranges::find(settings.features, minimap_feature) != settings.features.end();
+    return feature_enabled(settings, EditorFeature::minimap);
 }
 
 EditorSettings minimap_set(EditorSettings settings, bool shown)
 {
-    auto &features = settings.features;
-    std::erase(features, minimap_feature);
-    if (shown)
-    {
-        features.emplace_back(minimap_feature);
-    }
-    return settings;
+    return feature_set(std::move(settings), EditorFeature::minimap, shown);
 }
 
 MinimapRow minimap_row(std::string_view line, std::span<const ColorSpan> colors)
