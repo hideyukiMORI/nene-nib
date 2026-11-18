@@ -58,7 +58,8 @@ PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column)
                         .spans = std::move(spans),
                         .task = std::nullopt,
                         .table = std::nullopt,
-                        .alert = std::nullopt};
+                        .alert = std::nullopt,
+                        .code_colors = std::nullopt};
 }
 
 namespace

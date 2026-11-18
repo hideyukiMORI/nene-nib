@@ -29,7 +29,8 @@ constexpr float unbounded_height = 1.0e7F;
                             float width, const PreviewTextStyle &style)
 {
     return entry.kind == block.kind && entry.level == block.level && entry.width == width &&
-           entry.text == block.text && entry.spans == block.spans && entry.style == style;
+           entry.text == block.text && entry.spans == block.spans && entry.style == style &&
+           entry.colors == block.code_colors;
 }
 
 // 列 column の升を行の順に改行でつないだ要素（装飾は升の中から写す・幅だけを測る）。
@@ -46,7 +47,8 @@ constexpr float unbounded_height = 1.0e7F;
                               .spans = {},
                               .task = std::nullopt,
                               .table = std::nullopt,
-                              .alert = std::nullopt};
+                              .alert = std::nullopt,
+                              .code_colors = std::nullopt};
     for (const auto &row : rows)
     {
         if (!joined.text.empty())
@@ -110,6 +112,22 @@ constexpr float unbounded_height = 1.0e7F;
     bytes.reserve(block.spans.size());
     std::ranges::transform(block.spans, std::back_inserter(bytes), [](const core::PreviewSpan &span)
                            { return PreviewByteRange{span.begin.value, span.end.value}; });
+    return preview_unit_ranges(shown, bytes);
+}
+// 囲みのコードの構文の色の範囲（code_colors と同じ順・#1858）を layout の UTF-16 の範囲に写す。
+[[nodiscard]] std::vector<DWRITE_TEXT_RANGE> color_ranges(const core::PreviewBlock &block,
+                                                          std::string_view shown)
+{
+    if (!block.code_colors.has_value())
+    {
+        return {};
+    }
+    const auto &colors = block.code_colors.value();
+    std::vector<PreviewByteRange> bytes;
+    bytes.reserve(colors.size());
+    std::ranges::transform(colors, std::back_inserter(bytes),
+                           [](const core::PreviewCodeColor &color)
+                           { return PreviewByteRange{color.begin.value, color.end.value}; });
     return preview_unit_ranges(shown, bytes);
 }
 // layout の 1 行目の baseline（GetLineMetrics は欄が足りないと何も書かないので、全部の行を引く）。
@@ -341,7 +359,9 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
                             {},
                             0,
                             std::move(ranges),
-                            0};
+                            0,
+                            block.code_colors,
+                            color_ranges(block, shown)};
     if (FAILED(locate(entry, block, inlines, style.dpi)))
     {
         return std::unexpected(directwrite);
@@ -387,6 +407,32 @@ HRESULT PreviewTextLayouts::ink(PreviewTextLayout &entry, const core::PreviewBlo
         }
         ++inked_;
         const auto set = entry.layout->SetDrawingEffect(brushes.of(ink.value()), range);
+        if (FAILED(set))
+        {
+            return set;
+        }
+    }
+    return ink_colors(entry, brushes);
+}
+
+HRESULT PreviewTextLayouts::ink_colors(PreviewTextLayout &entry, const PreviewBrushes &brushes)
+{
+    if (!entry.colors.has_value())
+    {
+        entry.inked = brushes.generation();
+        return S_OK;
+    }
+    const auto &colors = entry.colors.value();
+    for (std::size_t index = 0; index < colors.size() && index < entry.color_ranges.size(); ++index)
+    {
+        const auto range = entry.color_ranges.at(index);
+        if (range.length == 0)
+        {
+            continue;
+        }
+        ++inked_;
+        const auto set = entry.layout->SetDrawingEffect(
+            brushes.of(preview_syntax_ink(colors.at(index).role)), range);
         if (FAILED(set))
         {
             return set;

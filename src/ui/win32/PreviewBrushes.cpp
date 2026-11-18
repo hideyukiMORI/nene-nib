@@ -60,6 +60,10 @@ constexpr float full_channel = 255.0F;
         return to_color(theme.body.warning);
     case PreviewInk::error:
         return to_color(theme.body.error);
+    case PreviewInk::type:
+        return to_color(theme.body.type);
+    case PreviewInk::constant:
+        return to_color(theme.body.constant);
     }
     std::unreachable();
 }
@@ -147,6 +151,34 @@ PreviewInk preview_alert_ink(core::PreviewAlert alert) noexcept
         return PreviewInk::warning;
     case core::PreviewAlert::caution:
         return PreviewInk::error;
+    }
+    std::unreachable();
+}
+
+PreviewInk preview_syntax_ink(core::SyntaxRole role) noexcept
+{
+    switch (role)
+    {
+    case core::SyntaxRole::comment:
+        return PreviewInk::comment;
+    case core::SyntaxRole::keyword:
+        return PreviewInk::keyword;
+    case core::SyntaxRole::string:
+        return PreviewInk::string;
+    case core::SyntaxRole::number:
+        return PreviewInk::number;
+    case core::SyntaxRole::type:
+        return PreviewInk::type;
+    case core::SyntaxRole::function:
+        return PreviewInk::function;
+    case core::SyntaxRole::constant:
+        return PreviewInk::constant;
+    case core::SyntaxRole::operators:
+        return PreviewInk::operators;
+    case core::SyntaxRole::error:
+        return PreviewInk::error;
+    case core::SyntaxRole::warning:
+        return PreviewInk::warning;
     }
     std::unreachable();
 }

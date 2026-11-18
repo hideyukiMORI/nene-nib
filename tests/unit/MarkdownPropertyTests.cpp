@@ -15,6 +15,7 @@
 #include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColor.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableRow.hpp"
@@ -724,6 +725,57 @@ std::string markdown_tabled(Random &random)
     return {};
 }
 
+// 囲みのコードの色の族（#1858）: 言語つきの囲みの中に断片を置く（断片の ``` が囲みを早く閉じても
+// よい・知らない言語と大文字の名前も混ぜる）。
+constexpr std::array<std::string_view, 8> fence_languages{
+    {"cpp", "Python", "json", "js", "c++", "sh", "zig", "rust title=\"x\""}};
+
+std::string markdown_fenced(Random &random)
+{
+    const auto language = fence_languages.at(random() % fence_languages.size());
+    return "```" + std::string(language) + "\n" + composed(random, markdown_fragments) + "\n" +
+           composed(random, markdown_fragments) + "\n```\n" + composed(random, markdown_fragments);
+}
+
+// 色の区間は囲みのコードだけが持ち、要素の文字の中・空でない・位置の順で重ならない・code point の
+// 境目に立つ。
+[[nodiscard]] bool colors_hold(const PreviewBlock &block)
+{
+    if (!block.code_colors.has_value())
+    {
+        return true;
+    }
+    if (block.kind != PreviewBlockKind::code)
+    {
+        return false;
+    }
+    std::size_t last = 0U;
+    for (const auto &color : block.code_colors.value())
+    {
+        if (color.begin.value < last || color.end.value <= color.begin.value ||
+            color.end.value > block.text.size() || !core::is_boundary(block.text, color.begin) ||
+            !core::is_boundary(block.text, color.end))
+        {
+            return false;
+        }
+        last = color.end.value;
+    }
+    return true;
+}
+
+[[nodiscard]] std::string_view fenced_violation(std::string_view input)
+{
+    const std::string_view broken = markdown_violation(input);
+    if (!broken.empty())
+    {
+        return broken;
+    }
+    const Parsed parsed = core::parse_markdown(input, MarkdownStop::never());
+    const bool held = std::ranges::all_of(parsed.value().blocks, colors_hold);
+    return held ? std::string_view{}
+                : "code colors leave the code text, overlap, or split a code point";
+}
+
 void verify_markdown_properties()
 {
     verify_family("parse_markdown holds on random bytes", 8711U, markdown_bytes,
@@ -742,6 +794,8 @@ void verify_markdown_properties()
                   tilde_violation);
     verify_family("parse_markdown keeps table rows and alert titles consistent", 8719U,
                   markdown_tabled, tabled_violation);
+    verify_family("parse_markdown keeps code colors inside the code text and in order", 8720U,
+                  markdown_fenced, fenced_violation);
     verify_stops_happen();
     verify_markdown_depths();
     verify_markdown_size_boundary();

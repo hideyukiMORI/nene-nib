@@ -20,6 +20,8 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewCodeColor.hpp"
+#include "PreviewCodeColors.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewInk.hpp"
 #include "PreviewMetrics.hpp"
@@ -86,6 +88,7 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
                               core::Offset{0},
                               std::move(text),
                               std::move(spans),
+                              std::nullopt,
                               std::nullopt,
                               std::nullopt,
                               std::nullopt};
@@ -1528,6 +1531,124 @@ void check_many_tables_kept()
                layouts.created() == made,
            "six visible tables are measured once and a second paint measures and makes nothing");
 }
+
+// 要素 index の layout の先頭の文字に brush の色が置いてあるか。
+[[nodiscard]] bool block_inked(PreviewTextLayouts &layouts, const win32::PreviewScene &scene,
+                               std::size_t index, ID2D1Brush *brush)
+{
+    const auto &block = scene.document.blocks.at(index);
+    const auto layout = layouts.get(
+        block, win32::preview_text_width(block, 400.0F, scene.tops.indent(index), scene.style.dpi),
+        scene.style);
+    return layout.has_value() && effect_is(*layout.value().Get(), 0U, brush);
+}
+
+// 文書（大きな囲み 1 つ）を 400 × 200 に描き、最初の描画で置いた色の数が inks で、描き直しと
+// 送りで layout の生成も色の置き直しも 0。
+void check_fence_paint(const core::MarkdownDocument &document, std::size_t inks)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the large fence check prepares a target and brushes");
+        return;
+    }
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const auto scene_at = [&](float scroll)
+    {
+        return win32::PreviewScene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200},
+                                   scroll,   std::nullopt};
+    };
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
+    const auto painted = layout_counts(layouts);
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(4000.0F)));
+    expect(!failure.has_value() && std::get<0>(painted) == 1U && std::get<1>(painted) == inks &&
+               layout_counts(layouts) == painted,
+           "a large fence is laid out and coloured once, and repaints and scrolls redo nothing");
+}
+
+// lines 行の row の囲み（language）を 400 × 200 に描き、2 回目の描画と送りで layout の生成と色の
+// 置き直しが 0 で、最初の描画で置いた色の数が inks であることを確かめる。
+void check_fence_cost(std::size_t lines, std::string_view language, std::string_view row,
+                      std::size_t inks)
+{
+    std::string text = "```" + std::string(language) + "\n";
+    for (std::size_t line = 0; line < lines; ++line)
+    {
+        text += row;
+        text += "\n";
+    }
+    const auto parsed = core::parse_markdown(text + "```\n", core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.front().code_colors.has_value() != (inks != 0U))
+    {
+        expect(false, "a large fence parses with colours only under the colour limit");
+        return;
+    }
+    check_fence_paint(parsed.value(), inks);
+}
+
+// 囲みのコードの構文の色（#1858）: 言語の分かった囲みは本文の字句器の役割の色を 1 回だけ置き、
+// 描き直しは layout を作らず色も置き直さない。知らない言語の囲みは色を置かない（1 色）。
+void check_code_colors()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto parsed = core::parse_markdown("```cpp\n// c\nint x = 1;\n```\n\n```zig\n// c\n```\n",
+                                             core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.size() != 2U)
+    {
+        expect(false, "the code colour document parses into two fences");
+        return;
+    }
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(parsed.value(), layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the code colour checks prepare a target, brushes and a document");
+        return;
+    }
+    const win32::PreviewScene scene{
+        parsed.value(), tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F, std::nullopt};
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const auto first = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    const auto painted = layout_counts(layouts);
+    const auto second = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    expect(!first.empty() && !failure.has_value() &&
+               block_inked(layouts, scene, 0U, brushes.of(win32::PreviewInk::comment)),
+           "a cpp fence draws its comment in the comment ink");
+    expect(!block_inked(layouts, scene, 1U, brushes.of(win32::PreviewInk::comment)),
+           "an unknown language keeps one colour");
+    expect(layout_counts(layouts) == painted && second == first,
+           "a repaint of a coloured fence makes no layout and sets no colour");
+}
+
+// 区間の数が上限いっぱいの囲み（1 行に数 1 つ）の色は最初に描くときに区間の数だけ 1 回置き、
+// 描き直しも画面の送りも色を置き直さない（色の区間は要素が持つ）。上限を超える密な JSON の囲みは
+// 1 色で、layout に置く effect は 0（#1860 のレビュー M1）。
+void check_large_fence_cost()
+{
+    check_fence_cost(core::preview_code_color_count_limit, "py", "1",
+                     core::preview_code_color_count_limit);
+    check_fence_cost(1000U, "json", "[1,2,3,4,5,6,7,8,9]", 0U);
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -1547,6 +1668,8 @@ void verify_preview_layouts()
     check_repaint_keeps_layouts_clean();
     check_target_change_drops_inked();
     check_recolour_every_ink();
+    check_code_colors();
+    check_large_fence_cost();
     check_unit_ranges_match_units();
     check_html_and_style();
     check_markers();
