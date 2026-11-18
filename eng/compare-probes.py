@@ -206,7 +206,13 @@ WORKLOADS = ("controller-open-utf8-16mib", "buffer-from-utf8-16mib",
              'vim-count-h-giant-1line',
              'vim-count-l-giant-1line',
              'sentence-motion-giant-1line-16384',
-             'ordinary-word-boundary-giant-1line')
+             'ordinary-word-boundary-giant-1line',
+             'controller-word-table-first-ascii-1mib',
+             'controller-word-table-second-ascii-1mib',
+             'controller-word-table-rebuilt-ascii-1mib',
+             'controller-word-table-first-japanese-1mib',
+             'controller-word-table-second-japanese-1mib',
+             'controller-word-table-rebuilt-japanese-1mib')
 ORDER = ("before", "after", "after", "before")
 
 
@@ -447,6 +453,10 @@ def lexer_input(workload: str) -> bytes:
 
 
 def fixed_input(workload: str) -> bytes:
+    if workload in WORKLOADS[203:209]:
+        # 語の表の 6 本（#1868）。入力は名札だけで、文書は probe の中の固定の生成が作る。
+        stage, kind = workload.split("-")[3:5]
+        return f"word-table-v1\n{kind}\n{stage}\n".encode("utf-8")
     if workload == "sentence-motion-giant-1line-16384":
         return text_object_input("text-object-sentence-giant-1line-16384")
     if workload in (*WORKLOADS[194:201], 'ordinary-word-boundary-giant-1line'):

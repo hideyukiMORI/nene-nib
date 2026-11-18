@@ -29,6 +29,7 @@
 #include "TextObjectWorkload.hpp"
 #include "VimBlockWorkload.hpp"
 #include "WordObjectWorkload.hpp"
+#include "WordTableWorkload.hpp"
 
 #include <variant>
 
@@ -49,5 +50,5 @@ using ProbeDispatch =
                  ProbeDispatchRow<EditedHistoryWorkload>, ProbeDispatchRow<PieceListWorkload>,
                  ProbeDispatchRow<SubstituteWorkload>, ProbeDispatchRow<PatternCostWorkload>,
                  ProbeDispatchRow<PatternProgramWorkload>, ProbeDispatchRow<SearchObjectWorkload>,
-                 ProbeDispatchRow<ExLinesWorkload>>;
+                 ProbeDispatchRow<ExLinesWorkload>, ProbeDispatchRow<WordTableWorkload>>;
 } // namespace nenenib::tests::performance
