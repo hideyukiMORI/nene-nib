@@ -547,7 +547,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
     tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp
     tests/ui/CompletionPaintTests.cpp
-    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp)
+    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp tests/ui/DeliveryStepsTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

@@ -122,18 +122,15 @@ const std::optional<core::SettingsLayout> &EditorWindow::settings_layout_drawn()
     return renderer_ == nullptr ? none : renderer_->settings_layout();
 }
 
-// 面が閉じた所で IME の変換を取り消す（deliver の 1 か所が呼ぶ・レビュー M1）。IME を開け閉めする
+// 面が閉じた所で IME の変換を取り消す（deliver の段 cancel_settings_composition・閉じたかは
+// delivery_steps が settings_just_closed で決める・レビュー M1・#1854）。IME を開け閉めする
 // follow_ime より前なので、Vim の NORMAL へ戻って IME を閉じるときには変換はもう無い（閉じるときに
 // IME が確定を本文へ送らない）。取り消しで IME が送り返す通知は、変換の無い本文の道で何もしない。
 void EditorWindow::follow_settings_closing()
 {
-    const bool was_open = std::exchange(settings_shown_, controller_.settings_open());
-    if (settings_just_closed(was_open, settings_shown_))
-    {
-        settings_pressed_ = std::nullopt;
-        settings_high_surrogate_ = 0;
-        cancel_ime_composition();
-    }
+    settings_pressed_ = std::nullopt;
+    settings_high_surrogate_ = 0;
+    cancel_ime_composition();
 }
 
 // 面が開いている間の左の押し。面の中は覚えるだけ（離したときに同じ部品なら動かす）。面の外の押しは
