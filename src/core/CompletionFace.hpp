@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace nenenib::core
 {
@@ -23,9 +24,15 @@ inline constexpr std::int32_t completion_face_mark_dips = 16;
 
 // 面の矩形と描く行（純関数）。キャレットの下に行が全部入れば下、入らなければ上、どちらにも入ら
 // なければ広い側に入るだけの行（1 行以上）を出し、選んでいる行が見えるように first を送る。左端は
-// x を bounds の中へ寄せる。
+// x を bounds の中へ寄せ、1 行ぶんの高さも無いときは上端を bounds の中へ寄せる（キャレットに
+// 掛かってよい）。
 [[nodiscard]] CompletionFaceLayout
 completion_face_layout(const CompletionFaceRequest &request) noexcept;
+
+// 点（クライアント座標の物理画素）の下の行。表示値の行の中の位置（layout.first + 面の行）で、
+// 面の外と上下の内側の空きは値なし。描画と窓の当たりが同じ配置を読む。
+[[nodiscard]] std::optional<std::size_t>
+completion_face_hit(const CompletionFaceLayout &layout, std::int32_t x, std::int32_t y) noexcept;
 
 // 面の index 番目（0 始まり・layout.rows 未満）の行の矩形。
 [[nodiscard]] LayoutRect completion_face_row(const CompletionFaceLayout &layout,

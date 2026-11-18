@@ -8,7 +8,7 @@
 #include "AutosaveId.hpp"
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
-#include "CompletionCandidate.hpp"
+#include "CompletionCandidates.hpp"
 #include "CompletionDirection.hpp"
 #include "CompletionEntries.hpp"
 #include "CompletionEntry.hpp"
@@ -34,11 +34,14 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenCompletion.hpp"
+#include "ScrollCompletion.hpp"
 #include "StepCompletion.hpp"
 #include "UiMessage.hpp"
+#include "Utf8.hpp"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -59,7 +62,8 @@ constexpr std::size_t typed_limit = 1024;
     return std::holds_alternative<OpenCompletion>(intent) ||
            std::holds_alternative<StepCompletion>(intent) ||
            std::holds_alternative<ChooseCompletion>(intent) ||
-           std::holds_alternative<CloseCompletion>(intent);
+           std::holds_alternative<CloseCompletion>(intent) ||
+           std::holds_alternative<ScrollCompletion>(intent);
 }
 
 // 面を開いたまま受ける意図（ADR 0190 の決定 5）。面の意図・文字の入力・手前への削除（絞り直す）と、
@@ -122,12 +126,14 @@ constexpr std::size_t typed_limit = 1024;
     std::unreachable();
 }
 
-// 持っている候補の列を打った分 typed で絞る（本文を走らない）。選んでいる行と窓は先頭へ戻す。
+// 持っている候補の列を打った分 typed で絞る（本文を走らない）。選んでいる行と窓は先頭へ戻し、
+// 「使う人が選ぶ行を動かした」の印も下ろす（絞った後に届いた答えは先頭を選ぶ・#1844 の R5）。
 void narrow(CompletionSession &session, std::string_view typed)
 {
     session.shown = core::completion_matches(session.entries, typed);
     session.selected = 0;
     session.first = 0;
+    session.stepped = false;
     session.detailed =
         std::ranges::any_of(session.shown, [&session](std::size_t position)
                             { return !session.entries.at(position).detail.empty(); });
@@ -140,7 +146,7 @@ void arrange(CompletionSession &session, std::string_view typed)
     narrow(session, typed);
 }
 
-// 名前と出どころが same と同じ候補を選び直す（無ければ先頭のまま）。
+// 名前と出どころが same と同じ候補を選び直し、動かした印を立て直す（無ければ先頭のまま）。
 void reselect(CompletionSession &session, const core::CompletionEntry &same)
 {
     const auto found =
@@ -154,7 +160,18 @@ void reselect(CompletionSession &session, const core::CompletionEntry &same)
     {
         session.selected = static_cast<std::size_t>(found - session.shown.begin());
         session.first = window_first(0, session.selected);
+        session.stepped = true;
     }
+}
+
+// lines 行送った窓の先頭（正は下）。候補が面の行数以下なら 0 のまま。
+[[nodiscard]] std::size_t scrolled_first(std::size_t first, std::size_t count,
+                                         std::int32_t lines) noexcept
+{
+    const std::size_t last = count - std::min(count, core::completion_face_rows);
+    const auto moved = static_cast<std::int64_t>(first) + lines;
+    return static_cast<std::size_t>(
+        std::clamp<std::int64_t>(moved, 0, static_cast<std::int64_t>(last)));
 }
 
 // 確定で入れる平文。LSP の本文の改行（LF か CRLF）は文書の改行の形にする（ARC-009）。CR は
@@ -193,18 +210,16 @@ void EditorController::close_completion_before(const EditorIntent &intent)
     }
 }
 
-// 面を閉じる 1 か所。待っている要求を取り消し、届いていた補完の答えを状態から消す（ADR 0190 の
-// 決定 1）。
+// 面を閉じる 1 か所。表に残っている補完の要求を取り消し、届いていた補完の答えを状態から消す
+// （ADR 0190 の決定 1）。取り消しは awaiting に依らない（出し直しを送れなかった後も前の要求が表に
+// 残り得るので、遅れた答えが面の無い状態に置かれる筋を閉じる・#1844 の R6）。
 void EditorController::close_completion()
 {
     if (!completion_.has_value())
     {
         return;
     }
-    if (completion_.value().awaiting)
-    {
-        cancel_lsp_requests(LspRequestKind::completion);
-    }
+    cancel_lsp_requests(LspRequestKind::completion);
     completion_.reset();
     forget_completion_answer();
 }
@@ -282,9 +297,22 @@ void EditorController::open_triggered_completion(std::string_view typed)
     }
 }
 
-// 面を開く 1 か所。trigger が無ければ手で開いた面（本文の語をすぐ出す・語の頭は席 W の接頭辞）、
-// あれば自動の面（語の頭はキャレット・本文の語は LSP の候補が届いてから集める）。出す行も待つ
-// 答えも無ければ開かず、手で開いたときだけ 1 行知らせる。
+// キャレットの直前の語の頭（席 W の接頭辞の決め方 completion_prefix_start の 1 本）。キャレットの
+// 手前の窓（typed_limit バイト）だけを読み、本文の語は集めない。
+core::Offset EditorController::completion_word_start() const
+{
+    const core::Offset caret = state_.selection().caret;
+    const std::size_t from = caret.value - std::min(caret.value, typed_limit);
+    const std::string window = state_.text().text_range(core::Offset{from}, caret);
+    const std::size_t skipped = from > 0 ? core::leading_continuations(window) : 0;
+    const std::string_view content = std::string_view{window}.substr(skipped);
+    return core::Offset{from + skipped + core::completion_prefix_start(content, content.size())};
+}
+
+// 面を開く 1 か所。trigger が無ければ手で開いた面（LSP の候補 ＋ 本文の語・語をすぐ出す）、あれば
+// 自動の面（LSP の候補だけ・本文の語を集めず語の表も作らない・#1844 の R3 / R4 の決め）。語の頭は
+// どちらも席 W の接頭辞の始まり（trigger が語の文字のサーバーでも、確定は語の頭から置き換える・
+// M1）。出す行も待つ答えも無ければ開かず、手で開いたときだけ 1 行知らせる。
 void EditorController::start_completion(std::optional<std::string_view> trigger)
 {
     if (!completion_startable())
@@ -295,7 +323,7 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
     const core::Offset caret = state_.selection().caret;
     CompletionSession session{.id = ++completion_sessions_,
                               .document = state_.autosave_ids().at(state_.active_tab()),
-                              .origin = caret,
+                              .origin = completion_word_start(),
                               .by_hand = by_hand,
                               .caret = caret,
                               .revision = state_.history().revision()};
@@ -316,15 +344,6 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
     {
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_completion_none));
     }
-}
-
-// 本文の語の列を作る（席 W の入口 insert_completion）。本文の窓を 1 回走り、語の表が無ければ
-// 作る。呼ぶのは面を開いたとき（自動の面は LSP の候補が届いたとき）と `isIncomplete` の出し直しの
-// ときだけで、打鍵ごとには呼ばない（打っている間は持っている列を接頭辞で絞る）。
-void EditorController::collect_completion_words(CompletionSession &session)
-{
-    session.words = insert_completion(core::CompletionDirection::forward).candidates;
-    session.words_collected = true;
 }
 
 // 意図の出口の 1 か所（apply）。面が成り立たなくなっていれば閉じ、届いた答えを列に足し、本文か
@@ -366,27 +385,20 @@ void EditorController::settle_completion()
     }
 }
 
-// 打った後の絞り直し（決定 1・5）。持っている列を接頭辞で絞るだけで、本文を走らない。最後の
-// 答えが `isIncomplete` のときだけ、古い要求を取り消して出し直し、本文の語も集め直す（届くまでは
-// 手元の候補を絞って見せる）。
+// 打った後の絞り直し（決定 1・5）。持っている列を接頭辞で絞るだけで、本文を走らず、列も作り
+// 直さない。最後の答えが `isIncomplete` のときだけ、古い要求を取り消して LSP の要求を出し直す
+// （本文の語は面を開いたときの列を使い回す・届くまでは手元の候補を絞って見せる・#1844 の R2）。
 void EditorController::refresh_completion(CompletionSession &session)
 {
     const core::Offset caret = state_.selection().caret;
-    const std::string typed = state_.text().text_range(session.origin, caret);
     session.caret = caret;
     session.revision = state_.history().revision();
-    if (!session.incomplete)
+    narrow(session, state_.text().text_range(session.origin, caret));
+    if (session.incomplete)
     {
-        narrow(session, typed);
-        return;
+        session.awaiting = request_completion(session.id);
+        session.incomplete = session.awaiting;
     }
-    session.awaiting = request_completion(session.id);
-    session.incomplete = session.awaiting;
-    if (session.words_collected)
-    {
-        collect_completion_words(session);
-    }
-    arrange(session, typed);
 }
 
 // 届いた補完の答え（段 A が状態に置いた 1 つ）を状態から消し、面の通し番号と文書が合えば面の列に
@@ -409,10 +421,9 @@ bool EditorController::take_completion_answer(CompletionSession &session)
 }
 
 // LSP の候補を入れ替えて並べ直す。使う人が選ぶ行を動かしていれば選んでいる候補を保ち、動かして
-// いなければ先頭（LSP の最初の候補）を選ぶ。自動で開いた面の本文の語は、LSP の候補が届いた
-// ここで初めて集める。
+// いなければ先頭（LSP の最初の候補）を選ぶ。本文の語は面を開いたときの列のまま（自動の面は空）。
 void EditorController::merge_completion_answer(CompletionSession &session,
-                                               const core::LspCompletionList &list)
+                                               const core::LspCompletionList &list) const
 {
     const std::string typed = state_.text().text_range(session.origin, state_.selection().caret);
     const std::optional<core::CompletionEntry> chosen =
@@ -422,10 +433,6 @@ void EditorController::merge_completion_answer(CompletionSession &session,
     session.server = core::completion_entries_of(list);
     session.incomplete = list.incomplete;
     session.awaiting = false;
-    if (!session.words_collected && !session.server.empty())
-    {
-        collect_completion_words(session);
-    }
     arrange(session, typed);
     if (chosen.has_value())
     {
@@ -445,19 +452,59 @@ void EditorController::accept(const StepCompletion &intent)
     session.stepped = true;
 }
 
+// 面のホイール（#1844 の R1）。窓だけを送り、選んでいる行は見えなくなったら窓の端へ寄せる。
+void EditorController::accept(const ScrollCompletion &intent)
+{
+    if (!completion_.has_value() || !has_rows(completion_.value()))
+    {
+        return;
+    }
+    auto &session = completion_.value();
+    session.first = scrolled_first(session.first, session.shown.size(), intent.lines);
+    const std::size_t last =
+        std::min(session.first + core::completion_face_rows, session.shown.size()) - 1;
+    session.selected = std::clamp(session.selected, session.first, last);
+}
+
+// row 番目の候補を確定したときの編集（置き換える範囲と入れる平文）。
+std::pair<core::OffsetRange, std::string>
+EditorController::completion_edit(const CompletionSession &session, std::size_t row) const
+{
+    const core::CompletionEntry &entry = session.entries.at(session.shown.at(row));
+    return {completion_range(session.origin, entry),
+            inserted_text(entry.insert, core::newline_of(state_.line_ending()))};
+}
+
+// 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽）。窓が Enter と Tab を面へ送るか
+// を決める安い読みで、変えないなら窓は面を閉じて鍵を本文へ通す（打った語と同じ綴りだけが残って
+// いるときに Enter が空振りしない・#1844 の L1）。
+bool EditorController::completion_commits() const
+{
+    if (!completion_.has_value() || !has_rows(completion_.value()))
+    {
+        return false;
+    }
+    const auto [range, text] = completion_edit(completion_.value(), completion_.value().selected);
+    return state_.text().text_range(range.begin, range.end) != text;
+}
+
 // 確定（決定 5）。本文に入れるのは replace の 1 か所の 1 編集（undo の 1 単位）で、面は先に閉じる
-// （出口の絞り直しに掛けない）。入れる平文が今の本文と同じなら編集を積まない。
-void EditorController::accept(const ChooseCompletion &)
+// （出口の絞り直しに掛けない）。入れる平文が今の本文と同じなら編集を積まない。row があればその
+// 候補（面の行のクリック）、無ければ選んでいる候補。
+void EditorController::accept(const ChooseCompletion &intent)
 {
     if (!completion_.has_value() || !has_rows(completion_.value()))
     {
         return;
     }
     const auto &session = completion_.value();
-    const core::CompletionEntry entry = session.entries.at(session.shown.at(session.selected));
-    const core::OffsetRange range = completion_range(session.origin, entry);
+    const std::size_t row = intent.row.value_or(session.selected);
+    if (row >= session.shown.size())
+    {
+        return;
+    }
+    const auto [range, text] = completion_edit(session, row);
     close_completion();
-    const std::string text = inserted_text(entry.insert, core::newline_of(state_.line_ending()));
     if (state_.text().text_range(range.begin, range.end) != text)
     {
         replace(range, text, core::EditBoundary::separate);

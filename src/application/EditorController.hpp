@@ -245,6 +245,9 @@ class EditorController final
     // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
     [[nodiscard]] bool completion_active() const noexcept;
     [[nodiscard]] bool completion_open() const noexcept;
+    // 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。窓が Enter と
+    // Tab を 面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
+    [[nodiscard]] bool completion_commits() const;
     // エクスプローラーの面に焦点があるか（ADR 0162 の決定 4・E4 で足した口）。窓が鍵の行き先を
     // 決めるための安い読みで、frame を作らない。面が消えていれば偽。
     [[nodiscard]] bool explorer_focused() const noexcept;
@@ -1152,8 +1155,9 @@ class EditorController final
     // EditorControllerCompletion.cpp の群だけが読み書きする。
     void accept(const OpenCompletion &);
     void accept(const StepCompletion &intent);
-    void accept(const ChooseCompletion &);
+    void accept(const ChooseCompletion &intent);
     void accept(const CloseCompletion &);
+    void accept(const ScrollCompletion &intent);
     // 入口の 1 か所（apply）。面が開いていて、開いたまま受ける意図でなければ、写す前に閉じる。
     void close_completion_before(const EditorIntent &intent);
     // 出口の 1 か所（apply）。成り立たなくなった面を閉じ、届いた答えを足し、打った分で絞り直す。
@@ -1165,10 +1169,15 @@ class EditorController final
     void start_completion(std::optional<std::string_view> trigger);
     [[nodiscard]] bool completion_startable() const;
     [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
-    void collect_completion_words(CompletionSession &session);
     void refresh_completion(CompletionSession &session);
     [[nodiscard]] bool take_completion_answer(CompletionSession &session);
-    void merge_completion_answer(CompletionSession &session, const core::LspCompletionList &list);
+    void merge_completion_answer(CompletionSession &session,
+                                 const core::LspCompletionList &list) const;
+    // キャレットの直前の語の頭（接頭辞の始まり・本文の語は集めない）。
+    [[nodiscard]] core::Offset completion_word_start() const;
+    // row 番目の候補を確定したときの編集（置き換える範囲と入れる平文）。
+    [[nodiscard]] std::pair<core::OffsetRange, std::string>
+    completion_edit(const CompletionSession &session, std::size_t row) const;
     // 面を閉じる 1 か所（待っている要求の取り消しと、届いていた補完の答えの消去）。
     void close_completion();
     void forget_completion_answer();
