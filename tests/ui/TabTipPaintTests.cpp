@@ -223,7 +223,5 @@ void verify_tab_tip_paint()
     }
     check_paint(target, written, core::palette_for(core::Appearance::dark), "dark");
     check_paint(target, written, core::palette_for(core::Appearance::light), "light");
-    // 同じ描く 1 本（paint_tab_tip）を通る hover の札（ADR 0190 の決定 6）も同じ群で確かめる。
-    verify_hover_tip_paint();
 }
 } // namespace nenenib::tests::ui

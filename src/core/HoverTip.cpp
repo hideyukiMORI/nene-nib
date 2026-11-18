@@ -109,7 +109,10 @@ LayoutRect hover_tip_rect(const LayoutRect &caret, const LayoutRect &area,
     const std::int32_t right_most = area.right - to_pixels(tab_tip_edge_dips, text.dpi) - width;
     const std::int32_t left = std::max(std::min(caret.left, right_most), area.left);
     const std::int32_t above = caret.top - gap - height;
-    const std::int32_t top = above >= area.top ? above : caret.bottom + gap;
+    // 上に入らなければ下。下にもはみ出すなら領域の下端へ寄せ、領域の上端より上へは出さない。
+    const std::int32_t below =
+        std::max(std::min(caret.bottom + gap, area.bottom - height), area.top);
+    const std::int32_t top = above >= area.top ? above : below;
     return LayoutRect{left, top, left + width, top + height};
 }
 } // namespace nenenib::core

@@ -635,8 +635,11 @@ class EditorController final
     // 開いた当たりの文書がアクティブならキャレットを置く（`''` を置いてから
     // PlaceCaret）。開く要求が 消えていれば（開けなかった）置く先を捨てる。
     void land_project_hit();
-    // 着地の位置 → アクティブな本文の行と桁（言語サーバーの Position は lsp_offset_of の 1 本）。
+    // 着地の位置 → アクティブな本文の行と桁（選択肢ごとの写し先を std::visit で引く・言語
+    // サーバーの Position は lsp_offset_of の 1 本）。
     [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
+    [[nodiscard]] core::TextPosition landed_position(const core::TextPosition &position) const;
+    [[nodiscard]] core::TextPosition landed_position(const core::LspPosition &position) const;
     // 進み具合の表示値（面が `!` の出どころのときだけ）。
     [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
     // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
@@ -923,8 +926,16 @@ class EditorController final
     void settle_hover(const EditorIntent &intent);
     void drop_hover();
     [[nodiscard]] std::optional<std::string> shown_hover() const;
-    void settle_language_answers();
+    void settle_language_answers(LspRequestKind kind);
+    void settle_hover_answer();
+    void settle_definition_answer();
     void land_definition(const std::vector<core::LspLocation> &locations);
+    // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
+    // メニュー・IME の変換が開いていない。awaits_nothing は問いを出したときと同じ「何も待って
+    // いない」状態（Vim は NORMAL でオペレータ・回数・レジスタ・次の鍵の待ちが無い／通常モードは
+    // 選択の起点が問いのときのまま）。
+    [[nodiscard]] bool faces_closed() const noexcept;
+    [[nodiscard]] bool awaits_nothing() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -1646,6 +1657,11 @@ class EditorController final
     // この意図が頼む待ちのタイマー（EditorDelivery.map_timer）。apply の入口で空に戻し、待ちを
     // 積む・流す所だけが置く。
     std::optional<MapTimer> map_timer_;
+    // 窓が非アクティブか（WindowDeactivated で真・使う人の操作の意図で偽）。非アクティブの間に
+    // 届いた hover の答えは札にしない（#1843 のレビュー R3）。
+    bool window_inactive_ = false;
+    // 定義の問いを出したときの選択の起点（答えが届いたときに同じなら跳ぶ・R1）。
+    std::optional<core::Offset> definition_anchor_;
     // この意図が頼むタブの札の待ちのタイマー（EditorDelivery.tab_tip_timer・#1789）。apply の
     // 入口で空に戻し、札の段を変える所（帯の hover・合図・入口の消す 1 か所）だけが置く。
     std::optional<TabTipTimer> tab_tip_timer_;

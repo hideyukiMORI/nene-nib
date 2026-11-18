@@ -33,8 +33,9 @@ inline constexpr std::size_t hover_tip_max_lines = 12;
                                                 std::uint32_t dpi) noexcept;
 
 // 札の矩形（物理画素）。文の大きさに余白を足した大きさで、キャレットの上（空きを挟む）に置き、
-// 領域 area の上端からはみ出すならキャレットの下に置く。左はキャレットの左端で、領域の右の端の
-// 空きからはみ出すなら左へ寄せ、領域の左端より左へは出さない。
+// 領域 area の上端からはみ出すならキャレットの下に置く（下端からもはみ出すなら下端へ寄せ、上端
+// より上へは出さない）。左はキャレットの左端で、領域の右の端の空きからはみ出すなら左へ寄せ、領域の
+// 左端より左へは出さない。
 [[nodiscard]] LayoutRect hover_tip_rect(const LayoutRect &caret, const LayoutRect &area,
                                         const TabTipMeasure &text) noexcept;
 } // namespace nenenib::core

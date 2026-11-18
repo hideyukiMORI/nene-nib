@@ -73,6 +73,15 @@ class Editing final
     {
     }
 
+    // 設定と前回のタブの一覧の両方を仕込んで controller を作る口（言語サーバーをオンにして、まだ
+    // 読んでいないタブを持つ形・#1834）。
+    Editing(SettingsReading reading, SessionReading listed,
+            const std::function<void(ScriptedFiles &)> &prepare)
+        : settings_(std::move(reading)), session_(std::move(listed)),
+          controller_(prepared_ports(prepare), nenenib::core::Distribution::unpackaged)
+    {
+    }
+
     // 起動の引数と前回のタブの一覧で controller を作る口（ADR 0159 の追補 1・4）。ファイルと読みの
     // 替え玉（裏へ回す境目）を仕込んでから controller を作る。
     Editing(SessionReading listed, const std::vector<nenenib::application::OpenDocument> &initial,

@@ -464,7 +464,7 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     case LspRequestKind::hover:
     case LspRequestKind::definition:
         receive_answer(request, response);
-        settle_language_answers();
+        settle_language_answers(request.kind);
         return;
     }
 }

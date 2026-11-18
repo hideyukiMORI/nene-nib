@@ -300,17 +300,24 @@ void EditorController::land_project_hit()
     }
 }
 
-// 着地の位置 → アクティブな本文の行と桁（ADR 0190 の決定 7）。言語サーバーの Position は開いた
-// 後の本文で lsp_offset_of の 1 本が写し、行が本文の外なら末尾。
+// 着地の位置 → アクティブな本文の行と桁（ADR 0190 の決定 7）。選択肢ごとの写し先を std::visit で
+// 引くので、LandingPlace に選択肢を足すと写し先が足りずにコンパイルが落ちる（CPP-002）。
 core::TextPosition EditorController::landed_position(const LandingPlace &place) const
 {
-    if (const auto *const position = std::get_if<core::TextPosition>(&place); position != nullptr)
-    {
-        return *position;
-    }
+    return std::visit([this](const auto &value) { return this->landed_position(value); }, place);
+}
+
+// 全文検索の当たりは行と桁のまま。
+core::TextPosition EditorController::landed_position(const core::TextPosition &position) const
+{
+    return position;
+}
+
+// 言語サーバーの Position は開いた後の本文で lsp_offset_of の 1 本が写し、行が本文の外なら末尾。
+core::TextPosition EditorController::landed_position(const core::LspPosition &position) const
+{
     const core::TextBuffer &text = state_.text();
-    const auto at =
-        core::lsp_offset_of(text, std::get<core::LspPosition>(place), language_server_.encoding);
+    const auto at = core::lsp_offset_of(text, position, language_server_.encoding);
     return text.position_of(at.value_or(core::Offset{text.size_bytes()}));
 }
 

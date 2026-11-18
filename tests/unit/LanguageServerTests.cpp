@@ -2,6 +2,7 @@
 // ScriptedLanguageServer で、起動 → `initialize` → 答え → `initialized`・失敗の値・再起動の
 // 上限 3・tick の古さ・設定の on / off で start / stop・`:set lsp` の要求を確かめる。本物の
 // clangd も窓も使わない。
+#include "CancelCommand.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "CommandText.hpp"
@@ -36,6 +37,7 @@
 #include "LspDiagnostics.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenContextMenu.hpp"
 #include "OpenDocument.hpp"
 #include "OperationBindings.hpp"
 #include "OperationKey.hpp"
@@ -54,6 +56,10 @@
 #include "ServerFailure.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
+#include "Session.hpp"
+#include "SessionTab.hpp"
+#include "SplitLayout.hpp"
+#include "SplitPane.hpp"
 #include "StatusItems.hpp"
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
@@ -63,6 +69,7 @@
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
 #include "VimAction.hpp"
+#include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimKeyTable.hpp"
@@ -1590,6 +1597,190 @@ void verify_hover_tip_core()
                                     core::LayoutRect{100, 50, 250, 600},
                                     text) == core::LayoutRect{100, 144, 320, 196},
            "the tip sits above the caret, below it when there is no room, inside the area");
+    expect(core::hover_tip_rect(core::LayoutRect{300, 60, 302, 80},
+                                core::LayoutRect{100, 50, 900, 120},
+                                text) == core::LayoutRect{300, 68, 520, 120} &&
+               core::hover_tip_rect(core::LayoutRect{300, 60, 302, 80},
+                                    core::LayoutRect{100, 50, 900, 90},
+                                    text) == core::LayoutRect{300, 50, 520, 102},
+           "a tip that fits neither above nor below is moved up to the bottom of the area");
+}
+
+// ---------------------------------------------- #1843 のレビューの直し（R1〜R3・R5・R6）
+
+// 窓の 1 打鍵と同じ意図（apply）で Vim の文字の鍵を流す。
+void keyed(Editing &editing, std::u32string_view keys)
+{
+    for (const char32_t code : keys)
+    {
+        static_cast<void>(editing.controller().apply_frame(
+            app::VimKeyPress{core::VimKey{core::VimCharacter{code}}}));
+    }
+}
+
+// `gd` の後に keys を打ってから、定義の要求に two.cpp の場所で答えた後のアクティブな経路。
+[[nodiscard]] std::string defined_after(std::u32string_view keys)
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    keyed(editing, U"gd");
+    const std::int64_t asked = last_request(editing, "textDocument/definition");
+    keyed(editing, keys);
+    const auto frame = answered_frame(editing, asked, two_location);
+    return message(frame).empty() ? active_path(editing) : "<message>";
+}
+
+// R1: 答えが届いたときに Vim が何かを待っていれば跳ばない（知らせない）。
+void verify_definition_waits_for_nothing()
+{
+    expect(defined_after(U"") == second_path, "an idle NORMAL lands on the answer");
+    expect(defined_after(U"d") == source_path, "a pending operator drops the definition answer");
+    expect(defined_after(U"v") == source_path, "VISUAL drops the definition answer");
+    expect(defined_after(U"i") == source_path, "INSERT drops the definition answer");
+    expect(defined_after(U"\"a") == source_path, "a chosen register drops the definition answer");
+    expect(defined_after(U"3") == source_path, "a count drops the definition answer");
+    expect(defined_after(U"g") == source_path, "a pending g drops the definition answer");
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    keyed(editing, U"gdd");
+    static_cast<void>(
+        answered_frame(editing, last_request(editing, "textDocument/definition"), two_location));
+    keyed(editing, U"d");
+    expect(active_path(editing) == source_path &&
+               whole_vim_body(editing.controller()) != "int main() {}\n",
+           "gd, d, a late answer and d delete the line in the document that was asked about");
+
+    Editing plain(lsp_settings(true));
+    capable(plain);
+    static_cast<void>(
+        plain.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition}));
+    const std::int64_t asked = last_request(plain, "textDocument/definition");
+    static_cast<void>(plain.controller().apply_frame(app::OpenContextMenu{10, 40, std::nullopt}));
+    static_cast<void>(answered_frame(plain, asked, two_location));
+    expect(active_path(plain) == source_path,
+           "an open context menu drops the definition answer in the ordinary mode");
+}
+
+// R2 / R3 / R6: 入力行が開いている間・窓が非アクティブの間に届いた hover は札にしない。空白だけの
+// 答えは「情報がありません」。
+void verify_hover_answer_needs_a_free_window()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    keyed(editing, U"K");
+    const std::int64_t lined = last_request(editing, "textDocument/hover");
+    keyed(editing, U":");
+    const auto with_line = answered_frame(editing, lined, R"({"contents":"doc"})");
+    expect(!with_line.hover.has_value() &&
+               !editing.controller().language_answers().hover.has_value(),
+           "a hover answer that arrives while a command line is open is dropped");
+    static_cast<void>(editing.controller().apply_frame(app::CancelCommand{}));
+    keyed(editing, U"K");
+    const std::int64_t away = last_request(editing, "textDocument/hover");
+    static_cast<void>(editing.controller().apply_frame(app::WindowDeactivated{}));
+    const auto inactive = answered_frame(editing, away, R"({"contents":"doc"})");
+    expect(!inactive.hover.has_value() && message(inactive).empty() &&
+               !editing.controller().language_answers().hover.has_value(),
+           "a hover answer that arrives in an inactive window is dropped without a notice");
+    keyed(editing, U"K");
+    const auto back = answered_frame(editing, last_request(editing, "textDocument/hover"),
+                                     R"({"contents":"doc"})");
+    expect(back.hover == std::optional<std::string>{"doc"},
+           "a key in the window makes it active again and the next hover shows");
+    keyed(editing, U"K");
+    const auto blank = answered_frame(editing, last_request(editing, "textDocument/hover"),
+                                      R"({"contents":"  \n \t "})");
+    expect(!blank.hover.has_value() && message(blank) == "情報がありません",
+           "a hover of white space only shows no tip and tells there is no information");
+}
+
+// R5: 録画と再生・`.`・`map` の右辺の `gd` `K`。再生は失敗の印で後ろの鍵を捨てる（表に無い鍵と
+// 同じ）が、問いは出る。`.` の記録には載らない。
+void verify_queries_in_replays()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto &server = editing.language_server();
+    keyed(editing, U"qaKxq");
+    expect(server.requests("textDocument/hover").size() == 1 &&
+               whole_vim_body(editing.controller()) == "nt main() {}\n",
+           "K is recorded like any key and the typed x after it runs");
+    keyed(editing, U"@a");
+    expect(server.requests("textDocument/hover").size() == 2 &&
+               whole_vim_body(editing.controller()) == "nt main() {}\n",
+           "a replayed K asks again and ends the replay like an unbound key");
+    keyed(editing, U"xgd.");
+    expect(server.requests("textDocument/definition").size() == 1 &&
+               whole_vim_body(editing.controller()) == " main() {}\n",
+           "gd is not the last change: the dot repeats the x before it");
+    static_cast<void>(run_ex(editing.controller(), "nnoremap Q gd"));
+    static_cast<void>(run_ex(editing.controller(), "nnoremap Z Kx"));
+    keyed(editing, U"Q");
+    expect(server.requests("textDocument/definition").size() == 2,
+           "a map whose right side is gd asks for the definition");
+    keyed(editing, U"Z");
+    expect(server.requests("textDocument/hover").size() == 3 &&
+               whole_vim_body(editing.controller()) == " main() {}\n",
+           "K in a map asks and drops the rest of the map like an unbound key");
+
+    Editing off;
+    open_vim_document(off, "abc def\n");
+    keyed(off, U"qaKxq@a");
+    expect(whole_vim_body(off.controller()) == "bc def\n" && off.language_server().touches() == 0,
+           "without a server the recorded K fails in the replay as it did before");
+}
+
+// R5: 2 枠に分けていても、操作中の枠のキャレットで問い、その枠が着地する。
+void verify_definition_in_split()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    applied(editing.controller(), app::SplitPane{core::SplitLayout::vertical});
+    const auto frame = defined(editing, main_location);
+    expect(landed_at(frame, 1, 5) && message(frame).empty(),
+           "gd lands in the active pane of a split window");
+    const auto tip = hovered(editing, R"({"contents":"doc"})");
+    expect(tip.hover == std::optional<std::string>{"doc"}, "K shows the tip in a split window");
+}
+
+// R5: まだ読んでいないタブの文書への着地は、読んでから着地する（reach_tab の道）。
+void verify_definition_in_unread_tab()
+{
+    const auto listed = [](std::string_view path, std::size_t rank)
+    {
+        return app::SessionTab{path_of(path),
+                               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                               core::LineNumber{1}, rank};
+    };
+    Editing editing(lsp_settings(true),
+                    SessionReading{std::optional<app::Session>{
+                        app::Session{{listed(source_path, 0), listed(second_path, 1)}, 0}}},
+                    [](ScriptedFiles &files)
+                    {
+                        files.hold_at(std::string(source_path),
+                                      Bytes{std::string("int main() {}\n")});
+                        files.hold_at(std::string(second_path), Bytes{std::string("abc\n")});
+                    });
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    static_cast<void>(delivered(editing, app::ServerMessage{std::string{capable_answer}}));
+    const std::size_t reads = editing.files().reads();
+    static_cast<void>(
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition}));
+    const auto frame =
+        answered_frame(editing, last_request(editing, "textDocument/definition"), two_location);
+    expect(active_path(editing) == second_path && landed_at(frame, 1, 3) &&
+               editing.files().reads() > reads,
+           "a definition in a tab not read yet reads the tab and lands in it");
+}
+
+void verify_language_query_reviews()
+{
+    verify_definition_waits_for_nothing();
+    verify_hover_answer_needs_a_free_window();
+    verify_queries_in_replays();
+    verify_definition_in_split();
+    verify_definition_in_unread_tab();
 }
 
 void verify_language_queries()
@@ -1605,6 +1796,7 @@ void verify_language_queries()
     verify_hover_tip_edges();
     verify_query_operations();
     verify_hover_tip_core();
+    verify_language_query_reviews();
 }
 } // namespace
 
