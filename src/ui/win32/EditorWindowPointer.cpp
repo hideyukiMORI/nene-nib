@@ -1,6 +1,8 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "CompletionPointer.hpp"
+
 #include "BodyLayout.hpp"
 #include "CaptionPress.hpp"
 #include "ChooseStartEntry.hpp"
@@ -110,6 +112,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_MOUSELEAVE:
         // 窓の外で離した押しは残さない（捕まえを取らないので離しが届かない・追補 24）。
         start_pressed_ = std::nullopt;
+        lose_completion_press(message);
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
         hover(std::nullopt);
@@ -122,6 +125,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
             caption_step(message, core::TitleBarTarget{core::TitleBarHit::none, 0}, left_pressed_)
                 .first;
         start_pressed_ = std::nullopt;
+        lose_completion_press(message);
         end_minimap_drag(message);
         lose_explorer_divider();
         end_selection_drag();
@@ -379,7 +383,8 @@ void EditorWindow::release_title_bar(LPARAM data)
 void EditorWindow::press_middle(LPARAM data)
 {
     middle_pressed_ = std::nullopt;
-    if (controller_.command_palette_active())
+    // 補完の面の上の中ボタンは面を閉じるだけ（#1844 の L3b）。
+    if (controller_.command_palette_active() || close_completion_under(data))
     {
         return;
     }
@@ -531,11 +536,15 @@ void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
 {
     // 起動画面の行で始まった押しの列（ダブル・トリプルクリック）は本文へ渡さない。1 回目の離しで
     // 開いた文書の語を 2 回目の押しが選ばない（ADR 0172 の追補 24）。
-    if (clicks != application::PointerClicks::single && start_click_began_)
+    // 補完の面の行で始まった押しの列も同じ（1 回目の離しで確定して面が閉じた後の 2 回目の押しが、
+    // 面の下の語を選ばない・#1844 の R1b）。
+    if ((clicks != application::PointerClicks::single && start_click_began_) ||
+        completion_swallows_press(clicks, completion_click_began_))
     {
         return;
     }
     start_click_began_ = false;
+    completion_click_began_ = false;
     // 右クリックのメニューが開いている間の押しはメニューへ（外なら閉じるだけ・#1051）。
     if (press_context_menu(data))
     {

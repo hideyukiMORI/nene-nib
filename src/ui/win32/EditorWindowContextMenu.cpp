@@ -63,6 +63,12 @@ bool EditorWindow::in_other_text_body(POINT point) const
 void EditorWindow::press_right(LPARAM data)
 {
     const auto point = point_of(data);
+    // 補完の面の上の右の押しは面を閉じるだけで、面の下の位置でメニューを開かない（#1844 の L3b）。
+    if (close_completion_under(data))
+    {
+        right_pressed_ = std::nullopt;
+        return;
+    }
     // 開いているメニューの外の右の押しは閉じてから、新しい点の押しとして覚える（中は何もしない）。
     if (controller_.context_menu_active())
     {

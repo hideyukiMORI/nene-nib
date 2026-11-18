@@ -191,6 +191,8 @@ class EditorWindow final
     // 面が受けたら真で、本文へ渡さない。
     [[nodiscard]] bool press_completion(LPARAM data);
     [[nodiscard]] bool release_completion(LPARAM data);
+    void lose_completion_press(UINT message);
+    [[nodiscard]] bool close_completion_under(LPARAM data);
     [[nodiscard]] bool scroll_completion(std::int32_t delta, LPARAM data);
     [[nodiscard]] bool in_text_body(POINT point) const;
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
@@ -507,6 +509,8 @@ class EditorWindow final
     bool context_menu_pressed_ = false;
     // 補完の面の上で押した行（離すまで・面の余白の押しは値なし）と、面のホイールの余り。
     std::optional<std::size_t> completion_pressed_;
+    // 補完の面の上で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・#1844 の R1b）。
+    bool completion_click_began_ = false;
     std::int32_t completion_wheel_remainder_ = 0;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;

@@ -9,6 +9,7 @@
 #include "CompletionFaceLayout.hpp"
 #include "CompletionFaceRequest.hpp"
 #include "CompletionPainter.hpp"
+#include "CompletionPointer.hpp"
 #include "CompletionRowView.hpp"
 #include "CompletionSource.hpp"
 #include "CompletionView.hpp"
@@ -16,6 +17,7 @@
 #include "DirectWriteFactory.hpp"
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
+#include "PointerClicks.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "SoftwareTarget.hpp"
 #include "VimSpecialKey.hpp"
@@ -180,10 +182,33 @@ void verify_vim_completion_keys()
                !vim_completion_key('Q', true, true, true).has_value(),
            "a key without Ctrl alone, and a key that is not a completion key, are not sent");
 }
+
+// #1844 の再確認 R1b・L1b・L3b: 面のマウスの守り。面の上で始まった押しの列の 2 回目・3 回目は本文へ
+// 渡さない・窓の外へ出た / 捕まえが変わったら押した行の覚えを下ろす・面の上の右と中の押しは面が
+// 受ける。
+void verify_completion_pointer_guards()
+{
+    using nenenib::application::PointerClicks;
+    using nenenib::ui::win32::completion_press_lost;
+    using nenenib::ui::win32::completion_swallows_press;
+    using nenenib::ui::win32::completion_takes_button;
+    expect(completion_swallows_press(PointerClicks::double_, true) &&
+               completion_swallows_press(PointerClicks::triple, true) &&
+               !completion_swallows_press(PointerClicks::single, true) &&
+               !completion_swallows_press(PointerClicks::double_, false),
+           "the second and third press of a click that began on the face do not reach the text");
+    expect(completion_press_lost(WM_MOUSELEAVE) && completion_press_lost(WM_CAPTURECHANGED) &&
+               !completion_press_lost(WM_MOUSEMOVE) && !completion_press_lost(WM_LBUTTONUP),
+           "leaving the window or losing the capture forgets the row pressed on the face");
+    expect(completion_takes_button(true, true) && !completion_takes_button(true, false) &&
+               !completion_takes_button(false, true),
+           "a right or middle press on the visible face is taken by the face");
+}
 } // namespace
 
 void verify_completion_paint()
 {
+    verify_completion_pointer_guards();
     verify_vim_completion_keys();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
