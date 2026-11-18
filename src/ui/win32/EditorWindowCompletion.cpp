@@ -9,6 +9,7 @@
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
 #include "CompletionFace.hpp"
+#include "CompletionPointer.hpp"
 #include "CompletionStep.hpp"
 #include "OpenCompletion.hpp"
 #include "ScrollCompletion.hpp"
@@ -35,11 +36,12 @@ void EditorWindow::run_complete()
 
 // 面が見えている間の鍵を面が受けたか。修飾つきの鍵（Shift+矢印の選択・Ctrl の操作）は受けずに
 // 今までの道へ流し、controller がその意図の前に面を閉じる。Enter・Tab・Esc の後の WM_CHAR は
-// 制御文字なので type_character が捨てる。
+// 制御文字なので type_character が捨てる。Vim のモードの面は engine が持つので、ここでは受けず、
+// どの鍵も Vim の鍵の道へ流す（Esc は確定して INSERT を抜ける・Enter は確定して改行・#1845）。
 bool EditorWindow::take_completion_key(UINT message, WPARAM word)
 {
-    if (message != WM_KEYDOWN || !controller_.completion_active() || held(VK_CONTROL) ||
-        held(VK_MENU) || held(VK_SHIFT))
+    if (message != WM_KEYDOWN || mode_ == core::EditMode::vim || !controller_.completion_active() ||
+        held(VK_CONTROL) || held(VK_MENU) || held(VK_SHIFT))
     {
         return false;
     }
@@ -104,6 +106,31 @@ bool EditorWindow::press_completion(LPARAM data)
         return false;
     }
     completion_pressed_ = renderer_->completion_row_at(point.x, point.y);
+    completion_click_began_ = true;
+    return true;
+}
+
+// 窓の外へ出た・捕まえが変わったときに、面の上で押した行の覚えを下ろす（次の離しを呑まない・
+// #1844 の L1b）。面が閉じた後の離しは release_completion が覚えを消すだけで確定しない。
+void EditorWindow::lose_completion_press(UINT message)
+{
+    if (completion_press_lost(message))
+    {
+        completion_pressed_.reset();
+    }
+}
+
+// 面の上の右ボタン・中ボタンの押しは面を閉じるだけ（本文へ渡さない・#1844 の L3b）。受けたら真。
+bool EditorWindow::close_completion_under(LPARAM data)
+{
+    const POINT point{low_word_of(data), high_word_of(data)};
+    if (!completion_takes_button(controller_.completion_active(),
+                                 renderer_ != nullptr &&
+                                     renderer_->completion_covers(point.x, point.y)))
+    {
+        return false;
+    }
+    send(application::CloseCompletion{});
     return true;
 }
 

@@ -49,7 +49,10 @@ CompletionFaceLayout completion_face_layout(const CompletionFaceRequest &request
     // 1 行ぶんの高さも無い窓では、面を bounds の中へ寄せる（外へ出さない）。
     const auto last_top = std::max(request.bounds.top, request.bounds.bottom - height);
     const auto top = std::clamp(wanted_top, request.bounds.top, last_top);
-    const std::size_t first = request.selected >= rows ? request.selected + 1 - rows : 0;
+    // 選んでいる行が無い（selected が rows 以上・Vim の補完が元の接頭辞へ戻った 1 歩・#1845）ときは
+    // 先頭から出す。
+    const bool chosen = request.selected < request.rows;
+    const std::size_t first = chosen && request.selected >= rows ? request.selected + 1 - rows : 0;
     return CompletionFaceLayout{LayoutRect{left, top, left + width, top + height},
                                 first,
                                 rows,

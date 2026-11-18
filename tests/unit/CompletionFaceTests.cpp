@@ -730,6 +730,7 @@ void verify_completion_face_contracts()
     verify_step_forgotten();
     verify_click_and_wheel();
     verify_commits();
+    verify_vim_insert_completion();
 }
 
 void verify_completion_face_scope()

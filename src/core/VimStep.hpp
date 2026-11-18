@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CompletionDirection.hpp"
 #include "ExGlobalRequest.hpp"
 #include "ExLinesRequest.hpp"
 #include "ExSubstituteRequest.hpp"
@@ -8,6 +9,7 @@
 #include "SubstituteAnswer.hpp"
 #include "VimChangeMark.hpp"
 #include "VimCommandMotion.hpp"
+#include "VimCompletionOffer.hpp"
 #include "VimCount.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
@@ -23,8 +25,10 @@
 #include "VimWantedColumn.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace nenenib::core
@@ -170,6 +174,39 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // の形（vim_clipboard_text_of）と同じなら、自分が書いた本文として無名を種類ごと残す。`"0`〜`"9`
 // `"-` 名前つき・`last_macro` は変えない。読めなかった・空の本文は空のレジスタとして置く。
 [[nodiscard]] VimState vim_unnamed_loaded(const VimState &state, VimRegister value);
+
+// 鍵 key が INSERT の補完を始めるか（#1845・ADR 0169 の決定 3）。向きを返すのは、INSERT で
+// 1 鍵の引数を待たず、補完が開いていないときの `Ctrl-n`（forward）と `Ctrl-p`（backward）だけ。
+// controller は vim_step を呼ぶ直前にこれを見て、向きがあれば候補の列をその向きで作り、
+// vim_completion_offered で置く（`"+` の写しと同じ形・ADR 0051）。何が始める鍵かを決めるのは
+// engine の側である（ARC-004）。
+[[nodiscard]] std::optional<CompletionDirection> vim_starts_completion(const VimState &state,
+                                                                       const VimKey &key) noexcept;
+
+// 補完の候補の写しを置いたあとの状態（#1845）。写しを置くだけで、ほかは変えない。写しは次の
+// vim_step の出口で消える。
+[[nodiscard]] VimState vim_completion_offered(const VimState &state, VimCompletionOffer offer);
+
+// 開いている補完の候補の列を入れ替えたあとの状態（#1845・言語サーバーの答えが後から届いたとき・
+// ADR 0190 の決定 5）。選んでいる語は本文に入っているので動かさず、新しい列の中の同じ綴りの位置を
+// 選び直す（元の接頭辞を選んでいれば元の接頭辞のまま）。新しい列に選んでいる語が無ければ何も
+// 変えない。補完が開いていなければ何も変えない。
+[[nodiscard]] VimState
+vim_completion_reoffered(const VimState &state,
+                         std::shared_ptr<const std::vector<std::string>> words);
+
+// 開いている補完の index 番目の候補を入れて確定する 1 歩（#1845・補完の面の行のクリック・ADR 0190
+// の決定 5）。効果は語の頭からキャレットまでをその語に置き換える 1 つ（INSERT の 1 単位に吸収）で、
+// 補完を閉じ、鍵で選んで確定したときと同じに `.` の記録と回数の鍵の列に打った本文として足す。
+// 鍵ではないのでマクロの録画には積まない。補完が開いていないか index が列の外なら何もしない。
+[[nodiscard]] VimStep vim_completion_chosen(const VimState &state, const VimEditorView &view,
+                                            std::size_t index);
+
+// 開いている補完を確定して閉じたあとの状態（#1845）。本文は選んでいた語のままで、鍵で確定した
+// ときと同じに、選んでいた語を打った本文として `.` の記録と回数の鍵の列に足す。engine の外の
+// 出来事で面を閉じるとき（ホイール・窓の非アクティブ・面の意図など）に controller が呼ぶ。候補の
+// 写しも消す。開いていなければ何も変えない。
+[[nodiscard]] VimState vim_completion_settled(const VimState &state);
 
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む

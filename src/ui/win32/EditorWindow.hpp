@@ -199,6 +199,8 @@ class EditorWindow final
     // 面が受けたら真で、本文へ渡さない。
     [[nodiscard]] bool press_completion(LPARAM data);
     [[nodiscard]] bool release_completion(LPARAM data);
+    void lose_completion_press(UINT message);
+    [[nodiscard]] bool close_completion_under(LPARAM data);
     [[nodiscard]] bool scroll_completion(std::int32_t delta, LPARAM data);
     [[nodiscard]] bool in_text_body(POINT point) const;
 
@@ -296,6 +298,8 @@ class EditorWindow final
     void toggle_mode();
     // タブの鍵（ADR 0056 の決定 10）。扱ったら true。
     [[nodiscard]] bool press_tab_key(WPARAM word);
+    // Vim の INSERT の補完の鍵（#1845）。扱ったら true。
+    [[nodiscard]] bool press_vim_completion_key(WPARAM word);
     void run_tab_command(core::TabCommand command);
     void press_command_key(WPARAM word);
     void press_command_control_key(WPARAM word);
@@ -542,6 +546,8 @@ class EditorWindow final
     bool context_menu_pressed_ = false;
     // 補完の面の上で押した行（離すまで・面の余白の押しは値なし）と、面のホイールの余り。
     std::optional<std::size_t> completion_pressed_;
+    // 補完の面の上で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・#1844 の R1b）。
+    bool completion_click_began_ = false;
     std::int32_t completion_wheel_remainder_ = 0;
     // 設定の面の上で押した部品（離したときに同じ部品なら動かす）・ホイールの余り・探す欄へ打つ
     // 文字の上位サロゲート（#1836）。

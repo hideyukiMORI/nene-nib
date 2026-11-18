@@ -1232,6 +1232,20 @@ class EditorController final
     [[nodiscard]] core::OffsetRange completion_range(core::Offset origin,
                                                      const core::CompletionEntry &entry) const;
     [[nodiscard]] std::optional<CompletionView> completion_view() const;
+    // Vim の INSERT の補完（#1845・ADR 0169 の決定 3）。engine が形を持ち、controller は補完を
+    // 始める鍵の直前に候補の写しを置き（offer）、鍵の後に engine の状態を面へ写す（follow）。
+    void offer_vim_completion(const core::VimKey &key);
+    void follow_vim_completion();
+    void choose_vim_completion(std::optional<std::size_t> row);
+    void settle_vim_completion(CompletionSession &session);
+    void merge_vim_completion_answer(CompletionSession &session,
+                                     const core::LspCompletionList &list);
+    [[nodiscard]] std::optional<core::LspRange>
+    vim_completion_span(core::Offset origin, std::string_view original) const;
+    [[nodiscard]] std::optional<std::string>
+    vim_completion_text(const core::LspRange &typed, core::Offset origin,
+                        const core::CompletionEntry &entry) const;
+
     // ---------------------------------------------------------------- 設定の面（ADR 0170・#1016）
     // EditorControllerSettings.cpp の群だけが settings_ を読み書きする（2026-11-18 の追補 2）。
     void accept(const OpenSettings &);

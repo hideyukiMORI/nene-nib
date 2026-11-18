@@ -9,15 +9,23 @@
 #include "CompletionFaceLayout.hpp"
 #include "CompletionFaceRequest.hpp"
 #include "CompletionPainter.hpp"
+#include "CompletionPointer.hpp"
 #include "CompletionRowView.hpp"
 #include "CompletionSource.hpp"
 #include "CompletionView.hpp"
 #include "ContextMenuText.hpp"
 #include "DirectWriteFactory.hpp"
+#include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "LayoutRect.hpp"
+#include "OperationBindings.hpp"
+#include "OperationShortcut.hpp"
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
+#include "PointerClicks.hpp"
 #include "SoftwareTarget.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimSpecialKeys.hpp"
 #include "WindowChecks.hpp"
 
 #include <algorithm>
@@ -150,10 +158,89 @@ void verify_face(SoftwareTarget &target, const ContextMenuText &text, const core
     static_cast<void>(paint(view));
     expect(held > 0 && layouts.size() == held, "drawing the same face again makes no new layouts");
 }
+
+// #1845（ADR 0169 の決定 3）: Vim の INSERT の補完の鍵の振り分け。Ctrl+N は INSERT で常に engine の
+// Ctrl-n、Ctrl+P・Ctrl+E・Ctrl+Y は補完の面が開いている間だけ engine の鍵で、閉じていれば今までの道
+// （Ctrl+P はファイルの一覧）へ流す。INSERT の外・Ctrl 以外の修飾つき・ほかの鍵は写さない。
+void verify_vim_completion_keys()
+{
+    using nenenib::core::VimSpecialKey;
+    using nenenib::ui::win32::vim_completion_key;
+    expect(vim_completion_key('N', true, true, false) == VimSpecialKey::control_n &&
+               vim_completion_key('N', true, true, true) == VimSpecialKey::control_n,
+           "Ctrl+N is the engine key Ctrl-n in the Vim INSERT mode, face open or closed");
+    expect(!vim_completion_key('P', true, true, false).has_value() &&
+               !vim_completion_key('E', true, true, false).has_value() &&
+               !vim_completion_key('Y', true, true, false).has_value(),
+           "with no face shown (closed, or only waiting for the server) Ctrl+P goes on to the file "
+           "list and Ctrl+E / Ctrl+Y stay as they were");
+    expect(vim_completion_key('P', true, true, true) == VimSpecialKey::control_p &&
+               vim_completion_key('E', true, true, true) == VimSpecialKey::control_e &&
+               vim_completion_key('Y', true, true, true) == VimSpecialKey::control_y,
+           "with the face open Ctrl+P is the previous candidate and Ctrl+E / Ctrl+Y end the "
+           "completion");
+    expect(!vim_completion_key('N', true, false, true).has_value() &&
+               !vim_completion_key('P', true, false, true).has_value(),
+           "outside the Vim INSERT mode no completion key is sent");
+    expect(!vim_completion_key('N', false, true, true).has_value() &&
+               !vim_completion_key('Q', true, true, true).has_value(),
+           "a key without Ctrl alone, and a key that is not a completion key, are not sent");
+}
+
+// 補完の 2 つ目の鍵（施主決定 D104）: 通常モードの Ctrl+I は操作「補完」で、Vim のモードの
+// Ctrl+I は今までどおり操作に当たらない。Ctrl+I の WM_CHAR（Tab・0x09）は Ctrl を押している間の
+// 文字として type_character が捨てるので、本文に Tab は入らない。素の I・素の Tab・Shift+Tab は
+// 操作の鍵にならない（今までの道）。
+void verify_second_completion_key()
+{
+    using nenenib::core::EditMode;
+    using nenenib::core::EditorOperation;
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::operation_chord;
+    const auto chord = operation_chord('I', true, false);
+    expect(chord.has_value() &&
+               operation_for(chord.value(), EditMode::ordinary) == EditorOperation::complete,
+           "Ctrl+I opens the completion in the ordinary mode");
+    expect(chord.has_value() && !operation_for(chord.value(), EditMode::vim).has_value(),
+           "Ctrl+I is not an operation in the Vim mode");
+    const auto spaced = operation_chord(VK_SPACE, true, false);
+    expect(spaced.has_value() &&
+               operation_for(spaced.value(), EditMode::ordinary) == EditorOperation::complete,
+           "Ctrl+Space still opens the completion");
+    expect(!operation_chord('I', false, false).has_value() &&
+               !operation_chord(VK_TAB, false, false).has_value() &&
+               !operation_chord(VK_TAB, false, true).has_value(),
+           "a plain I, Tab and Shift+Tab are not operation chords");
+}
+
+// #1844 の再確認 R1b・L1b・L3b: 面のマウスの守り。面の上で始まった押しの列の 2 回目・3 回目は本文へ
+// 渡さない・窓の外へ出た / 捕まえが変わったら押した行の覚えを下ろす・面の上の右と中の押しは面が
+// 受ける。
+void verify_completion_pointer_guards()
+{
+    using nenenib::application::PointerClicks;
+    using nenenib::ui::win32::completion_press_lost;
+    using nenenib::ui::win32::completion_swallows_press;
+    using nenenib::ui::win32::completion_takes_button;
+    expect(completion_swallows_press(PointerClicks::double_, true) &&
+               completion_swallows_press(PointerClicks::triple, true) &&
+               !completion_swallows_press(PointerClicks::single, true) &&
+               !completion_swallows_press(PointerClicks::double_, false),
+           "the second and third press of a click that began on the face do not reach the text");
+    expect(completion_press_lost(WM_MOUSELEAVE) && completion_press_lost(WM_CAPTURECHANGED) &&
+               !completion_press_lost(WM_MOUSEMOVE) && !completion_press_lost(WM_LBUTTONUP),
+           "leaving the window or losing the capture forgets the row pressed on the face");
+    expect(completion_takes_button(true, true) && !completion_takes_button(true, false) &&
+               !completion_takes_button(false, true),
+           "a right or middle press on the visible face is taken by the face");
+}
 } // namespace
 
 void verify_completion_paint()
 {
+    verify_completion_pointer_guards();
+    verify_second_completion_key();
+    verify_vim_completion_keys();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)
