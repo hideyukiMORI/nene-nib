@@ -1,8 +1,8 @@
-// INSERT の補完（`Ctrl-n` `Ctrl-p` `Ctrl-e` `Ctrl-y`・#1845・ADR 0169 の決定 3）。Vim の
-// insexpand.c の形を engine が持つ: 選ぶたびに選んだ語を本文に入れ、輪は「候補の列 ＋
-// 元の接頭辞」、`Ctrl-e` は 元の接頭辞へ戻して閉じ、`Ctrl-y` とほかの鍵は確定して閉じる。候補は
-// controller が置いた写し （VimState.completion_offer）で、engine は語の表にも port
-// にも触れない（ADR 0051 と同じ形）。
+// INSERT の補完（`Ctrl-n` `Ctrl-p` `Ctrl-e` `Ctrl-y`・#1845・ADR 0169 の決定 3）。
+// Vim の insexpand.c の形を engine が持つ。選ぶたびに選んだ語を本文に入れ、輪は
+// 「候補の列 ＋ 元の接頭辞」。`Ctrl-e` は元の接頭辞へ戻して閉じ、`Ctrl-y` とほかの鍵は
+// 確定して閉じる。候補は controller が置いた写し（VimState.completion_offer）で、engine は
+// 語の表にも port にも触れない（ADR 0051 と同じ形）。
 // `.` と回数の記録には補完の鍵を残さず、確定した語を打った本文として足す（Vim の
 // ins_compl_fixRedoBufForLeader・oracle で実測: `cwa<C-n><Esc>` の後の `.` は同じ語を入れる）。
 #include "VimStepDetail.hpp"
@@ -10,8 +10,6 @@
 #include "CompletionDirection.hpp"
 #include "EditBoundary.hpp"
 #include "Utf8.hpp"
-#include "VimChange.hpp"
-#include "VimChangeMark.hpp"
 #include "VimCharacterBoundary.hpp"
 #include "VimCompletionOffer.hpp"
 #include "VimInsertCompletion.hpp"
@@ -225,6 +223,12 @@ VimStep completion_stepped(const VimState &state, const VimEditorView &view,
     {
         return started_completion(state, view, direction);
     }
+    // 列が空（言語サーバーの答えを待つだけ）の間は輪が元の接頭辞の 1 つなので、歩いても本文は
+    // 変わらない。置き換えを返さない（同じ本文への置き換えを履歴に積まない・#1850 の S1）。
+    if (state.insert_completion->words->empty())
+    {
+        return VimStep{state, VimNoEffect{}};
+    }
     VimInsertCompletion completion = *state.insert_completion;
     // 輪は「候補の列 ＋ 元の接頭辞」。列の向きと同じ鍵は次へ、逆の鍵は前へ回る。
     const std::size_t ring = completion.words->size() + single_step;
@@ -243,6 +247,12 @@ VimStep completion_cancelled(const VimState &state, const VimEditorView &view)
     const VimInsertCompletion &completion = *state.insert_completion;
     VimState next = state;
     next.insert_completion = nullptr;
+    // 元の接頭辞を選んでいる（列が空の待ちの間・輪の端）なら本文はもう元の接頭辞なので、閉じる
+    // だけ（#1850 の S1）。
+    if (completion.selected >= completion.words->size())
+    {
+        return VimStep{std::move(next), VimNoEffect{}};
+    }
     return VimStep{std::move(next),
                    replaced_with(completion.begin, view.selection.caret, completion.original)};
 }
@@ -374,11 +384,9 @@ VimStep vim_completion_chosen(const VimState &state, const VimEditorView &view, 
     }
     VimInsertCompletion completion = *state.insert_completion;
     completion.selected = index;
-    const TextPosition at = view.text.position_of(completion.begin);
     VimStep step = selected_step(state, view, std::move(completion));
     step.next = detail::completion_settled(step.next);
-    step.change = VimChangeMark{VimChange::changed, at};
-    return step;
+    return detail::change_marked(view, std::move(step));
 }
 
 VimState vim_completion_settled(const VimState &state)

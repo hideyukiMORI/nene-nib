@@ -157,8 +157,10 @@ constexpr std::array<std::string_view, 3> skip_reasons{
 // type_text）。Ctrl+V / A / X / E / Y は INSERT でだけ通常モードの表へ落ちる（vim_block_key）。
 // Delete は全部のモードで `<Del>`（vim_special_for・#1325）。Shift+Delete は窓が送らないが、
 // fixture の記法に `<S-Del>` は無い。`{ } ( ) [ ]` は WM_CHAR の文字で、上の文字の道を通る。
-// 補完の鍵（#1845・vim_completion_key の写し）。`Ctrl+N` は INSERT でだけ、`Ctrl+P` は INSERT で
-// 補完の面が開いている間だけ Vim の鍵になる。ほかは窓が Vim の鍵を送らない。
+// 補完の鍵（#1845・ui の vim_completion_key の写し。unit の試験は core と application にだけ
+// 依存するので ui の関数は呼べない・eng/architecture.json。面の読みは窓と同じ
+// completion_active）。`Ctrl+N` は INSERT でだけ、`Ctrl+P` は INSERT で 補完の面が開いている間だけ
+// Vim の鍵になる。ほかは窓が Vim の鍵を送らない。
 [[nodiscard]] WindowSend completion_send(const core::VimKey &key, core::VimMode mode,
                                          bool face_open)
 {
@@ -310,7 +312,7 @@ void prepare(Editing &editing, const VimFixture &fixture)
         const WindowSend send =
             controller.command_line_active()
                 ? command_line_send(key)
-                : vim_send(key, controller.vim_state().mode, controller.completion_open());
+                : vim_send(key, controller.vim_state().mode, controller.completion_active());
         if (!send.has_value())
         {
             return std::unexpected(send.error());

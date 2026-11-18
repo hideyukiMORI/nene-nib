@@ -175,12 +175,11 @@ void vim_macro_typed(VimState &state, std::span<const VimKey> keys);
 // `"-` 名前つき・`last_macro` は変えない。読めなかった・空の本文は空のレジスタとして置く。
 [[nodiscard]] VimState vim_unnamed_loaded(const VimState &state, VimRegister value);
 
-// 鍵 key が INSERT の補完を始めるか（#1845・ADR 0169 の決定 3）。INSERT で 1
-// 鍵の引数を待たず、補完が 開いていないときの `Ctrl-n`（forward）と
-// `Ctrl-p`（backward）だけが向きを返す。controller は vim_step
-// を呼ぶ直前にこれを見て、向きがあれば候補の列をその向きで作って vim_completion_offered
-// で置く（`"+` の写しと同じ形・ADR 0051）。何が始める鍵かを決めるのは engine
-// の側である（ARC-004）。
+// 鍵 key が INSERT の補完を始めるか（#1845・ADR 0169 の決定 3）。向きを返すのは、INSERT で
+// 1 鍵の引数を待たず、補完が開いていないときの `Ctrl-n`（forward）と `Ctrl-p`（backward）だけ。
+// controller は vim_step を呼ぶ直前にこれを見て、向きがあれば候補の列をその向きで作り、
+// vim_completion_offered で置く（`"+` の写しと同じ形・ADR 0051）。何が始める鍵かを決めるのは
+// engine の側である（ARC-004）。
 [[nodiscard]] std::optional<CompletionDirection> vim_starts_completion(const VimState &state,
                                                                        const VimKey &key) noexcept;
 

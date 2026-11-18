@@ -1227,7 +1227,8 @@ class EditorController final
     void merge_vim_completion_answer(CompletionSession &session,
                                      const core::LspCompletionList &list);
     [[nodiscard]] std::optional<std::string>
-    vim_completion_text(core::Offset origin, const core::CompletionEntry &entry) const;
+    vim_completion_text(const CompletionSession &session, std::string_view original,
+                        const core::CompletionEntry &entry) const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。

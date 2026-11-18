@@ -391,6 +391,9 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                        VimSpecialKey key);
 [[nodiscard]] std::optional<VimRepeatRecord>
 completion_recording(const VimState &before, const VimRepeatRecord &record, const VimKey &key);
+// 変更の印を立てる 1 か所（VimStepChange.cpp・ADR 0181 の決定 2）。本文を置き換える効果を返す step
+// に changed の印を立て、位置が無ければ効果の既定の位置を書く。
+[[nodiscard]] VimStep change_marked(const VimEditorView &view, VimStep step);
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept;
 [[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept;
 [[nodiscard]] bool moved_nothing(const VimKey &key, const VimEffect &effect) noexcept;

@@ -51,6 +51,13 @@ namespace nenenib::core
 // 特別な鍵は nullopt。
 [[nodiscard]] std::optional<char32_t> vim_number_control_character(VimSpecialKey key) noexcept;
 
+// Ctrl-n と Ctrl-p の文字（0x0E と 0x10・`f` `t` `r` の引数になる・#1845）。key はこの 2 つの
+// どちらか。
+[[nodiscard]] constexpr char32_t vim_completion_control_character(VimSpecialKey key) noexcept
+{
+    return key == VimSpecialKey::control_n ? char32_t{0x0E} : char32_t{0x10};
+}
+
 // `gd` `K` の動作 → 言語サーバーへの問いの種類（ADR 0190 の決定 8）。ほかの動作は nullopt。
 [[nodiscard]] std::optional<LanguageQueryKind> vim_language_query_for(VimAction action) noexcept;
 

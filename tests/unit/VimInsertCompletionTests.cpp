@@ -386,6 +386,14 @@ void verify_waiting()
     expect(!waiting.completion.has_value() && message(waiting).empty() && completing(editing) &&
                editing.controller().completion_open() && body(editing) == "int main() {}\nap\n",
            "with no buffer word the completion waits for the answer without touching the text");
+    // 答えの前の 2 回目の Ctrl-n・Ctrl-p は本文を変えないので、履歴に何も積まず未保存にしない
+    // （#1850 の S1）。
+    const std::size_t revision = editing.controller().history().revision();
+    const auto again = pressed(editing, "<C-n><C-p>");
+    expect(!again.completion.has_value() && completing(editing) &&
+               editing.controller().history().revision() == revision &&
+               body(editing) == "int main() {}\nap\n",
+           "stepping a completion that only waits for the answer puts nothing on the history");
     const auto shown = answered(editing, R"([{"label":"Apple"},{"label":"other"}])");
     expect(rows(shown) == std::vector<std::string>{"Apple"} && chosen(shown) == "<none>" &&
                body(editing) == "int main() {}\nap\n",
@@ -401,9 +409,13 @@ void verify_waiting()
                                                  editing.controller().display_language()),
            "an empty answer to a waiting completion closes it and says there are no completions");
     static_cast<void>(pressed(editing, "<C-n>"));
+    const std::size_t waiting_revision = editing.controller().history().revision();
+    static_cast<void>(pressed(editing, "<C-e><C-n>"));
+    expect(completing(editing) && editing.controller().history().revision() == waiting_revision,
+           "Ctrl-e on a waiting completion closes it without touching the history");
     const auto id = server.requests(completion_method).back();
     static_cast<void>(pressed(editing, "x"));
-    expect(server.cancelled() == std::vector{id} && !completing(editing),
+    expect(!server.cancelled().empty() && server.cancelled().back() == id && !completing(editing),
            "a key that ends a waiting completion cancels its request");
 }
 
@@ -416,10 +428,11 @@ void verify_text_edit_range()
     static_cast<void>(pressed(editing, "ox.ma<C-n>"));
     const auto filled = answered(
         editing,
-        R"j([{"label":"mango","sortText":"a","textEdit":{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":4}},"newText":"mango()"}},{"label":"mast","sortText":"b","textEdit":{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":4}},"newText":"x.mast"}},{"label":"mad","sortText":"c","textEdit":{"range":{"start":{"line":1,"character":1},"end":{"line":1,"character":4}},"newText":"->mad"}}])j");
+        R"j([{"label":"mango","sortText":"a","textEdit":{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":4}},"newText":"mango()"}},{"label":"mast","sortText":"b","textEdit":{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":4}},"newText":"x.mast"}},{"label":"mad","sortText":"c","textEdit":{"range":{"start":{"line":1,"character":1},"end":{"line":1,"character":4}},"newText":"->mad"}},{"label":"maze","sortText":"d","textEdit":{"range":{"start":{"line":1,"character":2},"end":{"line":1,"character":6}},"newText":"maze"}}])j");
     expect(rows(filled) == std::vector<std::string>{"mango", "mast", "main"} &&
                chosen(filled) == "main",
-           "a candidate whose text edit cannot be written from the word start is left out");
+           "a candidate whose text edit cannot be written from the word start to the caret is "
+           "left out");
     static_cast<void>(pressed(editing, "<C-p>"));
     expect(body(editing) == "int main() {}\nx.mast\n",
            "a text edit that starts before the word start puts in the rest of its text");

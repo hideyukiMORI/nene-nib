@@ -168,8 +168,8 @@ void verify_vim_completion_keys()
     expect(!vim_completion_key('P', true, true, false).has_value() &&
                !vim_completion_key('E', true, true, false).has_value() &&
                !vim_completion_key('Y', true, true, false).has_value(),
-           "with the face closed Ctrl+P goes on to the file list and Ctrl+E / Ctrl+Y stay as "
-           "they were");
+           "with no face shown (closed, or only waiting for the server) Ctrl+P goes on to the file "
+           "list and Ctrl+E / Ctrl+Y stay as they were");
     expect(vim_completion_key('P', true, true, true) == VimSpecialKey::control_p &&
                vim_completion_key('E', true, true, true) == VimSpecialKey::control_e &&
                vim_completion_key('Y', true, true, true) == VimSpecialKey::control_y,

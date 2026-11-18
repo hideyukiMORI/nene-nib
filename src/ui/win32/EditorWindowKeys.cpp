@@ -408,7 +408,7 @@ bool EditorWindow::press_vim_completion_key(WPARAM word)
     const bool inserting = mode_ == core::EditMode::vim && vim_mode_ == core::VimMode::insert &&
                            !controller_.explorer_focused();
     const auto key = vim_completion_key(word, held(VK_CONTROL) && !held(VK_SHIFT) && !held(VK_MENU),
-                                        inserting, controller_.completion_open());
+                                        inserting, controller_.completion_active());
     if (!key.has_value())
     {
         return false;

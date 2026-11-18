@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 afa05ad5c733165a57dee21085d2f16619bc9c0afad9f4453a2c600b1ed5a14f / 6890 fixtures
+// fixtures.json: sha256 2c4414c12dc1cfbdf75b30ee1aee7b1830841fae573319919dc9b15d026e4702 / 6892 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6890> vim_fixtures{{
+constexpr std::array<VimFixture, 6892> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6902,6 +6902,8 @@ constexpr std::array<VimFixture, 6890> vim_fixtures{{
     {"insert-complete-macro", "a1 a2 a1 x a3 a2", "fx@a", "a1 a2 a1 a2 a3 a2", 1, 11, "x", "v", std::nullopt, VimMacroFixture{'a', "cwa<C-n><C-n><Esc>"}},
     {"insert-complete-macro-ctrl-p", "a2 a1 x a2 a3", "fx@a", "a2 a1 a2 a2 a3", 1, 8, "x", "v", std::nullopt, VimMacroFixture{'a', "cwa<C-p><C-p><Esc>"}},
     {"insert-complete-macro-twice", "a1 a2 a1 x a3 a2", "fx@a0@@", "a2 a2 a1 a3 a3 a2", 1, 2, "a1", "v", std::nullopt, VimMacroFixture{'a', "cwa<C-n><Esc>"}},
+    {"insert-complete-ctrl-r-ctrl-n-char", "ab cd", "yiwA<C-r><C-n>x<Esc>", "ab cdx", 1, 6, "ab", "v", std::nullopt},
+    {"insert-complete-ctrl-r-ctrl-n-again", "cd1 cd", "A<C-r><C-n><C-n><Esc>", "cd1 cd1", 1, 7, "", "", std::nullopt},
 }};
 } // namespace nenenib::tests
 // clang-format on

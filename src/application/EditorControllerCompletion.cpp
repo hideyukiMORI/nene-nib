@@ -33,6 +33,8 @@
 #include "LineEnding.hpp"
 #include "LspCompletionList.hpp"
 #include "LspDiagnostics.hpp"
+#include "LspPosition.hpp"
+#include "LspRange.hpp"
 #include "LspRequestKind.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
@@ -729,32 +731,43 @@ void EditorController::settle_vim_completion(CompletionSession &session)
     }
 }
 
-// LSP の候補が入れる本文を、語の頭 origin からキャレットまでと置き換える形にしたもの。`textEdit` の
-// 範囲が無ければそのまま、始まりが語の頭ならそのまま、語の頭より前（同じ行）で入れる本文がその間の
-// 本文で始まるなら残り。ほかの範囲（語の頭より後ろから・別の行）は直せないので空（列に入れない）。
-// 改行は engine の形（LF）。
+// LSP の候補が入れる本文を、語の頭からキャレットまでと置き換える形にしたもの。`textEdit` の
+// 範囲が無ければそのまま。範囲は要求を出したときの座標で、語の頭より前の本文は補完の間に変わら
+// ないので、LSP の座標のまま比べる。終わりが要求のときのキャレット（語の頭 ＋ 元の接頭辞）で、
+// 始まりが語の頭ならそのまま、語の頭より前（同じ行）で入れる本文がその間の本文で始まるなら残り。
+// ほかの範囲（終わりがキャレットでない・語の頭より後ろから・別の行）は直せないので空（列に
+// 入れない）。改行は engine の形（LF）。
 std::optional<std::string>
-EditorController::vim_completion_text(core::Offset origin, const core::CompletionEntry &entry) const
+EditorController::vim_completion_text(const CompletionSession &session, std::string_view original,
+                                      const core::CompletionEntry &entry) const
 {
     std::string text = inserted_text(entry.insert, "\n");
     if (!entry.range.has_value())
     {
         return text;
     }
-    const auto placed =
-        core::lsp_range_to_offsets(state_.text(), entry.range.value(), language_server_.encoding);
-    if (!placed.has_value() || placed.value().begin == origin)
-    {
-        return text;
-    }
-    const core::Offset begin = placed.value().begin;
-    if (origin < begin ||
-        state_.text().position_of(begin).line.value != state_.text().position_of(origin).line.value)
+    const auto encoding = language_server_.encoding;
+    const auto typed = core::TextBuffer::from_utf8(original);
+    if (!typed.has_value())
     {
         return std::nullopt;
     }
-    const std::string head = state_.text().text_range(begin, origin);
-    return text.starts_with(head) ? std::optional{text.substr(head.size())} : std::nullopt;
+    const core::LspRange &range = entry.range.value();
+    const core::LspPosition head = core::lsp_position_of(state_.text(), session.origin, encoding);
+    const std::size_t units =
+        core::lsp_position_of(typed.value(), core::Offset{original.size()}, encoding).character;
+    if (range.end != core::LspPosition{head.line, head.character + units} ||
+        range.start.line != head.line || head.character < range.start.character)
+    {
+        return std::nullopt;
+    }
+    const auto begin = core::lsp_offset_of(state_.text(), range.start, encoding);
+    if (!begin.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string before = state_.text().text_range(begin.value(), session.origin);
+    return text.starts_with(before) ? std::optional{text.substr(before.size())} : std::nullopt;
 }
 
 // 後から届いた LSP の候補を列の先頭側に足す（ADR 0190 の決定 5）。元の接頭辞に当たり（filter の
@@ -774,7 +787,7 @@ void EditorController::merge_vim_completion_answer(CompletionSession &session,
     for (const std::size_t position : core::completion_matches(answered, engine->original))
     {
         core::CompletionEntry entry = answered.at(position);
-        auto text = vim_completion_text(session.origin, entry);
+        auto text = vim_completion_text(session, engine->original, entry);
         if (text.has_value())
         {
             entry.insert = std::move(text).value();

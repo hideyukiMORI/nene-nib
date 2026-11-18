@@ -6888,5 +6888,7 @@
   {"name":"insert-complete-normal-f-ctrl-n","text":"ab cd","keys":"f<C-n>x"},
   {"name":"insert-complete-macro","text":"a1 a2 a1 x a3 a2","keys":"fx@a","register":{"name":"a","keys":"cwa<C-n><C-n><Esc>"}},
   {"name":"insert-complete-macro-ctrl-p","text":"a2 a1 x a2 a3","keys":"fx@a","register":{"name":"a","keys":"cwa<C-p><C-p><Esc>"}},
-  {"name":"insert-complete-macro-twice","text":"a1 a2 a1 x a3 a2","keys":"fx@a0@@","register":{"name":"a","keys":"cwa<C-n><Esc>"}}
+  {"name":"insert-complete-macro-twice","text":"a1 a2 a1 x a3 a2","keys":"fx@a0@@","register":{"name":"a","keys":"cwa<C-n><Esc>"}},
+  {"name":"insert-complete-ctrl-r-ctrl-n-char","text":"ab cd","keys":"yiwA<C-r><C-n>x<Esc>"},
+  {"name":"insert-complete-ctrl-r-ctrl-n-again","text":"cd1 cd","keys":"A<C-r><C-n><C-n><Esc>"}
 ]
