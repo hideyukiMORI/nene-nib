@@ -23,7 +23,6 @@
 #include "EditBoundary.hpp"
 #include "EditMode.hpp"
 #include "EditorControllerDetail.hpp"
-#include "InsertCompletion.hpp"
 #include "InsertText.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageCompletion.hpp"
@@ -144,12 +143,13 @@ void arrange(CompletionSession &session, std::string_view typed)
 // 名前と出どころが same と同じ候補を選び直す（無ければ先頭のまま）。
 void reselect(CompletionSession &session, const core::CompletionEntry &same)
 {
-    const auto found = std::ranges::find_if(
-        session.shown, [&session, &same](std::size_t position)
-        {
-            const auto &entry = session.entries.at(position);
-            return entry.label == same.label && entry.source == same.source;
-        });
+    const auto found =
+        std::ranges::find_if(session.shown,
+                             [&session, &same](std::size_t position)
+                             {
+                                 const auto &entry = session.entries.at(position);
+                                 return entry.label == same.label && entry.source == same.source;
+                             });
     if (found != session.shown.end())
     {
         session.selected = static_cast<std::size_t>(found - session.shown.begin());
@@ -157,11 +157,21 @@ void reselect(CompletionSession &session, const core::CompletionEntry &same)
     }
 }
 
-// 確定で入れる平文。LSP の本文の改行は文書の改行の形にする（ARC-009）。
-[[nodiscard]] std::string inserted_text(std::string text, std::string_view newline)
+// 確定で入れる平文。LSP の本文の改行（LF か CRLF）は文書の改行の形にする（ARC-009）。CR は
+// 1 バイトずつ落とす（std::erase は MSVC STL の __std_remove_1 を application
+// の外へ出す・ARC-003）。
+[[nodiscard]] std::string inserted_text(std::string_view text, std::string_view newline)
 {
-    std::erase(text, '\r');
-    return detail::with_document_newlines(text, newline);
+    std::string plain;
+    plain.reserve(text.size());
+    for (const char byte : text)
+    {
+        if (byte != '\r')
+        {
+            plain.push_back(byte);
+        }
+    }
+    return detail::with_document_newlines(plain, newline);
 }
 } // namespace
 
@@ -291,8 +301,7 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
                               .revision = state_.history().revision()};
     if (by_hand)
     {
-        core::CompletionList list =
-            insert_completion_list(state_, core::CompletionDirection::forward);
+        core::CompletionList list = insert_completion(core::CompletionDirection::forward);
         session.origin = list.prefix.begin;
         session.words = std::move(list.candidates);
         session.words_collected = true;
@@ -309,12 +318,12 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
     }
 }
 
-// 本文の語の列を作る（席 W の入口・本文の窓を 1 回走る）。呼ぶのは面を開いたとき（自動の面は
-// LSP の候補が届いたとき）と `isIncomplete` の出し直しのときだけで、打鍵ごとには呼ばない（打って
-// いる間は持っている列を接頭辞で絞る）。
-void EditorController::collect_completion_words(CompletionSession &session) const
+// 本文の語の列を作る（席 W の入口 insert_completion）。本文の窓を 1 回走り、語の表が無ければ
+// 作る。呼ぶのは面を開いたとき（自動の面は LSP の候補が届いたとき）と `isIncomplete` の出し直しの
+// ときだけで、打鍵ごとには呼ばない（打っている間は持っている列を接頭辞で絞る）。
+void EditorController::collect_completion_words(CompletionSession &session)
 {
-    session.words = insert_completion_list(state_, core::CompletionDirection::forward).candidates;
+    session.words = insert_completion(core::CompletionDirection::forward).candidates;
     session.words_collected = true;
 }
 
@@ -403,7 +412,7 @@ bool EditorController::take_completion_answer(CompletionSession &session)
 // いなければ先頭（LSP の最初の候補）を選ぶ。自動で開いた面の本文の語は、LSP の候補が届いた
 // ここで初めて集める。
 void EditorController::merge_completion_answer(CompletionSession &session,
-                                               const core::LspCompletionList &list) const
+                                               const core::LspCompletionList &list)
 {
     const std::string typed = state_.text().text_range(session.origin, state_.selection().caret);
     const std::optional<core::CompletionEntry> chosen =
@@ -448,8 +457,7 @@ void EditorController::accept(const ChooseCompletion &)
     const core::CompletionEntry entry = session.entries.at(session.shown.at(session.selected));
     const core::OffsetRange range = completion_range(session.origin, entry);
     close_completion();
-    const std::string text =
-        inserted_text(entry.insert, core::newline_of(state_.line_ending()));
+    const std::string text = inserted_text(entry.insert, core::newline_of(state_.line_ending()));
     if (state_.text().text_range(range.begin, range.end) != text)
     {
         replace(range, text, core::EditBoundary::separate);

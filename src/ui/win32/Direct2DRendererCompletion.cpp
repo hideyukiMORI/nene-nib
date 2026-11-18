@@ -30,7 +30,8 @@ void Direct2DRenderer::draw_completion(const application::EditorFrame &frame,
     const auto &view = frame.completion.value();
     if (!completion_anchor_.has_value() || completion_anchor_.value().first != view.session)
     {
-        completion_anchor_ = std::pair{view.session, static_cast<std::int32_t>(caret_rectangle_.left)};
+        completion_anchor_ =
+            std::pair{view.session, static_cast<std::int32_t>(caret_rectangle_.left)};
     }
     const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
                                  caret_rectangle_.right, caret_rectangle_.bottom};

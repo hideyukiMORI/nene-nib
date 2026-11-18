@@ -15,8 +15,8 @@
 #include "CompletionSource.hpp"
 #include "CompletionStep.hpp"
 #include "CompletionView.hpp"
-#include "Composition.hpp"
 #include "ComposeText.hpp"
+#include "Composition.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
 #include "DeleteUnit.hpp"
@@ -79,8 +79,8 @@ constexpr std::size_t shown_lines = 4;
 
 [[nodiscard]] core::LspCompletionItem item(std::string label, std::string sort)
 {
-    return core::LspCompletionItem{label, std::nullopt, {}, std::move(sort), label, label,
-                                   std::nullopt};
+    return core::LspCompletionItem{label, std::nullopt, {},          std::move(sort),
+                                   label, label,        std::nullopt};
 }
 
 [[nodiscard]] std::vector<std::string> labels_of(const std::vector<CompletionEntry> &entries)
@@ -93,7 +93,8 @@ constexpr std::size_t shown_lines = 4;
     return labels;
 }
 
-// 決定 5: LSP の候補は sortText の順（同じ鍵は届いた順）、本文の語は後ろで、同じ綴りは LSP の 1 つ。
+// 決定 5: LSP の候補は sortText の順（同じ鍵は届いた順）、本文の語は後ろで、同じ綴りは LSP の 1
+// つ。
 void verify_entry_order()
 {
     const core::LspCompletionList list{
@@ -104,10 +105,9 @@ void verify_entry_order()
     expect(server.front().source == CompletionSource::language_server &&
                server.front().filter == "first" && server.front().insert == "first",
            "a server item keeps its filter and insert text and is marked as the language server");
-    const std::vector<core::CompletionCandidate> words{
-        {"beta", CompletionSource::buffer},
-        {"alpha", CompletionSource::buffer},
-        {"gamma", CompletionSource::other_buffers}};
+    const std::vector<core::CompletionCandidate> words{{"beta", CompletionSource::buffer},
+                                                       {"alpha", CompletionSource::buffer},
+                                                       {"gamma", CompletionSource::other_buffers}};
     const auto merged = core::completion_entries(server, words);
     expect(labels_of(merged) ==
                std::vector<std::string>{"first", "zeta", "mid", "alpha", "beta", "gamma"},
@@ -165,8 +165,8 @@ void verify_face_layout()
 {
     const LayoutRect bounds{0, 40, 800, 600};
     const LayoutRect caret{100, 100, 102, 120};
-    const auto below =
-        core::completion_face_layout(core::CompletionFaceRequest{caret, 100, bounds, 8, 0, false, 96});
+    const auto below = core::completion_face_layout(
+        core::CompletionFaceRequest{caret, 100, bounds, 8, 0, false, 96});
     expect(!below.above && below.rows == 8 && below.first == 0 &&
                below.panel == LayoutRect{100, 122, 340, 322},
            "the face opens under the caret, 240 DIP wide and eight rows tall");
@@ -176,12 +176,12 @@ void verify_face_layout()
                core::width_of(core::completion_face_detail(below, 0)) == 0,
            "a row holds the source mark and the label, and no detail column");
     const LayoutRect low{100, 500, 102, 520};
-    const auto above =
-        core::completion_face_layout(core::CompletionFaceRequest{low, 100, bounds, 8, 0, false, 96});
+    const auto above = core::completion_face_layout(
+        core::CompletionFaceRequest{low, 100, bounds, 8, 0, false, 96});
     expect(above.above && above.rows == 8 && above.panel == LayoutRect{100, 298, 340, 498},
            "a caret near the bottom opens the face above it");
-    const auto few =
-        core::completion_face_layout(core::CompletionFaceRequest{low, 100, bounds, 2, 0, false, 96});
+    const auto few = core::completion_face_layout(
+        core::CompletionFaceRequest{low, 100, bounds, 2, 0, false, 96});
     expect(!few.above && few.rows == 2 && few.panel == LayoutRect{100, 522, 340, 578},
            "a short list still fits under a low caret");
     const auto wide = core::completion_face_layout(
@@ -224,8 +224,8 @@ void capable(Editing &editing)
     editing.language_server().serve(app::ServerMessage{std::string{capable_answer}});
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
-    applied(editing.controller(), app::MoveCaret{core::CaretMotion::document_end,
-                                                 core::SelectionAnchoring::collapse});
+    applied(editing.controller(),
+            app::MoveCaret{core::CaretMotion::document_end, core::SelectionAnchoring::collapse});
 }
 
 [[nodiscard]] app::EditorFrame typed(Editing &editing, std::string text)
@@ -337,8 +337,8 @@ void verify_nothing_to_offer()
                !editing.controller().completion_open(),
            "an empty document opens no face and says there are no completions");
     static_cast<void>(typed(editing, "alpha al"));
-    const auto composing = editing.controller().apply_frame(
-        app::ComposeText{composed_of("\xE3\x81\x82", {}, 1)});
+    const auto composing =
+        editing.controller().apply_frame(app::ComposeText{composed_of("\xE3\x81\x82", {}, 1)});
     static_cast<void>(composing);
     const auto refused = opened(editing);
     expect(!refused.completion.has_value() && message(refused).empty(),
@@ -368,13 +368,11 @@ void verify_steps()
     expect(chosen(wrapped) == "wlx" && face_of(wrapped).first == 4,
            "Up from the first row wraps to the last and the window follows");
     const auto paged = stepped(editing, app::CompletionStep::page_previous);
-    expect(chosen(paged) == "wdx" && face_of(paged).first == 3,
-           "PageUp moves eight rows up");
+    expect(chosen(paged) == "wdx" && face_of(paged).first == 3, "PageUp moves eight rows up");
     const auto top = stepped(editing, app::CompletionStep::page_previous);
     expect(chosen(top) == "wax" && face_of(top).first == 0, "PageUp stops at the top");
     const auto down = stepped(editing, app::CompletionStep::page_next);
-    expect(chosen(down) == "wix" && face_of(down).first == 1,
-           "PageDown moves eight rows down");
+    expect(chosen(down) == "wix" && face_of(down).first == 1, "PageDown moves eight rows down");
     static_cast<void>(stepped(editing, app::CompletionStep::page_next));
     const auto first = stepped(editing, app::CompletionStep::next);
     expect(chosen(first) == "wax" && face_of(first).first == 0,
@@ -401,7 +399,8 @@ void verify_closing()
            "a character that is not a word character closes the face and still goes in");
     static_cast<void>(typed(editing, " al"));
     static_cast<void>(opened(editing));
-    const auto erase = app::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character};
+    const auto erase =
+        app::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character};
     static_cast<void>(editing.controller().apply_frame(erase));
     const auto at_head = editing.controller().apply_frame(erase);
     expect(at_head.completion.has_value(), "Backspace back to the word start keeps the face");
@@ -409,17 +408,19 @@ void verify_closing()
     expect(!before.completion.has_value(), "Backspace before the word start closes the face");
     static_cast<void>(typed(editing, " al"));
     static_cast<void>(opened(editing));
-    const auto moved = editing.controller().apply_frame(app::MoveCaret{
-        core::CaretMotion::previous_character, core::SelectionAnchoring::collapse});
+    const auto moved = editing.controller().apply_frame(
+        app::MoveCaret{core::CaretMotion::previous_character, core::SelectionAnchoring::collapse});
     expect(!moved.completion.has_value(), "moving the caret closes the face");
     static_cast<void>(opened(editing));
-    expect(editing.controller().completion_active(), "the face opens again in the middle of a word");
+    expect(editing.controller().completion_active(),
+           "the face opens again in the middle of a word");
     const auto switched = editing.controller().apply_frame(app::NewTab{});
     expect(!switched.completion.has_value() && !editing.controller().completion_open(),
            "switching the tab closes the face");
 }
 
-// 決定 1・2・5: 手で開くと要求を送り、届いた LSP の候補を本文の語の前に足す。面を閉じたら答えを消す。
+// 決定 1・2・5: 手で開くと要求を送り、届いた LSP
+// の候補を本文の語の前に足す。面を閉じたら答えを消す。
 void verify_server_candidates()
 {
     Editing editing(lsp_settings(true));
@@ -429,7 +430,8 @@ void verify_server_candidates()
     const std::size_t before = server.sent().size();
     const auto face = opened(editing);
     expect(rows(face) == std::vector<std::string>{"main"} &&
-               server.requests(completion_method).size() == 1 && server.sent().size() == before + 1 &&
+               server.requests(completion_method).size() == 1 &&
+               server.sent().size() == before + 1 &&
                contains(server.sent().back(), R"("position":{"line":1,"character":2})") &&
                contains(server.sent().back(), R"("context":{"triggerKind":1})"),
            "Ctrl+Space shows the buffer words at once and asks the server at the caret");
@@ -498,8 +500,7 @@ void verify_incomplete()
     expect(rows(replaced) == std::vector<std::string>{"mast", "main"},
            "the newer answer replaces the server items");
     static_cast<void>(typed(editing, "s"));
-    expect(server.requests(completion_method).size() == 2,
-           "a complete answer is not asked again");
+    expect(server.requests(completion_method).size() == 2, "a complete answer is not asked again");
 }
 
 // 決定 1: 面を閉じると待っている要求を取り消し、遅れた答えは使わない。

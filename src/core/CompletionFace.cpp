@@ -41,15 +41,18 @@ CompletionFaceLayout completion_face_layout(const CompletionFaceRequest &request
     const bool fits_below = height_for(wanted, dpi) <= below;
     const bool above = !fits_below && (height_for(wanted, dpi) <= over || over > below);
     const std::size_t rows = rows_within(above ? over : below, wanted, dpi);
-    const auto width = to_pixels(
-        request.detailed ? completion_face_wide_dips : completion_face_width_dips, dpi);
+    const auto width =
+        to_pixels(request.detailed ? completion_face_wide_dips : completion_face_width_dips, dpi);
     const auto left = placed_left(request, width);
     const auto height = height_for(rows, dpi);
     const auto top = above ? request.caret.top - gap - height : request.caret.bottom + gap;
     const std::size_t first = request.selected >= rows ? request.selected + 1 - rows : 0;
-    return CompletionFaceLayout{
-        LayoutRect{left, top, left + width, top + height}, first, rows, above, request.detailed,
-        dpi};
+    return CompletionFaceLayout{LayoutRect{left, top, left + width, top + height},
+                                first,
+                                rows,
+                                above,
+                                request.detailed,
+                                dpi};
 }
 
 LayoutRect completion_face_row(const CompletionFaceLayout &layout, std::size_t index) noexcept
@@ -85,9 +88,8 @@ LayoutRect completion_face_detail(const CompletionFaceLayout &layout, std::size_
     const auto row = completion_face_row(layout, index);
     const auto padding = to_pixels(completion_face_padding_dips, layout.dpi);
     const auto right = row.right - padding;
-    const auto left = layout.detailed
-                          ? row.left + to_pixels(completion_face_width_dips, layout.dpi)
-                          : right;
+    const auto left =
+        layout.detailed ? row.left + to_pixels(completion_face_width_dips, layout.dpi) : right;
     return LayoutRect{std::min(left, right), row.top, right, row.bottom};
 }
 } // namespace nenenib::core

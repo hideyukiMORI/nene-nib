@@ -12,13 +12,13 @@
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
 #include "CompletionDirection.hpp"
+#include "CompletionEntry.hpp"
 #include "CompletionList.hpp"
+#include "CompletionSession.hpp"
+#include "CompletionView.hpp"
 #include "CompositionView.hpp"
 #include "ContextMenuItem.hpp"
 #include "ContextMenuMode.hpp"
-#include "CompletionEntry.hpp"
-#include "CompletionSession.hpp"
-#include "CompletionView.hpp"
 #include "ContextMenuOpen.hpp"
 #include "ContextMenuView.hpp"
 #include "DetectedText.hpp"
@@ -87,10 +87,10 @@
 #include "LanguageAnswers.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
-#include "LspCompletionList.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LspCompletionList.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspRequest.hpp"
@@ -1165,11 +1165,10 @@ class EditorController final
     void start_completion(std::optional<std::string_view> trigger);
     [[nodiscard]] bool completion_startable() const;
     [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
-    void collect_completion_words(CompletionSession &session) const;
+    void collect_completion_words(CompletionSession &session);
     void refresh_completion(CompletionSession &session);
     [[nodiscard]] bool take_completion_answer(CompletionSession &session);
-    void merge_completion_answer(CompletionSession &session,
-                                 const core::LspCompletionList &list) const;
+    void merge_completion_answer(CompletionSession &session, const core::LspCompletionList &list);
     // 面を閉じる 1 か所（待っている要求の取り消しと、届いていた補完の答えの消去）。
     void close_completion();
     void forget_completion_answer();

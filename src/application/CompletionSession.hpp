@@ -21,7 +21,8 @@ namespace nenenib::application
 // - server は LSP の候補（core::completion_entries_of の順）、words は本文の語（Vim の `complete`
 //   の順）、words_collected は words を集めたこと。集めるのは面を開いたときと `isIncomplete` の
 //   出し直しのときだけで、打っている間は持っている列を接頭辞で絞る（本文を打鍵ごとに走らない）。
-// - entries は server ＋ words の列（同じ綴りは LSP の 1 つ）、shown は今の接頭辞に当たる entries の
+// - entries は server ＋ words の列（同じ綴りは LSP の 1 つ）、shown は今の接頭辞に当たる entries
+// の
 //   位置、selected は shown の中の選んでいる行、first は面の窓の先頭（shown の中の位置）、detailed
 //   は当たっている候補のどれかに補足があること。
 // - awaiting は LSP の答えを待っていること、incomplete は最後の答えが `isIncomplete` だったこと

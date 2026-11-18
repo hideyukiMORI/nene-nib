@@ -22,15 +22,17 @@ namespace nenenib::core
 // 面の候補の列。LSP の候補 server（completion_entries_of の順）が先、本文の語 words（Vim の
 // `complete` の順）が後。本文の語のうち LSP の候補の label か insert と同じ綴りのものは落とす
 // （同じ綴りは LSP の 1 つだけ）。
-[[nodiscard]] std::vector<CompletionEntry> completion_entries(std::span<const CompletionEntry> server,
-                                                              std::span<const CompletionCandidate> words);
+[[nodiscard]] std::vector<CompletionEntry>
+completion_entries(std::span<const CompletionEntry> server,
+                   std::span<const CompletionCandidate> words);
 
 // 接頭辞 prefix で絞った候補の位置（entries の中の位置・列の順のまま）。filter の前方一致で、
 // ASCII の大小は区別しない（ASCII でないバイトはそのまま比べる）。空の接頭辞は全部。
 [[nodiscard]] std::vector<std::size_t> completion_matches(std::span<const CompletionEntry> entries,
                                                           std::string_view prefix);
 
-// 語の頭からキャレットまでに打った分 typed が、まだ 1 つの接頭辞か（空か、同じ種類の語の文字だけ）。
+// 語の頭からキャレットまでに打った分 typed が、まだ 1
+// つの接頭辞か（空か、同じ種類の語の文字だけ）。
 // 語の文字でない文字・別の種類の文字を打つと偽で、面は閉じる。接頭辞の決め方は
 // completion_prefix_start の 1 本（Vim の実測の形・ADR 0169 の決定 2）。
 [[nodiscard]] bool completion_prefix_kept(std::string_view typed) noexcept;
