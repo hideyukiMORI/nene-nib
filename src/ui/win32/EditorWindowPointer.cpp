@@ -85,17 +85,8 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_LBUTTONDOWN:
-        press_left(data, counted_clicks(application::PointerClicks::single, data));
-        return 0;
     case WM_LBUTTONDBLCLK:
-        // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
-        // 回目の押しで、本文なら語を選ぶ（#1250）。
-        if (reset_explorer_width(data) || point_explorer(WM_LBUTTONDBLCLK, data))
-        {
-            last_clicks_ = application::PointerClicks::single;
-            return 0;
-        }
-        press_left(data, counted_clicks(application::PointerClicks::double_, data));
+        press_left_button(message, data);
         return 0;
     case WM_LBUTTONUP:
         release_left(data);
@@ -138,10 +129,38 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     return DefWindowProcW(window_, message, word, data);
 }
 
+// 左の押し（1 回目と、OS が数えた 2 回目）。
+void EditorWindow::press_left_button(UINT message, LPARAM data)
+{
+    // 設定の面の外を押して閉じた直後の 2 回目の押しは 1 回目の押し（閉じるだけだった押しを
+    // ダブルクリックに数えない＝本文の語を選ばない・面の行を開かない・#1836 の差し戻し）。
+    const bool dismissed = take_settings_dismissal();
+    if (message == WM_LBUTTONDOWN || dismissed)
+    {
+        press_left(data, counted_clicks(application::PointerClicks::single, data));
+        return;
+    }
+    // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
+    // 回目の押しで、本文なら語を選ぶ（#1250）。
+    // 設定の面が開いている間は面の押しの道だけ（全幅の面の下のエクスプローラーへ渡さない）。
+    if (!controller_.settings_open() &&
+        (reset_explorer_width(data) || point_explorer(WM_LBUTTONDBLCLK, data)))
+    {
+        last_clicks_ = application::PointerClicks::single;
+        return;
+    }
+    press_left(data, counted_clicks(application::PointerClicks::double_, data));
+}
+
 void EditorWindow::move_pointer(LPARAM data)
 {
     // 右クリックのメニューが開いている間の動きは、載せた行だけ（#1051）。
     if (point_context_menu(data))
+    {
+        return;
+    }
+    // 設定の面の上の動きは面の下の本文・エクスプローラー・境へ渡さない（#1836）。
+    if (over_settings(data))
     {
         return;
     }
@@ -161,6 +180,11 @@ void EditorWindow::release_left(LPARAM data)
 {
     // 右クリックのメニューの上で押した左の離しは、その行の実行だけ（#1051）。
     if (release_context_menu(data))
+    {
+        return;
+    }
+    // 設定の面の上で押した左の離しは、その部品だけ（#1836）。
+    if (release_settings(data))
     {
         return;
     }
@@ -550,6 +574,11 @@ void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
     {
         return;
     }
+    // 設定の面が開いている間の押しは面へ（外なら閉じて保存するだけ・#1836）。
+    if (press_settings(data))
+    {
+        return;
+    }
     // 補完の面の上の押しは面へ（本文へ渡さない・面の外は今までどおり本文へ）。
     if (press_completion(data))
     {
@@ -789,6 +818,12 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     zoom_wheel_remainder_ = 0;
+    // 設定の面の上のホイールは面の行だけを送る（面の外は下の今の道・#1836）。
+    if (wheel_settings(delta, data))
+    {
+        return;
+    }
+    settings_wheel_remainder_ = 0;
     // 面の上のホイールは一覧だけを送り、選択は動かさない（ADR 0150 の決定 2）。
     if (controller_.command_palette_active())
     {

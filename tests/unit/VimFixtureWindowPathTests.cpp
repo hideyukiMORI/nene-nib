@@ -159,20 +159,20 @@ constexpr std::array<std::string_view, 3> skip_reasons{
 // fixture の記法に `<S-Del>` は無い。`{ } ( ) [ ]` は WM_CHAR の文字で、上の文字の道を通る。
 // 補完の鍵（#1845・ui の vim_completion_key の写し。unit の試験は core と application にだけ
 // 依存するので ui の関数は呼べない・eng/architecture.json。面の読みは窓と同じ
-// completion_active）。`Ctrl+N` は INSERT でだけ、`Ctrl+P` は INSERT で 補完の面が開いている間だけ
-// Vim の鍵になる。ほかは窓が Vim の鍵を送らない。
+// completion_active）。`Ctrl+N` は INSERT でだけ、`Ctrl+P` は INSERT で補完の面が見えている間
+// だけ Vim の鍵になる。ほかは窓が Vim の鍵を送らない。
 [[nodiscard]] WindowSend completion_send(const core::VimKey &key, core::VimMode mode,
-                                         bool face_open)
+                                         bool face_shown)
 {
     const bool next = std::get<core::VimSpecialKey>(key) == core::VimSpecialKey::control_n;
-    if (mode == core::VimMode::insert && (next || face_open))
+    if (mode == core::VimMode::insert && (next || face_shown))
     {
         return app::EditorIntent{app::VimKeyPress{key}};
     }
     return std::unexpected(completion_unsent);
 }
 
-[[nodiscard]] WindowSend vim_send(const core::VimKey &key, core::VimMode mode, bool face_open)
+[[nodiscard]] WindowSend vim_send(const core::VimKey &key, core::VimMode mode, bool face_shown)
 {
     const app::EditorIntent press{app::VimKeyPress{key}};
     if (const auto *const character = std::get_if<core::VimCharacter>(&key))
@@ -187,11 +187,11 @@ constexpr std::array<std::string_view, 3> skip_reasons{
     {
     case core::VimSpecialKey::control_n:
     case core::VimSpecialKey::control_p:
-        return completion_send(key, mode, face_open);
+        return completion_send(key, mode, face_shown);
     // INSERT の Ctrl+E / Ctrl+Y は補完の面が開いている間だけ Vim の鍵（#1845）。
     case core::VimSpecialKey::control_e:
     case core::VimSpecialKey::control_y:
-        if (mode == core::VimMode::insert && !face_open)
+        if (mode == core::VimMode::insert && !face_shown)
         {
             return std::unexpected(insert_ordinary_control);
         }

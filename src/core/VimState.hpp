@@ -137,8 +137,9 @@ struct VimState
     // 入力を捨てる所でも消える。
     std::optional<EasyMotionState> easy_motion = std::nullopt;
     // INSERT の補完の候補の写し（#1845・ADR 0169 の決定 3）。controller が補完を始める鍵の直前に
-    // vim_completion_offered で置き、その鍵の vim_step の出口で消える（`"+` の写しと同じく、鍵を
-    // またいで持たない）。
+    // vim_completion_offered で置き、その鍵の歩（補完を始める completion_stepped）が消す。鍵を
+    // またいで持たない（`"+` の写しと同じ）。鍵が拒まれて歩に届かなかったときは、controller の
+    // close_completion が vim_completion_settled で消す。
     std::shared_ptr<const VimCompletionOffer> completion_offer = nullptr;
     // 開いている INSERT の補完（#1845）。立てるのは補完を始めた Ctrl-n / Ctrl-p、動かすのは次の
     // Ctrl-n / Ctrl-p、消すのは Ctrl-e（元の接頭辞へ戻す）・Ctrl-y とほかの鍵（確定・

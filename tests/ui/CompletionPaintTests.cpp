@@ -187,7 +187,7 @@ void verify_vim_completion_keys()
            "a key without Ctrl alone, and a key that is not a completion key, are not sent");
 }
 
-// 補完の 2 つ目の鍵（施主決定 2026-11-18）: 通常モードの Ctrl+I は操作「補完」で、Vim のモードの
+// 補完の 2 つ目の鍵（施主決定 D104）: 通常モードの Ctrl+I は操作「補完」で、Vim のモードの
 // Ctrl+I は今までどおり操作に当たらない。Ctrl+I の WM_CHAR（Tab・0x09）は Ctrl を押している間の
 // 文字として type_character が捨てるので、本文に Tab は入らない。素の I・素の Tab・Shift+Tab は
 // 操作の鍵にならない（今までの道）。

@@ -230,7 +230,10 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // ことは無い。題名のダブルクリックの PinTab も使う人の操作なので、ここにも begin_intent にも
 // 書かない（ADR 0179 の決定 4-4）。ミニマップの押しとドラッグ（PointMinimap）はホイールの
 // ScrollLines と同じく使う人の操作の側で、ここにも begin_intent にも keeps_wanted_x にも書かない
-// （ADR 0171 の決定 5 の追補）。
+// （ADR 0171 の決定 5 の追補）。設定の面の意図（OpenSettings・CloseSettings・RevertSettings・
+// StepSettings・ChangeSetting・ChooseSettingsPreset・FilterSettings・JumpSettingsSection・ADR 0170
+// の 2026-11-18 の追補 2 と、画面の工程の FocusSettingsRow・ScrollSettings・#1836）も使う人の操作
+// なので、ここにも begin_intent にも書かない。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return not_user_operation(intent) || std::holds_alternative<WalkRecentTab>(intent) ||
@@ -455,6 +458,13 @@ void EditorController::accept(const AdjustFontSize &intent)
     auto settings = state_.settings();
     settings.font_size =
         core::adjusted_font_size(settings.font_size, intent.adjustment, intent.steps);
+    // 設定の面が開いている間は面の切り替えと同じくその場で効かせるだけで、書くのは閉じるときの
+    // 1 回（ADR 0170 の決定 6・#1836 の差し戻し）。
+    if (settings_open())
+    {
+        preview_settings(std::move(settings));
+        return;
+    }
     (void)persist_settings(std::move(settings));
 }
 
@@ -478,21 +488,37 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     {
         return true;
     }
+    if (!write_settings(settings))
+    {
+        return false;
+    }
+    settings_unsaved_ = false;
+    adopt_settings(std::move(settings));
+    return true;
+}
+
+bool EditorController::write_settings(const core::EditorSettings &settings)
+{
     const auto saved = ports_.settings.write(settings);
     if (!saved)
     {
         state_ = state_.with_settings_failure(saved.error());
         return false;
     }
+    state_ = state_.with_settings_failure(std::nullopt);
+    return true;
+}
+
+void EditorController::adopt_settings(core::EditorSettings settings)
+{
     const bool reshaped = core::affects_line_height(state_.settings(), settings);
-    state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
-    // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
-    // 本。
+    state_ = state_.with_settings(std::move(settings));
+    // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図・設定の面のどれから
+    // 変えても同じ 1 本。
     sync_explorer();
     sync_minimap();
     refresh_key_map();
     follow_after_settings(reshaped);
-    return true;
 }
 
 // 設定が変わった後の画面の後始末（追従と clamp の頼み）はここの 1 か所（#1432 のレビュー L1）。
@@ -562,10 +588,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
-    settle_pending_keys(intent);
-    // `:s///c` の問いは答えでない意図の前に `q` と同じに終える（ADR 0168 の決定 6・入口の 1
-    // か所）。
-    end_question_before(intent);
+    settle_before(intent);
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -600,6 +623,16 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     layout_failure_ = drawing_failure(layout_failure_);
     --intent_depth_;
     return delivered;
+}
+
+// 写す前の片付け（begin_intent の後）。設定の面は面を開いたまま受ける意図でなければ閉じて保存する
+// （保存の失敗の知らせを begin_intent が消さない順）。`:s///c` の問いは答えでない意図の前に `q` と
+// 同じに終える（ADR 0168 の決定 6・入口の 1 か所）。apply の長さの上限のため分けた。
+void EditorController::settle_before(const EditorIntent &intent)
+{
+    close_settings_before(intent);
+    settle_pending_keys(intent);
+    end_question_before(intent);
 }
 
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
@@ -1230,29 +1263,36 @@ core::EditorSettings EditorController::shown_settings() const
     return shown;
 }
 
+// IME の構え。設定の面が開いている間は探す欄のために閉じ直さない（#1836）。
+ImeStance EditorController::shown_ime_stance() const
+{
+    const auto decided =
+        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused());
+    return settings_open() ? ime_stance_in_settings(decided) : decided;
+}
+
 EditorDelivery EditorController::delivery() const
 {
     auto settings = shown_settings();
     const auto &theme = core::selected_theme(settings, state_.appearance());
-    return EditorDelivery{
-        theme.appearance,
-        state_.mode(),
-        state_.vim().mode,
-        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused()),
-        state_.command_input().transform(input_line_prompt_of),
-        composed(),
-        command_composed(),
-        active_document_view(),
-        std::move(settings),
-        state_.settings_failure(),
-        command_message(),
-        state_.closing(),
-        state_.close_request(),
-        state_.operation_request(),
-        state_.display_question(),
-        layout_failure_,
-        true,
-        std::nullopt};
+    return EditorDelivery{theme.appearance,
+                          state_.mode(),
+                          state_.vim().mode,
+                          shown_ime_stance(),
+                          state_.command_input().transform(input_line_prompt_of),
+                          composed(),
+                          command_composed(),
+                          active_document_view(),
+                          std::move(settings),
+                          state_.settings_failure(),
+                          command_message(),
+                          state_.closing(),
+                          state_.close_request(),
+                          state_.operation_request(),
+                          state_.display_question(),
+                          layout_failure_,
+                          true,
+                          std::nullopt};
 }
 
 namespace
@@ -1363,6 +1403,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.start_screen = start_screen_view();
     result.context_menu = context_menu_view();
     result.completion = completion_view();
+    result.settings_panel = settings_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

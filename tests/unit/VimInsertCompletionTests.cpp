@@ -23,6 +23,7 @@
 #include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
+#include "OpenSettings.hpp"
 #include "Scopes.hpp"
 #include "ScrollCompletion.hpp"
 #include "SelectEditMode.hpp"
@@ -277,6 +278,23 @@ void verify_click()
     expect(body(editing) == words_text, "the click is part of the one undo unit of the insert");
 }
 
+// 設定の面との排他: 設定の面が開いている間に届いた Ctrl-n は設定の面を閉じるだけで、補完を
+// 始めない（その次の Ctrl-n は始める）。
+void verify_settings_exclusive()
+{
+    Editing editing;
+    open_vim_document(editing, std::string(words_text));
+    static_cast<void>(pressed(editing, "fxcwa"));
+    static_cast<void>(editing.controller().apply_frame(app::OpenSettings{}));
+    const auto refused = pressed(editing, "<C-n>");
+    expect(!refused.completion.has_value() && !completing(editing) &&
+               body(editing) == "a1 a2 a1 a a3 a2",
+           "Ctrl-n that arrives while the settings face is open starts no completion");
+    const auto started = pressed(editing, "<C-n>");
+    expect(started.completion.has_value() && completing(editing),
+           "the next Ctrl-n starts the completion once the settings face is closed");
+}
+
 // 他のタブの語（語の表を持つタブだけ・ADR 0169 の決定 1）は今の文書の語の後ろに並ぶ。
 void verify_other_tabs()
 {
@@ -461,6 +479,7 @@ void verify_vim_insert_completion()
     verify_face_follows_engine();
     verify_refusals_and_outside_close();
     verify_click();
+    verify_settings_exclusive();
     verify_other_tabs();
     verify_server_candidates();
     verify_waiting();

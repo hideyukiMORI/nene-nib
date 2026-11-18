@@ -28,6 +28,7 @@
 #include "PaneSide.hpp"
 #include "PreviewFrame.hpp"
 #include "SettingsIssue.hpp"
+#include "SettingsView.hpp"
 #include "SplitLayout.hpp"
 #include "StartScreenView.hpp"
 #include "StatusItems.hpp"
@@ -171,6 +172,9 @@ struct EditorFrame
     // 12 行に切った値で、答えの文脈（文書・revision・キャレット）が今と同じ間だけ値を持つ。
     // renderer はキャレットの上（入らなければ下）に札を描く。
     std::optional<std::string> hover{};
+    // 設定の面（ADR 0170 の決定 5・2026-11-18 の追補 2・施主決定 D102）。開いている間だけ値を持つ。
+    // renderer は値があれば右の引き出しに描く（配置は ui の工程）。
+    std::optional<SettingsView> settings_panel{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

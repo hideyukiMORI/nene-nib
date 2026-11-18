@@ -137,6 +137,8 @@
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "Session.hpp"
+#include "SettingsOpen.hpp"
+#include "SettingsView.hpp"
 #include "SplitState.hpp"
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
@@ -241,6 +243,12 @@ class EditorController final
     // 本文の右クリックのメニューが開いているか（ADR 0078 の追補 #1051）。窓が鍵とマウスの行き先を
     // 決めるための安い読みで、frame を作らない。
     [[nodiscard]] bool context_menu_active() const noexcept;
+    // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
+    // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
+    [[nodiscard]] bool settings_open() const noexcept;
+    // 設定の面の表示値（開いていなければ値なし）。frame に載る値と同じで、窓が鍵とマウスの後に
+    // 焦点の行と送りを読む口（本文の frame を作らない・#1836）。
+    [[nodiscard]] std::optional<SettingsView> settings_view() const;
     // 開いているメニューの選んでいる行（マウスの動きのたびに窓が比べる安い読み）。
     [[nodiscard]] std::optional<std::size_t> context_menu_highlighted() const noexcept;
     // 補完の面が見えているか（ADR 0190 の決定 5）。窓が上下・Enter・Tab・Esc の行き先を決めるための
@@ -1135,6 +1143,12 @@ class EditorController final
     // 打ち切られたときの 1 行。判断はここだけ（ARC-001）。
     [[nodiscard]] std::optional<core::DisplayText> command_message() const;
     [[nodiscard]] bool persist_settings(core::EditorSettings settings);
+    // 設定を状態に置いて後ろの同期（エクスプローラー・ミニマップ・map の表・追従）を通す 1 本。
+    // persist_settings が書いた後と、設定の面の切り替え（保存しない）が共用する。
+    void adopt_settings(core::EditorSettings settings);
+    // 設定を port に書く 1 本（persist_settings と設定の面の閉じが共用）。失敗は状態に置いて偽、
+    // 成功は失敗を消して真。状態の設定は変えない。
+    [[nodiscard]] bool write_settings(const core::EditorSettings &settings);
     // 設定が変わった後の追従と clamp の頼み（順は定義のコメント・#1432）。
     void follow_after_settings(bool reshaped);
     // Vim が窓を決め直す option（`scrolloff` `wrap` `relativenumber` `hlsearch`）を置いた時点の
@@ -1226,9 +1240,40 @@ class EditorController final
     void settle_vim_completion(CompletionSession &session);
     void merge_vim_completion_answer(CompletionSession &session,
                                      const core::LspCompletionList &list);
+    [[nodiscard]] std::optional<core::LspRange>
+    vim_completion_span(core::Offset origin, std::string_view original) const;
     [[nodiscard]] std::optional<std::string>
-    vim_completion_text(const CompletionSession &session, std::string_view original,
+    vim_completion_text(const core::LspRange &typed, core::Offset origin,
                         const core::CompletionEntry &entry) const;
+
+    // ---------------------------------------------------------------- 設定の面（ADR 0170・#1016）
+    // EditorControllerSettings.cpp の群だけが settings_ を読み書きする（2026-11-18 の追補 2）。
+    void accept(const OpenSettings &);
+    void accept(const CloseSettings &);
+    void accept(const RevertSettings &);
+    void accept(const StepSettings &intent);
+    void accept(const ChangeSetting &intent);
+    void accept(const ChooseSettingsPreset &intent);
+    void accept(const FilterSettings &intent);
+    void accept(const JumpSettingsSection &intent);
+    void accept(const FocusSettingsRow &intent);
+    void accept(const ScrollSettings &intent);
+    // 入口の 1
+    // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
+    // 写す前に閉じて保存する。
+    void close_settings_before(const EditorIntent &intent);
+    // 写す前の片付けの 3 つ（設定の面・待ちの鍵・`:s///c` の問い）を順に呼ぶ。
+    void settle_before(const EditorIntent &intent);
+    // 閉じて、開いたときの写しと違えば 1 回だけ書く（失敗は状態と 1 行の知らせと覚え）。
+    void close_settings();
+    // 窓を閉じるとき（EndSession）に、面で変えて書けなかった設定をもう 1 回だけ書く。
+    void retry_unsaved_settings();
+    // 面の切り替えをその場で効かせる（保存しない）。
+    void preview_settings(core::EditorSettings settings);
+    [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
+    [[nodiscard]] std::optional<std::size_t> focused_settings_row() const;
+    // 配達に載せる IME の構え（面が開いている間は閉じ直さない・#1836）。
+    [[nodiscard]] ImeStance shown_ime_stance() const;
 
     // ---------------------------------------------------------------- 起動画面（ADR 0172）
     // EditorControllerStartScreen.cpp の群だけが読み書きする。
@@ -1690,6 +1735,17 @@ class EditorController final
     // 開いている補完の面と、面の通し番号（ADR 0190 の決定 1・5）。
     std::optional<CompletionSession> completion_;
     std::uint64_t completion_sessions_ = 0;
+    // 開いている設定の面（ADR 0170 の 2026-11-18 の追補 2）。
+    std::optional<SettingsOpen> settings_;
+    // 面を閉じたときの書き込みが失敗し、状態の設定がまだファイルに無い（R1）。書けたとき・窓を
+    // 閉じるときの書き直しの後に落とす。
+    bool settings_unsaved_ = false;
+    // いまの意図の入口（close_settings_before）で面を閉じて書けなかった。同じ意図の中の
+    // retry_unsaved_settings を飛ばす（書き込みは 1 回だけ・#1835 の再確認 R-b1）。
+    bool settings_write_failed_now_ = false;
+    // いまの意図の入口で面を閉じた（面が開いていた）。同じ意図は補完の面も hover の札も出さず、
+    // 定義の問いも出さない（面どうしの排他・ADR 0190 の決定 5・6 と ADR 0170）。
+    bool settings_closed_now_ = false;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

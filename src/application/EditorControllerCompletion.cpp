@@ -276,9 +276,10 @@ bool EditorController::completion_startable() const
         break;
     }
     const auto &selection = state_.selection();
-    return !state_.command_input().has_value() && !state_.composition().has_value() &&
-           !explorer_focused() && state_.full_preview() == nullptr &&
-           selection.anchor == selection.caret;
+    // 設定の面が開いている間と、この意図の入口で設定の面を閉じた直後は開かない（面どうしの排他）。
+    return !settings_open() && !settings_closed_now_ && !state_.command_input().has_value() &&
+           !state_.composition().has_value() && !explorer_focused() &&
+           state_.full_preview() == nullptr && selection.anchor == selection.caret;
 }
 
 // 開いている面がまだ成り立つか。同じ文書がアクティブで、キャレットが語の頭より前へ行かず、語の
@@ -648,7 +649,10 @@ void arrange_vim(CompletionSession &session)
 void EditorController::offer_vim_completion(const core::VimKey &key)
 {
     const auto direction = core::vim_starts_completion(state_.vim(), key);
-    if (!direction.has_value() || state_.composition().has_value())
+    // 設定の面が開いている間と、この意図の入口で設定の面を閉じた直後は始めない（面どうしの排他・
+    // completion_startable と同じ読み）。
+    if (!direction.has_value() || state_.composition().has_value() || settings_open() ||
+        settings_closed_now_)
     {
         return;
     }
@@ -738,7 +742,7 @@ void EditorController::settle_vim_completion(CompletionSession &session)
 // ほかの範囲（終わりがキャレットでない・語の頭より後ろから・別の行）は直せないので空（列に
 // 入れない）。改行は engine の形（LF）。
 std::optional<std::string>
-EditorController::vim_completion_text(const CompletionSession &session, std::string_view original,
+EditorController::vim_completion_text(const core::LspRange &typed, core::Offset origin,
                                       const core::CompletionEntry &entry) const
 {
     std::string text = inserted_text(entry.insert, "\n");
@@ -746,28 +750,37 @@ EditorController::vim_completion_text(const CompletionSession &session, std::str
     {
         return text;
     }
+    const core::LspRange &range = entry.range.value();
+    if (range.end != typed.end || range.start.line != typed.start.line ||
+        typed.start.character < range.start.character)
+    {
+        return std::nullopt;
+    }
+    const auto begin = core::lsp_offset_of(state_.text(), range.start, language_server_.encoding);
+    if (!begin.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string before = state_.text().text_range(begin.value(), origin);
+    return text.starts_with(before) ? std::optional{text.substr(before.size())} : std::nullopt;
+}
+
+// 要求を出したときの「語の頭からキャレットまで」の LSP の範囲。語の頭より前の本文は補完の間に
+// 変わらないので語の頭は今の本文から引き、キャレットは語の頭 ＋ 元の接頭辞の長さ（LSP の単位）。
+// 答えが届いたときに 1 回だけ作る。元の接頭辞が本文に読めなければ空。
+std::optional<core::LspRange> EditorController::vim_completion_span(core::Offset origin,
+                                                                    std::string_view original) const
+{
     const auto encoding = language_server_.encoding;
     const auto typed = core::TextBuffer::from_utf8(original);
     if (!typed.has_value())
     {
         return std::nullopt;
     }
-    const core::LspRange &range = entry.range.value();
-    const core::LspPosition head = core::lsp_position_of(state_.text(), session.origin, encoding);
+    const core::LspPosition head = core::lsp_position_of(state_.text(), origin, encoding);
     const std::size_t units =
         core::lsp_position_of(typed.value(), core::Offset{original.size()}, encoding).character;
-    if (range.end != core::LspPosition{head.line, head.character + units} ||
-        range.start.line != head.line || head.character < range.start.character)
-    {
-        return std::nullopt;
-    }
-    const auto begin = core::lsp_offset_of(state_.text(), range.start, encoding);
-    if (!begin.has_value())
-    {
-        return std::nullopt;
-    }
-    const std::string before = state_.text().text_range(begin.value(), session.origin);
-    return text.starts_with(before) ? std::optional{text.substr(before.size())} : std::nullopt;
+    return core::LspRange{head, core::LspPosition{head.line, head.character + units}};
 }
 
 // 後から届いた LSP の候補を列の先頭側に足す（ADR 0190 の決定 5）。元の接頭辞に当たり（filter の
@@ -782,12 +795,17 @@ void EditorController::merge_vim_completion_answer(CompletionSession &session,
     {
         return;
     }
+    const auto typed = vim_completion_span(session.origin, engine->original);
+    if (!typed.has_value())
+    {
+        return;
+    }
     const std::vector<core::CompletionEntry> answered = core::completion_entries_of(list);
     std::vector<core::CompletionEntry> server;
     for (const std::size_t position : core::completion_matches(answered, engine->original))
     {
         core::CompletionEntry entry = answered.at(position);
-        auto text = vim_completion_text(session, engine->original, entry);
+        auto text = vim_completion_text(typed.value(), session.origin, entry);
         if (text.has_value())
         {
             entry.insert = std::move(text).value();

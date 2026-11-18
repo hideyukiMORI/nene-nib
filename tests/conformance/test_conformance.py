@@ -873,6 +873,51 @@ class TranslationUnitSizeChecks(unittest.TestCase):
         self.assertEqual([], [str(f) for f in cnf.translation_unit_size_checks(ROOT, cnf.inventory(ROOT))])
 
 
+class FeatureCostChecks(unittest.TestCase):
+    """CNF-015 — 機能の表の測った行と docs/quality/feature-costs.md の一致・ベンチの実在（ADR 0170）。"""
+
+    TABLE = ('inline constexpr std::array<FeatureCost, 2> feature_costs{{\n'
+             '    {EditorFeature::wrap, "wrap", true, FeatureStorage::own_key, 0, "", false,\n'
+             '     UiMessage::a, UiMessage::b},\n'
+             '    {EditorFeature::lsp, "lsp", false, FeatureStorage::own_key, 200, "lsp-single-key", true,\n'
+             '     UiMessage::c, UiMessage::d},\n}};\n')
+    DOCUMENT = "| 機能 | ベンチ | 1 打鍵の増分 µs |\n|---|---|---|\n| lsp | lsp-single-key | 200 |\n"
+    SPEED = 'LSP_SINGLE_BENCH = "lsp-single-key"\nLSP_BENCHES = (LSP_SINGLE_BENCH,)\nOPTIONAL_BENCHES = (*LSP_BENCHES,)\n'
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def details(self, table=TABLE, document=DOCUMENT, speed=SPEED):
+        for path, text in ((cnf.FEATURE_COSTS_TABLE, table), (cnf.FEATURE_COSTS_DOCUMENT, document),
+                           (cnf.MEASURE_SPEED, speed)):
+            (self.root / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / path).write_text(text, encoding="utf-8")
+        return [str(f) for f in cnf.feature_cost_checks(self.root)]
+
+    def test_cnf015_positive(self):
+        self.assertEqual([], self.details())
+
+    def test_cnf015_negative_number_differs(self):
+        self.assertEqual(["CNF-015: docs/quality/feature-costs.md: no row for lsp lsp-single-key 200",
+                          "CNF-015: src/core/FeatureCosts.hpp: no measured row for lsp lsp-single-key 150"],
+                         self.details(document=self.DOCUMENT.replace("200", "150")))
+
+    def test_cnf015_negative_bench_not_optional(self):
+        self.assertEqual(["CNF-015: src/core/FeatureCosts.hpp: bench lsp-single-key of lsp is not in "
+                          "OPTIONAL_BENCHES"],
+                         self.details(speed=self.SPEED.replace("OPTIONAL_BENCHES = (*LSP_BENCHES,)",
+                                                               "OPTIONAL_BENCHES = ()")))
+
+    def test_cnf015_negative_unread_row(self):
+        self.assertEqual(["CNF-015: src/core/FeatureCosts.hpp: read 1 rows of feature_costs, not the declared size"],
+                         self.details(table=self.TABLE.replace('"wrap", true', 'wrap_name, true')))
+
+    def test_cnf015_repository_passes(self):
+        self.assertEqual([], [str(f) for f in cnf.feature_cost_checks(ROOT)])
+
+
 class UiTextChecks(unittest.TestCase):
     """CNF-016 — 画面の文は UiMessage の表から（ADR 0123 の追補 2026-11-13 の決定 12・#1019）。"""
 

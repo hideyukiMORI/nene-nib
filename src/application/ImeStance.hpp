@@ -28,4 +28,9 @@ enum class ImeStance : std::uint8_t
 [[nodiscard]] ImeStance ime_stance_of(core::EditMode mode, core::VimMode vim_mode,
                                       const std::optional<CommandInput> &input,
                                       bool explorer_focused);
+
+// 設定の面が開いている間の構え（#1836）。decided は ime_stance_of の値。面の探す欄に日本語も
+// 打てるよう、閉じたままにする構え（Vim の NORMAL など）だけを「閉じ直さずに使う人に任せる」
+// （closed_once・入力行の種類は変わらないので ui は閉じない）に替える。ほかはそのまま。
+[[nodiscard]] ImeStance ime_stance_in_settings(ImeStance decided) noexcept;
 } // namespace nenenib::application

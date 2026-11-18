@@ -5,9 +5,7 @@
 
 #include <windows.h>
 
-#include <array>
 #include <optional>
-#include <utility>
 
 namespace nenenib::ui::win32
 {
@@ -27,7 +25,7 @@ namespace nenenib::ui::win32
 // ルートのフォルダを選ぶ Ctrl+Shift+R の R も写す（#1495・Shift なしは表に行が無く Vim の
 // Ctrl-r のまま）。Shift なしの Ctrl+V（貼り付け・#1051）は表に行があるが写さない（今の貼り付けの
 // 道のまま・Vim の矩形とエクスプローラーの焦点の振る舞いを変えない）。Ctrl+X / C / A と Delete も
-// 同じく写さない。
+// 同じく写さない。設定の面の Ctrl+,（#1836）も写す（Shift つきは表に行が無い）。
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
 {
@@ -58,34 +56,35 @@ namespace nenenib::ui::win32
     return std::nullopt;
 }
 
-// Ctrl つきの英字 → 操作の鍵の表（CPP-012）。Shift は押されているままを入れる。V は Shift つき
-// だけなので表の外。I は通常モードの補完の 2 つ目の鍵（施主決定 2026-11-18・Vim では表に行が無く
-// 今までどおり）。
-inline constexpr std::array<std::pair<WPARAM, core::OperationKey>, 13> operation_letters{
-    {{'O', core::OperationKey::o},
-     {'S', core::OperationKey::s},
-     {'P', core::OperationKey::p},
-     {'Z', core::OperationKey::z},
-     {'Y', core::OperationKey::y},
-     {'M', core::OperationKey::m},
-     {'E', core::OperationKey::e},
-     {'F', core::OperationKey::f},
-     {'H', core::OperationKey::h},
-     {'G', core::OperationKey::g},
-     {'N', core::OperationKey::n},
-     {'R', core::OperationKey::r},
-     {'I', core::OperationKey::i}}};
-
-[[nodiscard]] constexpr std::optional<core::OperationKey> operation_letter(WPARAM key) noexcept
+// Ctrl つきの記号・数字・空白・F4 の鍵（operation_chord の続き・CPP-012 の関数の長さで分ける）。
+[[nodiscard]] inline std::optional<core::KeyChord> symbol_chord(WPARAM key, bool shift)
 {
-    for (const auto &[letter, operation_key] : operation_letters)
+    const auto chord = [shift](core::OperationKey operation_key)
+    { return std::optional{core::KeyChord{true, shift, operation_key}}; };
+    // OS の仮想キーは開いた集合（CPP-017）。
+    switch (key)
     {
-        if (key == letter)
-        {
-            return operation_key;
-        }
+    case VK_OEM_PLUS:
+    case VK_ADD:
+        return chord(core::OperationKey::plus);
+    case VK_OEM_MINUS:
+    case VK_SUBTRACT:
+        return chord(core::OperationKey::minus);
+    case '0':
+    case VK_NUMPAD0:
+        return chord(core::OperationKey::zero);
+    case VK_SPACE:
+        return chord(core::OperationKey::space);
+    case VK_OEM_5:
+    case VK_OEM_102:
+        return chord(core::OperationKey::backslash);
+    case VK_OEM_COMMA:
+        return chord(core::OperationKey::comma);
+    case VK_F4:
+        return shift ? chord(core::OperationKey::f4) : std::nullopt;
+    default:
+        return std::nullopt;
     }
-    return std::nullopt;
 }
 
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,
@@ -101,33 +100,40 @@ inline constexpr std::array<std::pair<WPARAM, core::OperationKey>, 13> operation
     }
     const auto chord = [shift](core::OperationKey operation_key)
     { return std::optional{core::KeyChord{true, shift, operation_key}}; };
-    if (const auto letter = operation_letter(key))
-    {
-        return chord(letter.value());
-    }
     // OS の仮想キーは開いた集合（CPP-017）。
     switch (key)
     {
+    case 'O':
+        return chord(core::OperationKey::o);
+    case 'S':
+        return chord(core::OperationKey::s);
+    case 'P':
+        return chord(core::OperationKey::p);
+    case 'Z':
+        return chord(core::OperationKey::z);
+    case 'Y':
+        return chord(core::OperationKey::y);
+    case 'M':
+        return chord(core::OperationKey::m);
+    case 'E':
+        return chord(core::OperationKey::e);
     case 'V':
         return shift ? chord(core::OperationKey::v) : std::nullopt;
-    case VK_OEM_PLUS:
-    case VK_ADD:
-        return chord(core::OperationKey::plus);
-    case VK_OEM_MINUS:
-    case VK_SUBTRACT:
-        return chord(core::OperationKey::minus);
-    case '0':
-    case VK_NUMPAD0:
-        return chord(core::OperationKey::zero);
-    case VK_SPACE:
-        return chord(core::OperationKey::space);
-    case VK_OEM_5:
-    case VK_OEM_102:
-        return chord(core::OperationKey::backslash);
-    case VK_F4:
-        return shift ? chord(core::OperationKey::f4) : std::nullopt;
+    case 'F':
+        return chord(core::OperationKey::f);
+    case 'H':
+        return chord(core::OperationKey::h);
+    case 'G':
+        return chord(core::OperationKey::g);
+    case 'N':
+        return chord(core::OperationKey::n);
+    // 通常モードの補完の 2 つ目の鍵 Ctrl+I（施主決定 D104・Vim では表に行が無い）。
+    case 'I':
+        return chord(core::OperationKey::i);
+    case 'R':
+        return chord(core::OperationKey::r);
     default:
-        return std::nullopt;
+        return symbol_chord(key, shift);
     }
 }
 } // namespace nenenib::ui::win32
