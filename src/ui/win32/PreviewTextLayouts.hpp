@@ -38,8 +38,9 @@ class PreviewTextLayouts final
     // 表の升の文字組み（種類 table_row の要素・core::preview_table_cell）は本文の要素と別の保持で、
     // cell_capacity 件まで（見えている行 × 列が本文の要素の保持を押し出さない・#1848）。
     static constexpr std::size_t cell_capacity = 1024;
-    // 列の幅を覚えておく表の数。
-    static constexpr std::size_t table_capacity = 4;
+    // 列の幅を覚えておく表の数（同じ frame に見えている表の数より多く・あふれたら最も前に引いた表
+    // から捨てる・あふれても測り直すだけで描く値は同じ）。
+    static constexpr std::size_t table_capacity = 32;
 
     // 保持から引き、無ければ作って保持する。width は layout の幅（物理画素）。inlines は
     // 要素の中で読めた画像（ADR 0155 の追補 62）で、箱の範囲を同じ大きさの inline の物にし、
@@ -81,7 +82,8 @@ class PreviewTextLayouts final
     // index の要素（表の行）が属する表の、列ごとの中身の幅（その列のいちばん広い升・物理画素・
     // #1848）。列ごとに升の文字を改行でつないだ 1 つの文字組みを一時に作って幅だけを読み（保持
     // しない・表の行の数に依らず列の数だけ作る）、表の升の文字・装飾・見出しが同じなら測り直さない
-    // （最近の table_capacity 個・位置は鍵に入れないので、表の前の打鍵では測り直さない）。返す値は
+    // （表の同一性は行が持つ表の要約 core::PreviewTableRow::digest の 1 回の比較・位置は鍵に
+    // 入れないので、表の前の打鍵では測り直さない・最近の table_capacity 個）。返す値は
     // 次にこの保持を呼ぶまで使える。
     [[nodiscard]] std::expected<const std::vector<float> *, RenderFailure>
     table_columns(const core::MarkdownDocument &document, std::size_t index,
@@ -149,9 +151,11 @@ class PreviewTextLayouts final
     std::vector<Spacing> spacings_;
     std::vector<PreviewTextLayout> held_;
     std::vector<PreviewTextLayout> cells_;
-    // 表の鍵（行ごとの文字・装飾・見出しか）と列の幅。最近使った順。
-    using TableRowKey = std::tuple<std::string, std::vector<core::PreviewSpan>, bool>;
-    std::vector<std::pair<std::vector<TableRowKey>, std::vector<float>>> tables_;
+    // 表の要約・最後に引いた回・列の幅。
+    using TableColumns = std::tuple<std::uint64_t, std::uint64_t, std::vector<float>>;
+    std::vector<TableColumns> tables_;
+    // 保持と表の覚えを引いた回の通し番号。
+    std::uint64_t uses_ = 0;
     std::size_t measured_tables_ = 0;
     // 結んだ brush と、保持の色を置いた brush の回（PreviewBrushes::generation）。
     const PreviewBrushes *inked_by_ = nullptr;

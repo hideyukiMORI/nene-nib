@@ -61,6 +61,41 @@ PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column)
                         .alert = std::nullopt};
 }
 
+namespace
+{
+constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
+constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+
+void mixed(std::uint64_t &digest, std::uint64_t value) noexcept
+{
+    for (int shift = 0; shift < 64; shift += 8)
+    {
+        digest = (digest ^ ((value >> shift) & 0xFFU)) * fnv_prime;
+    }
+}
+} // namespace
+
+std::uint64_t preview_table_digest(std::span<const PreviewBlock> rows) noexcept
+{
+    std::uint64_t digest = fnv_offset;
+    for (const auto &row : rows)
+    {
+        mixed(digest, row.text.size());
+        for (const char value : row.text)
+        {
+            digest = (digest ^ static_cast<unsigned char>(value)) * fnv_prime;
+        }
+        mixed(digest, row.table.has_value() && row.table.value().header ? 1U : 0U);
+        for (const auto &span : row.spans)
+        {
+            mixed(digest, span.begin.value);
+            mixed(digest, span.end.value);
+            mixed(digest, static_cast<std::uint64_t>(span.style));
+        }
+    }
+    return digest;
+}
+
 std::pair<std::size_t, std::size_t> preview_table_rows(const MarkdownDocument &document,
                                                        std::size_t index)
 {

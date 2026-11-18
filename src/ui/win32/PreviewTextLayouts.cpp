@@ -32,23 +32,6 @@ constexpr float unbounded_height = 1.0e7F;
            entry.text == block.text && entry.spans == block.spans && entry.style == style;
 }
 
-// 表の鍵の 1 行（文字・装飾・見出しか）。
-using TableRowKey = std::tuple<std::string, std::vector<core::PreviewSpan>, bool>;
-
-// 表の行 rows が覚えた鍵 key と同じ文字・装飾・見出しか（位置は比べない）。
-[[nodiscard]] bool same_rows(const std::vector<TableRowKey> &key,
-                             std::span<const core::PreviewBlock> rows)
-{
-    return std::ranges::equal(key, rows,
-                              [](const TableRowKey &held, const core::PreviewBlock &row)
-                              {
-                                  return std::get<0>(held) == row.text &&
-                                         std::get<1>(held) == row.spans &&
-                                         std::get<2>(held) ==
-                                             (row.table.has_value() && row.table.value().header);
-                              });
-}
-
 // 列 column の升を行の順に改行でつないだ要素（装飾は升の中から写す・幅だけを測る）。
 [[nodiscard]] core::PreviewBlock column_block(std::span<const core::PreviewBlock> rows,
                                               std::size_t column)
@@ -345,10 +328,20 @@ PreviewTextLayouts::make(const core::PreviewBlock &block, float width,
         return std::unexpected(directwrite);
     }
     ++created_;
-    PreviewTextLayout entry{
-        block.text,        block.spans,     block.kind,     block.level, width, style,
-        boxes_of(inlines), std::move(made), metrics.height, {},          {},    0,
-        std::move(ranges)};
+    PreviewTextLayout entry{block.text,
+                            block.spans,
+                            block.kind,
+                            block.level,
+                            width,
+                            style,
+                            boxes_of(inlines),
+                            std::move(made),
+                            metrics.height,
+                            {},
+                            {},
+                            0,
+                            std::move(ranges),
+                            0};
     if (FAILED(locate(entry, block, inlines, style.dpi)))
     {
         return std::unexpected(directwrite);
@@ -450,11 +443,12 @@ PreviewTextLayouts::hold(const core::PreviewBlock &block, float width,
     }
     auto &pool = pool_of(block);
     const auto found = find(block, width, style, inlines);
+    // 引いた回を通し番号で覚え、あふれたら最も前に引いたものを捨てる（列を動かさない・
+    // 見えている升の数の 2 乗にならない・#1852 のレビュー）。
     if (found != pool.end())
     {
-        // 最近使った順の末尾へ回す（捨てるのは先頭から）。
-        std::rotate(found, found + 1, pool.end());
-        return std::prev(pool.end());
+        found->used = ++uses_;
+        return found;
     }
     auto made = make(block, width, style, inlines);
     if (!made)
@@ -463,8 +457,9 @@ PreviewTextLayouts::hold(const core::PreviewBlock &block, float width,
     }
     if (pool.size() >= (&pool == &cells_ ? cell_capacity : capacity))
     {
-        pool.erase(pool.begin());
+        pool.erase(std::ranges::min_element(pool, {}, &PreviewTextLayout::used));
     }
+    made.value().used = ++uses_;
     pool.push_back(std::move(made.value()));
     return std::prev(pool.end());
 }
@@ -611,34 +606,32 @@ PreviewTextLayouts::table_columns(const core::MarkdownDocument &document, std::s
     {
         return std::unexpected(directwrite);
     }
-    const auto [first, last] = core::preview_table_rows(document, index);
-    const auto rows =
-        std::span<const core::PreviewBlock>{document.blocks}.subspan(first, last - first);
-    const auto found = std::ranges::find_if(tables_, [rows](const auto &entry)
-                                            { return same_rows(entry.first, rows); });
+    // 表の同一性は行が持つ表の要約で 1 回で決める（行の数に依らない・#1852 のレビュー）。
+    const auto digest = document.blocks.at(index).table.transform(
+        [](const core::PreviewTableRow &row) { return row.digest; });
+    const auto found = std::ranges::find_if(
+        tables_, [&digest](const TableColumns &entry)
+        { return digest.has_value() && std::get<0>(entry) == digest.value(); });
     if (found != tables_.end())
     {
-        std::rotate(found, found + 1, tables_.end());
-        return &tables_.back().second;
+        std::get<1>(*found) = ++uses_;
+        return &std::get<2>(*found);
     }
-    auto columns = measured_columns(rows);
+    const auto [first, last] = core::preview_table_rows(document, index);
+    auto columns = measured_columns(
+        std::span<const core::PreviewBlock>{document.blocks}.subspan(first, last - first));
     if (!columns)
     {
         return std::unexpected(columns.error());
     }
-    std::vector<TableRowKey> key;
-    key.reserve(rows.size());
-    for (const auto &row : rows)
-    {
-        key.emplace_back(row.text, row.spans, row.table.has_value() && row.table.value().header);
-    }
     if (tables_.size() >= table_capacity)
     {
-        tables_.erase(tables_.begin());
+        tables_.erase(std::ranges::min_element(tables_, {}, [](const TableColumns &entry)
+                                               { return std::get<1>(entry); }));
     }
     ++measured_tables_;
-    tables_.emplace_back(std::move(key), std::move(columns.value()));
-    return &tables_.back().second;
+    tables_.emplace_back(digest.value_or(0U), ++uses_, std::move(columns.value()));
+    return &std::get<2>(tables_.back());
 }
 
 std::size_t PreviewTextLayouts::measured_tables() const noexcept

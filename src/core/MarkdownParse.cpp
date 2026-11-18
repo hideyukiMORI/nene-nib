@@ -159,8 +159,10 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
 {
     switch (type)
     {
-    case MD_BLOCK_DOC:
     case MD_BLOCK_TABLE:
+        builder.leave_table();
+        return;
+    case MD_BLOCK_DOC:
     case MD_BLOCK_THEAD:
     case MD_BLOCK_TBODY:
     case MD_BLOCK_TH:

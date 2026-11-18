@@ -4,6 +4,8 @@
 #include "PreviewBlock.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <span>
 #include <utility>
 
 namespace nenenib::core
@@ -25,4 +27,7 @@ namespace nenenib::core
 // 自分の番号から行の番号を引いた位置で、終わりは行の番号が 1 ずつ続く所まで。
 [[nodiscard]] std::pair<std::size_t, std::size_t>
 preview_table_rows(const MarkdownDocument &document, std::size_t index);
+// 表の行 rows の升の文字・装飾・見出しかの要約（FNV-1a 64・位置は入れない）。表を閉じるときに
+// 1 回だけ作り、列の幅の覚えが表の同一性を行の数に依らず 1 回で決める（#1852 のレビュー）。
+[[nodiscard]] std::uint64_t preview_table_digest(std::span<const PreviewBlock> rows) noexcept;
 } // namespace nenenib::core

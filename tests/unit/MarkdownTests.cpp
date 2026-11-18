@@ -112,7 +112,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                                  std::vector<std::pair<std::size_t, core::PreviewTableAlign>> cells)
 {
     auto block = leaf(PreviewBlockKind::table_row, std::move(text), begin);
-    core::PreviewTableRow table{.row = row, .header = row == 0U, .cells = {}, .aligns = {}};
+    core::PreviewTableRow table{
+        .row = row, .header = row == 0U, .cells = {}, .aligns = {}, .digest = 0U};
     for (const auto &[cell, align] : cells)
     {
         table.cells.push_back(Offset{cell});
@@ -499,6 +500,10 @@ void verify_strikethrough()
                   "an escaped tilde and a lone tilde are text");
     expect_blocks("`~a~`", {styled(leaf(paragraph, "~a~", 1U), {span(0U, 3U, inline_code)})},
                   "single tildes in a code span are text");
+    expect_blocks("\\~~a~ b", {leaf(paragraph, "~~a~ b", 1U)},
+                  "an escaped tilde before a single tilde pair is not counted as a mark");
+    expect_blocks("x\\~~a~", {leaf(paragraph, "x~~a~", 0U)},
+                  "an escaped tilde after text before a single tilde pair keeps every tilde");
     expect_blocks("x ~~~a~~~ y", {leaf(paragraph, "x ~~~a~~~ y", 0U)}, "three tildes are text");
     expect_blocks("x ~~a~ y", {leaf(paragraph, "x ~~a~ y", 0U)},
                   "tildes that do not pair are text");
@@ -617,6 +622,8 @@ void verify_tables()
     expect_blocks("| a |\n|---|\n\n| b |\n|---|",
                   {rowed("a", 2U, 0U, {{0U, left}}), rowed("b", 15U, 0U, {{0U, left}})},
                   "a second table counts its rows from 0 again");
+    expect_blocks("| a&NewLine;b |\n|---|", {rowed("a b", 2U, 0U, {{0U, left}})},
+                  "a newline from an entity in a cell becomes a space");
     expect_blocks("| a |\n| b |", {leaf(paragraph, "| a | | b |", 0U)},
                   "rows without a delimiter row are not a table");
 }
@@ -664,6 +671,8 @@ void verify_alerts()
                   "an alert marker in a quote inside a list is an ordinary quote");
     expect_blocks("> # [!NOTE]", {quoted(titled(1U, "[!NOTE]", 4U), 1U)},
                   "a heading first is an ordinary quote");
+    expect_blocks("> \\[!NOTE]\n> body", {quoted(leaf(paragraph, "[!NOTE] body", 3U), 1U)},
+                  "an escaped marker is an ordinary quote with the marker as text");
     expect_blocks(
         "> [!NOTE]\n> a\n\n> b",
         {alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U), {span(0U, 4U, title)}), note),

@@ -5,6 +5,7 @@
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewSpan.hpp"
+#include "PreviewTableCell.hpp"
 #include "PreviewTableRow.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
@@ -14,6 +15,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -151,6 +153,14 @@ constexpr std::string_view replacement = "\xEF\xBF\xBD";
         --at;
         ++count;
     }
+    // 並びの前の `\` が奇数個なら、並びの最初の `~` はエスケープした文字（記号に数えない・
+    // #1852 のレビュー）。
+    std::size_t escapes = 0U;
+    while (at > escapes && input[at - escapes - 1U] == '\\')
+    {
+        ++escapes;
+    }
+    count -= escapes % 2U == 1U && count > 0U ? 1U : 0U;
     return count == 0U ? 2U : count;
 }
 
@@ -267,6 +277,11 @@ std::optional<PreviewAlert> MarkdownBuilder::titled_alert(PreviewBlock &block)
         return std::nullopt;
     }
     const auto begin = leaf_begin_.value();
+    // エスケープした印（`> \[!NOTE]`）は alert にしない（#1852 のレビュー）。
+    if (begin > 0U && input_[begin - 1U] == '\\')
+    {
+        return std::nullopt;
+    }
     const auto kind = markdown_alert_line(input_.substr(begin, line_end(input_, begin) - begin));
     const auto shift = kind.has_value() ? markdown_alert_titled(block, kind.value())
                                         : std::optional<std::ptrdiff_t>{};
@@ -296,12 +311,29 @@ void MarkdownBuilder::enter_table()
     close_implicit();
     flush_marker();
     table_row_ = 0U;
+    table_start_ = blocks_.size();
+}
+
+void MarkdownBuilder::leave_table()
+{
+    close_implicit();
+    const auto start = std::min(table_start_, blocks_.size());
+    const auto rows = std::span<PreviewBlock>{blocks_}.subspan(start);
+    const auto digest = preview_table_digest(rows);
+    for (auto &row : rows)
+    {
+        if (row.table.has_value())
+        {
+            row.table.value().digest = digest;
+        }
+    }
 }
 
 void MarkdownBuilder::enter_row()
 {
     auto &row = opened(PreviewBlockKind::table_row, 0U);
-    row.table = PreviewTableRow{.row = table_row_, .header = false, .cells = {}, .aligns = {}};
+    row.table = PreviewTableRow{
+        .row = table_row_, .header = false, .cells = {}, .aligns = {}, .digest = 0U};
     ++table_row_;
 }
 
@@ -530,11 +562,12 @@ void MarkdownBuilder::text(std::string_view shown, std::string_view source)
     auto &leaf = ensure_leaf();
     const auto from = leaf.text.size();
     leaf.text.append(shown);
-    // 表の行の Tab は升の間だけ（升の中の Tab は空白にする・#1848）。
+    // 表の行の Tab は升の間だけ（升の中の Tab と改行（`&NewLine;` など）は空白にする・#1848）。
     if (leaf.kind == PreviewBlockKind::table_row)
     {
-        std::ranges::replace(leaf.text.begin() + static_cast<std::ptrdiff_t>(from), leaf.text.end(),
-                             '\t', ' ');
+        std::ranges::replace_if(
+            leaf.text.begin() + static_cast<std::ptrdiff_t>(from), leaf.text.end(),
+            [](char value) { return value == '\t' || value == '\n' || value == '\r'; }, ' ');
     }
     const auto at = located(source);
     if (!pending_strikes_.empty())

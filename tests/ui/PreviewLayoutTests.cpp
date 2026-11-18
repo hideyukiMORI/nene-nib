@@ -1487,6 +1487,47 @@ void check_large_table_cost()
     expect(made <= 1U + 8U + 8U * 6U && layouts.created() - made == 1U,
            "only the visible cells are made and an edit before the table makes one layout");
 }
+// 小さな表が 6 つ見えている文書（#1852 のレビュー）: 2 回目の描画では列の幅を測り直さず、文字組み
+// も作らない（覚えの上限が見えている表の数より多い）。
+void check_many_tables_kept()
+{
+    std::string text;
+    for (int table = 0; table < 6; ++table)
+    {
+        text += "| t" + std::to_string(table) + " |\n|---|\n\n";
+    }
+    const auto parsed = core::parse_markdown(text, core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.size() != 6U)
+    {
+        expect(false, "six one row tables parse into six rows");
+        return;
+    }
+    const auto style = style_of();
+    PreviewTextLayouts layouts;
+    const auto paint = [&]
+    {
+        const auto tops = win32::PreviewBlockTops::measure(
+            parsed.value(), layouts, style, win32::PreviewViewport{0, width, 400.0F});
+        CountingTarget target;
+        const win32::PreviewBrushes brushes;
+        std::optional<win32::RenderFailure> failure;
+        win32::PreviewPainter<CountingTarget> painter(target, layouts, brushes, failure);
+        if (tops)
+        {
+            painter.paint(win32::PreviewScene{
+                parsed.value(), tops.value(), style,
+                core::LayoutRect{0, 0, static_cast<std::int32_t>(width), 400}, 0.0F, std::nullopt});
+        }
+        return tops.has_value() && !failure.has_value() && target.balanced();
+    };
+    const bool first = paint();
+    const auto measured = layouts.measured_tables();
+    const auto made = layouts.created();
+    const bool second = paint();
+    expect(first && second && measured == 6U && layouts.measured_tables() == measured &&
+               layouts.created() == made,
+           "six visible tables are measured once and a second paint measures and makes nothing");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -1524,5 +1565,6 @@ void verify_preview_layouts()
     check_table_pixels();
     check_alert_pixels();
     check_large_table_cost();
+    check_many_tables_kept();
 }
 } // namespace nenenib::tests::ui
