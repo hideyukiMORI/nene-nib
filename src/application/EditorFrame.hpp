@@ -163,6 +163,10 @@ struct EditorFrame
     // 要素がタブ（本体か ×）のときだけ値を持つ。renderer は帯の配置とこの位置のタブの経路から札を
     // 描く（文は core::tab_tip_text）。
     std::optional<std::size_t> tab_tip{};
+    // hover の札の文（ADR 0190 の決定 6）。言語サーバーの答えの平文を core::hover_tip_text が
+    // 12 行に切った値で、答えの文脈（文書・revision・キャレット）が今と同じ間だけ値を持つ。
+    // renderer はキャレットの上（入らなければ下）に札を描く。
+    std::optional<std::string> hover{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

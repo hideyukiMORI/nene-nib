@@ -21,6 +21,7 @@
 #include "FileFailureText.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "InsertDateTime.hpp"
+#include "LanguageQueryKind.hpp"
 #include "Milestone.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDisplayLanguageList.hpp"
@@ -31,6 +32,7 @@
 #include "OperationTexts.hpp"
 #include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
+#include "QueryLanguage.hpp"
 #include "RegisterShell.hpp"
 #include "SaveDocument.hpp"
 #include "SaveQuestion.hpp"
@@ -403,6 +405,8 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::delete_selection, &EditorWindow::run_delete_selection},
         {core::EditorOperation::select_all, &EditorWindow::run_select_all},
         {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
+        {core::EditorOperation::go_to_definition, &EditorWindow::run_go_to_definition},
+        {core::EditorOperation::show_information, &EditorWindow::run_show_information},
     }};
     static_assert(runners_in_order(runners),
                   "operation runners follow the order of EditorOperation and point to a function");
@@ -628,6 +632,17 @@ void EditorWindow::run_search_project()
 void EditorWindow::run_cycle_finder_preview()
 {
     send(application::CycleFinderPreview{});
+}
+
+// 言語サーバーへの問い（ADR 0190 の決定 8）。出せるか・答えをどう使うかは controller が決める。
+void EditorWindow::run_go_to_definition()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::definition});
+}
+
+void EditorWindow::run_show_information()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::hover});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

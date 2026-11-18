@@ -78,13 +78,16 @@
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
 #include "KeyMap.hpp"
+#include "LandingPlace.hpp"
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
+#include "LanguageQueryKind.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LspLocation.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspRequest.hpp"
@@ -632,6 +635,8 @@ class EditorController final
     // 開いた当たりの文書がアクティブならキャレットを置く（`''` を置いてから
     // PlaceCaret）。開く要求が 消えていれば（開けなかった）置く先を捨てる。
     void land_project_hit();
+    // 着地の位置 → アクティブな本文の行と桁（言語サーバーの Position は lsp_offset_of の 1 本）。
+    [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
     // 進み具合の表示値（面が `!` の出どころのときだけ）。
     [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
     // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
@@ -906,6 +911,20 @@ class EditorController final
     [[nodiscard]] core::LspPosition request_position() const;
     [[nodiscard]] LspRequestContext request_context() const;
     void receive_answer(const PendingLspRequest &request, const core::LspResponse &response);
+    // 問いと答えの使い方（ADR 0190 の決定 6〜8）。本体は EditorControllerLanguageQueries.cpp。
+    // query_language は操作（F12・情報を表示）と Vim の `gd` `K` の効果が入る 1 本で、出せたら真。
+    // settle_language_answers は答えが届く合図の道の中で、空の hover を知らせ、定義の答えを 1 回
+    // 使って消す。hover の札は答えを状態に置いたまま shown_hover が frame に写し、消すのは入口の
+    // settle_hover（使う人の操作の意図）と WindowDeactivated の 2 か所。
+    void accept(const QueryLanguage &intent);
+    void accept(const WindowDeactivated &);
+    void perform(const core::VimLanguageQuery &effect);
+    [[nodiscard]] bool query_language(core::LanguageQueryKind kind);
+    void settle_hover(const EditorIntent &intent);
+    void drop_hover();
+    [[nodiscard]] std::optional<std::string> shown_hover() const;
+    void settle_language_answers();
+    void land_definition(const std::vector<core::LspLocation> &locations);
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);

@@ -62,6 +62,8 @@ namespace
     case EditorOperation::delete_selection:
     case EditorOperation::select_all:
     case EditorOperation::cycle_finder_preview:
+    case EditorOperation::go_to_definition:
+    case EditorOperation::show_information:
         return true;
     }
     return false;

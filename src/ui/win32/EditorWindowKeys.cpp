@@ -35,6 +35,7 @@
 #include "VimSpecialKey.hpp"
 #include "VimSpecialKeys.hpp"
 #include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WordDeletionKey.hpp"
 
 #include <algorithm>
@@ -188,6 +189,9 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
         // 窓が非アクティブになったら帯の hover を外し、タブの札を消す（#1789）。マウスが戻れば
         // WM_MOUSEMOVE が載せ直す。
         hover(std::nullopt);
+        // hover の札も消す（ADR 0190 の決定 6）。使う人の操作ではない知らせで、札が無ければ何も
+        // 変えない。
+        send(application::WindowDeactivated{});
         // よそで Ctrl を離すと WM_KEYUP は来ないので、ここでも残りを捨てる（#1048）。
         zoom_wheel_remainder_ = 0;
         break;

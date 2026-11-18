@@ -54,6 +54,7 @@
 #include "PointTitleBar.hpp"
 #include "PreviewTick.hpp"
 #include "PrintDocument.hpp"
+#include "QueryLanguage.hpp"
 #include "RefreshAppearance.hpp"
 #include "RegisterShell.hpp"
 #include "ResizeExplorer.hpp"
@@ -90,6 +91,7 @@
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <variant>
@@ -115,5 +117,5 @@ using EditorIntent = std::variant<
     SetPreviewPlacement, PointPreview, PrintDocument, RegisterShell, UnregisterShell, PinTab,
     FirstFramePresented, ChooseStartEntry, PointMinimap, ShowVersion, OpenProjectSearch,
     OpenContextMenu, PointContextMenu, StepContextMenu, ChooseContextMenu, CloseContextMenu,
-    CycleFinderPreview, TabTipTick>;
+    CycleFinderPreview, TabTipTick, QueryLanguage, WindowDeactivated>;
 } // namespace nenenib::application

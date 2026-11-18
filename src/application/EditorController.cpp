@@ -274,7 +274,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent);
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<WindowDeactivated>(intent) || keeps_wanted_x_for_menu(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
@@ -589,10 +590,11 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
 // 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
 // （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）と、タブの札
-// （settle_tab_tip・#1789）。
+// （settle_tab_tip・#1789）と、hover の札（settle_hover・ADR 0190 の決定 6）。
 void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
     settle_tab_tip(intent);
+    settle_hover(intent);
     if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
@@ -1304,6 +1306,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.guide = core::operation_guide(guide_context(), result.mode, result.language);
     // タブの札（#1789）。札が無いときの分岐はこの 1 つ（shown_tab_tip の入口）。
     result.tab_tip = shown_tab_tip();
+    // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
+    result.hover = shown_hover();
     if (gridded)
     {
         GridTally tally{0, 0, lexed};

@@ -14,6 +14,8 @@
 #include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorIntent.hpp"
+#include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "ExLspRequest.hpp"
 #include "ExResult.hpp"
@@ -23,17 +25,25 @@
 #include "GuideContext.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
+#include "HoverTip.hpp"
 #include "InsertText.hpp"
+#include "KeyChord.hpp"
+#include "LanguageQueryKind.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerTick.hpp"
+#include "LayoutRect.hpp"
 #include "LineView.hpp"
 #include "LspDiagnostics.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
+#include "OperationBindings.hpp"
+#include "OperationKey.hpp"
 #include "PlaceCaret.hpp"
+#include "QueryLanguage.hpp"
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
+#include "ScrollLines.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
@@ -47,14 +57,20 @@
 #include "StatusItems.hpp"
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
+#include "TabTipMeasure.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "VimAction.hpp"
+#include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimKeyTable.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
@@ -85,6 +101,12 @@ constexpr std::string_view clangd_command = R"("C:\LLVM\bin\clangd.exe" --log=er
 {
     return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
                                              : "";
+}
+
+// frame のキャレットが line 行 column 桁（1 始まり）か。
+[[nodiscard]] bool landed_at(const app::EditorFrame &frame, std::size_t line, std::size_t column)
+{
+    return frame.caret.position == core::TextPosition{core::LineNumber{line}, core::Column{column}};
 }
 
 // lsp を on / off にし、cpp にだけ命令を書いた設定。
@@ -1041,15 +1063,16 @@ void verify_answer_context()
     const std::int64_t typed = last_request(editing, "textDocument/hover");
     applied(editing.controller(), app::InsertText{"y"});
     answer_with(editing, typed, R"({"contents":"typed"})");
-    expect(hover_text(editing) == "doc", "a hover answer for an older revision is dropped");
+    expect(hover_text(editing) == "<none>", "a hover answer for an older revision is dropped");
     static_cast<void>(editing.controller().request_hover());
     const std::int64_t moved = last_request(editing, "textDocument/hover");
     static_cast<void>(caret_at(editing, 4));
     answer_with(editing, moved, R"({"contents":"moved"})");
-    expect(hover_text(editing) == "doc", "a hover answer for another caret is dropped");
+    expect(hover_text(editing) == "<none>", "a hover answer for another caret is dropped");
     static_cast<void>(editing.controller().request_hover());
     answer_with(editing, last_request(editing, "textDocument/hover"), "null");
-    expect(hover_text(editing) == "<empty>", "an empty hover answer is placed without text");
+    expect(hover_text(editing) == "<none>",
+           "an empty hover answer is told and not kept (the tip stage drops it)");
     applied(editing.controller(), app::OpenDocument{path_of(second_path)});
     static_cast<void>(editing.controller().request_definition());
     const std::int64_t elsewhere = last_request(editing, "textDocument/definition");
@@ -1059,10 +1082,9 @@ void verify_answer_context()
            "a definition answer for another tab is dropped");
     static_cast<void>(editing.controller().request_definition());
     answer_with(editing, last_request(editing, "textDocument/definition"), main_location);
-    const auto &definition = editing.controller().language_answers().definition;
-    expect(definition.has_value() && definition.value().locations.size() == 1 &&
-               definition.value().locations.front().uri == source_uri,
-           "a current definition answer is placed");
+    expect(!editing.controller().language_answers().definition.has_value() &&
+               landed_at(editing.controller().frame(), 1, 5),
+           "a current definition answer is used once (the caret lands on it)");
 }
 
 // 決定 1: 同じ種類の新しい要求は古い要求を取り消し、遅れた古い答えは捨てる。ほかの種類は
@@ -1083,10 +1105,10 @@ void verify_cancel()
     answer_with(editing, first, main_location);
     expect(!editing.controller().language_answers().definition.has_value(),
            "the late answer to the cancelled request is dropped");
-    answer_with(editing, second, "null");
-    const auto &definition = editing.controller().language_answers().definition;
-    expect(definition.has_value() && definition.value().locations.empty(),
-           "the answer to the newer request is placed");
+    editing.language_server().answer(second, "null");
+    expect(message(editing.controller().apply_frame(app::WorkCompleted{})) ==
+               "定義が見つかりません",
+           "the answer to the newer request is used (no definition is told)");
 }
 
 // 決定 1: 補完の答えは同じ文書がアクティブなときに、面の通し番号と共に置く。誤りの答えは空。
@@ -1150,6 +1172,338 @@ void verify_request_expiry()
     answer_with(editing, id, R"({"contents":"late"})");
     expect(hover_text(editing) == "<none>", "the answer after the expiry is dropped");
 }
+
+// ---------------------------------------------- 段 L3: hover の札と定義へ（ADR 0190 の決定
+// 6〜8・#1834）
+
+constexpr std::string_view two_location =
+    R"({"uri":"file:///C:/work/two.cpp","range":{"start":{"line":0,"character":2},"end":{"line":0,"character":3}}})";
+
+// 能力つきで起こし、Vim のモードにする。
+void capable_vim(Editing &editing)
+{
+    capable(editing);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+}
+
+// 答えを仕込み、合図の意図で引かせた frame。
+[[nodiscard]] app::EditorFrame answered_frame(Editing &editing, std::int64_t id,
+                                              std::string_view result)
+{
+    editing.language_server().answer(id, result);
+    return editing.controller().apply_frame(app::WorkCompleted{});
+}
+
+// `gd` を打って、その定義の要求に result で答えた frame。
+[[nodiscard]] app::EditorFrame defined(Editing &editing, std::string_view result)
+{
+    vim_replay(editing.controller(), "gd");
+    return answered_frame(editing, last_request(editing, "textDocument/definition"), result);
+}
+
+// `K` を打って、その hover の要求に result で答えた frame。
+[[nodiscard]] app::EditorFrame hovered(Editing &editing, std::string_view result)
+{
+    vim_replay(editing.controller(), "K");
+    return answered_frame(editing, last_request(editing, "textDocument/hover"), result);
+}
+
+[[nodiscard]] std::string active_path(Editing &editing)
+{
+    const auto frame = editing.controller().frame();
+    const auto &path = frame.tabs.at(frame.active_tab).path;
+    return path.has_value() ? std::string(path.value().text()) : "";
+}
+
+// 決定 8: 表の行（core）。`K` は通常の表、`gd` は g の表、F12 は両モードの「定義へ移動」。
+void verify_query_tables()
+{
+    expect(core::vim_action_for(U'K') == core::VimAction::language_hover &&
+               core::vim_g_action_for(U'd') == core::VimAction::language_definition &&
+               core::vim_language_query_for(core::VimAction::language_hover) ==
+                   core::LanguageQueryKind::hover &&
+               core::vim_language_query_for(core::VimAction::language_definition) ==
+                   core::LanguageQueryKind::definition &&
+               !core::vim_language_query_for(core::VimAction::move_left).has_value(),
+           "K and gd are rows of the key tables that name a language query");
+    const core::KeyChord f12{false, false, core::OperationKey::f12};
+    expect(core::operation_for(f12, core::EditMode::ordinary) ==
+                   core::EditorOperation::go_to_definition &&
+               core::operation_for(f12, core::EditMode::vim) ==
+                   core::EditorOperation::go_to_definition &&
+               !core::shown_chord(core::EditorOperation::show_information, core::EditMode::ordinary)
+                    .has_value(),
+           "F12 goes to the definition in both modes and show information has no key");
+}
+
+// 決定 8: `gd` `K` は NORMAL で回数もオペレータも無いときだけ問う。
+void verify_vim_keys_ask()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto &server = editing.language_server();
+    vim_replay(editing.controller(), "K");
+    expect(server.requests("textDocument/hover").size() == 1, "K asks for a hover");
+    vim_replay(editing.controller(), "gd");
+    expect(server.requests("textDocument/definition").size() == 1, "gd asks for the definition");
+    const std::size_t before = server.sent().size();
+    vim_replay(editing.controller(), "3K2gddK<Esc>dgd<Esc>vK<Esc>vgd<Esc>");
+    expect(server.sent().size() == before &&
+               whole_vim_body(editing.controller()) == "int main() {}\n",
+           "a count, a pending operator and VISUAL ask nothing and change nothing");
+}
+
+// 決定 8: 言語サーバーが動いていない文書では、表に行が無い鍵（`Q` と `gx`）と同じ失敗に見える。
+void verify_vim_keys_fail_without_server()
+{
+    Editing with_k;
+    Editing with_q;
+    for (Editing *editing : {&with_k, &with_q})
+    {
+        open_vim_document(*editing, "abc def\n");
+    }
+    // :normal! の意味では失敗した鍵の後ろを流さない。打った鍵の意味では後ろの鍵が走る。
+    vim_normal(with_k.controller(), "Kx");
+    vim_normal(with_q.controller(), "Qx");
+    expect(whole_vim_body(with_k.controller()) == "abc def\n" &&
+               whole_vim_body(with_q.controller()) == "abc def\n",
+           "K fails like an unbound key and ends a :normal! run");
+    vim_normal(with_k.controller(), "gdx");
+    vim_normal(with_q.controller(), "gxx");
+    expect(whole_vim_body(with_k.controller()) == "abc def\n" &&
+               whole_vim_body(with_q.controller()) == "abc def\n",
+           "gd fails like an unbound g key and ends a :normal! run");
+    vim_replay(with_k.controller(), "3Kx");
+    vim_replay(with_q.controller(), "3Qx");
+    const auto k_frame = with_k.controller().frame();
+    expect(whole_vim_body(with_k.controller()) == whole_vim_body(with_q.controller()) &&
+               whole_vim_body(with_k.controller()) == "bc def\n" && message(k_frame).empty() &&
+               with_k.language_server().touches() == 0,
+           "a typed K drops the count like an unbound key, says nothing and touches no server");
+}
+
+// 決定 7: 同じ文書の定義は `''` を置いてキャレットを移す。答えは使ったら消える。
+void verify_definition_in_document()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto frame = defined(editing, main_location);
+    expect(landed_at(frame, 1, 5) && message(frame).empty() &&
+               !editing.controller().language_answers().definition.has_value(),
+           "gd lands on the definition in the same document and uses the answer once");
+    vim_replay(editing.controller(), "``");
+    expect(landed_at(editing.controller().frame(), 1, 1),
+           "the place before the jump is kept in the '' mark");
+}
+
+// 決定 7: 別のファイルは開いて着地する（全文検索の当たりと同じ道）。行が本文の外なら末尾。
+void verify_definition_in_other_file()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto frame = defined(editing, two_location);
+    expect(active_path(editing) == second_path && landed_at(frame, 1, 3),
+           "gd opens the other file and lands on the definition");
+    Editing plain(lsp_settings(true));
+    capable(plain);
+    static_cast<void>(
+        plain.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition}));
+    const auto beyond = answered_frame(
+        plain, last_request(plain, "textDocument/definition"),
+        R"({"uri":"file:///C:/work/two.cpp","range":{"start":{"line":9,"character":0},"end":{"line":9,"character":1}}})");
+    expect(active_path(plain) == second_path && landed_at(beyond, 2, 1),
+           "a line outside the opened text lands at its end");
+}
+
+// 決定 7: 2 つ以上は最初へ跳んで「1 / N」・無ければ 1 行・file: 以外は 1 行・開けなければ動かない。
+void verify_definition_notices()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto first =
+        defined(editing, "[" + std::string{main_location} + "," + std::string{two_location} + "]");
+    expect(landed_at(first, 1, 5) && message(first) == "定義 1 / 2",
+           "several definitions land on the first and tell how many there are");
+    const auto none = defined(editing, "[]");
+    expect(landed_at(none, 1, 5) && message(none) == "定義が見つかりません",
+           "no definition is told in one line");
+    const auto null = defined(editing, "null");
+    expect(message(null) == "定義が見つかりません", "a null answer is no definition");
+    const auto foreign = defined(
+        editing,
+        R"({"uri":"jdt://contents/x.class","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}})");
+    expect(landed_at(foreign, 1, 5) &&
+               message(foreign) == "定義の場所はファイルではないので開けません",
+           "a location that is not a file is told in one line");
+    const auto missing = defined(
+        editing,
+        R"({"uri":"file:///C:/work/missing.cpp","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}})");
+    expect(active_path(editing) == source_path && landed_at(missing, 1, 5) &&
+               !message(missing).empty(),
+           "a definition in a file that cannot be opened leaves the caret and tells why");
+}
+
+// 決定 1: 文脈の違う答え（キャレットが動いた・入力行が開いた）では跳ばない・知らせない。
+void verify_definition_context()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    vim_replay(editing.controller(), "gd");
+    const std::int64_t asked = last_request(editing, "textDocument/definition");
+    vim_replay(editing.controller(), "l");
+    const auto moved = answered_frame(editing, asked, two_location);
+    expect(active_path(editing) == source_path && landed_at(moved, 1, 2) && message(moved).empty(),
+           "a definition answer for another caret does nothing");
+    vim_replay(editing.controller(), "gd");
+    const std::int64_t again = last_request(editing, "textDocument/definition");
+    vim_replay(editing.controller(), ":");
+    static_cast<void>(answered_frame(editing, again, two_location));
+    expect(active_path(editing) == source_path &&
+               !editing.controller().language_answers().definition.has_value(),
+           "a definition answer that arrives while a command line is open is dropped");
+}
+
+// 決定 6: `K` の答えは frame の札に載る。合図では消えず、使う人の操作と窓の非アクティブ化で消える。
+void verify_hover_tip_shown()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto shown = hovered(editing, R"({"contents":"int main"})");
+    expect(shown.hover == std::optional<std::string>{"int main"} && message(shown).empty(),
+           "the hover answer is carried by the frame");
+    expect(editing.controller().apply_frame(app::WorkCompleted{}).hover.has_value() &&
+               editing.controller().apply_frame(app::AutosaveTick{}).hover.has_value() &&
+               editing.controller().apply_frame(app::VisibleLines{shown_lines}).hover.has_value(),
+           "signals and the window size keep the tip");
+    expect(!editing.controller().apply_frame(app::WindowDeactivated{}).hover.has_value() &&
+               !editing.controller().language_answers().hover.has_value(),
+           "a deactivated window drops the tip and the answer");
+    const std::vector<app::EditorIntent> operations{
+        app::VimKeyPress{core::VimKey{core::VimSpecialKey::escape}},
+        app::ScrollLines{1},
+        app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                        core::SelectionAnchoring::collapse},
+        app::NewTab{},
+    };
+    bool dropped = true;
+    for (const app::EditorIntent &operation : operations)
+    {
+        applied(editing.controller(), app::SwitchTab{0});
+        dropped = dropped && hovered(editing, R"({"contents":"doc"})").hover.has_value() &&
+                  !editing.controller().apply_frame(operation).hover.has_value();
+    }
+    expect(dropped, "a key, the wheel, a click and a tab switch drop the tip");
+}
+
+// 決定 6: 空の答えは札を出さず 1 行知らせる。文脈の違う答えは何も起こさない。12 行で切る。
+void verify_hover_tip_edges()
+{
+    Editing editing(lsp_settings(true));
+    capable_vim(editing);
+    const auto empty = hovered(editing, "null");
+    expect(!empty.hover.has_value() && message(empty) == "情報がありません" &&
+               !editing.controller().language_answers().hover.has_value(),
+           "an empty hover answer shows no tip and tells so in one line");
+    vim_replay(editing.controller(), "K");
+    const std::int64_t asked = last_request(editing, "textDocument/hover");
+    vim_replay(editing.controller(), "l");
+    const auto moved = answered_frame(editing, asked, R"({"contents":"late"})");
+    expect(!moved.hover.has_value() && message(moved).empty(),
+           "a hover answer for another caret shows nothing and tells nothing");
+    const auto tall =
+        hovered(editing, R"({"contents":"1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13"})");
+    expect(tall.hover == std::optional<std::string>{"1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12…"},
+           "a hover of more than twelve lines is cut with an ellipsis");
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::ordinary});
+    static_cast<void>(
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::hover}));
+    const auto edited = answered_frame(editing, last_request(editing, "textDocument/hover"),
+                                       R"({"contents":"doc"})");
+    expect(edited.hover.has_value() &&
+               !editing.controller().apply_frame(app::InsertText{"x"}).hover.has_value(),
+           "an edit drops the tip");
+}
+
+// 決定 8・5: 操作（F12・情報を表示）は通常モードでも問い、言語サーバーが動いていなければ知らせる。
+void verify_query_operations()
+{
+    Editing editing(lsp_settings(true));
+    capable(editing);
+    const auto &server = editing.language_server();
+    const auto asked =
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition});
+    expect(server.requests("textDocument/definition").size() == 1 && message(asked).empty(),
+           "the go to definition operation asks in the ordinary mode");
+    const auto landed =
+        answered_frame(editing, last_request(editing, "textDocument/definition"), main_location);
+    expect(landed_at(landed, 1, 5), "the operation's answer lands like gd");
+    static_cast<void>(
+        editing.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::hover}));
+    const auto tip = answered_frame(editing, last_request(editing, "textDocument/hover"),
+                                    R"({"contents":"doc"})");
+    expect(tip.hover == std::optional<std::string>{"doc"},
+           "the show information operation shows the tip");
+
+    Editing off;
+    hold_documents(off);
+    applied(off.controller(), app::OpenDocument{path_of(source_path)});
+    const auto quiet =
+        off.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::definition});
+    const auto silent =
+        off.controller().apply_frame(app::QueryLanguage{core::LanguageQueryKind::hover});
+    expect(message(quiet) == "言語サーバーが動いていません" &&
+               message(silent) == "言語サーバーが動いていません" &&
+               off.language_server().touches() == 0,
+           "without a running server both operations tell so in one line");
+}
+
+// 決定 6: 札の文の切り詰めと置き場（core の純関数）。
+void verify_hover_tip_core()
+{
+    expect(core::hover_tip_text("a\r\nb\rc\n\n") == "a\nb\nc" &&
+               core::hover_tip_text("1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12") ==
+                   "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12" &&
+               core::hover_tip_text("1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n \n13") ==
+                   "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11…",
+           "the tip text uses line feeds, drops trailing blank lines and keeps twelve lines");
+    expect(core::hover_tip_clipped("abc def", 7) == "abc def" &&
+               core::hover_tip_clipped("abc def", 4) == "abc…" &&
+               core::hover_tip_clipped("あいう", 2) == "あい…" &&
+               core::hover_tip_clipped("abc", 0) == "…",
+           "the clipped text keeps whole characters, trims the end and adds an ellipsis");
+    expect(
+        core::hover_tip_text_limit(2000, 96) == 460 && core::hover_tip_text_limit(300, 96) == 264 &&
+            core::hover_tip_text_limit(10, 96) == 0 && core::hover_tip_text_limit(2000, 192) == 920,
+        "the text limit is 480 DIP or the area less the edges, less the padding");
+    const core::LayoutRect area{100, 50, 900, 600};
+    const core::TabTipMeasure text{200, 40, 96};
+    // 札は 220 × 52。上は キャレットの上端 − 4 − 52。
+    expect(core::hover_tip_rect(core::LayoutRect{300, 200, 302, 220}, area, text) ==
+                   core::LayoutRect{300, 144, 520, 196} &&
+               core::hover_tip_rect(core::LayoutRect{300, 60, 302, 80}, area, text) ==
+                   core::LayoutRect{300, 84, 520, 136} &&
+               core::hover_tip_rect(core::LayoutRect{800, 200, 802, 220}, area, text) ==
+                   core::LayoutRect{672, 144, 892, 196} &&
+               core::hover_tip_rect(core::LayoutRect{20, 200, 22, 220},
+                                    core::LayoutRect{100, 50, 250, 600},
+                                    text) == core::LayoutRect{100, 144, 320, 196},
+           "the tip sits above the caret, below it when there is no room, inside the area");
+}
+
+void verify_language_queries()
+{
+    verify_query_tables();
+    verify_vim_keys_ask();
+    verify_vim_keys_fail_without_server();
+    verify_definition_in_document();
+    verify_definition_in_other_file();
+    verify_definition_notices();
+    verify_definition_context();
+    verify_hover_tip_shown();
+    verify_hover_tip_edges();
+    verify_query_operations();
+    verify_hover_tip_core();
+}
 } // namespace
 
 void verify_language_server_contracts()
@@ -1186,6 +1540,7 @@ void verify_language_server_contracts()
     verify_cancel();
     verify_completion_answer();
     verify_request_expiry();
+    verify_language_queries();
 }
 
 void verify_language_server_scope()

@@ -67,6 +67,9 @@ void verify_project_hit_paint();
 void verify_context_menu_paint();
 // #1785: プレビュー欄の画素（ADR 0189 の決定 5・right / below / off × ダークとライト）。
 void verify_finder_preview_paint();
+// hover の札の折り返し・12 行・置き場と画素（ADR 0190 の決定 6・#1834）。描く 1 本がタブの札と同じ
+// なので、群 `--tab-tip` の verify_tab_tip_paint が終わりに呼ぶ（群の表に行を足さない）。
+void verify_hover_tip_paint();
 // 窓の角は四角（DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND・#1488）。窓は作らない。
 void verify_window_corners();
 // 描画を失って取消の無い箱を聞く間だけの窓の下地（#1499）。窓は作らない。

@@ -411,6 +411,8 @@ class EditorWindow final
     void run_delete_selection();
     void run_select_all();
     void run_cycle_finder_preview();
+    void run_go_to_definition();
+    void run_show_information();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

@@ -1,6 +1,7 @@
 #include "TabTipLayout.hpp"
 
 #include "DevicePixels.hpp"
+#include "LayoutRect.hpp"
 #include "RgbColor.hpp"
 #include "TabTip.hpp"
 #include "TabTipMeasure.hpp"
@@ -86,6 +87,24 @@ constexpr float measuring_width = 100'000.0F;
 }
 } // namespace
 
+TabTipPaint tip_paint(const core::LayoutRect &box, IDWriteTextLayout *written,
+                      const core::Palette &palette, std::uint32_t dpi)
+{
+    const float scale = static_cast<float>(dpi) / static_cast<float>(core::reference_dpi);
+    return TabTipPaint{
+        D2D1::RectF(static_cast<float>(box.left), static_cast<float>(box.top),
+                    static_cast<float>(box.right), static_cast<float>(box.bottom)),
+        written,
+        D2D1::Point2F(
+            static_cast<float>(box.left + core::to_pixels(core::tab_tip_padding_x_dips, dpi)),
+            static_cast<float>(box.top + core::to_pixels(core::tab_tip_padding_y_dips, dpi))),
+        static_cast<float>(core::tab_tip_radius_dips) * scale,
+        scale,
+        color_of(palette.panel),
+        color_of(palette.panel_border),
+        color_of(palette.text)};
+}
+
 IDWriteTextLayout *TabTipLayout::fitted(IDWriteFactory &dwrite, IDWriteTextFormat *format,
                                         std::string_view text, std::int32_t limit)
 {
@@ -124,19 +143,7 @@ std::optional<TabTipPaint> TabTipLayout::painted(const core::TitleBarLayout &lay
         core::TabTipMeasure{
             static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace)),
             static_cast<std::int32_t>(std::ceil(metrics.height)), dpi});
-    const float scale = static_cast<float>(dpi) / static_cast<float>(core::reference_dpi);
-    return TabTipPaint{
-        D2D1::RectF(static_cast<float>(box.left), static_cast<float>(box.top),
-                    static_cast<float>(box.right), static_cast<float>(box.bottom)),
-        layout_.Get(),
-        D2D1::Point2F(
-            static_cast<float>(box.left + core::to_pixels(core::tab_tip_padding_x_dips, dpi)),
-            static_cast<float>(box.top + core::to_pixels(core::tab_tip_padding_y_dips, dpi))),
-        static_cast<float>(core::tab_tip_radius_dips) * scale,
-        scale,
-        color_of(palette.panel),
-        color_of(palette.panel_border),
-        color_of(palette.text)};
+    return tip_paint(box, layout_.Get(), palette, dpi);
 }
 
 void TabTipLayout::clear() noexcept

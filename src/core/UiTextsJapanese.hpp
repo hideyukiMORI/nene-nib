@@ -119,6 +119,12 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_cycle_finder_preview_name, "プレビューの置き方を切り替える"},
     {UiMessage::operation_cycle_finder_preview_description,
      "Ctrl+P の面のプレビューを右・下・なしの順に変えます（面を開いている間は Ctrl+Shift+P）"},
+    {UiMessage::operation_go_to_definition_name, "定義へ移動"},
+    {UiMessage::operation_go_to_definition_description,
+     "キャレットの名前の定義へ移動します（言語サーバー）"},
+    {UiMessage::operation_show_information_name, "情報を表示"},
+    {UiMessage::operation_show_information_description,
+     "キャレットの名前の情報を札で表示します（言語サーバー）"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -278,5 +284,10 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::start_new_file_detail, "そのまま打ち始める"},
     {UiMessage::start_open_folder, "フォルダを開く"},
     {UiMessage::start_open_folder_detail, "ルートを選んでエクスプローラーを出す"},
+    {UiMessage::notice_language_server_not_running, "言語サーバーが動いていません"},
+    {UiMessage::notice_definition_not_found, "定義が見つかりません"},
+    {UiMessage::notice_definition_first_of, "定義 1 / {0}"},
+    {UiMessage::notice_definition_not_a_file, "定義の場所はファイルではないので開けません"},
+    {UiMessage::notice_information_not_found, "情報がありません"},
 }};
 } // namespace nenenib::core

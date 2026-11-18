@@ -265,7 +265,7 @@ void EditorController::open_project_hit(std::size_t index)
     const ProjectSearchHit hit = project_search_.hits.at(index);
     close_command_input();
     project_landing_ =
-        ProjectHitLanding{hit.file, core::TextPosition{hit.hit.line, hit.hit.column}};
+        ProjectHitLanding{hit.file, LandingPlace{core::TextPosition{hit.hit.line, hit.hit.column}}};
     open_listed(hit.file, core::PaletteOrigin::project_hit, OpenedAs::pinned);
     land_project_hit();
 }
@@ -289,7 +289,7 @@ void EditorController::land_project_hit()
         {
             state_ = state_.with_vim_marks(std::move(marks).value());
         }
-        accept(PlaceCaret{landing.at, core::SelectionAnchoring::collapse});
+        accept(PlaceCaret{landed_position(landing.at), core::SelectionAnchoring::collapse});
         return;
     }
     // 開く要求が残っていなければ開けなかった（知らせは開く道が出した）。
@@ -298,6 +298,20 @@ void EditorController::land_project_hit()
     {
         project_landing_.reset();
     }
+}
+
+// 着地の位置 → アクティブな本文の行と桁（ADR 0190 の決定 7）。言語サーバーの Position は開いた
+// 後の本文で lsp_offset_of の 1 本が写し、行が本文の外なら末尾。
+core::TextPosition EditorController::landed_position(const LandingPlace &place) const
+{
+    if (const auto *const position = std::get_if<core::TextPosition>(&place); position != nullptr)
+    {
+        return *position;
+    }
+    const core::TextBuffer &text = state_.text();
+    const auto at =
+        core::lsp_offset_of(text, std::get<core::LspPosition>(place), language_server_.encoding);
+    return text.position_of(at.value_or(core::Offset{text.size_bytes()}));
 }
 
 std::optional<ProjectSearchView> EditorController::project_search_view() const
