@@ -189,6 +189,24 @@ void verify_crlf_document()
                toggled.document.save_state == core::SaveState::modified,
            "a CRLF document toggles the mark of the second line");
 }
+
+// 6. front matter（#1840）は要素 0 で、後ろの task の印の位置は front matter の分だけずれない。
+void verify_front_matter_document()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_previewed(editing, "---\ntitle: a\n---\n- [ ] a\n- [x] b");
+    const EditorFrame toggled = controller.apply_frame(app::TogglePreviewTask{1});
+    expect(body_of(toggled) == "---\ntitle: a\n---\n- [x] a\n- [x] b",
+           "the first task after a front matter toggles its own mark");
+    const EditorFrame second = controller.apply_frame(app::TogglePreviewTask{2});
+    expect(body_of(second) == "---\ntitle: a\n---\n- [x] a\n- [ ] b",
+           "the second task after a front matter toggles its own mark");
+    const EditorFrame front = controller.apply_frame(app::TogglePreviewTask{0});
+    expect(body_of(front) == "---\ntitle: a\n---\n- [x] a\n- [ ] b" &&
+               message_of(front) == "プレビューが古いので切り替えられません",
+           "the front matter has no task and is refused");
+}
 } // namespace
 
 void verify_preview_task_scope()
@@ -198,5 +216,6 @@ void verify_preview_task_scope()
     verify_redraw_through_revision();
     verify_vim_toggle();
     verify_crlf_document();
+    verify_front_matter_document();
 }
 } // namespace nenenib::tests

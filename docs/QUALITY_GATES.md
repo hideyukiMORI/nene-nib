@@ -235,6 +235,7 @@ fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-o
 Vim を要らずに全文を作り直せるので、SHA の 1 行ではなく全文の一致を見る。直すのは `python eng/vim-oracle.py --key-names` だけ。
 表の検査（名前の重複・`<` で始まり `>` で終わる形・ある名前が別の名前の接頭辞にならない）は oracle が読み込むときに例外で止め、表に無い列挙子の名前は生成物のコンパイルが落とす。
 Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` も同じ形の生成物で、`eng/case-mapping.py` の `case_mapping_header()`（固定の Python の `unicodedata`）の出力との全文の一致を CNF-010 で見る（Issue #781・ADR 0015 決定 10 の追記）。直すのは `python eng/case-mapping.py --write` だけ。
+Markdown プレビューの名前つきの実体参照の表 `src/core/MarkdownEntityTable.hpp` も同じ形の生成物で、`eng/markdown-entities.py` の `markdown_entities_header()`（固定の Python の `html.entities.html5` の末尾が `;` の名前・名前のバイト順）の出力との全文の一致を CNF-010 で見る（#1840）。直すのは `python eng/markdown-entities.py --write` だけ。
 折り返す窓の fixture の生成物 `tests/vim/VimWrapFixtures.hpp` は、`eng/vim-wrap-oracle.py --regenerate` が先頭に書いた入力 3 つ（`wrap-fixtures.json`・測定のコード `eng/vim-wrap-oracle.py`・共有の oracle `eng/vim-oracle.py`）の SHA-256 の行を、木のファイルのバイト列の SHA-256 と突き合わせる。入力の表は `eng/conformance-rules.json` の `wrapFixtureProvenance` の 1 つで、生成器が自分で照合する口（`python eng/vim-wrap-oracle.py`）と同じ 3 つ。生成物が無い・行が無い・SHA が違う・入力が無い、のいずれも CNF-010（Issue #1431）。
 Vim を起動しないので CI でも回る。共有の oracle も入力に数えるので、`eng/vim-oracle.py` を変える PR は折り返す窓の fixture も Vim のある機械で測り直す。
 fixture の `settings` は生成物の行の最後の欄に載り、再生が窓の後・鍵の前に `:` の行として流し、Nib が受けない行は再生の試験が落ちる: **active**（CTest `nib_unit` / `nib_unit_scopes` の fixture の再生・載せない行は oracle の `NIB_FIXED_SETTINGS` の表だけ・ADR 0012 の追記・#1626）。
@@ -375,7 +376,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |
 | CNF-009 | active | eng/conformance.py / tests/conformance |
-| CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `src/core/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054。折り返す窓の生成物 `tests/vim/VimWrapFixtures.hpp` は入力 3 つの SHA-256 の行と一致・#1431） |
+| CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `src/core/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054。折り返す窓の生成物 `tests/vim/VimWrapFixtures.hpp` は入力 3 つの SHA-256 の行と一致・#1431。実体参照の表 `src/core/MarkdownEntityTable.hpp` は eng/markdown-entities.py の `markdown_entities_header` と全文一致・#1840） |
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |

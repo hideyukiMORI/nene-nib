@@ -2,6 +2,7 @@
 
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewTableAlign.hpp"
 #include "PreviewTaskBox.hpp"
 #include "PreviewTextStyle.hpp"
 
@@ -26,10 +27,13 @@ namespace nenenib::ui::win32
 [[nodiscard]] float preview_line_pixels(const PreviewTextStyle &style) noexcept;
 // 見出しの倍率（h1 1.6・h2 1.35・h3 1.15・ほかは 1）。
 [[nodiscard]] float preview_heading_scale(std::uint8_t level) noexcept;
-// 等幅で描く要素（コードブロックと HTML ブロック）か。
+// 等幅で描く要素（コードブロック・HTML ブロック・front matter）か。
 [[nodiscard]] bool preview_monospaced(core::PreviewBlockKind kind) noexcept;
+// 囲みのコードの面（panel・内側の余白・折らずに面で切る）に描く要素
+// （コードブロックと front matter・#1840）か。
+[[nodiscard]] bool preview_paneled(core::PreviewBlockKind kind) noexcept;
 // 要素の layout の幅。枠の幅から字下げ indent（PreviewBlockTops が決める）と右の余白、
-// コードブロックは面の内側の余白を引く。
+// 面に描く要素（preview_paneled）は面の内側の余白を引く。
 [[nodiscard]] float preview_text_width(const core::PreviewBlock &block, float frame_width,
                                        float indent, std::uint32_t dpi) noexcept;
 // 左右の余白（16 DIP）・引用の深さ depth（0 から）の左の線の左端・箇条書きの 1 段の字下げの
@@ -42,6 +46,22 @@ namespace nenenib::ui::win32
 [[nodiscard]] float preview_code_padding(std::uint32_t dpi) noexcept;
 // 枠の上の余白。
 [[nodiscard]] float preview_top_margin(std::uint32_t dpi) noexcept;
+// 表（採用案 D103・#1848）: 升の左右の余白 14 DIP・上下の余白 7 DIP・見出しの下の罫 2 DIP・行の間の
+// 罫 1 DIP。行の高さは行高に上下の余白を足した一定の値で、升の中では折り返さない。
+[[nodiscard]] float preview_table_padding_x(std::uint32_t dpi) noexcept;
+[[nodiscard]] float preview_table_padding_y(std::uint32_t dpi) noexcept;
+[[nodiscard]] float preview_table_rule(bool header, std::uint32_t dpi) noexcept;
+// 行の原点（字下げの位置）から column 番目の升の文字の箱の左端まで（前の列の幅と左右の余白の和
+// ＋ 自分の左の余白）。columns は列ごとの中身の幅（物理画素）。
+[[nodiscard]] float preview_table_cell_left(std::span<const float> columns, std::size_t column,
+                                            std::uint32_t dpi) noexcept;
+// 表の幅（列の幅と左右の余白の和）。
+[[nodiscard]] float preview_table_width(std::span<const float> columns, std::uint32_t dpi) noexcept;
+// 列の幅 column_width の中で、幅 cell_width の升の文字を揃えるために箱の左端から足す量。
+[[nodiscard]] float preview_table_aligned(float column_width, float cell_width,
+                                          core::PreviewTableAlign align) noexcept;
+// alert の左の線の太さ（3 DIP・ふつうの引用は 2 DIP）。
+[[nodiscard]] float preview_quote_rule(bool alert, std::uint32_t dpi) noexcept;
 // 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高）。
 // same_list は同じリストの続く項目（間は 0）で、種類の違うリストの境は段落と同じ半行。
 [[nodiscard]] float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,

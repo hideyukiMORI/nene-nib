@@ -10,6 +10,7 @@
 #include "PreviewScene.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableCell.hpp"
 #include "PreviewTaskBox.hpp"
 #include "PreviewTextLayout.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -23,6 +24,7 @@
 #include <dwrite.h>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -64,7 +66,6 @@ template <typename Target> class PreviewPainter final
     static constexpr float inline_padding_dips = 4.0F;
     static constexpr float inline_radius_dips = 3.0F;
     static constexpr float code_radius_dips = 5.0F;
-    static constexpr float quote_rule_dips = 2.0F;
     // チェックボックスの枠と線の太さ（DIP）と、チェックの 3 点（一辺に対する比）。
     static constexpr float task_stroke_dips = 1.0F;
     static constexpr float check_stroke_dips = 2.0F;
@@ -83,8 +84,9 @@ template <typename Target> class PreviewPainter final
                            static_cast<float>(area.right), static_cast<float>(area.bottom));
     }
 
-    // 要素の文字の色（見出しは keyword・コードは string・HTML と水平線は comment・引用の中の
-    // 段落と項目は comment・ほかは foreground）。
+    // 要素の文字の色（見出しは keyword・コードは string・HTML と水平線と front matter は comment・
+    // 引用の中の段落と項目と表の行は comment（alert の引用の中は foreground・#1848）・
+    // ほかは foreground）。
     [[nodiscard]] static PreviewInk ink_of(const core::PreviewBlock &block) noexcept
     {
         switch (block.kind)
@@ -95,12 +97,22 @@ template <typename Target> class PreviewPainter final
             return PreviewInk::string;
         case core::PreviewBlockKind::html:
         case core::PreviewBlockKind::rule:
+        case core::PreviewBlockKind::front_matter:
             return PreviewInk::comment;
         case core::PreviewBlockKind::paragraph:
         case core::PreviewBlockKind::list_item:
-            return block.quote_depth > 0 ? PreviewInk::comment : PreviewInk::foreground;
+        case core::PreviewBlockKind::table_row:
+            return block.quote_depth > 0 && !alerted(block) ? PreviewInk::comment
+                                                            : PreviewInk::foreground;
         }
         std::unreachable();
+    }
+
+    // alert の引用の中の要素で、alert の線の深さ（いちばん外）の中にある（入れ子の引用の中は
+    // ふつうの引用の色）。
+    [[nodiscard]] static bool alerted(const core::PreviewBlock &block) noexcept
+    {
+        return block.alert.has_value() && block.quote_depth == 1;
     }
 
     void draw_block(const PreviewScene &scene, std::size_t index)
@@ -116,6 +128,7 @@ template <typename Target> class PreviewPainter final
             draw_rule(scene, origin.y, scene.tops.bottom(index) - scene.tops.top(index));
             return;
         case core::PreviewBlockKind::code:
+        case core::PreviewBlockKind::front_matter:
             draw_code(scene, index, origin);
             return;
         case core::PreviewBlockKind::list_item:
@@ -127,10 +140,14 @@ template <typename Target> class PreviewPainter final
         case core::PreviewBlockKind::html:
             draw_text(scene, index, origin);
             return;
+        case core::PreviewBlockKind::table_row:
+            draw_table_row(scene, index, origin);
+            return;
         }
     }
 
     // 引用の深さごとの左の線（comment・2 DIP）。前の要素が同じ深さの引用なら間も塗ってつなぐ。
+    // alert の引用のいちばん外の線は 3 DIP で種類の色（#1848・D103）。
     void draw_quote_rules(const PreviewScene &scene, std::size_t index)
     {
         const auto &block = scene.document.blocks.at(index);
@@ -139,15 +156,152 @@ template <typename Target> class PreviewPainter final
         for (std::uint8_t depth = 0; depth < block.quote_depth; ++depth)
         {
             // 測った範囲の最初の要素（錨）は枠の上端から塗るので、前の要素とはつながない。
-            const bool joined = index > scene.tops.first() &&
-                                scene.document.blocks.at(index - 1).quote_depth > depth;
+            // alert の種類が違う前の要素（隣り合う別の引用）とは、いちばん外の線をつながない。
+            const bool joined =
+                index > scene.tops.first() &&
+                scene.document.blocks.at(index - 1).quote_depth > depth &&
+                (depth > 0 || scene.document.blocks.at(index - 1).alert == block.alert);
             const auto left = static_cast<float>(scene.frame.left) + preview_quote_left(depth, dpi);
             const auto top =
                 offset + (joined ? scene.tops.bottom(index - 1) : scene.tops.top(index));
-            target_.FillRectangle(D2D1::RectF(left, top,
-                                              left + preview_pixels(quote_rule_dips, dpi),
-                                              offset + scene.tops.bottom(index)),
-                                  brushes_.of(PreviewInk::comment));
+            const bool alert = depth == 0 && block.alert.has_value();
+            target_.FillRectangle(
+                D2D1::RectF(left, top, left + preview_quote_rule(alert, dpi),
+                            offset + scene.tops.bottom(index)),
+                brushes_.of(alert ? preview_alert_ink(block.alert.value()) : PreviewInk::comment));
+        }
+    }
+
+    // 表の 1 行（#1848・採用案 D103 の案 B）。升ごとに折り返さない文字組みを列の揃えで置き、
+    // 見出しの行の下に panel_border の 2 DIP、続く行の上に 1 DIP の罫を引く（外枠と縦の罫は
+    // 引かない）。枠より広い表は右を枠の余白で切る。列の幅は表ごとに 1 回だけ測った値を読む。
+    void draw_table_row(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
+    {
+        const auto &block = scene.document.blocks.at(index);
+        const auto columns = layouts_.table_columns(scene.document, index, scene.style);
+        if (!columns || !block.table.has_value())
+        {
+            failure_ = columns ? RenderFailure::directwrite : columns.error();
+            return;
+        }
+        const auto dpi = scene.style.dpi;
+        const auto bottom = origin.y + scene.tops.bottom(index) - scene.tops.top(index);
+        const auto right = static_cast<float>(scene.frame.right) - preview_side_margin(dpi);
+        const auto band = D2D1::RectF(origin.x, origin.y, std::max(right, origin.x), bottom);
+        target_.PushAxisAlignedClip(band, D2D1_ANTIALIAS_MODE_ALIASED);
+        draw_table_rules(scene, index, band, *columns.value());
+        for (std::size_t column = 0; column < block.table.value().cells.size() &&
+                                     column < columns.value()->size() && !failure_.has_value();
+             ++column)
+        {
+            const auto left = origin.x + preview_table_cell_left(*columns.value(), column, dpi);
+            if (left >= right)
+            {
+                break;
+            }
+            draw_cell(scene, index, column,
+                      D2D1::RectF(left, origin.y, left + columns.value()->at(column), bottom));
+        }
+        target_.PopAxisAlignedClip();
+    }
+
+    // 見出しの行は下に 2 DIP、見出しでない行の前の行が見出しでなければ上に 1 DIP。
+    void draw_table_rules(const PreviewScene &scene, std::size_t index, D2D1_RECT_F band,
+                          const std::vector<float> &columns)
+    {
+        const auto &row = scene.document.blocks.at(index).table;
+        if (!row.has_value())
+        {
+            return;
+        }
+        const auto &table = row.value();
+        const auto dpi = scene.style.dpi;
+        const auto right = std::min(band.right, band.left + preview_table_width(columns, dpi));
+        if (table.header)
+        {
+            const auto thick = preview_table_rule(true, dpi);
+            target_.FillRectangle(D2D1::RectF(band.left, band.bottom - thick, right, band.bottom),
+                                  brushes_.of(PreviewInk::panel_border));
+            return;
+        }
+        const auto &previous = scene.document.blocks.at(index - (table.row > 0 ? 1U : 0U));
+        if (table.row > 0 && previous.table.has_value() && !previous.table.value().header)
+        {
+            target_.FillRectangle(
+                D2D1::RectF(band.left, band.top, right, band.top + preview_table_rule(false, dpi)),
+                brushes_.of(PreviewInk::panel_border));
+        }
+    }
+
+    // 1 つの升。box は列の中身の箱（左端は列の左の余白の後・幅は列の中身の幅・縦は行の帯）。
+    void draw_cell(const PreviewScene &scene, std::size_t index, std::size_t column,
+                   D2D1_RECT_F box)
+    {
+        const auto &block = scene.document.blocks.at(index);
+        const auto held = layouts_.paintable(core::preview_table_cell(block, column),
+                                             preview_marker_layout_width(), scene.style, {});
+        DWRITE_TEXT_METRICS metrics{};
+        if (!held || FAILED(held.value()->layout->GetMetrics(&metrics)) || !block.table.has_value())
+        {
+            failure_ = held ? RenderFailure::directwrite : held.error();
+            return;
+        }
+        const auto &entry = *held.value();
+        const auto origin =
+            D2D1::Point2F(box.left + preview_table_aligned(box.right - box.left, metrics.width,
+                                                           block.table.value().aligns.at(column)),
+                          box.top + preview_table_padding_y(scene.style.dpi));
+        fill_inline_code(scene, entry, origin);
+        const auto selected = cell_selection(scene, index, column);
+        if (selected.has_value())
+        {
+            fill_runs(*entry.layout.Get(), origin, selected.value().first, selected.value().second);
+        }
+        target_.DrawTextLayout(origin, entry.layout.Get(), brushes_.of(ink_of(block)),
+                               D2D1_DRAW_TEXT_OPTIONS_NONE);
+    }
+
+    // 全面プレビューの選択のうち、升の範囲に掛かる所の升の文字組みの UTF-16 の範囲（行の文字の
+    // 中の選択を升の中へ写す・掛からなければ nullopt）。
+    [[nodiscard]] static std::optional<std::pair<std::uint32_t, std::uint32_t>>
+    cell_selection(const PreviewScene &scene, std::size_t index, std::size_t column)
+    {
+        const auto bytes =
+            scene.selection.has_value()
+                ? core::preview_selected_bytes(scene.document, scene.selection.value(), index)
+                : std::nullopt;
+        if (!bytes.has_value())
+        {
+            return std::nullopt;
+        }
+        const auto &block = scene.document.blocks.at(index);
+        const auto [first, second] = core::preview_table_cell_range(block, column);
+        const auto begin = std::clamp(bytes.value().first, first, second) - first;
+        const auto end = std::clamp(bytes.value().second, first, second) - first;
+        if (end <= begin)
+        {
+            return std::nullopt;
+        }
+        const auto shown = std::string_view(block.text).substr(first, second - first);
+        return std::pair{preview_units(shown, begin), preview_units(shown, end)};
+    }
+
+    void fill_runs(IDWriteTextLayout &layout, D2D1_POINT_2F origin, std::uint32_t begin,
+                   std::uint32_t end)
+    {
+        const auto runs =
+            layouts_.hit_runs(layout, DWRITE_TEXT_RANGE{begin, end > begin ? end - begin : 0});
+        if (!runs)
+        {
+            failure_ = runs.error();
+            return;
+        }
+        for (const auto &run : runs.value())
+        {
+            const auto left = origin.x + run.left;
+            const auto top = origin.y + run.top;
+            target_.FillRectangle(D2D1::RectF(left, top, left + run.width, top + run.height),
+                                  brushes_.of(PreviewInk::selection));
         }
     }
 
@@ -160,7 +314,8 @@ template <typename Target> class PreviewPainter final
                               brushes_.of(PreviewInk::comment));
     }
 
-    // コードブロック: panel の面（角丸 5）の内側の余白 12 に折らずに描き、面の外は切る。
+    // コードブロックと front matter: panel の面（角丸 5）の内側の
+    // 余白 12 に折らずに描き、面の外は切る。
     void draw_code(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
         const auto dpi = scene.style.dpi;
@@ -323,22 +478,8 @@ template <typename Target> class PreviewPainter final
             return;
         }
         const auto shown = core::preview_shown_text(scene.document.blocks.at(index));
-        const auto begin = preview_units(shown, bytes.value().first);
-        const auto end = preview_units(shown, bytes.value().second);
-        const auto runs =
-            layouts_.hit_runs(layout, DWRITE_TEXT_RANGE{begin, end > begin ? end - begin : 0});
-        if (!runs)
-        {
-            failure_ = runs.error();
-            return;
-        }
-        for (const auto &run : runs.value())
-        {
-            const auto left = origin.x + run.left;
-            const auto top = origin.y + run.top;
-            target_.FillRectangle(D2D1::RectF(left, top, left + run.width, top + run.height),
-                                  brushes_.of(PreviewInk::selection));
-        }
+        fill_runs(layout, origin, preview_units(shown, bytes.value().first),
+                  preview_units(shown, bytes.value().second));
     }
 
     // 行内コードの面（panel・角丸 3・左右 4 DIP）。折り返した範囲は画面行ごとの矩形。

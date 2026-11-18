@@ -101,6 +101,8 @@ void window_command(app::EditorController &controller, std::string_view key)
                                                  core::Offset{0},
                                                  std::string(text),
                                                  {},
+                                                 std::nullopt,
+                                                 std::nullopt,
                                                  std::nullopt});
     return app::MarkdownOutcome{ticket, std::move(document)};
 }

@@ -1,16 +1,21 @@
 #include "MarkdownBuilder.hpp"
 
+#include "MarkdownAlert.hpp"
 #include "MarkdownImage.hpp"
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
 #include "PreviewSpan.hpp"
+#include "PreviewTableCell.hpp"
+#include "PreviewTableRow.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -94,6 +99,87 @@ constexpr std::size_t depth_limit = 255U;
     }
     return line;
 }
+
+constexpr std::string_view replacement = "\xEF\xBF\xBD";
+
+// [from, to) の改行を LF にそろえる（CRLF と CR だけの改行も LF・md4c のコードブロックと同じ形）。
+[[nodiscard]] std::string lf_text(std::string_view input, std::size_t from, std::size_t to)
+{
+    std::string text;
+    text.reserve(to - from);
+    for (; from < to; ++from)
+    {
+        const bool crlf = input[from] == '\r' && from + 1U < to && input[from + 1U] == '\n';
+        if (crlf)
+        {
+            continue;
+        }
+        // NUL は本文と同じく U+FFFD（md4c の MD_TEXT_NULLCHAR と同じ・#1840 のレビュー）。
+        if (input[from] == '\0')
+        {
+            text.append(replacement);
+            continue;
+        }
+        text.push_back(input[from] == '\r' ? '\n' : input[from]);
+    }
+    return text;
+}
+
+// line から始まる行の中身（改行と後ろの空白・Tab を除く）が word だけか（Jekyll と同じ・#1840 の
+// レビュー）。
+[[nodiscard]] bool line_is(std::string_view input, std::size_t line, std::string_view word) noexcept
+{
+    auto end = line_end(input, line);
+    while (end > line && blank(input[end - 1U]))
+    {
+        --end;
+    }
+    return input.substr(line, end - line) == word;
+}
+
+// 打ち消しの開く記号の `~` の数。at は span の中の最初の文字の本文の位置で、その前の入れ子の
+// 開く記号（強調・コード・リンク・画像・自動リンク・エスケープ）を飛ばして `~` の並びを数える。
+// 読めない形は 2（打ち消しのまま）。
+[[nodiscard]] std::size_t opening_tildes(std::string_view input, std::size_t at) noexcept
+{
+    constexpr std::string_view openers = "*_`[!<\\";
+    while (at > 0U && openers.contains(input[at - 1U]))
+    {
+        --at;
+    }
+    std::size_t count = 0U;
+    while (at > 0U && input[at - 1U] == '~')
+    {
+        --at;
+        ++count;
+    }
+    // 並びの前の `\` が奇数個なら、並びの最初の `~` はエスケープした文字（記号に数えない・
+    // #1852 のレビュー）。
+    std::size_t escapes = 0U;
+    while (at > escapes && input[at - escapes - 1U] == '\\')
+    {
+        ++escapes;
+    }
+    count -= escapes % 2U == 1U && count > 0U ? 1U : 0U;
+    return count == 0U ? 2U : count;
+}
+
+// line から始めて、`---` か `...` だけの最初の行の行頭
+// （front matter の閉じる行・無ければ nullopt）。
+[[nodiscard]] std::optional<std::size_t> closing_line(std::string_view input,
+                                                      std::size_t line) noexcept
+{
+    while (line < input.size())
+    {
+        if (line_is(input, line, "---") || line_is(input, line, "..."))
+        {
+            return line;
+        }
+        const auto end = line_end(input, line);
+        line = end == input.size() ? end : next_line(input, end);
+    }
+    return std::nullopt;
+}
 } // namespace
 
 MarkdownBuilder::MarkdownBuilder(std::string_view input, const MarkdownStop &stop,
@@ -124,9 +210,38 @@ bool MarkdownBuilder::exhausted() const noexcept
     return exhausted_;
 }
 
+std::size_t MarkdownBuilder::front_matter()
+{
+    const auto opening = line_end(input_, 0U);
+    if (!line_is(input_, 0U, "---") || opening == input_.size())
+    {
+        return 0U;
+    }
+    const auto content = next_line(input_, opening);
+    const auto closing = closing_line(input_, content);
+    if (!closing.has_value())
+    {
+        return 0U;
+    }
+    auto block = started(PreviewBlockKind::front_matter, 0U);
+    block.text = lf_text(input_, content, closing.value());
+    blocks_.push_back(std::move(block));
+    // 位置を持たない次の要素（水平線など）は、閉じる行の次の行から探す。
+    last_end_ = closing.value();
+    const auto end = line_end(input_, closing.value());
+    parsed_from_ = end == input_.size() ? end : next_line(input_, end);
+    return parsed_from_;
+}
+
 void MarkdownBuilder::enter_quote()
 {
     close_implicit();
+    // alert はいちばん外の引用（リストの外）だけ（GitHub と同じ・#1848）。
+    if (quote_depth_ == 0U && lists_.empty())
+    {
+        alert_start_ = blocks_.size();
+        alert_.reset();
+    }
     ++quote_depth_;
 }
 
@@ -134,14 +249,117 @@ void MarkdownBuilder::leave_quote()
 {
     close_implicit();
     quote_depth_ -= quote_depth_ == 0U ? 0U : 1U;
+    if (quote_depth_ == 0U)
+    {
+        alert_start_.reset();
+        alert_.reset();
+    }
 }
 
-void MarkdownBuilder::enter_list(std::optional<std::uint64_t> first)
+void MarkdownBuilder::mark_alert(PreviewBlock &block)
+{
+    if (!alert_start_.has_value() || quote_depth_ == 0U)
+    {
+        return;
+    }
+    const bool first = blocks_.size() == alert_start_.value();
+    if (first && quote_depth_ == 1U && block.kind == PreviewBlockKind::paragraph)
+    {
+        alert_ = titled_alert(block);
+    }
+    block.alert = alert_;
+}
+
+std::optional<PreviewAlert> MarkdownBuilder::titled_alert(PreviewBlock &block)
+{
+    if (!leaf_begin_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto begin = leaf_begin_.value();
+    // エスケープした印（`> \[!NOTE]`）は alert にしない（#1852 のレビュー）。
+    if (begin > 0U && input_[begin - 1U] == '\\')
+    {
+        return std::nullopt;
+    }
+    const auto kind = markdown_alert_line(input_.substr(begin, line_end(input_, begin) - begin));
+    const auto shift = kind.has_value() ? markdown_alert_titled(block, kind.value())
+                                        : std::optional<std::ptrdiff_t>{};
+    if (!shift.has_value())
+    {
+        return std::nullopt;
+    }
+    // この要素の画像の節も同じだけずらす。
+    const auto moved = [&shift](Offset offset)
+    {
+        return Offset{
+            static_cast<std::size_t>(static_cast<std::ptrdiff_t>(offset.value) + shift.value())};
+    };
+    for (auto &image : images_)
+    {
+        if (image.block == blocks_.size())
+        {
+            image.begin = moved(image.begin);
+            image.end = moved(image.end);
+        }
+    }
+    return kind;
+}
+
+void MarkdownBuilder::enter_table()
+{
+    close_implicit();
+    flush_marker();
+    table_row_ = 0U;
+    table_start_ = blocks_.size();
+}
+
+void MarkdownBuilder::leave_table()
+{
+    close_implicit();
+    const auto start = std::min(table_start_, blocks_.size());
+    const auto rows = std::span<PreviewBlock>{blocks_}.subspan(start);
+    const auto digest = preview_table_digest(rows);
+    for (auto &row : rows)
+    {
+        if (row.table.has_value())
+        {
+            row.table.value().digest = digest;
+        }
+    }
+}
+
+void MarkdownBuilder::enter_row()
+{
+    auto &row = opened(PreviewBlockKind::table_row, 0U);
+    row.table = PreviewTableRow{
+        .row = table_row_, .header = false, .cells = {}, .aligns = {}, .digest = 0U};
+    ++table_row_;
+}
+
+void MarkdownBuilder::enter_cell(PreviewTableAlign align, bool header)
+{
+    auto &row = ensure_leaf();
+    if (!row.table.has_value())
+    {
+        return;
+    }
+    auto &table = row.table.value();
+    if (!table.cells.empty())
+    {
+        row.text.push_back('\t');
+    }
+    table.cells.push_back(Offset{row.text.size()});
+    table.aligns.push_back(align);
+    table.header = table.header || header;
+}
+
+void MarkdownBuilder::enter_list(std::optional<std::pair<std::uint64_t, char>> numbering)
 {
     // 記号だけの項目の直後に入れ子のリストが来たら（"- - a"）、外の項目の記号を空の要素で出す。
     close_implicit();
     flush_marker();
-    lists_.push_back(first);
+    lists_.push_back(numbering);
 }
 
 void MarkdownBuilder::leave_list()
@@ -158,14 +376,19 @@ void MarkdownBuilder::enter_item(std::optional<MarkdownTask> task)
     close_implicit();
     flush_marker();
     task_ = task;
-    const std::optional<std::uint64_t> number = lists_.empty() ? std::nullopt : lists_.back();
-    if (!number.has_value())
+    if (task_.has_value())
+    {
+        task_.value().mark_offset += parsed_from_;
+    }
+    const auto numbering = lists_.empty() ? std::nullopt : lists_.back();
+    if (!numbering.has_value())
     {
         marker_ = std::string(bullet_marker);
         return;
     }
-    marker_ = std::to_string(number.value()) + ".";
-    lists_.back() = number.value() + 1U;
+    const auto [number, delimiter] = numbering.value();
+    marker_ = std::to_string(number) + delimiter;
+    lists_.back() = std::pair{number + 1U, delimiter};
 }
 
 void MarkdownBuilder::leave_item()
@@ -209,6 +432,15 @@ void MarkdownBuilder::close_leaf()
     {
         block.source_begin = Offset{unlocated_begin()};
     }
+    mark_alert(block);
+    // `~` 1 つの打ち消しは装飾を外す（番号の大きい方から）。
+    std::ranges::sort(single_strikes_, std::greater{});
+    for (const auto span : single_strikes_)
+    {
+        block.spans.erase(block.spans.begin() + static_cast<std::ptrdiff_t>(span));
+    }
+    single_strikes_.clear();
+    pending_strikes_.clear();
     blocks_.push_back(std::move(block));
     leaf_begin_.reset();
     implicit_leaf_ = false;
@@ -232,6 +464,47 @@ void MarkdownBuilder::enter_span(std::optional<PreviewStyle> style)
     }
 }
 
+void MarkdownBuilder::enter_strike()
+{
+    enter_span(PreviewStyle::strikethrough);
+    const auto &block = ensure_leaf();
+    pending_strikes_.emplace_back(block.spans.size() - 1U, block.text.size());
+}
+
+void MarkdownBuilder::settle_strikes(std::optional<std::size_t> at)
+{
+    for (const auto &[span, begin] : pending_strikes_)
+    {
+        if (at.has_value() && opening_tildes(input_, at.value()) == 1U)
+        {
+            restore_opening(span, begin);
+        }
+    }
+    pending_strikes_.clear();
+}
+
+void MarkdownBuilder::restore_opening(std::size_t span, std::size_t begin)
+{
+    // 開く `~` を始まりへ戻し、打ち消しの後に開いた装飾（入れ子）と画像の節を 1 つずらす。
+    auto &block = ensure_leaf();
+    block.text.insert(begin, 1U, '~');
+    for (std::size_t other = span + 1U; other < block.spans.size(); ++other)
+    {
+        auto &moved = block.spans.at(other);
+        if (moved.begin.value >= begin)
+        {
+            moved.begin = Offset{moved.begin.value + 1U};
+            moved.end = Offset{std::max(moved.end.value + 1U, moved.begin.value)};
+        }
+    }
+    for (const auto image : open_images_)
+    {
+        auto &node = images_.at(image);
+        node.begin = Offset{node.begin.value + (node.begin.value >= begin ? 1U : 0U)};
+    }
+    single_strikes_.push_back(span);
+}
+
 void MarkdownBuilder::leave_span()
 {
     if (spans_.empty())
@@ -242,12 +515,19 @@ void MarkdownBuilder::leave_span()
     spans_.pop_back();
     if (index.has_value() && leaf_.has_value())
     {
+        std::erase_if(pending_strikes_,
+                      [&index](const auto &pending) { return pending.first == index.value(); });
         auto &block = leaf_.value();
         auto &span = block.spans.at(index.value());
         const bool image = span.style == PreviewStyle::image;
         if (image)
         {
             block.text.append(image_closing_);
+        }
+        // `~` 1 つの打ち消しは閉じる `~` も文字に戻す。
+        if (std::ranges::contains(single_strikes_, index.value()))
+        {
+            block.text.push_back('~');
         }
         span.end = Offset{block.text.size()};
         if (image)
@@ -279,8 +559,21 @@ void MarkdownBuilder::finish_image(const PreviewBlock &block, bool closed)
 
 void MarkdownBuilder::text(std::string_view shown, std::string_view source)
 {
-    ensure_leaf().text.append(shown);
+    auto &leaf = ensure_leaf();
+    const auto from = leaf.text.size();
+    leaf.text.append(shown);
+    // 表の行の Tab は升の間だけ（升の中の Tab と改行（`&NewLine;` など）は空白にする・#1848）。
+    if (leaf.kind == PreviewBlockKind::table_row)
+    {
+        std::ranges::replace_if(
+            leaf.text.begin() + static_cast<std::ptrdiff_t>(from), leaf.text.end(),
+            [](char value) { return value == '\t' || value == '\n' || value == '\r'; }, ' ');
+    }
     const auto at = located(source);
+    if (!pending_strikes_.empty())
+    {
+        settle_strikes(at);
+    }
     if (!at.has_value())
     {
         return;
@@ -341,6 +634,8 @@ PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)
         .text = {},
         .spans = {},
         .task = std::exchange(task_, std::nullopt),
+        .table = std::nullopt,
+        .alert = std::nullopt,
     };
 }
 

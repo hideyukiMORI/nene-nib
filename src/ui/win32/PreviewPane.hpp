@@ -98,6 +98,10 @@ class PreviewPane final
                                                               const core::LayoutRect &area,
                                                               std::size_t index,
                                                               D2D1_POINT_2F point);
+    // 表の行 index の点 point（行の原点から・#1848）の文字の位置。列の左右の余白を含めた範囲で
+    // 升を選び、描く所と同じ升の文字組みと揃えで升の中の位置を引いて、行の文字の位置に写す。
+    [[nodiscard]] std::optional<core::PreviewPoint> hit_cell(std::size_t index, D2D1_POINT_2F point,
+                                                             const PreviewTextStyle &style);
     // 枠の大きさの描ける bitmap（大きさが同じなら今のもの）。作れなければ nullptr。
     [[nodiscard]] ID2D1Bitmap1 *picture_of(ID2D1DeviceContext &context, std::int32_t width,
                                            std::int32_t height);

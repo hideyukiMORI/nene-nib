@@ -4,6 +4,7 @@
 #include "ImageGeometry.hpp"
 #include "ImageSize.hpp"
 #include "MarkdownImage.hpp"
+#include "PreviewBlockKind.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewSelectionText.hpp"
 
@@ -13,12 +14,23 @@
 
 namespace nenenib::ui::win32
 {
+namespace
+{
+// 要素の中に画像を置くか。表の升の画像は代わりの文字のまま（升の文字組みは行の高さが一定・#1848）。
+[[nodiscard]] bool shows_images(const core::MarkdownDocument &document,
+                                const application::PreviewImages *images, std::size_t block)
+{
+    return images != nullptr && block < document.blocks.size() &&
+           document.blocks.at(block).kind != core::PreviewBlockKind::table_row;
+}
+} // namespace
+
 std::vector<PreviewInlineImage> preview_inline_images(const core::MarkdownDocument &document,
                                                       const application::PreviewImages *images,
                                                       std::size_t block, std::uint32_t frame_dips)
 {
     std::vector<PreviewInlineImage> placed;
-    if (images == nullptr)
+    if (!shows_images(document, images, block))
     {
         return placed;
     }

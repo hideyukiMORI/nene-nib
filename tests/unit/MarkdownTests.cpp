@@ -7,10 +7,13 @@
 #include "MarkdownStop.hpp"
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
+#include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableAlign.hpp"
+#include "PreviewTableRow.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 
@@ -66,7 +69,9 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .source_begin = Offset{begin},
                         .text = std::move(text),
                         .spans = {},
-                        .task = std::nullopt};
+                        .task = std::nullopt,
+                        .table = std::nullopt,
+                        .alert = std::nullopt};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -102,9 +107,49 @@ static_assert(!LendsStop<decltype(never_stop)>);
     return block;
 }
 
+// 表の行（#1848）。cells は升の始まりと列の揃え。行 0 が見出しの行。
+[[nodiscard]] PreviewBlock rowed(std::string text, std::size_t begin, std::uint32_t row,
+                                 std::vector<std::pair<std::size_t, core::PreviewTableAlign>> cells)
+{
+    auto block = leaf(PreviewBlockKind::table_row, std::move(text), begin);
+    core::PreviewTableRow table{
+        .row = row, .header = row == 0U, .cells = {}, .aligns = {}, .digest = 0U};
+    for (const auto &[cell, align] : cells)
+    {
+        table.cells.push_back(Offset{cell});
+        table.aligns.push_back(align);
+    }
+    block.table = std::move(table);
+    return block;
+}
+
+[[nodiscard]] PreviewBlock alerted(PreviewBlock block, core::PreviewAlert alert)
+{
+    block.alert = alert;
+    return block;
+}
+
 [[nodiscard]] PreviewSpan span(std::size_t begin, std::size_t end, PreviewStyle style)
 {
     return PreviewSpan{Offset{begin}, Offset{end}, style};
+}
+
+void dump_table(const PreviewBlock &block)
+{
+    if (block.table.has_value())
+    {
+        const auto &table = block.table.value();
+        std::fprintf(stderr, " row(%u,%d)", table.row, table.header ? 1 : 0);
+        for (std::size_t at = 0; at < table.cells.size() && at < table.aligns.size(); ++at)
+        {
+            std::fprintf(stderr, " cell(%zu,%d)", table.cells.at(at).value,
+                         static_cast<int>(table.aligns.at(at)));
+        }
+    }
+    if (block.alert.has_value())
+    {
+        std::fprintf(stderr, " alert(%d)", static_cast<int>(block.alert.value()));
+    }
 }
 
 void dump(const std::vector<PreviewBlock> &blocks)
@@ -124,6 +169,7 @@ void dump(const std::vector<PreviewBlock> &blocks)
             std::fprintf(stderr, " span(%zu,%zu,%d)", shown.begin.value, shown.end.value,
                          static_cast<int>(shown.style));
         }
+        dump_table(block);
         std::fprintf(stderr, "\n");
     }
 }
@@ -273,8 +319,14 @@ void verify_ordered_lists()
         "7. a\n8. b",
         {listed(leaf(list_item, "a", 3U), 1U, "7."), listed(leaf(list_item, "b", 8U), 1U, "8.")},
         "an ordered list may start at 7");
-    expect_blocks("3) a", {listed(leaf(list_item, "a", 3U), 1U, "3.")},
-                  "a parenthesis delimiter is shown with a period");
+    expect_blocks(
+        "3) a\n4) b",
+        {listed(leaf(list_item, "a", 3U), 1U, "3)"), listed(leaf(list_item, "b", 8U), 1U, "4)")},
+        "a parenthesis delimiter is shown as it is written (#1840)");
+    expect_blocks(
+        "1) a\n   1. b",
+        {listed(leaf(list_item, "a", 3U), 1U, "1)"), listed(leaf(list_item, "b", 11U), 2U, "1.")},
+        "a nested list keeps its own delimiter");
     expect_blocks("0. ok", {listed(leaf(list_item, "ok", 3U), 1U, "0.")},
                   "an ordered list may start at 0");
     expect_blocks(
@@ -407,6 +459,225 @@ void verify_entities()
                   "an entity inside strong sets the span and the position");
     expect_blocks("[a](url &quot;tit&quot;)", {leaf(paragraph, "[a](url \"tit\")", 0U)},
                   "an entity quote does not delimit a link title");
+}
+
+// HTML5 の名前つきの実体参照の全表（#1840・生成物 MarkdownEntityTable.hpp）。2 コードポイントに写る
+// 名前・大文字の別名・表に無い名前・`;` の無い綴り。
+void verify_html5_entities()
+{
+    expect_blocks("&hellip; &mdash; &ndash; &rarr; &AMP; &NotEqualTilde;",
+                  {leaf(paragraph, "… — – → & ≂̸", 0U)},
+                  "HTML5 named references are resolved, two code points included");
+    expect_blocks("&AElig;&zwnj;", {leaf(paragraph, "Æ\xE2\x80\x8C", 0U)},
+                  "the first and last names of the table are found by the binary search");
+    expect_blocks("&nosuch; &amp &hellip &Hellip;",
+                  {leaf(paragraph, "&nosuch; &amp &hellip &Hellip;", 0U)},
+                  "unknown names and names without a semicolon keep their spelling");
+}
+
+// 打ち消し線（MD_FLAG_STRIKETHROUGH・#1840）。記号は文字に入らず、装飾が範囲を持つ。打ち消しは
+// `~~` だけで、md4c が打ち消しにする `~` 1 つの対は文字のまま元の位置に戻す（日本語の範囲の `~`・
+// #1840 のレビュー）。3 つ以上と数の合わない対も文字のまま。
+void verify_strikethrough()
+{
+    const PreviewStyle struck = PreviewStyle::strikethrough;
+    expect_blocks("~~a~~", {styled(leaf(paragraph, "a", 2U), {span(0U, 1U, struck)})},
+                  "double tildes strike through and drop the marks");
+    expect_blocks("~a~", {leaf(paragraph, "~a~", 1U)}, "single tildes are text");
+    expect_blocks("10時~12時、14時~16時", {leaf(paragraph, "10時~12時、14時~16時", 0U)},
+                  "tildes for ranges keep the text between them as it is");
+    expect_blocks("*~a~*", {styled(leaf(paragraph, "~a~", 2U), {span(0U, 3U, emphasis)})},
+                  "single tildes inside emphasis keep the emphasis around them");
+    expect_blocks("~a **b** c~", {styled(leaf(paragraph, "~a b c~", 1U), {span(3U, 4U, strong)})},
+                  "strong inside single tildes moves by the opening tilde");
+    expect_blocks("~**b** c~", {styled(leaf(paragraph, "~b c~", 3U), {span(1U, 2U, strong)})},
+                  "strong right after a single tilde moves by the tilde");
+    expect_blocks("~~a ~b~ c~~", {styled(leaf(paragraph, "a ~b~ c", 2U), {span(0U, 7U, struck)})},
+                  "single tildes inside a strike through are text inside it");
+    expect_blocks("~a~\nb~c~", {leaf(paragraph, "~a~ b~c~", 1U)},
+                  "single tildes at the start and the end of lines are text");
+    expect_blocks("\\~a~", {leaf(paragraph, "~a~", 1U)},
+                  "an escaped tilde and a lone tilde are text");
+    expect_blocks("`~a~`", {styled(leaf(paragraph, "~a~", 1U), {span(0U, 3U, inline_code)})},
+                  "single tildes in a code span are text");
+    expect_blocks("\\~~a~ b", {leaf(paragraph, "~~a~ b", 1U)},
+                  "an escaped tilde before a single tilde pair is not counted as a mark");
+    expect_blocks("x\\~~a~", {leaf(paragraph, "x~~a~", 0U)},
+                  "an escaped tilde after text before a single tilde pair keeps every tilde");
+    expect_blocks("x ~~~a~~~ y", {leaf(paragraph, "x ~~~a~~~ y", 0U)}, "three tildes are text");
+    expect_blocks("x ~~a~ y", {leaf(paragraph, "x ~~a~ y", 0U)},
+                  "tildes that do not pair are text");
+    expect_blocks("**~~a~~**",
+                  {styled(leaf(paragraph, "a", 4U), {span(0U, 1U, strong), span(0U, 1U, struck)})},
+                  "strike through nested in strong");
+    expect_blocks(
+        "~~a **b** c~~",
+        {styled(leaf(paragraph, "a b c", 2U), {span(0U, 5U, struck), span(2U, 3U, strong)})},
+        "strong nested in strike through");
+    expect_blocks("`~~a~~`", {styled(leaf(paragraph, "~~a~~", 1U), {span(0U, 5U, inline_code)})},
+                  "tildes in a code span are text");
+    expect_blocks("```\n~~a~~\n```", {leaf(code, "~~a~~\n", 4U)},
+                  "tildes in a code block are text");
+}
+
+// 裸の URL・www・メール（MD_FLAG_PERMISSIVE{URL,WWW,EMAIL}AUTOLINKS・#1840）。
+// 見た目は今のリンクと同じ装飾で、文字は書いたまま（http:// を足さない）。
+// 末尾の句読点はリンクに入らない。
+void verify_bare_links()
+{
+    expect_blocks(
+        "see https://example.com/a?b=1.",
+        {styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U), {span(4U, 29U, link)})},
+        "a bare URL is a link without its trailing period");
+    expect_blocks("www.example.com",
+                  {styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)})},
+                  "a www address is a link shown as written");
+    expect_blocks("mail a@example.com",
+                  {styled(leaf(paragraph, "mail a@example.com", 0U), {span(5U, 18U, link)})},
+                  "an e-mail address is a link");
+    expect_blocks("example.com", {leaf(paragraph, "example.com", 0U)},
+                  "a host without a scheme or www is text");
+    expect_blocks(
+        "`https://example.com`",
+        {styled(leaf(paragraph, "https://example.com", 1U), {span(0U, 19U, inline_code)})},
+        "an address in a code span is not a link");
+}
+
+[[nodiscard]] PreviewBlock front(std::string text)
+{
+    return leaf(PreviewBlockKind::front_matter, std::move(text), 0U);
+}
+
+// 文書の先頭の front matter（#1840）。`---` の行から `---` か `...` の行までを
+// Markdown として読まず 1 要素にし、後ろの要素の位置と task の印の位置は
+// 本文の中の位置のまま。閉じる行が無い・先頭の行が `---` でない・
+// 先頭に空行がある文書は今までどおり。
+void verify_front_matter()
+{
+    expect_blocks("---\ntitle: a\n---\n# b", {front("title: a\n"), titled(1U, "b", 19U)},
+                  "a front matter closed by --- is one element and the heading keeps its position");
+    expect_blocks("---\na: 1\n...\nx", {front("a: 1\n"), leaf(paragraph, "x", 13U)},
+                  "a front matter may be closed by ...");
+    expect_blocks("---\r\na: 1\r\nb: 2\r\n---\r\nx",
+                  {front("a: 1\nb: 2\n"), leaf(paragraph, "x", 22U)},
+                  "a CRLF front matter ends its lines with LF and keeps byte positions");
+    expect_blocks("---\na\n---", {front("a\n")}, "a front matter may end the document");
+    expect_blocks("---\n---\nx", {front(""), leaf(paragraph, "x", 8U)},
+                  "an empty front matter is one empty element");
+    expect_blocks("---\n# not a heading\n- not a list\n---\n",
+                  {front("# not a heading\n- not a list\n")},
+                  "the inside of a front matter is not read as Markdown");
+    expect_blocks("---\na\n---\n\n***", {front("a\n"), leaf(rule, "", 11U)},
+                  "an element without text after a front matter begins on its own line");
+    expect_blocks("---\na\n---\n- [x] b",
+                  {front("a\n"), tasked(listed(leaf(list_item, "b", 16U), 1U, bullet), true, 13U)},
+                  "a task mark after a front matter keeps its position in the document");
+    expect_blocks("---\na: 1\n", {leaf(rule, "", 0U), leaf(paragraph, "a: 1", 4U)},
+                  "without a closing line the document is read as before");
+    expect_blocks("\n---\na\n---\n", {leaf(rule, "", 1U), titled(2U, "a", 5U)},
+                  "a blank line before the opening line reads as before");
+    expect_blocks("----\na\n----", {leaf(rule, "", 0U), titled(2U, "a", 5U)},
+                  "an opening line other than --- reads as before");
+    expect_blocks("--- \na\n---\t\nb", {front("a\n"), leaf(paragraph, "b", 12U)},
+                  "spaces and tabs after the opening and closing lines are allowed (Jekyll)");
+    expect_blocks(std::string_view("---\na\0b\n---\nx", 13U),
+                  {front("a\xEF\xBF\xBD"
+                         "b\n"),
+                   leaf(paragraph, "x", 12U)},
+                  "a NUL in a front matter becomes U+FFFD like the body");
+    expect_blocks("---", {leaf(rule, "", 0U)}, "a lone --- is a thematic break");
+}
+
+// 表（MD_FLAG_TABLES・#1848・D103）。行ごとに要素 table_row を 1 つ・升の間は Tab・位置は行ごと。
+void verify_tables()
+{
+    using enum core::PreviewTableAlign;
+    expect_blocks("| a | b |\n|---|--:|\n| 1 | 22 |",
+                  {rowed("a\tb", 2U, 0U, {{0U, left}, {2U, right}}),
+                   rowed("1\t22", 22U, 1U, {{0U, left}, {2U, right}})},
+                  "a table gives one element per row with the cells and the alignments");
+    expect_blocks(
+        "| l | c | r | d |\n|:--|:-:|--:|---|\n| 1 | 2 | 3 | 4 |",
+        {rowed("l\tc\tr\td", 2U, 0U, {{0U, left}, {2U, center}, {4U, right}, {6U, left}}),
+         rowed("1\t2\t3\t4", 38U, 1U, {{0U, left}, {2U, center}, {4U, right}, {6U, left}})},
+        "colons set the left, center and right alignment and none is left");
+    expect_blocks("| *a* | `b` |\n|---|---|\n| ~~c~~ | [d](u) |",
+                  {styled(rowed("a\tb", 3U, 0U, {{0U, left}, {2U, left}}),
+                          {span(0U, 1U, emphasis), span(2U, 3U, inline_code)}),
+                   styled(rowed("c\td", 28U, 1U, {{0U, left}, {2U, left}}),
+                          {span(0U, 1U, PreviewStyle::strikethrough), span(2U, 3U, link)})},
+                  "spans inside cells keep their style in the row text");
+    expect_blocks("| a \\| b |\n|---|\n| c |",
+                  {rowed("a | b", 2U, 0U, {{0U, left}}), rowed("c", 19U, 1U, {{0U, left}})},
+                  "an escaped pipe is text inside a cell");
+    expect_blocks("| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |",
+                  {rowed("a\tb", 2U, 0U, {{0U, left}, {2U, left}}),
+                   rowed("1\t", 22U, 1U, {{0U, left}, {2U, left}}),
+                   rowed("1\t2", 28U, 2U, {{0U, left}, {2U, left}})},
+                  "a short row gets empty cells and a long row drops the extra cells");
+    expect_blocks("x\n\n| a |\n|---|\n| 1 |\n\ny",
+                  {leaf(paragraph, "x", 0U), rowed("a", 5U, 0U, {{0U, left}}),
+                   rowed("1", 17U, 1U, {{0U, left}}), leaf(paragraph, "y", 22U)},
+                  "paragraphs before and after a table stay paragraphs");
+    expect_blocks("| a |\n|---|\n\n| b |\n|---|",
+                  {rowed("a", 2U, 0U, {{0U, left}}), rowed("b", 15U, 0U, {{0U, left}})},
+                  "a second table counts its rows from 0 again");
+    expect_blocks("| a&NewLine;b |\n|---|", {rowed("a b", 2U, 0U, {{0U, left}})},
+                  "a newline from an entity in a cell becomes a space");
+    expect_blocks("| a |\n| b |", {leaf(paragraph, "| a | | b |", 0U)},
+                  "rows without a delimiter row are not a table");
+}
+
+// GitHub の alert（#1848・D103）。いちばん外の引用の最初の行が `[!NOTE]` などだけのとき、印を種類の
+// 名前と改行に置き換えて名前に alert_title を足し、引用の中の要素に種類を置く。
+void verify_alerts()
+{
+    using enum core::PreviewAlert;
+    const PreviewStyle title = PreviewStyle::alert_title;
+    expect_blocks(
+        "> [!NOTE]\n> body",
+        {alerted(styled(quoted(leaf(paragraph, "NOTE\nbody", 2U), 1U), {span(0U, 4U, title)}),
+                 note)},
+        "a note alert shows its name on the first line");
+    expect_blocks(
+        "> [!tip]\n> x",
+        {alerted(styled(quoted(leaf(paragraph, "TIP\nx", 2U), 1U), {span(0U, 3U, title)}), tip)},
+        "the marker is matched without case and the name is upper case");
+    expect_blocks(
+        ">  [!Important]  \n> x",
+        {alerted(styled(quoted(leaf(paragraph, "IMPORTANT\nx", 3U), 1U), {span(0U, 9U, title)}),
+                 important)},
+        "spaces around the marker are allowed");
+    expect_blocks(
+        "> [!WARNING]",
+        {alerted(styled(quoted(leaf(paragraph, "WARNING", 2U), 1U), {span(0U, 7U, title)}),
+                 warning)},
+        "an alert with only the marker shows only the name");
+    expect_blocks("> [!CAUTION]\n> *a*\n>\n> - b",
+                  {alerted(styled(quoted(leaf(paragraph, "CAUTION\na", 2U), 1U),
+                                  {span(0U, 7U, title), span(8U, 9U, emphasis)}),
+                           caution),
+                   alerted(quoted(listed(leaf(list_item, "b", 25U), 1U, bullet), 1U), caution)},
+                  "every element of the alert quote keeps the kind and later spans move");
+    expect_blocks("> [!NOTE] extra\n> body",
+                  {quoted(leaf(paragraph, "[!NOTE] extra body", 2U), 1U)},
+                  "text after the marker on the first line is an ordinary quote");
+    expect_blocks("> [!NOPE]\n> body", {quoted(leaf(paragraph, "[!NOPE] body", 2U), 1U)},
+                  "an unknown kind is an ordinary quote");
+    expect_blocks("> > [!NOTE]\n> > x", {quoted(leaf(paragraph, "[!NOTE] x", 4U), 2U)},
+                  "an alert marker in a nested quote is an ordinary quote");
+    expect_blocks("- > [!NOTE]\n  > x",
+                  {quoted(listed(leaf(list_item, "[!NOTE] x", 4U), 1U, bullet), 1U)},
+                  "an alert marker in a quote inside a list is an ordinary quote");
+    expect_blocks("> # [!NOTE]", {quoted(titled(1U, "[!NOTE]", 4U), 1U)},
+                  "a heading first is an ordinary quote");
+    expect_blocks("> \\[!NOTE]\n> body", {quoted(leaf(paragraph, "[!NOTE] body", 3U), 1U)},
+                  "an escaped marker is an ordinary quote with the marker as text");
+    expect_blocks(
+        "> [!NOTE]\n> a\n\n> b",
+        {alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U), {span(0U, 4U, title)}), note),
+         quoted(leaf(paragraph, "b", 17U), 1U)},
+        "the next quote after a blank line is a new ordinary quote");
 }
 
 void verify_html_and_line_endings()
@@ -542,6 +813,12 @@ void verify_markdown_scope()
     verify_code_blocks();
     verify_rules();
     verify_entities();
+    verify_html5_entities();
+    verify_strikethrough();
+    verify_bare_links();
+    verify_front_matter();
+    verify_tables();
+    verify_alerts();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();
