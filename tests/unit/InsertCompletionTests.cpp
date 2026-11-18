@@ -1,18 +1,27 @@
 // Issue #1008 / #1824・ADR 0169 の決定 1・2・6。INSERT の補完の語の表と候補の順。
 // 候補の順の期待値は Windows の Vim 9.1 の実測（`-u NONE -es` で `:normal! i<C-n>…` を流した結果・
 // 道具 D:/NeNeNib/scripts/20261118/1008/probe.py）。面と鍵は #1008 の段 B。
+#include "Appearance.hpp"
 #include "CompletionCandidates.hpp"
 #include "CompletionDirection.hpp"
 #include "CompletionSource.hpp"
+#include "DeleteDirection.hpp"
+#include "DeleteText.hpp"
+#include "DeleteUnit.hpp"
+#include "Document.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorState.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "LineEnding.hpp"
 #include "NewTab.hpp"
 #include "Scopes.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WordTable.hpp"
 
@@ -42,22 +51,55 @@ using Random = std::mt19937_64;
 
 constexpr std::size_t every_word = std::numeric_limits<std::size_t>::max();
 constexpr std::uint64_t property_seed = 0x6E69'6231'3030'38ULL;
-constexpr std::size_t property_steps = 2500;
+constexpr std::size_t property_seeds = 6;
+constexpr std::size_t property_steps = 1200;
+constexpr std::size_t controller_steps = 240;
 
-// 語の文字の種類が変わる所・幅 0 の code point（結合文字 U+0301・幅 0 の空白 U+200B）・改行の
-// 形・64 バイトを超える語の連なり（窓を倍にして読み直す道）を混ぜる。
-constexpr std::array<std::string_view, 22> fragments{
-    "a",        "b",
-    "f",        "o",
-    "_",        "1",
-    " ",        ".",
-    "\n",       "\r\n",
-    "\t",       "日",
-    "本",       "あ",
-    "カ",       "\xF0\x9F\x98\x80",
-    "\xCC\x81", "\xE2\x80\x8B",
-    "\xC3\xA9", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "ab",       "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E"};
+// 語の文字の種類が変わる所・幅 0 の code point（結合文字 U+0301・タイ文字の結合 U+0E31・幅 0 の
+// 空白 U+200B・ZWJ・VS16）・改行の形（LF・CRLF・孤立した CR）・3 バイトで語の文字のタイ文字
+// U+0E01・64 バイトを超える語と幅 0 の列（窓を倍にして読み直す道・窓の端が code point の途中）を
+// 混ぜる（PR #1832 のレビューの ReviewProbe の形）。
+constexpr std::array<std::string_view, 33> fragments{
+    "a",
+    "b",
+    "f",
+    "o",
+    "_",
+    "1",
+    " ",
+    ".",
+    "\n",
+    "\r\n",
+    "\r",
+    "\t",
+    "日",
+    "本",
+    "あ",
+    "カ",
+    "\xF0\x9F\x98\x80",
+    "\xCC\x81",
+    "\xE2\x80\x8B",
+    "\xE2\x80\x8D",
+    "\xEF\xB8\x8F",
+    "\xC3\xA9",
+    "\xE0\xB8\x81",
+    "\xE0\xB8\xB1",
+    "\xE1\xB8\x81",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81"
+    "\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81"
+    "\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81\xE0\xB8\x81",
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81"
+    "\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81\xCC\x81",
+    "\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80"
+    "\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80"
+    "\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80"
+    "\xF0\x9F\x98\x80\xF0\x9F\x98\x80",
+    "ab",
+    "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E",
+    "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+    "foo"};
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
 {
@@ -135,74 +177,132 @@ void verify_table()
            "prefixed lists the words that start with the prefix");
 }
 
+// 1 MiB を超える文書は表を持たない（設計席の追補 2026-11-18）。候補は窓の語と他のタブの表だけ。
 void verify_size_limit()
 {
-    const std::string large(core::word_table_byte_limit + 1, 'a');
-    const core::TextBuffer buffer = buffer_of(large);
-    expect(!core::WordTable::of(buffer).has_value(),
-           "a document over 16 MiB gets no word table (ADR 0169 decision 1)");
-    const auto list = core::completion_list(buffer, Offset{large.size()},
-                                            CompletionDirection::forward, core::CompletionTables{});
-    expect(list.candidates.empty(), "without its table the document offers no body words");
-    expect(list.prefix.end == Offset{large.size()} && list.prefix.begin.value < large.size(),
-           "the prefix range is still reported for the other sources");
+    const std::string filler(core::word_table_byte_limit, '.');
+    const std::string text = "wfar " + filler + " wnear w";
+    const core::TextBuffer buffer = buffer_of(text);
+    expect(!core::WordTable::of(buffer).has_value(), "a document over 1 MiB gets no word table");
+    const core::WordTable other = held(buffer_of("wother"));
+    const std::array<const core::WordTable *, 1> others{&other};
+    const auto list =
+        core::completion_list(buffer, Offset{text.size()}, CompletionDirection::forward,
+                              core::CompletionTables{nullptr, others});
+    expect(listed(list) == std::vector<std::string>{"wnear", "wother"},
+           "without its table the document offers the words in the window and other tabs");
+    expect(list.prefix.end == Offset{text.size()} && list.prefix.begin == Offset{text.size() - 1},
+           "the prefix range is reported");
 }
 
-// 1 回の編集。断片の境 [first, last) を消し、断片の列 inserted を入れる。
-[[nodiscard]] core::Edit random_edit(Random &random, std::vector<std::string_view> &model)
+// 開く・切り替える道は表を作らない。表を作るのは最初に補完を使ったときだけ。
+void verify_lazy_table()
 {
-    const std::size_t first = below(random, model.size() + 1);
-    const std::size_t last =
-        first + below(random, std::min<std::size_t>(model.size() - first, 6) + 1);
-    std::size_t at = 0;
-    for (std::size_t index = 0; index < first; ++index)
+    const auto opened = app::EditorState::create(core::Appearance::dark, core::EditMode::ordinary)
+                            .with_opened(buffer_of("alpha beta"), app::Document{});
+    expect(!opened.word_table().has_value(), "opening a document builds no word table");
+    const auto built = opened.with_word_table();
+    const auto &table = built.word_table();
+    expect(table.has_value() && table.value().count("alpha") == 1,
+           "the table is built on demand from the text");
+    const auto switched = built.with_new_tab().with_switched(0);
+    expect(switched.word_table().has_value(), "a parked table comes back with its tab");
+    const auto reopened = built.with_opened(buffer_of("gamma"), app::Document{});
+    expect(!reopened.word_table().has_value(), "opening another document drops the old table");
+    const std::string paste(core::word_table_edit_limit + 1, 'a');
+    const core::Edit big{Offset{0}, std::string{}, paste, Offset{0}};
+    expect(!built.with_words_edited(big).word_table().has_value(),
+           "an edit over 64 KiB drops the table instead of updating it");
+    const core::Edit small{Offset{0}, std::string{}, "zeta ", Offset{0}};
+    expect(!opened.with_words_edited(small).word_table().has_value(),
+           "editing a document without a table costs nothing and builds none");
+}
+
+// 本文の code point の境の列（0 と末尾を含む）。
+[[nodiscard]] std::vector<std::size_t> boundaries_of(std::string_view text)
+{
+    std::vector<std::size_t> bounds{0};
+    for (std::size_t index = 1; index <= text.size(); ++index)
     {
-        at += model.at(index).size();
+        if (index == text.size() || (static_cast<unsigned char>(text[index]) & 0xC0U) != 0x80U)
+        {
+            bounds.push_back(index);
+        }
     }
-    std::string removed;
-    for (std::size_t index = first; index < last; ++index)
-    {
-        removed += model.at(index);
-    }
-    std::vector<std::string_view> inserted;
+    return bounds;
+}
+
+// 1 回の編集。code point の境で切った範囲を消し、断片を 0〜4 個入れる。
+[[nodiscard]] core::Edit random_edit(Random &random, const std::string &text)
+{
+    const std::vector<std::size_t> bounds = boundaries_of(text);
+    const std::size_t first = below(random, bounds.size());
+    const std::size_t last = std::min(bounds.size() - 1, first + below(random, 7));
     std::string typed;
     for (std::size_t count = below(random, 5); count > 0; --count)
     {
-        inserted.push_back(fragments.at(below(random, fragments.size())));
-        typed += inserted.back();
+        typed += fragments.at(below(random, fragments.size()));
     }
-    model.erase(model.begin() + static_cast<std::ptrdiff_t>(first),
-                model.begin() + static_cast<std::ptrdiff_t>(last));
-    model.insert(model.begin() + static_cast<std::ptrdiff_t>(first), inserted.begin(),
-                 inserted.end());
-    return core::Edit{Offset{at}, std::move(removed), std::move(typed), Offset{at}};
+    const std::size_t at = bounds.at(first);
+    return core::Edit{Offset{at}, text.substr(at, bounds.at(last) - at), std::move(typed),
+                      Offset{at}};
 }
 
-// 性質の試験（ADR 0169 の決定 6）: ランダムな編集の列の後、増分で直した表は本文から作り直した表と
-// 同じ。増減の列を畳む道も通る。
-void verify_incremental_property()
+[[nodiscard]] core::TextBuffer seeded_text(Random &random, bool crlf)
 {
-    Random random{property_seed};
-    std::vector<std::string_view> model;
+    std::string text;
     for (std::size_t index = 0; index < 120; ++index)
     {
-        model.push_back(fragments.at(below(random, fragments.size())));
+        text += fragments.at(below(random, fragments.size()));
     }
-    std::string text;
-    for (const std::string_view fragment : model)
+    auto buffer = crlf ? core::TextBuffer::from_utf8(text, core::LineEnding::crlf)
+                       : core::TextBuffer::from_utf8(text);
+    if (!buffer.has_value())
     {
-        text += fragment;
+        std::abort();
     }
-    core::TextBuffer buffer = buffer_of(text);
+    return std::move(buffer).value();
+}
+
+// 1 つの seed の編集の列。5 回に 1 回は直前の編集を戻す（undo の形の逆向きの編集）。
+[[nodiscard]] bool property_case(std::uint64_t seed)
+{
+    Random random{property_seed + seed};
+    core::TextBuffer buffer = seeded_text(random, seed % 2 == 0);
     core::WordTable table = held(buffer);
-    bool agreed = true;
-    for (std::size_t step = 0; step < property_steps && agreed; ++step)
+    std::vector<core::Edit> done;
+    for (std::size_t step = 0; step < property_steps; ++step)
     {
-        const core::Edit edit = random_edit(random, model);
+        core::Edit edit = random_edit(random, buffer.text());
+        if (!done.empty() && below(random, 5) == 0)
+        {
+            const core::Edit last = done.back();
+            done.pop_back();
+            edit = core::Edit{last.at, last.inserted, last.removed, last.at};
+        }
+        else
+        {
+            done.push_back(edit);
+        }
         table = table.edited(buffer, edit);
         buffer =
             buffer.replaced(edit.at, Offset{edit.at.value + edit.removed.size()}, edit.inserted);
-        agreed = words_of(table) == words_of(held(buffer));
+        if (words_of(table) != words_of(held(buffer)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 性質の試験（ADR 0169 の決定 6）: ランダムな編集の列の後、増分で直した表は本文から作り直した表と
+// 同じ（LF と CRLF の本文・undo の形の編集）。
+void verify_incremental_property()
+{
+    bool agreed = true;
+    for (std::uint64_t seed = 0; seed < property_seeds && agreed; ++seed)
+    {
+        agreed = property_case(seed);
     }
     expect(agreed, "the incrementally edited table equals the table rebuilt from the text");
 }
@@ -253,6 +353,30 @@ void verify_vim_order()
            "with an empty prefix the word starting at the caret counts as after the caret");
     expect(forward_is("a\xE6\x97\xA5 ab a", 8, {"a", "ab"}),
            "a one-character word followed by another keyword class matches \\<a\\k");
+    expect(forward_is("foobar fofooqux", 9, {"fooqux", "foobar"}) &&
+               forward_is("bar ffoo", 5, {"foo"}) && forward_is("ab ababab", 5, {"abab", "ab"}) &&
+               backward_is("zz fofooqux foobar", 5, {"foobar", "fooqux"}),
+           "the rest of the typed word after the caret is matched once as a word start");
+    expect(forward_is("foxfoo x", 2, {}) && forward_is("fozz x fozz", 9, {"fozz"}),
+           "the rest after the caret must start with the prefix");
+    expect(forward_is("aa\xCC\x81 aab2 aa", 12, {"aab2"}),
+           "a prefix that ends inside a character with a combining mark does not match");
+}
+
+// 空の接頭辞の `\<\k\k` は 2 文字を食い、次の照合はその後ろから（Vim の実測）。
+void verify_empty_prefix_chain()
+{
+    const std::string text = "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E\xE3\x81\xAE\xE8\xA3\x9C"
+                             "\xE5\xAE\x8C\xE3\x81\xAF\xE4\xBE\xBF\xE5\x88\xA9\xE3\x81\xA7"
+                             "\xE3\x81\x99 ";
+    const std::vector<std::string> forward{"\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E", "\xE3\x81\xAE",
+                                           "\xE3\x81\xAF", "\xE3\x81\xA7\xE3\x81\x99"};
+    expect(forward_is(text, text.size(), forward),
+           "a word that starts inside the two characters of the previous match is not offered");
+    const std::vector<std::string> backward{forward.rbegin(), forward.rend()};
+    expect(backward_is(text, text.size(), backward), "the same chain holds for Ctrl-p");
+    expect(forward_is("\xE6\x97\xA5_a ", 6, {"\xE6\x97\xA5"}),
+           "a one-character word swallows the first character of the next word");
 }
 
 void verify_non_ascii()
@@ -327,6 +451,7 @@ void verify_controller_tabs()
     Editing editing;
     auto &controller = editing.controller();
     applied(controller, app::VisibleLines{10});
+    static_cast<void>(controller.insert_completion(CompletionDirection::forward));
     applied(controller, app::InsertText{"alpha beta"});
     applied(controller, app::NewTab{});
     applied(controller, app::InsertText{"al"});
@@ -346,6 +471,77 @@ void verify_controller_tabs()
                std::vector<std::string>{"alpha"},
            "redo puts the words back");
 }
+
+// 他のタブ（帯の位置 1・空）から空の接頭辞で引いた候補（他のタブの表の語・語の順の 100 個まで）。
+[[nodiscard]] std::vector<std::string> parked_words(EditorController &controller)
+{
+    applied(controller, app::SwitchTab{1});
+    std::vector<std::string> words =
+        listed(controller.insert_completion(CompletionDirection::forward));
+    applied(controller, app::SwitchTab{0});
+    return words;
+}
+
+[[nodiscard]] std::vector<std::string> rebuilt_words(std::string_view text)
+{
+    std::vector<std::string> words;
+    for (const core::WordCount &entry :
+         held(buffer_of(text)).prefixed("", core::completion_candidate_limit))
+    {
+        words.push_back(entry.word);
+    }
+    return words;
+}
+
+// 1 歩の操作（打つ・消す・undo・redo）。
+void random_step(EditorController &controller, Random &random)
+{
+    constexpr std::array<std::string_view, 8> typed{
+        "ab", "foo", " ", "\n", "x", "\xE6\x97\xA5\xE6\x9C\xAC", "1", "."};
+    const std::size_t choice = below(random, 6);
+    if (choice == 0)
+    {
+        applied(controller,
+                app::DeleteText{core::DeleteDirection::backward, core::DeleteUnit::character});
+    }
+    else if (choice == 1 || choice == 2)
+    {
+        applied(controller, app::HistoryAction{choice == 1 ? core::HistoryDirection::undo
+                                                           : core::HistoryDirection::redo});
+    }
+    else
+    {
+        applied(controller, app::InsertText{std::string{typed.at(below(random, typed.size()))}});
+    }
+}
+
+// controller の性質の試験（レビューの推奨 3）: 打つ・消す・undo・redo の列の後、状態の表は本文から
+// 作り直した表と同じ。大きな貼り付けで捨てた後は表が無く、次に補完を使うと作り直す。
+void verify_controller_property()
+{
+    Random random{property_seed};
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, app::VisibleLines{10});
+    applied(controller, app::NewTab{});
+    applied(controller, app::SwitchTab{0});
+    static_cast<void>(controller.insert_completion(CompletionDirection::forward));
+    bool agreed = true;
+    for (std::size_t step = 1; step <= controller_steps && agreed; ++step)
+    {
+        random_step(controller, random);
+        if (step % 20 == 0)
+        {
+            agreed = parked_words(controller) == rebuilt_words(whole_vim_body(controller));
+        }
+    }
+    expect(agreed, "the table in the state equals the table rebuilt from the text");
+    applied(controller, app::InsertText{std::string(core::word_table_edit_limit + 1, 'q') + " "});
+    expect(parked_words(controller).empty(), "a large paste drops the table");
+    static_cast<void>(controller.insert_completion(CompletionDirection::forward));
+    expect(parked_words(controller) == rebuilt_words(whole_vim_body(controller)),
+           "the next completion rebuilds the table from the text");
+}
 } // namespace
 
 void verify_insert_completion_contracts()
@@ -354,12 +550,15 @@ void verify_insert_completion_contracts()
     verify_size_limit();
     verify_incremental_property();
     verify_fold();
+    verify_lazy_table();
     verify_vim_order();
+    verify_empty_prefix_chain();
     verify_non_ascii();
     verify_limit();
     verify_scan_window();
     verify_other_tables();
     verify_controller_tabs();
+    verify_controller_property();
 }
 
 void verify_insert_completion_scope()

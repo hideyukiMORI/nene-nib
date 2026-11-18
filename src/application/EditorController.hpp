@@ -278,9 +278,10 @@ class EditorController final
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
-    // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 1・2）。アクティブな文書のキャレットで
-    // insert_completion_list を呼ぶだけで、状態を変えない。面と鍵（#1008 の段 B）が読む口。
-    [[nodiscard]] core::CompletionList insert_completion(core::CompletionDirection direction) const;
+    // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 1・2）。アクティブな文書の語の表が
+    // 無ければ（1 MiB 以下なら）ここで 1 回作って状態に置き（表を作るのはこの 1 か所・設計席の追補
+    // 2026-11-18）、キャレットで insert_completion_list を呼ぶ。面と鍵（#1008 の段 B）が呼ぶ口。
+    [[nodiscard]] core::CompletionList insert_completion(core::CompletionDirection direction);
     // `@` の再生の中で `map` の左辺の途中まで読んで待った回数（起動からの累計・#1312）。性質の
     // 試験が待ちと flush の道を通ったことを確かめるための口で、状態を変えない。
     [[nodiscard]] std::size_t replay_waits() const noexcept;

@@ -49,6 +49,7 @@
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWantedColumn.hpp"
+#include "WordTable.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -775,8 +776,13 @@ PaneSource EditorController::framed_source(const core::VimPattern *pattern) cons
                                    state_.autosave_ids().at(state_.active_tab())});
 }
 
-core::CompletionList EditorController::insert_completion(core::CompletionDirection direction) const
+core::CompletionList EditorController::insert_completion(core::CompletionDirection direction)
 {
+    if (!state_.word_table().has_value() &&
+        state_.text().size_bytes() <= core::word_table_byte_limit)
+    {
+        state_ = state_.with_word_table();
+    }
     return insert_completion_list(state_, direction);
 }
 

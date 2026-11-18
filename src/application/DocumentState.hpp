@@ -66,8 +66,8 @@ struct DocumentState
     // まま置き、広げるとき（開いたとき）に本文から決める。置いた束は今の値を持つ。
     std::optional<VimEndOfLine> vim_eol = std::nullopt;
     // INSERT の補完の語の表（ADR 0169 の決定 1）。文書の値で、脇に置いても保つ（他のタブの語の和は
-    // 読み込み済みの束のこの表から引く）。空は「作っていない」で、16 MiB 超の文書と、作る前の束
-    // （読んだ・戻した文書）。束を状態に入れる所（広げる・読み込む・足す）が本文から作る。
+    // 読み込み済みの束のこの表から引く）。空は「作っていない」で、まだ補完を使っていない文書・
+    // 1 MiB 超の文書・大きな編集で捨てた後。作るのはアクティブな文書で補完を使ったときだけ。
     std::optional<core::WordTable> words = std::nullopt;
 };
 } // namespace nenenib::application
