@@ -25,8 +25,8 @@ namespace nenenib::core
 // 表の行（table_row）だけが持つ升と揃え、alert は GitHub の alert の引用の中の要素が持つ
 // 種類（#1848・ほかは nullopt）。code_colors は言語の分かった囲みのコードだけが持つ構文の色の
 // 区間（#1858・text のバイト位置）で、nullopt の要素は 1 色で描く（空の列は色の区間の無い
-// 囲み・文字は本文の色）。links は要素の中のリンクの宛先（ADR 0151 の追補 2026-11-19・#1869・開いた順・
-// 画像の宛先は載せない）。
+// 囲み・文字は本文の色）。links は要素の中のリンクの宛先（ADR 0151 の追補
+// 2026-11-19・#1869・開いた順・ 画像の宛先は載せない）。
 struct PreviewBlock
 {
     PreviewBlockKind kind;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "FilePath.hpp"
-#include "ImageReferenceRefusal.hpp"
+#include "LocalReferenceRefusal.hpp"
 
 #include <expected>
 #include <optional>
@@ -9,8 +9,10 @@
 
 namespace nenenib::core
 {
-// Markdown の画像の参照先（md4c の src・実体参照は解いた後）をローカルのファイルの経路に解く純関数
-// （施主決定 D79・ADR 0155 の追補 48・#1381）。ファイルに触れない（文字列の計算だけ・ARC-007）。
+// Markdown の画像の参照先（md4c の src）とリンクの宛先（href・link_destination が scheme の無いもの
+// と file: を渡す）を、実体参照を解いた後にローカルのファイルの経路に解く唯一の純関数（施主決定
+// D79・ ADR 0155 の追補 48・#1381・ADR 0151 の追補 2026-11-19・#1869 で画像とリンクの共用に改名）。
+// ファイルに触れない（文字列の計算だけ・ARC-007）。
 // document は開いている Markdown のファイルの経路（無題なら nullopt）。
 //
 // - ドライブの絶対パス（`C:\a.png` `C:/a.png`）は綴りのまま（percent-encoding を解かない・`?` と
@@ -24,6 +26,6 @@ namespace nenenib::core
 // - 結果は区切りを `\` に揃え、`.` を落として `..` を 1 つ上へ畳む（根より上へは出ない）。結果が
 //   `\\` で始まる（文書がネットワークの場所にある）なら network。
 // - 不完全な percent-encoding（`%` の後ろが 16 進 2 桁でない）は `%` のまま残す。
-[[nodiscard]] std::expected<FilePath, ImageReferenceRefusal>
-resolve_image_reference(std::string_view reference, const std::optional<FilePath> &document);
+[[nodiscard]] std::expected<FilePath, LocalReferenceRefusal>
+resolve_local_reference(std::string_view reference, const std::optional<FilePath> &document);
 } // namespace nenenib::core

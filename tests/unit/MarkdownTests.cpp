@@ -1,9 +1,12 @@
 // parse_markdown（ADR 0151 の決定 5〜8・#765）。入力は CommonMark 0.31 の例を 8 つの構文
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
+#include "FilePath.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "Lexer.hpp"
+#include "LinkDestination.hpp"
+#include "LinkKind.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
@@ -30,6 +33,7 @@
 #include <cstdio>
 #include <limits>
 #include <new>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -286,17 +290,19 @@ void verify_inline_code_and_links()
     expect_blocks("`` foo ` bar ``",
                   {styled(leaf(paragraph, "foo ` bar", 3U), {span(0U, 9U, inline_code)})},
                   "a double backtick code span keeps a single backtick");
-    expect_blocks("[link](/uri \"title\")",
-                  {linked(styled(leaf(paragraph, "link", 1U), {span(0U, 4U, link)}), {to(0U, 4U, "/uri")})},
-                  "an inline link keeps only its text");
+    expect_blocks(
+        "[link](/uri \"title\")",
+        {linked(styled(leaf(paragraph, "link", 1U), {span(0U, 4U, link)}), {to(0U, 4U, "/uri")})},
+        "an inline link keeps only its text");
     expect_blocks("<https://foo.bar.baz>",
                   {linked(styled(leaf(paragraph, "https://foo.bar.baz", 1U), {span(0U, 19U, link)}),
                           {to(0U, 19U, "https://foo.bar.baz")})},
                   "an autolink shows its address");
-    expect_blocks("[*a*](u)",
-                  {linked(styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)}),
-                          {to(0U, 1U, "u")})},
-                  "emphasis inside a link");
+    expect_blocks(
+        "[*a*](u)",
+        {linked(styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)}),
+                {to(0U, 1U, "u")})},
+        "emphasis inside a link");
     // "[画像: " は 9 バイト（[ 1・画像 6・: 1・空白 1）。
     expect_blocks(
         "![foo](/url)",
@@ -676,11 +682,11 @@ void verify_strikethrough()
 // 末尾の句読点はリンクに入らない。
 void verify_bare_links()
 {
-    expect_blocks(
-        "see https://example.com/a?b=1.",
-        {linked(styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U), {span(4U, 29U, link)}),
-                {to(4U, 29U, "https://example.com/a?b=1")})},
-        "a bare URL is a link without its trailing period");
+    expect_blocks("see https://example.com/a?b=1.",
+                  {linked(styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U),
+                                 {span(4U, 29U, link)}),
+                          {to(4U, 29U, "https://example.com/a?b=1")})},
+                  "a bare URL is a link without its trailing period");
     expect_blocks("www.example.com",
                   {linked(styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)}),
                           {to(0U, 15U, "http://www.example.com")})},
@@ -848,10 +854,10 @@ void verify_link_targets()
         {linked(styled(leaf(paragraph, "a b", 1U), {span(0U, 1U, link), span(2U, 3U, link)}),
                 {to(0U, 1U, "1"), to(2U, 3U, "2")})},
         "links are listed in the order they open");
-    expect_blocks("[a](b\\_c&amp;d%20e)",
-                  {linked(styled(leaf(paragraph, "a", 1U), {span(0U, 1U, link)}),
-                          {to(0U, 1U, "b_c&d%20e")})},
-                  "escapes and entities are resolved and percent signs are kept");
+    expect_blocks(
+        "[a](b\\_c&amp;d%20e)",
+        {linked(styled(leaf(paragraph, "a", 1U), {span(0U, 1U, link)}), {to(0U, 1U, "b_c&d%20e")})},
+        "escapes and entities are resolved and percent signs are kept");
     expect_blocks("<a@example.com>",
                   {linked(styled(leaf(paragraph, "a@example.com", 1U), {span(0U, 13U, link)}),
                           {to(0U, 13U, "mailto:a@example.com")})},
@@ -869,17 +875,79 @@ void verify_link_targets()
     expect_blocks("# [h](#x)",
                   {linked(styled(titled(1U, "h", 3U), {span(0U, 1U, link)}), {to(0U, 1U, "#x")})},
                   "a link inside a heading");
-    expect_blocks("> [!NOTE]\n> [a](u)",
-                  {linked(alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U),
-                                         {span(0U, 4U, PreviewStyle::alert_title),
-                                          span(5U, 6U, link)}),
-                                  core::PreviewAlert::note),
-                          {to(5U, 6U, "u")})},
-                  "a link after an alert marker moves with the spans");
-    expect_blocks("~a [b](u)~",
-                  {linked(styled(leaf(paragraph, "~a b~", 1U), {span(3U, 4U, link)}),
-                          {to(3U, 4U, "u")})},
-                  "a link after a restored single tilde moves with the spans");
+    expect_blocks(
+        "> [!NOTE]\n> [a](u)",
+        {linked(alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U),
+                               {span(0U, 4U, PreviewStyle::alert_title), span(5U, 6U, link)}),
+                        core::PreviewAlert::note),
+                {to(5U, 6U, "u")})},
+        "a link after an alert marker moves with the spans");
+    expect_blocks(
+        "~a [b](u)~",
+        {linked(styled(leaf(paragraph, "~a b~", 1U), {span(3U, 4U, link)}), {to(3U, 4U, "u")})},
+        "a link after a restored single tilde moves with the spans");
+}
+
+// リンクの宛先の種類（ADR 0151 の追補 2026-11-19・#1869）。文書へのリンクは画像と同じ
+// resolve_local_reference で解く。
+[[nodiscard]] bool destined(std::string_view target, const std::optional<core::FilePath> &document,
+                            core::LinkKind kind, std::string_view text)
+{
+    const auto found = core::link_destination(target, document);
+    const bool same = found == core::LinkDestination{.kind = kind, .text = std::string(text)};
+    if (!same)
+    {
+        std::fprintf(stderr, "  link_destination([%.*s]) = (%d, [%s])\n",
+                     static_cast<int>(target.size()), target.data(), static_cast<int>(found.kind),
+                     found.text.c_str());
+    }
+    return same;
+}
+
+[[nodiscard]] bool refused_link(std::string_view target,
+                                const std::optional<core::FilePath> &document)
+{
+    return destined(target, document, core::LinkKind::refused, target);
+}
+
+void verify_link_destinations()
+{
+    using enum core::LinkKind;
+    const std::optional<core::FilePath> base = core::FilePath::parse("C:\\docs\\a.md").value();
+    const std::optional<core::FilePath> untitled;
+    expect(destined("https://x.y/a?b#c", base, web, "https://x.y/a?b#c") &&
+               destined("HTTP://X.Y", base, web, "HTTP://X.Y") &&
+               destined("MailTo:a@b.c", base, mail, "MailTo:a@b.c"),
+           "http, https and mailto are matched without case and keep their spelling");
+    expect(refused_link("javascript:alert(1)", base) && refused_link("ms-settings:x", base) &&
+               refused_link("data:text/plain,x", base) && refused_link("a.md:stream", base),
+           "any other scheme is refused");
+    expect(destined("#sec", base, heading, "sec") && destined("#", untitled, heading, ""),
+           "a hash first is a heading");
+    expect(destined("C:\\x\\b.md", base, document, "C:\\x\\b.md") &&
+               destined("c:/x/b.md", base, document, "c:\\x\\b.md"),
+           "a one-letter scheme is a drive and an absolute path is a document");
+    expect(destined("b.md", base, document, "C:\\docs\\b.md") &&
+               destined("../c/./d.md", base, document, "C:\\c\\d.md") &&
+               destined("sub/e%20f.md", base, document, "C:\\docs\\sub\\e f.md") &&
+               destined("b.md#sec", base, document, "C:\\docs\\b.md") &&
+               destined("b.md?q", base, document, "C:\\docs\\b.md") &&
+               destined("%zz.md", base, document, "C:\\docs\\%zz.md"),
+           "a relative path is resolved from the folder of the document like an image");
+    expect(destined("file:///C:/x/y.md", base, document, "C:\\x\\y.md") &&
+               refused_link("file://server/s/x.md", base),
+           "a file URL is resolved like an image and a host is refused");
+    expect(refused_link("b.md", untitled), "a relative path in an untitled document is refused");
+    expect(refused_link("\\\\server\\share\\x.md", base) && refused_link("//host/x.md", base),
+           "a network path is refused");
+    expect(refused_link("%FF.md", base) && refused_link("%00a.md", base),
+           "a percent sign that decodes to invalid UTF-8 or NUL is refused");
+    expect(refused_link("", base) && refused_link("a\tb.md", base) &&
+               refused_link("https://x\x7f", base),
+           "an empty destination and control characters are refused");
+    expect(refused_link("p.png", base) && refused_link("P.PNG", base) &&
+               refused_link("file:///C:/x/y.EXE", base),
+           "a destination with an extension that is not text is refused");
 }
 
 void verify_html_and_line_endings()
@@ -1025,6 +1093,7 @@ void verify_markdown_scope()
     verify_tables();
     verify_alerts();
     verify_link_targets();
+    verify_link_destinations();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();

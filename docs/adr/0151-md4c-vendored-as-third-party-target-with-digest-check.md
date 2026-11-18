@@ -126,12 +126,18 @@ PR #1860 の実装と独立レビュー（`D:/NeNeNib/outputs/20261118/review-18
 決定 7 の「リンクの URL は `PreviewSpan` に持たない・開かないので」を改める。D105 でリンクは確かめてから開くことになったので、宛先を要素に持つ。確かめの見た目（どこに何を出すか）は段 L2 で、/design のキャンバス（https://claude.ai/artifact/Y1Gk5UsPmj1PucmjVAtEzR ）の答えの後に書く。
 
 1. **宛先は要素ごとの別の列。** `PreviewSpan` には足さない（全部の装飾に文字列を持たせない）。`PreviewBlock` に `std::vector<PreviewLink> links`（`PreviewLink{Offset begin; Offset end; std::string target}`・`text` の中のバイト位置は `link` の span と同じ）を足す。`target` は md4c の `MD_SPAN_A_DETAIL.href` を、実体参照と `\` のエスケープを解いた綴り（`%` の符号は解かない）。裸の URL（決定 2 の autolink）も同じ列に載る（`www.` は `http://` を前に付けた形、メールは `mailto:` を前に付けた形）。画像（`MD_SPAN_IMG`）の宛先は載せない（画像は読まない・開かない）。
-2. **種類を決めるのは core の純関数 `link_destination` の 1 本。** 入力は `target` と文書の置き場（無題なら無し）、出力は `LinkDestination{LinkKind kind; std::string text}`。`LinkKind` は閉じた enum `{web, mail, document, heading, refused}`。
-   - 先頭の scheme（`[A-Za-z][A-Za-z0-9+.-]*:`）を ASCII の大小を畳んで見る。`http` `https` → `web`。`mailto` → `mail`。それ以外の scheme（`javascript` `file` `ms-*` `data` など）→ `refused`。1 文字の scheme（`C:`）はドライブの文字として扱い、scheme と見なさない。
+2. **種類を決めるのは core の純関数 `link_destination` の 1 本。** 入力は `target` と文書の経路（`FilePath`・無題なら無し・画像と同じ）、出力は `LinkDestination{LinkKind kind; std::string text}`。`LinkKind` は閉じた enum `{web, mail, document, heading, refused}`。
+   - 空・制御文字（U+0000〜U+001F・U+007F）を含む宛先は `refused`。先頭の scheme（`[A-Za-z][A-Za-z0-9+.-]*:`・判定は画像の参照と共用の `uri_scheme_length` の 1 本）を ASCII の大小を畳んで見る。`http` `https` → `web`。`mailto` → `mail`。`file` → ローカルの参照（下）。それ以外の scheme（`javascript` `ms-*` `data` など）→ `refused`。1 文字の scheme（`C:`）はドライブの文字として扱い、scheme と見なさない。
    - `#` で始まる → `heading`（`text` は `#` の後ろ・段 L3 で使う）。
-   - scheme の無い宛先はファイルのパス。`%XX` を解き（解いた結果が不正な UTF-8 か NUL を含むなら `refused`）、`/` を `\` に揃え、後ろの `#…` と `?…` を外す。絶対のパス（`C:\` の形）はそのまま、相対のパスは文書の置き場からつなぐ（無題の文書なら `refused`）。`\\` で始まる（UNC・ネットワークの宛先）は `refused`。拡張子が `unlisted_extensions`（D34 の「テキストでない拡張子」の表・`UnlistedExtensions.hpp`）にあれば `refused`。それ以外は `document`（`text` はつないだパス・存在とテキストかどうかは開くときに `open_document` が決める）。
-   - `web` と `mail` の `text` は元の綴り（確かめで見せる・OS に渡すのもこの綴り）。空・制御文字（U+0000〜U+001F・U+007F）を含む宛先は `refused`。
+   - scheme の無い宛先と `file:` の URL はローカルの参照。**パスの解き方は画像と同じ `resolve_local_reference` の 1 本**（ADR 0155 の追補 48 の規則・`resolve_image_reference` を画像とリンクの共用の名前に改め、拒否の型も `LocalReferenceRefusal` にした。規則と振る舞いは変えない）。解決器の拒否（network・no_base・malformed など）→ `refused`。解いた経路の名前の拡張子が `unlisted_extensions`（D34 の「テキストでない拡張子」の表・`folder_lists` と同じ口）にあれば `refused`、それ以外は `document`（`text` は解いた経路・存在とテキストかどうかは開くときに `open_document` が決める）。文書へのリンクの `#見出し`（`other.md#sec`）は解決器の規則どおり後ろを捨てる（見出しへ跳ぶのは段 L3 で、要ればそのとき別の欄を足す）。
+   - `web` と `mail` の `text` は元の綴り（確かめで見せる・OS に渡すのもこの綴り）。`heading` は `#` の後ろ、`refused` は元の綴り。
 3. **段 L1 は開かない。** OS で開く port・確かめの状態・クリックは段 L2。段 L1 で変わる振る舞いは無い（描画も今のまま）。
 4. **試験。** `nib_tests` の Markdown の scope に、宛先の列（インラインの形・参照の形 `[a][1]`・autolink 3 種・エスケープと実体参照・画像は載らない・表の升と見出しの中のリンク）と、`link_destination` の表（各種類・大小・ドライブの文字・UNC・`..` を含む相対・無題・`%` の解き・不正な `%`・制御文字・テキストでない拡張子）。
 
-**限界（段 L1）。** 宛先が実在するか・テキストかは見ない（開くときに分かる）。`file:` の URL は全部 `refused`（ローカルのファイルへはパスで書く）。参照の形の定義の行そのものは要素に出ない（md4c の作り）。
+**限界（段 L1）。** 宛先が実在するか・テキストかは見ない（開くときに分かる）。`file:` の URL は画像と同じく host が空か `localhost` のものだけを受ける。参照の形の定義の行そのものは要素に出ない（md4c の作り）。表の升の要素（`preview_table_cell`）は links を写さない（升の中のリンクをクリックで開くなら段 L2 で写す・申し送り）。画像の alt の中に書いたリンク（画像の角括弧の中のリンクの記法）は links に載る。
+
+### 段 L1 の実装で分かった事実
+
+- md4c は href の `\` のエスケープを解いて渡す（autolink は解かない・`<https://x/a\_b>` は綴りのまま）。実体参照は ENTITY の部分列で来るので、画像の属性と同じ `attribute_text` で解く。
+- `www.` の autolink には md4c が `http://` を、裸のメールと `<a@b.c>` には `mailto:` を前に付けて渡す（builder で足さない）。参照の形 `[a][1]` は定義の宛先が href に来る。
+- 宛先の範囲は link の装飾の範囲から要素を閉じるときに作るので、`~` 1 つの打ち消しを戻したずれと alert の印の置き換え（`markdown_alert_titled` が装飾と同じだけずらす）がそのまま入る。
