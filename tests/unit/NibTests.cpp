@@ -417,6 +417,11 @@ using nenenib::tests::verify_vim_scope_contracts;
 
 int main(int argc, char **argv)
 {
+    if (argc > 2)
+    {
+        std::fputs("usage: nib_tests [scope]  (scopes run one at a time)\n", stderr);
+        return 2;
+    }
     const std::string_view command = argc == 2 ? std::string_view{argv[1]} : std::string_view{};
     if (verify_selected_scope(command))
     {
