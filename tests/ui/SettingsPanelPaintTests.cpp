@@ -1,8 +1,9 @@
 // #1836（施主決定 D102・ADR 0170 の決定 5）: 設定の面（右の引き出し）の画素と鍵の振り分け。WIC の
 // bitmap（SoftwareTarget）に SettingsPanelPainter で描き、面の地が panel・左の境が panel_border の
-// 1 DIP・面の外には何も描かない（暗幕なし）・焦点の行に current_line の面・スイッチのオンは accent で
-// つまみが右・オフは toggle でつまみが左・段の印は high だけが heavy の色・細い窓（700 DIP 未満）は
-// 全幅で `:set` の名前を描かない・文字組みの保持が描き直しで増えないことを、ダークとライトで
+// 1 DIP・面の外には何も描かない（暗幕なし）・焦点の行に current_line の面・スイッチのオンは accent
+// で つまみが右・オフは toggle でつまみが左・段の印は high だけが heavy の色・細い窓（700 DIP
+// 未満）は 全幅で `:set`
+// の名前を描かない・文字組みの保持が描き直しで増えないことを、ダークとライトで
 // 確かめる。配置は製品と同じ core::settings_layout。bitmap は 80 画素の高さなので、帯を平行移動して
 // 見たい行を bitmap に入れる。窓・device は作らない。字の画素は字体に依るので、Segoe UI と Consolas
 // が無い機械では測らない（QLT-013）。鍵の表（settings_key_action）は窓を作らずに確かめる。
@@ -172,8 +173,7 @@ class PanelStrip final
             [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
             {
                 const SettingsPanelPainter painter(surface, *brush, text_, layouts_);
-                layout = painter.arranged(view,
-                                          core::LayoutRect{0, top, width, top + band_height});
+                layout = painter.arranged(view, core::LayoutRect{0, top, width, top + band_height});
             }));
         return layout;
     }
@@ -197,9 +197,9 @@ class PanelStrip final
     [[nodiscard]] static const core::SettingsLayoutItem &row_box(const core::SettingsLayout &layout,
                                                                  std::size_t row)
     {
-        return *std::ranges::find_if(layout.items, [row](const core::SettingsLayoutItem &item)
-                                     { return item.kind == core::SettingsItemKind::row &&
-                                              item.index == row; });
+        return *std::ranges::find_if(
+            layout.items, [row](const core::SettingsLayoutItem &item)
+            { return item.kind == core::SettingsItemKind::row && item.index == row; });
     }
 
   private:

@@ -15,8 +15,8 @@ namespace nenenib::core
 // - chips: 節の札（宣言の順・折り返した後の位置）。divider は札の下の 1 DIP の線。
 // - list: 行の領域（ここだけ縦に送る・描画の clip）。items は送った後の位置で、list の外へ出た
 //   ものも含む。presets は要約の中の組のボタン（要約が無ければ空の矩形）。
-// - footer_line: 下の帯の上の 1 DIP の線。note は「閉じると保存されます」、revert と close_button は
-//   ボタン。
+// - footer_line: 下の帯の上の 1 DIP の線。note は「閉じると保存されます」の文、revert と
+//   close_button はボタン。
 // - scroll: 切り詰めた後の送り。scroll_limit はその上限（行が入り切れば 0）。
 // - narrow: 全幅（窓の幅が 700 DIP 未満）。`:set` の名前を描かない。
 struct SettingsLayout

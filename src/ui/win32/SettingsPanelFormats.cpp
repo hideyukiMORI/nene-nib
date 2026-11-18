@@ -23,7 +23,7 @@ constexpr std::size_t mono_index = 6;
 
 bool SettingsPanelFormats::made(IDWriteFactory &dwrite,
                                 std::pair<const wchar_t *, const wchar_t *> faces, float scale,
-                                const wchar_t *locale)
+                                const wchar_t *tag)
 {
     if (ready_)
     {
@@ -33,9 +33,9 @@ bool SettingsPanelFormats::made(IDWriteFactory &dwrite,
     {
         auto &format = formats_.at(index);
         const auto &[size, weight] = shapes.at(index);
-        if (FAILED(dwrite.CreateTextFormat(index == mono_index ? faces.second : faces.first, nullptr, weight,
-                                           DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                           size * scale, locale,
+        if (FAILED(dwrite.CreateTextFormat(index == mono_index ? faces.second : faces.first,
+                                           nullptr, weight, DWRITE_FONT_STYLE_NORMAL,
+                                           DWRITE_FONT_STRETCH_NORMAL, size * scale, tag,
                                            format.ReleaseAndGetAddressOf())) ||
             FAILED(format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)) ||
             FAILED(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)))

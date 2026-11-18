@@ -30,6 +30,8 @@ inline constexpr std::int32_t settings_switch_width_dips = 40;
 inline constexpr std::int32_t settings_switch_height_dips = 22;
 inline constexpr std::int32_t settings_value_width_dips = 172;
 inline constexpr std::int32_t settings_value_height_dips = 30;
+// 切れない機能の「常にオン」の語の欄の幅（DIP・高さはスイッチと同じ）。
+inline constexpr std::int32_t settings_fixed_width_dips = 72;
 // 行の内側の左右の余白と、行の中の部品どうしの空き（DIP）。
 inline constexpr std::int32_t settings_row_padding_dips = 12;
 inline constexpr std::int32_t settings_row_gap_dips = 14;
@@ -38,9 +40,8 @@ inline constexpr std::int32_t settings_wheel_line_dips = 20;
 
 // 節の札と見出しの順（宣言の順）。
 inline constexpr std::array<SettingsSection, 6> settings_sections{
-    SettingsSection::display,  SettingsSection::text,
-    SettingsSection::editing,  SettingsSection::panes,
-    SettingsSection::features, SettingsSection::language_server};
+    SettingsSection::display, SettingsSection::text,     SettingsSection::editing,
+    SettingsSection::panes,   SettingsSection::features, SettingsSection::language_server};
 // 組のボタンの順。
 inline constexpr std::array<SettingsPreset, 3> settings_presets{
     SettingsPreset::speed_first, SettingsPreset::recommended, SettingsPreset::all_on};
@@ -59,7 +60,8 @@ inline constexpr std::array<SettingsPreset, 3> settings_presets{
 [[nodiscard]] SettingsTarget settings_hit(const SettingsLayout &layout, std::int32_t x,
                                           std::int32_t y) noexcept;
 
-// 行の右端の部品の矩形（スイッチは 40 × 22・ほかは 172 × 30・行の右の内側に縦の中央）。
+// 行の右端の部品の矩形（スイッチは 40 × 22・「常にオン」の語は 72 × 22・ほかは 172 × 30・行の右の
+// 内側に縦の中央）。
 [[nodiscard]] LayoutRect settings_control_box(const SettingsLayout &layout,
                                               const SettingsLayoutItem &row) noexcept;
 // 段の上下の欄 box の中の −（plus が偽）と ＋ のボタン。

@@ -1218,8 +1218,8 @@ core::EditorSettings EditorController::shown_settings() const
 // IME の構え。設定の面が開いている間は探す欄のために閉じ直さない（#1836）。
 ImeStance EditorController::shown_ime_stance() const
 {
-    const auto decided = ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(),
-                                       explorer_focused());
+    const auto decided =
+        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused());
     return settings_open() ? ime_stance_in_settings(decided) : decided;
 }
 
@@ -1227,25 +1227,24 @@ EditorDelivery EditorController::delivery() const
 {
     auto settings = shown_settings();
     const auto &theme = core::selected_theme(settings, state_.appearance());
-    return EditorDelivery{
-        theme.appearance,
-        state_.mode(),
-        state_.vim().mode,
-        shown_ime_stance(),
-        state_.command_input().transform(input_line_prompt_of),
-        composed(),
-        command_composed(),
-        active_document_view(),
-        std::move(settings),
-        state_.settings_failure(),
-        command_message(),
-        state_.closing(),
-        state_.close_request(),
-        state_.operation_request(),
-        state_.display_question(),
-        layout_failure_,
-        true,
-        std::nullopt};
+    return EditorDelivery{theme.appearance,
+                          state_.mode(),
+                          state_.vim().mode,
+                          shown_ime_stance(),
+                          state_.command_input().transform(input_line_prompt_of),
+                          composed(),
+                          command_composed(),
+                          active_document_view(),
+                          std::move(settings),
+                          state_.settings_failure(),
+                          command_message(),
+                          state_.closing(),
+                          state_.close_request(),
+                          state_.operation_request(),
+                          state_.display_question(),
+                          layout_failure_,
+                          true,
+                          std::nullopt};
 }
 
 namespace

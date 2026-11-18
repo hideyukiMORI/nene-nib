@@ -521,10 +521,28 @@ void verify_vim_wrap_window()
     expect(wrap_switched(true) == by_ex,
            "switching wrap in the panel re-decides the Vim window like :set nowrap");
 }
+
+// 面が開いたまま窓を閉じて書けないとき、同じ EndSession の中で書こうとするのは 1 回だけ（#1835 の
+// 再確認 R-b1）。次の EndSession でも試さない。
+void verify_end_session_tries_once()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.settings().fail(nenenib::application::SettingsFailure::unwritable);
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    focus_on(controller, core::EditorFeature::guide);
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+    expect(editing.settings().writes() == 1,
+           "EndSession over an open panel under a failure tries to write once");
+    static_cast<void>(controller.apply(app::EndSession{app::SessionEnd::window_closed}));
+    expect(editing.settings().writes() == 1, "a second EndSession does not try again");
+}
 } // namespace
 
 void verify_settings_modal_scope()
 {
+    verify_end_session_tries_once();
     verify_open_change_close();
     verify_revert();
     verify_other_intents_close();

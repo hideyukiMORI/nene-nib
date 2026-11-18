@@ -88,9 +88,9 @@ constexpr core::SettingsTextWidths short_widths{{40, 40, 40, 20, 40, 60}, {60, 6
 [[nodiscard]] const core::SettingsLayoutItem &row_item(const core::SettingsLayout &layout,
                                                        std::size_t row)
 {
-    return *std::ranges::find_if(layout.items, [row](const core::SettingsLayoutItem &item)
-                                 { return item.kind == core::SettingsItemKind::row &&
-                                          item.index == row; });
+    return *std::ranges::find_if(
+        layout.items, [row](const core::SettingsLayoutItem &item)
+        { return item.kind == core::SettingsItemKind::row && item.index == row; });
 }
 
 // 部品 control を持つ最初の行の番号。
@@ -186,8 +186,8 @@ void verify_chip_wrap()
 {
     const auto rows = every_row();
     const core::SettingsTextWidths wide{{120, 120, 120, 120, 120, 120}, {60, 60, 60}, 50, 40};
-    const auto layout = core::settings_layout(
-        core::SettingsLayoutRequest{wide_area, dpi, rows, 0, wide, 0});
+    const auto layout =
+        core::settings_layout(core::SettingsLayoutRequest{wide_area, dpi, rows, 0, wide, 0});
     expect(layout.chips.at(1).top == layout.chips.at(0).top &&
                layout.chips.at(2).top == layout.chips.at(0).top + 32 &&
                layout.chips.at(2).left == layout.chips.at(0).left &&
@@ -245,10 +245,10 @@ void verify_hit()
                hit_centre(layout, layout.close_button).part == core::SettingsPart::close_button,
            "the header, the chips and the footer buttons are hit by their boxes");
     // 組のボタンは行の領域に見えているときだけ当たる（機能の節の最初の行が見える所へ送る）。
-    const auto featured = static_cast<std::size_t>(
-        std::ranges::find(rows, core::SettingsSection::features,
-                          &core::SettingsLayoutRow::section) -
-        rows.begin());
+    const auto featured =
+        static_cast<std::size_t>(std::ranges::find(rows, core::SettingsSection::features,
+                                                   &core::SettingsLayoutRow::section) -
+                                 rows.begin());
     const auto shown = laid(rows, wide_area, core::settings_scroll_revealing(layout, featured));
     expect(hit_centre(layout, layout.presets.at(2)).part != core::SettingsPart::preset &&
                hit_centre(shown, shown.presets.at(2)) ==

@@ -11,12 +11,6 @@
 #include "CommandLayout.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuPainter.hpp"
-#include "SettingsControl.hpp"
-#include "SettingsLayout.hpp"
-#include "SettingsPanelFormats.hpp"
-#include "SettingsPanelPainter.hpp"
-#include "SettingsTarget.hpp"
-#include "SettingsView.hpp"
 #include "DeviceWarmup.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLine.hpp"
@@ -47,6 +41,12 @@
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
+#include "SettingsControl.hpp"
+#include "SettingsLayout.hpp"
+#include "SettingsPanelFormats.hpp"
+#include "SettingsPanelPainter.hpp"
+#include "SettingsTarget.hpp"
+#include "SettingsView.hpp"
 #include "StartScreenPainter.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusLayoutDemand.hpp"
@@ -132,8 +132,8 @@ class Direct2DRenderer final
     [[nodiscard]] core::SettingsTarget settings_target_at(std::int32_t x, std::int32_t y) const;
     [[nodiscard]] std::optional<core::SettingsControl> settings_row_control(std::size_t row) const;
     [[nodiscard]] std::optional<std::int32_t> settings_scrolled(std::int32_t lines) const;
-    [[nodiscard]] std::optional<std::size_t>
-    settings_paged_row(std::optional<std::size_t> focused, bool down) const;
+    [[nodiscard]] std::optional<std::size_t> settings_paged_row(std::optional<std::size_t> focused,
+                                                                bool down) const;
     [[nodiscard]] std::optional<std::int32_t>
     settings_revealed(const application::SettingsView &view, core::DisplayLanguage language);
     [[nodiscard]] std::optional<core::LayoutRect> settings_search_rectangle() const;

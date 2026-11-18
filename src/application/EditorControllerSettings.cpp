@@ -22,10 +22,10 @@
 #include "PointMinimap.hpp"
 #include "ResolvedLanguage.hpp"
 #include "RevertSettings.hpp"
-#include "ScrollSettings.hpp"
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollSettings.hpp"
 #include "ScrollTabs.hpp"
 #include "SettingsOpen.hpp"
 #include "SettingsPanel.hpp"
@@ -281,9 +281,13 @@ void EditorController::accept(const ScrollSettings &intent)
 // 写す前に閉じて保存する（窓を閉じる EndSession・タブの操作・本文のクリック・打鍵…・追補 2）。
 void EditorController::close_settings_before(const EditorIntent &intent)
 {
+    // この意図の入口で書こうとして書けなかったか（同じ意図の中の書き直しを飛ばす・#1835 の再確認
+    // R-b1）。
+    settings_write_failed_now_ = false;
     if (settings_.has_value() && !keeps_settings_open(intent))
     {
         close_settings();
+        settings_write_failed_now_ = settings_unsaved_;
     }
 }
 
@@ -320,6 +324,12 @@ void EditorController::retry_unsaved_settings()
         return;
     }
     settings_unsaved_ = false;
+    // 同じ EndSession の入口で面を閉じて書けなかった直後は、間に何も変わっていないので試さない
+    // （その 1 回が窓を閉じるときの 1 回・#1835 の再確認 R-b1）。
+    if (settings_write_failed_now_)
+    {
+        return;
+    }
     static_cast<void>(write_settings(state_.settings()));
 }
 

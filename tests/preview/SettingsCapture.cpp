@@ -5,7 +5,7 @@
 // client の全部（タイトルバーとステータスバーは描かない）で、面の外は配色の背景で塗る。
 // CTest に登録しない（設計席が PNG を Read で見る）。
 //
-//   nib_settings_capture <png> <幅 px> <高さ px> <dpi> <配色の名前> <焦点の行|-1> <送り px> <lsp 0|1>
+//   nib_settings_capture <png> <幅 px> <高さ px> <dpi> <配色> <焦点の行|-1> <送り px> <lsp 0|1>
 #include "DevicePixels.hpp"
 #include "DisplayLanguage.hpp"
 #include "EditorFeature.hpp"

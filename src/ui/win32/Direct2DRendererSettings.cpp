@@ -64,16 +64,16 @@ std::optional<core::LayoutRect> Direct2DRenderer::settings_search_rectangle() co
 // 書式は面を最初に描くときに作る（開いていない間は持たない）。
 bool Direct2DRenderer::settings_formats_made()
 {
-    return settings_formats_.made(*dwrite_.Get(),
-                                  {family(L"Segoe UI Variable Text", L"Segoe UI"),
-                                   family(L"Cascadia Code", L"Consolas")},
-                                  static_cast<float>(dpi_) /
-                                      static_cast<float>(core::reference_dpi),
-                                  ui_locale_name(formatted_language_));
+    return settings_formats_.made(
+        *dwrite_.Get(),
+        {family(L"Segoe UI Variable Text", L"Segoe UI"), family(L"Cascadia Code", L"Consolas")},
+        static_cast<float>(dpi_) / static_cast<float>(core::reference_dpi),
+        ui_locale_name(formatted_language_));
 }
 
-std::optional<std::int32_t> Direct2DRenderer::settings_revealed(
-    const application::SettingsView &view, core::DisplayLanguage language)
+std::optional<std::int32_t>
+Direct2DRenderer::settings_revealed(const application::SettingsView &view,
+                                    core::DisplayLanguage language)
 {
     // 面をまだ描いていなければ帯が分からない（開いた直後は焦点が最初の行なので送りは要らない）。
     if (!settings_layout_.has_value() || !view.focused.has_value() || !settings_formats_made())

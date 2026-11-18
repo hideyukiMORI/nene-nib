@@ -1599,6 +1599,9 @@ class EditorController final
     // 面を閉じたときの書き込みが失敗し、状態の設定がまだファイルに無い（R1）。書けたとき・窓を
     // 閉じるときの書き直しの後に落とす。
     bool settings_unsaved_ = false;
+    // いまの意図の入口（close_settings_before）で面を閉じて書けなかった。同じ意図の中の
+    // retry_unsaved_settings を飛ばす（書き込みは 1 回だけ・#1835 の再確認 R-b1）。
+    bool settings_write_failed_now_ = false;
     // 写している途中の意図の深さと、いちばん外の意図の入口の印（ADR 0137 の追補 #1625）。apply の
     // 入口と出口が整数を書くだけで、例外で抜けると深さは戻らない（落ちたときは「意図の中」と読む）。
     std::size_t intent_depth_ = 0;

@@ -76,6 +76,12 @@ constexpr std::int32_t composition_top_dips = 8;
 // 操作「設定」（Ctrl+, と F1 の一覧）。開いている間の Ctrl+, は面の鍵が先に受けて閉じる。
 void EditorWindow::run_open_settings()
 {
+    // 本文の変換中に開いたら、IME の側の変換も取り消す（状態の変換は application が消す・#1835 の
+    // 再確認 L-b2）。
+    if (controller_.is_composing())
+    {
+        cancel_ime_composition();
+    }
     send(application::OpenSettings{});
 }
 
@@ -325,12 +331,10 @@ void EditorWindow::act_on_settings(core::SettingsTarget target)
         send(application::CloseSettings{});
         return;
     case core::SettingsPart::chip:
-        send_settings(
-            application::JumpSettingsSection{core::settings_sections.at(target.index)});
+        send_settings(application::JumpSettingsSection{core::settings_sections.at(target.index)});
         return;
     case core::SettingsPart::preset:
-        send_settings(
-            application::ChooseSettingsPreset{core::settings_presets.at(target.index)});
+        send_settings(application::ChooseSettingsPreset{core::settings_presets.at(target.index)});
         return;
     case core::SettingsPart::revert:
         send_settings(application::RevertSettings{});

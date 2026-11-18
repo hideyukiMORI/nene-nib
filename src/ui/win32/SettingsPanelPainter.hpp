@@ -22,9 +22,10 @@ namespace nenenib::ui::win32
 // 設定の面（右の引き出し）を描く経路（施主決定 D102・採用案
 // docs/design/2026-11-18-settings-modal-look.md・#1836）。面は地 panel・左の境 1 DIP の
 // panel_border（影は付けない）。見出し・鍵の表示・✕・探す欄・節の札・行の領域（clip）・下の帯の順に
-// 描く。スイッチのオンは accent・オフは toggle・つまみは on_accent。選ぶ欄と段の上下は地 background・
-// 枠 panel_border。段の印は low が muted の ●・medium が accent の ●●・high が heavy（構文の色の
-// error）の ●●● で、裏で動く機能は「裏」の語を添える。焦点の行は current_line の面。
+// 描く。スイッチのオンは accent・オフは toggle・つまみは on_accent。選ぶ欄と段の上下は地が
+// background で枠が panel_border。段の印は low が muted の ●・medium が accent の ●●・high が
+// heavy（構文の色の error）の ●●● で、裏で動く機能は「裏」の語を添える。焦点の行は
+// current_line の面。
 // 配置は core::settings_layout の 1 本（窓の当たりと同じ矩形）で、札・組・ボタンの文字の幅は
 // arranged が測って渡す。文字組みは PaletteRowLayouts の保持から引く（1 行ぶんの広い箱で作り、
 // 中央と右寄せは幅を測って置く）。target は製品では Direct2D の描画先、tests/ui は WIC の bitmap の

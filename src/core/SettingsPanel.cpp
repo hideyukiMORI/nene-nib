@@ -86,8 +86,8 @@ constexpr LayoutRect nowhere{0, 0, 0, 0};
     SettingsLayout layout{};
     layout.panel = LayoutRect{left, area.top, area.right, area.bottom};
     layout.border = LayoutRect{left, area.top, inner, area.bottom};
-    layout.header = LayoutRect{inner + side, top, close.left - to_pixels(block_gap_dips, dpi),
-                               bottom};
+    layout.header =
+        LayoutRect{inner + side, top, close.left - to_pixels(block_gap_dips, dpi), bottom};
     layout.close = close;
     layout.search = LayoutRect{inner + side, search_top, area.right - side,
                                search_top + to_pixels(search_height_dips, dpi)};
@@ -138,8 +138,8 @@ void place_footer(SettingsLayout &layout, const SettingsTextWidths &widths)
     const auto revert_right = layout.close_button.left - to_pixels(button_gap_dips, dpi);
     layout.revert =
         LayoutRect{revert_right - width_of_button(widths.revert), top, revert_right, bottom};
-    layout.footer_line = LayoutRect{layout.border.right, band - to_pixels(1, dpi), panel.right,
-                                    band};
+    layout.footer_line =
+        LayoutRect{layout.border.right, band - to_pixels(1, dpi), panel.right, band};
     layout.note = LayoutRect{layout.search.left, top,
                              layout.revert.left - to_pixels(button_gap_dips, dpi), bottom};
 }
@@ -191,8 +191,7 @@ void push_heading(SettingsLayout &layout, std::int32_t &y, SettingsSection secti
         {
             push_heading(layout, y, row.section);
         }
-        push_item(layout, y,
-                  SettingsLayoutItem{SettingsItemKind::row, nowhere, index, row.control},
+        push_item(layout, y, SettingsLayoutItem{SettingsItemKind::row, nowhere, index, row.control},
                   settings_row_height_dips);
     }
     const bool served =
@@ -304,8 +303,8 @@ void place_items(SettingsLayout &layout, const SettingsLayoutRequest &request)
 [[nodiscard]] std::size_t item_of_row(const SettingsLayout &layout, std::size_t row) noexcept
 {
     std::size_t at = 0;
-    while (at < layout.items.size() && (layout.items.at(at).kind != SettingsItemKind::row ||
-                                        layout.items.at(at).index != row))
+    while (at < layout.items.size() &&
+           (layout.items.at(at).kind != SettingsItemKind::row || layout.items.at(at).index != row))
     {
         ++at;
     }
@@ -348,6 +347,22 @@ void place_items(SettingsLayout &layout, const SettingsLayoutRequest &request)
 {
     return down ? at + 1 : at - 1;
 }
+// 行の右端の部品の幅と高さ（DIP）。
+[[nodiscard]] std::pair<std::int32_t, std::int32_t> control_size(SettingsControl control) noexcept
+{
+    switch (control)
+    {
+    case SettingsControl::toggle:
+        return {settings_switch_width_dips, settings_switch_height_dips};
+    case SettingsControl::fixed:
+        return {settings_fixed_width_dips, settings_switch_height_dips};
+    case SettingsControl::choice:
+    case SettingsControl::stepper:
+    case SettingsControl::readonly:
+        return {settings_value_width_dips, settings_value_height_dips};
+    }
+    std::unreachable();
+}
 } // namespace
 
 SettingsControl settings_control_of(const SettingsSubject &subject, bool switchable) noexcept
@@ -365,8 +380,8 @@ SettingsLayout settings_layout(const SettingsLayoutRequest &request)
     const auto chips_bottom = place_chips(layout, request.widths);
     place_footer(layout, request.widths);
     const auto line = chips_bottom + to_pixels(block_gap_dips, layout.dpi);
-    layout.divider = LayoutRect{layout.border.right, line, layout.panel.right,
-                                line + to_pixels(1, layout.dpi)};
+    layout.divider =
+        LayoutRect{layout.border.right, line, layout.panel.right, line + to_pixels(1, layout.dpi)};
     layout.list = LayoutRect{layout.border.right, layout.divider.bottom, layout.panel.right,
                              std::max(layout.divider.bottom, layout.footer_line.top)};
     place_items(layout, request);
@@ -410,11 +425,9 @@ LayoutRect settings_control_box(const SettingsLayout &layout,
                                 const SettingsLayoutItem &row) noexcept
 {
     const auto dpi = layout.dpi;
-    const bool toggle = row.control == SettingsControl::toggle;
-    const auto width =
-        to_pixels(toggle ? settings_switch_width_dips : settings_value_width_dips, dpi);
-    const auto height =
-        to_pixels(toggle ? settings_switch_height_dips : settings_value_height_dips, dpi);
+    const auto [wide, tall] = control_size(row.control);
+    const auto width = to_pixels(wide, dpi);
+    const auto height = to_pixels(tall, dpi);
     const auto padding = to_pixels(settings_row_padding_dips, dpi);
     const auto right = row.box.right - padding;
     const auto left = std::max(row.box.left + padding, right - width);
@@ -444,9 +457,9 @@ std::int32_t settings_scroll_revealing(const SettingsLayout &layout, std::size_t
     // 最初と最後のものは、行の領域の上下の余白まで見せる（端まで送る）。
     const bool first = revealed_top(layout, at) == layout.items.front().box.top;
     const auto top = revealed_top(layout, at) - (first ? to_pixels(list_top_dips, layout.dpi) : 0);
-    const auto bottom = layout.items.at(at).box.bottom +
-                        (at + 1 == layout.items.size() ? to_pixels(list_bottom_dips, layout.dpi)
-                                                       : 0);
+    const auto bottom =
+        layout.items.at(at).box.bottom +
+        (at + 1 == layout.items.size() ? to_pixels(list_bottom_dips, layout.dpi) : 0);
     std::int32_t moved = layout.scroll;
     if (top < layout.list.top)
     {

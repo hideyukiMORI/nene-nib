@@ -190,10 +190,10 @@ void SettingsPanelPainter::paint(const application::SettingsView &view,
 
 void SettingsPanelPainter::paint_header(const core::SettingsLayout &layout)
 {
-    const auto used = write(said(core::UiMessage::settings_title), text_.title, layout.header,
-                            palette_.text);
-    const auto chord = core::shown_chord(core::EditorOperation::open_settings,
-                                         core::EditMode::ordinary);
+    const auto used =
+        write(said(core::UiMessage::settings_title), text_.title, layout.header, palette_.text);
+    const auto chord =
+        core::shown_chord(core::EditorOperation::open_settings, core::EditMode::ordinary);
     if (chord.has_value())
     {
         const auto label = core::key_chord_label(chord.value());
@@ -204,13 +204,12 @@ void SettingsPanelPainter::paint_header(const core::SettingsLayout &layout)
         style.face = palette_.panel;
         style.border = palette_.panel_border;
         style.text = palette_.muted;
-        paint_keycap(KeycapCanvas{target_, brush_, scaled(1.0F)}, line(label, text_.mono).Get(),
-                     core::LayoutRect{left, layout.header.top +
-                                                ((core::height_of(layout.header) - line_height) / 2),
-                                      right,
-                                      layout.header.top +
-                                          ((core::height_of(layout.header) + line_height) / 2)},
-                     style);
+        paint_keycap(
+            KeycapCanvas{target_, brush_, scaled(1.0F)}, line(label, text_.mono).Get(),
+            core::LayoutRect{
+                left, layout.header.top + ((core::height_of(layout.header) - line_height) / 2),
+                right, layout.header.top + ((core::height_of(layout.header) + line_height) / 2)},
+            style);
     }
     const auto centre = centre_of(layout.close);
     const float half = scaled(glyph_half_dips + 1.0F);
@@ -233,10 +232,10 @@ void SettingsPanelPainter::paint_search(const application::SettingsView &view,
     const auto centre = centre_of(icon);
     const float radius = scaled(glyph_half_dips + 0.5F);
     brush_.SetColor(to_color(palette_.muted));
-    target_.DrawEllipse(D2D1::Ellipse(D2D1::Point2F(centre.x - scaled(1.0F),
-                                                    centre.y - scaled(1.0F)),
-                                      radius, radius),
-                        &brush_, scaled(glyph_stroke_dips));
+    target_.DrawEllipse(
+        D2D1::Ellipse(D2D1::Point2F(centre.x - scaled(1.0F), centre.y - scaled(1.0F)), radius,
+                      radius),
+        &brush_, scaled(glyph_stroke_dips));
     stroke(D2D1::Point2F(centre.x + scaled(2.5F), centre.y + scaled(2.5F)),
            D2D1::Point2F(centre.x + scaled(6.0F), centre.y + scaled(6.0F)), palette_.muted);
     const core::LayoutRect field{icon.right + pixels(tier_gap_dips), layout.search.top,
@@ -313,9 +312,9 @@ void SettingsPanelPainter::paint_item(const application::SettingsView &view,
         paint_command(view, item.box, item.index);
         return;
     case core::SettingsItemKind::empty:
-        write_centered(core::ui_text_filled(core::UiMessage::settings_no_match, text_.language,
-                                            {view.query}),
-                       text_.note, item.box, palette_.muted);
+        write_centered(
+            core::ui_text_filled(core::UiMessage::settings_no_match, text_.language, {view.query}),
+            text_.note, item.box, palette_.muted);
         return;
     }
     std::unreachable();
@@ -336,8 +335,7 @@ void SettingsPanelPainter::paint_summary(const application::SettingsView &view,
     std::string names;
     for (const auto feature : view.summary.heavy)
     {
-        names += names.empty() ? std::string_view{}
-                               : said(core::UiMessage::settings_list_joiner);
+        names += names.empty() ? std::string_view{} : said(core::UiMessage::settings_list_joiner);
         names += said(core::settings_row_title(core::SettingsSubject{feature}));
     }
     const core::LayoutRect note{inside.left, middle + pixels(hint_gap_dips), inside.right,
@@ -348,16 +346,15 @@ void SettingsPanelPainter::paint_summary(const application::SettingsView &view,
     }
     else
     {
-        write(core::ui_text_filled(core::UiMessage::settings_summary_heavy, text_.language,
-                                   {names}),
-              text_.note, note, heavy_);
+        write(
+            core::ui_text_filled(core::UiMessage::settings_summary_heavy, text_.language, {names}),
+            text_.note, note, heavy_);
     }
     for (std::size_t index = 0; index < layout.presets.size(); ++index)
     {
         const bool chosen = view.summary.preset == std::optional{core::settings_presets.at(index)};
         paint_button(said(preset_message(core::settings_presets.at(index))),
-                     layout.presets.at(index), chosen,
-                     chosen ? palette_.on_accent : palette_.text);
+                     layout.presets.at(index), chosen, chosen ? palette_.on_accent : palette_.text);
     }
 }
 
@@ -368,22 +365,21 @@ void SettingsPanelPainter::paint_row(const application::SettingsRowView &row,
     const auto control = core::settings_control_box(layout, item);
     paint_control(row, layout, item, control);
     const auto gap = pixels(core::settings_row_gap_dips);
-    auto right = control.left - gap;
-    // 細い窓（全幅）では `:set` の名前を描かない。
-    if (!layout.narrow)
-    {
-        const auto named = width(row.set_name, text_.mono);
-        write(row.set_name, text_.mono,
-              core::LayoutRect{right - named, item.box.top, right, item.box.bottom},
-              palette_.gutter);
-        right -= named + gap;
-    }
+    const auto right = control.left - gap;
     const auto left = item.box.left + pixels(core::settings_row_padding_dips);
     const core::LayoutRect title{left, item.box.top + pixels(title_top_dips), right,
                                  item.box.top + pixels(title_top_dips + title_height_dips)};
-    const auto used = write(said(row.title), text_.strong, title, palette_.text);
-    paint_tier(row, core::LayoutRect{title.left + used + pixels(tier_gap_dips), title.top, right,
-                                     title.bottom});
+    // `:set` の名前は名前の行の右端（説明は下の行を部品の手前まで使う）。細い窓（全幅）では
+    // 描かない。
+    const auto named = layout.narrow ? 0 : width(row.set_name, text_.mono) + gap;
+    if (!layout.narrow)
+    {
+        write_trailing(row.set_name, text_.mono, title, palette_.gutter);
+    }
+    const core::LayoutRect name{left, title.top, right - named, title.bottom};
+    const auto used = write(said(row.title), text_.strong, name, palette_.text);
+    paint_tier(row, core::LayoutRect{name.left + used + pixels(tier_gap_dips), name.top, name.right,
+                                     name.bottom});
     write(said(row.description), text_.note,
           core::LayoutRect{left, title.bottom + pixels(hint_gap_dips), right,
                            item.box.bottom - pixels(title_top_dips)},
@@ -420,8 +416,8 @@ void SettingsPanelPainter::paint_tier(const application::SettingsRowView &row,
         label += said(core::UiMessage::settings_list_joiner);
         label += said(core::UiMessage::settings_tier_background);
     }
-    const auto offset = static_cast<std::int32_t>(
-        std::ceil(scaled(dot_step_dips) * static_cast<float>(dots)));
+    const auto offset =
+        static_cast<std::int32_t>(std::ceil(scaled(dot_step_dips) * static_cast<float>(dots)));
     write(label, text_.heading,
           core::LayoutRect{area.left + offset, area.top, area.right, area.bottom}, ink);
 }
@@ -437,8 +433,7 @@ void SettingsPanelPainter::paint_control(const application::SettingsRowView &row
         paint_switch(box, row.on);
         return;
     case core::SettingsControl::fixed:
-        write_trailing(said(core::UiMessage::settings_always_on), text_.note, box,
-                       palette_.muted);
+        write_trailing(said(core::UiMessage::settings_always_on), text_.note, box, palette_.muted);
         return;
     case core::SettingsControl::choice:
         paint_value(row.value, box, true);
@@ -457,11 +452,11 @@ void SettingsPanelPainter::paint_switch(const core::LayoutRect &box, bool on)
 {
     fill_rounded(box, switch_radius_dips, on ? palette_.accent : palette_.toggle);
     const float reach = scaled(knob_inset_dips + knob_radius_dips);
-    const float x = on ? static_cast<float>(box.right) - reach
-                       : static_cast<float>(box.left) + reach;
+    const float x =
+        on ? static_cast<float>(box.right) - reach : static_cast<float>(box.left) + reach;
     brush_.SetColor(to_color(palette_.on_accent));
-    target_.FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, centre_of(box).y),
-                                      scaled(knob_radius_dips), scaled(knob_radius_dips)),
+    target_.FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, centre_of(box).y), scaled(knob_radius_dips),
+                                      scaled(knob_radius_dips)),
                         &brush_);
 }
 
@@ -491,8 +486,7 @@ void SettingsPanelPainter::paint_value(std::string_view value, const core::Layou
            D2D1::Point2F(x + scaled(glyph_half_dips), y - scaled(2.0F)), palette_.muted);
 }
 
-void SettingsPanelPainter::paint_stepper(std::string_view value,
-                                         const core::SettingsLayout &layout,
+void SettingsPanelPainter::paint_stepper(std::string_view value, const core::SettingsLayout &layout,
                                          const core::LayoutRect &box)
 {
     fill_rounded(box, box_radius_dips, palette_.background);
@@ -525,8 +519,7 @@ void SettingsPanelPainter::paint_footer(const application::SettingsView &view,
                                         const core::SettingsLayout &layout)
 {
     fill(layout.footer_line, palette_.panel_border);
-    write(said(core::UiMessage::settings_saved_on_close), text_.note, layout.note,
-          palette_.muted);
+    write(said(core::UiMessage::settings_saved_on_close), text_.note, layout.note, palette_.muted);
     // 「元に戻す」は開いたときから変えていなければ淡く描く（押しても何も変わらない）。
     paint_button(said(core::UiMessage::settings_revert), layout.revert, false,
                  view.changed ? palette_.text : palette_.muted);
@@ -550,22 +543,22 @@ PaletteRowLayouts::TextLayout SettingsPanelPainter::line(std::string_view text,
                                                          IDWriteTextFormat *format) const
 {
     const core::LayoutRect area{0, 0, line_width, line_height};
-    return layouts_.obtain(
-        PaletteRowKey{format, PaletteTextRole::plain, text, area, text_.dpi},
-        [&]() -> PaletteRowLayouts::TextLayout
-        {
-            const std::wstring wide = core::to_utf16(text).value_or(std::wstring{});
-            PaletteRowLayouts::TextLayout made;
-            if (text_.dwrite == nullptr || format == nullptr ||
-                FAILED(text_.dwrite->CreateTextLayout(
-                    wide.c_str(), static_cast<UINT32>(wide.size()), format,
-                    static_cast<float>(line_width), static_cast<float>(line_height),
-                    made.GetAddressOf())))
-            {
-                return nullptr;
-            }
-            return made;
-        });
+    return layouts_.obtain(PaletteRowKey{format, PaletteTextRole::plain, text, area, text_.dpi},
+                           [&]() -> PaletteRowLayouts::TextLayout
+                           {
+                               const std::wstring wide =
+                                   core::to_utf16(text).value_or(std::wstring{});
+                               PaletteRowLayouts::TextLayout made;
+                               if (text_.dwrite == nullptr || format == nullptr ||
+                                   FAILED(text_.dwrite->CreateTextLayout(
+                                       wide.c_str(), static_cast<UINT32>(wide.size()), format,
+                                       static_cast<float>(line_width),
+                                       static_cast<float>(line_height), made.GetAddressOf())))
+                               {
+                                   return nullptr;
+                               }
+                               return made;
+                           });
 }
 
 std::int32_t SettingsPanelPainter::width(std::string_view text, IDWriteTextFormat *format) const
@@ -589,11 +582,9 @@ std::int32_t SettingsPanelPainter::write(std::string_view text, IDWriteTextForma
     }
     brush_.SetColor(to_color(color));
     target_.PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
-    const float top =
-        static_cast<float>(area.top) +
-        (static_cast<float>(core::height_of(area) - line_height) / 2.0F);
-    target_.DrawTextLayout(D2D1::Point2F(static_cast<float>(area.left), top), shown.Get(),
-                           &brush_);
+    const float top = static_cast<float>(area.top) +
+                      (static_cast<float>(core::height_of(area) - line_height) / 2.0F);
+    target_.DrawTextLayout(D2D1::Point2F(static_cast<float>(area.left), top), shown.Get(), &brush_);
     target_.PopAxisAlignedClip();
     return width(text, format);
 }
@@ -639,8 +630,8 @@ void SettingsPanelPainter::outline(const core::LayoutRect &area, float radius_di
     box.right -= half;
     box.bottom -= half;
     brush_.SetColor(to_color(color));
-    target_.DrawRoundedRectangle(
-        D2D1::RoundedRect(box, scaled(radius_dips), scaled(radius_dips)), &brush_, scaled(1.0F));
+    target_.DrawRoundedRectangle(D2D1::RoundedRect(box, scaled(radius_dips), scaled(radius_dips)),
+                                 &brush_, scaled(1.0F));
 }
 
 void SettingsPanelPainter::stroke(D2D1_POINT_2F from, D2D1_POINT_2F to, core::RgbColor color)
