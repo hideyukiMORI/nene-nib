@@ -1650,6 +1650,18 @@ void verify_definition_waits_for_nothing()
                whole_vim_body(editing.controller()) != "int main() {}\n",
            "gd, d, a late answer and d delete the line in the document that was asked about");
 
+    // `d` で始まる map を持つと、`gd` の後の `d` は engine に届かず積まれる（再確認 P1）。
+    Editing mapped(lsp_settings(true));
+    capable_vim(mapped);
+    static_cast<void>(run_ex(mapped.controller(), "nnoremap dq x"));
+    keyed(mapped, U"gd");
+    const std::int64_t waited = last_request(mapped, "textDocument/definition");
+    keyed(mapped, U"d");
+    static_cast<void>(answered_frame(mapped, waited, two_location));
+    expect(!mapped.controller().vim_state().pending.has_value() &&
+               active_path(mapped) == source_path,
+           "a key held for a map drops the definition answer");
+
     Editing plain(lsp_settings(true));
     capable(plain);
     static_cast<void>(
