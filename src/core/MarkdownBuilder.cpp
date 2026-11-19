@@ -762,8 +762,8 @@ MarkdownDocument MarkdownBuilder::finished() &&
     close_implicit();
     flush_marker();
     close_leaf();
-    return MarkdownDocument{std::move(blocks_), std::move(images_),
-                            heading_slugs(heading_sources_), tables_};
+    return MarkdownDocument{std::move(blocks_), std::move(images_), heading_slugs(heading_sources_),
+                            tables_};
 }
 
 std::optional<std::size_t> MarkdownBuilder::located(std::string_view source) const
