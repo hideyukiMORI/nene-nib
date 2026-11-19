@@ -5,11 +5,14 @@
 // 触らない（ScriptedClipboard と ScriptedLinkOpen だけ）。
 #include "ActOnLinkCard.hpp"
 #include "ClickPreviewLink.hpp"
+#include "Column.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "FilePath.hpp"
 #include "InsertText.hpp"
+#include "LineNumber.hpp"
 #include "LinkCard.hpp"
 #include "LinkCardAction.hpp"
 #include "LinkKind.hpp"
@@ -17,16 +20,25 @@
 #include "MarkdownOutcome.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
+#include "Offset.hpp"
 #include "OpenDocument.hpp"
 #include "PreviewFrame.hpp"
+#include "PreviewPlacement.hpp"
 #include "PreviewPoint.hpp"
 #include "Scopes.hpp"
 #include "ScriptedClipboard.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
+#include "ScrollLines.hpp"
+#include "SelectEditMode.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "TestSupport.hpp"
 #include "TogglePreview.hpp"
+#include "VimCharacter.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
+#include "VimMode.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
@@ -76,6 +88,10 @@ void open_previewed(Editing &editing, std::string text)
 {
     const auto *preview =
         frame.other.has_value() ? std::get_if<app::PreviewFrame>(&frame.other.value()) : nullptr;
+    if (preview == nullptr && frame.full_preview.has_value())
+    {
+        preview = &frame.full_preview.value();
+    }
     if (preview == nullptr || preview->document == nullptr)
     {
         return std::nullopt;
@@ -217,7 +233,7 @@ void verify_copy()
            "a refused copy says so and keeps the card");
 }
 
-// 6. document は Nib のタブで開く（port は呼ばない）。見出しは今は札を出さない（段 L3）。
+// 6. document は Nib のタブで開く（port は呼ばない）。見出しは札を出さない（段 L3 は 11〜14）。
 void verify_document_and_heading()
 {
     Editing editing;
@@ -233,7 +249,7 @@ void verify_document_and_heading()
            "Enter opens the file in a new tab without the port");
     Editing heading;
     open_previewed(heading, std::string(links_text));
-    expect(!clicked(heading, 4).link_card.has_value(), "a heading link opens no card yet");
+    expect(!clicked(heading, 4).link_card.has_value(), "a heading link opens no card");
 }
 
 // 7. 表の升の中のリンクも札を開く（preview_table_cell が links を写す・#1869 の L1 の申し送り）。
@@ -311,8 +327,158 @@ void verify_shown_text()
                                                                  "exe.txt",
            "copying keeps the original spelling");
 }
-} // namespace
+// 段 L3 の文書: 1 行目にリンク 3 つ（見出し・無い見出し・`%XX` の日本語）、7 行目と 11
+// 行目が見出し。
+constexpr std::string_view headings_text =
+    "[go](#second-part) and [gone](#Missing) and [jp](#%E6%A6%82%E8%A6%81)\n\n# First\n\nbody\n\n"
+    "## Second Part\n\nmore\n\n## \xE6\xA6\x82\xE8\xA6\x81\n";
 
+[[nodiscard]] bool caret_at(const EditorFrame &frame, std::size_t line)
+{
+    return frame.caret.position.line == core::LineNumber{line} &&
+           frame.caret.position.column == core::Column{1};
+}
+
+// 11. 横のプレビューの通常モード: `#見出し` は札を開かずにキャレットを見出しの行の頭へ置く。
+//     `%XX` は解いて比べる。見つからなければ 1 行で、キャレットは動かない。port は呼ばない。
+void verify_heading_jump_side()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    const EditorFrame jumped = clicked(editing, 0);
+    expect(!jumped.link_card.has_value() && caret_at(jumped, 7),
+           "a heading link puts the caret at the start of the heading line without a card");
+    expect(caret_at(clicked(editing, 2), 11), "a percent-encoded fragment finds the heading");
+    const EditorFrame missing = clicked(editing, 1);
+    expect(caret_at(missing, 11) && !missing.link_card.has_value() &&
+               message_of(missing) == "この文書にその見出しはありません",
+           "an unknown heading says so in one line and leaves the caret");
+    expect(editing.links().touches() == 0, "a heading never reaches the port");
+}
+
+// 側のプレビューの錨（見せている枠が側のプレビューでなければ nullopt）。
+[[nodiscard]] std::optional<core::Offset> side_anchor(const EditorFrame &frame)
+{
+    const auto *preview =
+        frame.other.has_value() ? std::get_if<app::PreviewFrame>(&frame.other.value()) : nullptr;
+    if (preview == nullptr)
+    {
+        return std::nullopt;
+    }
+    return preview->anchor;
+}
+
+// 11b. 横のプレビューも錨を見出しに置く（レビュー R2）。見出しが本文の窓に見えていて本文が
+//      送られなくても、プレビューはその見出しへ動く。
+void verify_heading_jump_side_anchor()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    const EditorFrame jumped = clicked(editing, 0);
+    const auto heading = headings_text.find("## Second Part");
+    expect(jumped.first_visible == core::LineNumber{1} &&
+               side_anchor(jumped) == std::optional<core::Offset>{core::Offset{heading}},
+           "a visible heading moves the side preview without scrolling the body");
+    expect(side_anchor(editing.controller().frame()) ==
+               std::optional<core::Offset>{core::Offset{heading}},
+           "the next frame keeps the side preview at the heading");
+}
+
+// 11c. 下へ遠く跳ぶと本文が送られても、プレビューの上端は見出し（本文の先頭行ではない）。本文を
+//      次に送るとプレビューは追従に戻る。
+void verify_heading_jump_side_far()
+{
+    std::string text = "[far](#far-away)\n";
+    for (int line = 0; line < 40; ++line)
+    {
+        text += "x\n";
+    }
+    const auto heading = text.size();
+    text += "# Far Away\n";
+    for (int line = 0; line < 40; ++line)
+    {
+        text += "y\n";
+    }
+    Editing editing;
+    open_previewed(editing, text);
+    const EditorFrame jumped = clicked(editing, 0);
+    expect(caret_at(jumped, 42) && jumped.first_visible != core::LineNumber{1} &&
+               side_anchor(jumped) == std::optional<core::Offset>{core::Offset{heading}},
+           "a far heading is at the top of the side preview after the body scrolls");
+    const EditorFrame scrolled = editing.controller().apply_frame(app::ScrollLines{1});
+    expect(side_anchor(scrolled) != std::optional<core::Offset>{core::Offset{heading}},
+           "scrolling the body makes the side preview follow again");
+}
+
+// 12. Vim のモードでも同じ着地で、前の位置は `''` で戻れる（Vim の `:tag` と同じく跳ぶ命令）。
+void verify_heading_jump_vim()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    expect(caret_at(clicked(editing, 0), 7), "a heading link moves the Vim caret to the heading");
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'\''}}});
+    const EditorFrame back =
+        controller.apply_frame(app::VimKeyPress{core::VimKey{core::VimCharacter{U'\''}}});
+    expect(caret_at(back, 1), "'' goes back to the line before the jump");
+}
+
+// 12b. Vim の VISUAL と operator-pending の途中で跳ぶ（レビュー L4）。道は本文のクリックと同じ
+//      PlaceCaret なので、VISUAL は本文のクリックと同じく VISUAL のまま見出しの行頭で選択を畳み、
+//      待っているオペレータは捨てる（PlaceCaret だけでは残るので jump_to_heading が
+//      vim_operator_cleared で捨てる・後の `k` は動くだけで消さない）。
+void verify_heading_jump_vim_pending()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'v'}}});
+    const EditorFrame visual = clicked(editing, 0);
+    expect(caret_at(visual, 7) && visual.vim_mode == core::VimMode::visual,
+           "a heading link in VISUAL lands like a click in the body and keeps VISUAL");
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'v'}}});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'd'}}});
+    const EditorFrame pending = clicked(editing, 2);
+    expect(caret_at(pending, 11) && pending.vim_mode == core::VimMode::normal,
+           "a heading link drops a pending operator");
+    const EditorFrame moved =
+        controller.apply_frame(app::VimKeyPress{core::VimKey{core::VimCharacter{U'k'}}});
+    expect(moved.caret.position.line == core::LineNumber{10} &&
+               moved.total_lines == visual.total_lines,
+           "the next motion only moves the caret");
+}
+
+// 13. 全面のプレビュー: プレビューの送りをその見出しの行へ置き、本文のキャレットも同じく動かす。
+void verify_heading_jump_full()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    auto &controller = editing.controller();
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    const EditorFrame jumped = clicked(editing, 0);
+    const auto heading = headings_text.find("## Second Part");
+    expect(jumped.full_preview.has_value() &&
+               jumped.full_preview.value().anchor == core::Offset{heading} && caret_at(jumped, 7) &&
+               !jumped.link_card.has_value(),
+           "the full preview scrolls to the heading and the caret follows");
+    const EditorFrame later = controller.frame();
+    expect(later.full_preview.has_value() &&
+               later.full_preview.value().anchor == core::Offset{heading},
+           "the next frame keeps the preview at the heading");
+}
+
+// 14. 表の升の中の `#見出し` も同じ入口で跳ぶ。
+void verify_heading_jump_table_cell()
+{
+    Editing editing;
+    open_previewed(editing, "| a |\n|---|\n| [t](#first) |\n\n# First\n");
+    const EditorFrame jumped = clicked(editing, 0);
+    expect(!jumped.link_card.has_value() && caret_at(jumped, 5),
+           "a heading link inside a table cell jumps to the heading");
+}
+} // namespace
 void verify_link_card_scope()
 {
     verify_click_opens_web();
@@ -325,5 +491,12 @@ void verify_link_card_scope()
     verify_edit_closes();
     verify_background_tab_switch();
     verify_shown_text();
+    verify_heading_jump_side();
+    verify_heading_jump_side_anchor();
+    verify_heading_jump_side_far();
+    verify_heading_jump_vim();
+    verify_heading_jump_vim_pending();
+    verify_heading_jump_full();
+    verify_heading_jump_table_cell();
 }
 } // namespace nenenib::tests

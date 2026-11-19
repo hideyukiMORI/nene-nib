@@ -35,6 +35,7 @@ src/core
 
 取り込み依存（ソースを取り込む C のライブラリ）は `third_party/<name>` を独立したモジュールにし、そこにだけ緩い警告集合を当てる（ADR 0003）。
 いまあるのは `third_party/md4c`（モジュール `third_party_md4c`・target `nenenib_md4c`・Markdown の parser・[ADR 0151](adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)）の 1 つ。
+モジュールでない生成の入力として `third_party/github-slugger`（`regex.js` と `license` の 2 つ・`eng/heading-slug-table.py` が見出しの名札の表 `src/core/HeadingSlugTable.hpp` を作る入力・JS は実行せず target も作らない・ADR 0151 の段 L3）も置く。
 上流のバイト列のまま置き（`.gitattributes` の `-text`）、作るのは `eng/targets.cmake` の `nenenib_third_party_target`（C17・`/W4 /WX /utf-8`・Debug のサニタイザ）だけ。
 `third_party/` の下のファイルは全部 `eng/conformance-rules.json` の `thirdPartyDigests` に SHA-256 があり、CNF-013 が git の index の blob と照合する。
 

@@ -368,5 +368,6 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::link_card_hint_refused, "Ctrl+C：{0} · Esc：{1}"},
     {UiMessage::notice_link_open_failed, "无法打开链接"},
     {UiMessage::notice_link_copied, "已复制目标"},
+    {UiMessage::notice_heading_not_found, "此文档中没有该标题"},
 }};
 } // namespace nenenib::core

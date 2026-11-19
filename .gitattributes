@@ -3,3 +3,5 @@
 *.ico binary
 # md4c は上流の blob のバイト列のまま置き、CNF-013 が LF の SHA-256 を照合する。行末空白の検査も外す（ADR 0151 の決定 1・13）。
 third_party/md4c/** -text -whitespace
+# github-slugger は見出しの名札の表の生成の入力（JS は実行しない）。上流のバイト列のまま置く（ADR 0151 の段 L3）。
+third_party/github-slugger/** -text -whitespace
