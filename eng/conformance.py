@@ -29,6 +29,10 @@ _MARKDOWN_ENTITIES = importlib.util.spec_from_file_location(
     "markdown_entities", Path(__file__).resolve().parent / "markdown-entities.py")
 markdown_entities = importlib.util.module_from_spec(_MARKDOWN_ENTITIES)
 _MARKDOWN_ENTITIES.loader.exec_module(markdown_entities)
+_HEADING_SLUG_TABLE = importlib.util.spec_from_file_location(
+    "heading_slug_table", Path(__file__).resolve().parent / "heading-slug-table.py")
+heading_slug_table = importlib.util.module_from_spec(_HEADING_SLUG_TABLE)
+_HEADING_SLUG_TABLE.loader.exec_module(heading_slug_table)
 
 
 @dataclass(frozen=True)
@@ -550,6 +554,31 @@ def markdown_entities_checks(root: Path) -> list[Finding]:
     return [Finding("CNF-010", name, f"differs from the generated entity table; {command}")]
 
 
+def heading_slug_table_checks(root: Path) -> list[Finding]:
+    """CNF-010: src/core/HeadingSlugTable.hpp is exactly what eng/heading-slug-table.py writes (#1869).
+
+    A heading's anchor drops the code points github-slugger 2.0.0 drops; the table is generated
+    from its regex.js kept as upstream bytes in third_party/github-slugger (CNF-013, and the tool
+    pins the SHA-256 and the version again). Like MarkdownEntityTable.hpp the whole file is
+    compared. Missing and different are both findings; `eng/heading-slug-table.py --write` writes it.
+    """
+    name = heading_slug_table.TARGET
+    path = root / name
+    command = "run eng/heading-slug-table.py --write"
+    if not path.is_file():
+        return [Finding("CNF-010", name, f"the generated heading slug table is missing; {command}")]
+    content = path.read_bytes()
+    expected = heading_slug_table.heading_slug_table_header().encode("utf-8")
+    if content == expected:
+        return []
+    for number, (stored, wanted) in enumerate(
+            itertools.zip_longest(content.split(b"\n"), expected.split(b"\n")), 1):
+        if stored != wanted:
+            return [Finding("CNF-010", name, f"line {number}: {excerpt(stored)} is not the generated "
+                            f"{excerpt(wanted)}; {command}")]
+    return [Finding("CNF-010", name, f"differs from the generated heading slug table; {command}")]
+
+
 def excerpt(line: bytes | None, limit: int = 60) -> str:
     if line is None:
         return "(nothing)"
@@ -919,6 +948,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(key_names_checks(root))
     findings.extend(case_mapping_checks(root))
     findings.extend(markdown_entities_checks(root))
+    findings.extend(heading_slug_table_checks(root))
     findings.extend(fixture_format_checks(root))
     findings.extend(third_party_digest_checks(root, paths, rules))
     findings.extend(translation_unit_size_checks(root, paths))

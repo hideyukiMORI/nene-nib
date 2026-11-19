@@ -2,7 +2,9 @@
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
 #include "CaretMotion.hpp"
+#include "DisplayLanguage.hpp"
 #include "FilePath.hpp"
+#include "HeadingSlug.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "Lexer.hpp"
@@ -1129,6 +1131,167 @@ void verify_link_targets()
     return destined(target, document, core::LinkKind::refused, target);
 }
 
+// 見出しの名札（段 L3・#1869）。text の見出しを解析して、名札の列を文書の順に並べた形。
+[[nodiscard]] std::vector<std::string>
+slugs_of(std::string_view text, core::DisplayLanguage language = core::DisplayLanguage::japanese)
+{
+    const auto parsed = core::parse_markdown(text, MarkdownStop::never(), language);
+    std::vector<std::string> slugs;
+    if (!parsed.has_value())
+    {
+        return slugs;
+    }
+    for (const auto &each : parsed.value().headings)
+    {
+        slugs.push_back(each.slug);
+    }
+    return slugs;
+}
+
+[[nodiscard]] bool slugged(std::string_view text, const std::vector<std::string> &expected)
+{
+    const auto found = slugs_of(text);
+    if (found != expected)
+    {
+        for (const auto &slug : found)
+        {
+            std::fprintf(stderr, "  slug [%s]\n", slug.c_str());
+        }
+    }
+    return found == expected;
+}
+
+// 名札の表。GitHub の公開の説明（Basic writing and formatting syntax の Section links）の規則と例:
+// 小文字に・空白は `-`・ほかの空白と記号は消す・装飾は中身だけ・同じ名札は `-1` `-2` …。大小は、
+// github-slugger は toLowerCase()（非 ASCII も畳む）で、Nib は ASCII だけを畳む（core に大小の表を
+// 持たないため・限界）ので、例の Θ は残る。消す字は github-slugger 2.0.0 の regex.js から作った
+// 表の 1 つ（ADR 0151 の段 L3）。
+void verify_heading_slugs()
+{
+    expect(slugged("# Example headings\n\n## Sample Section\n",
+                   {"example-headings", "sample-section"}),
+           "the examples of the GitHub description: lower case and a hyphen for each space");
+    expect(slugged("## This'll be a _Helpful_ Section About the Greek Letter \xCE\x98!\n",
+                   {"thisll-be-a-helpful-section-about-the-greek-letter-\xCE\x98"}),
+           "markup keeps its contents, ASCII punctuation goes and a non-ASCII letter stays");
+    expect(slugged("## This heading is not unique in the file\n\n"
+                   "## This heading is not unique in the file\n\n"
+                   "## This heading is not unique in the file\n",
+                   {"this-heading-is-not-unique-in-the-file",
+                    "this-heading-is-not-unique-in-the-file-1",
+                    "this-heading-is-not-unique-in-the-file-2"}),
+           "a repeated anchor gets a hyphen and an increasing number");
+    expect(slugged("# a\n\n# a\n\n# a-1\n", {"a", "a-1", "a-1-1"}),
+           "a numbered anchor that already exists moves on to the next number");
+    expect(slugged("# C++ & C#\n\n# a  b\n\n# x_y-z 9\n", {"c--c", "a--b", "x_y-z-9"}),
+           "symbols go, each space is a hyphen and digits, `-` and `_` stay");
+}
+
+// 日本語の文書の名札（設計席の決め 2026-11-19 の追記と、レビューの後の決め）。右の値は
+// github-slugger 2.0.0 の slug()（小文字に・regex.js の字を消す・空白を `-` に）の値で、大小を畳む
+// のが ASCII だけであることのほかは同じになる。
+void verify_heading_slugs_cjk()
+{
+    expect(slugged("# \xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB "
+                   "\xE6\xA6\x82\xE8\xA6\x81\n",
+                   {"\xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB-"
+                    "\xE6\xA6\x82\xE8\xA6\x81"}),
+           "Japanese letters stay");
+    // 「設定（Ctrl+,）」→ 設定ctrl・「手順 1. 準備」→ 手順-1-準備・「🚀 Launch」→ -launch・
+    // 「はじめに、概要。」→ はじめに概要・「「引用」と“quote”…」→ 引用とquote・
+    // 「❤️ Love」→ U+FE0F-love（❤ U+2764 は記号で消え、VARIATION SELECTOR-16 は結合記号で残る）。
+    expect(slugged("# \xE8\xA8\xAD\xE5\xAE\x9A\xEF\xBC\x88"
+                   "Ctrl+,\xEF\xBC\x89\n\n"
+                   "# \xE6\x89\x8B\xE9\xA0\x86 1. \xE6\xBA\x96\xE5\x82\x99\n\n"
+                   "# \xF0\x9F\x9A\x80 Launch\n\n"
+                   "# \xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB\xE3\x80\x81"
+                   "\xE6\xA6\x82\xE8\xA6\x81\xE3\x80\x82\n\n"
+                   "# \xE3\x80\x8C\xE5\xBC\x95\xE7\x94\xA8\xE3\x80\x8D\xE3\x81\xA8\xE2\x80\x9C"
+                   "quote\xE2\x80\x9D\xE2\x80\xA6\n\n"
+                   "# \xE2\x9D\xA4\xEF\xB8\x8F Love\n",
+                   {"\xE8\xA8\xAD\xE5\xAE\x9A"
+                    "ctrl",
+                    "\xE6\x89\x8B\xE9\xA0\x86-1-\xE6\xBA\x96\xE5\x82\x99", "-launch",
+                    "\xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB\xE6\xA6\x82\xE8\xA6\x81",
+                    "\xE5\xBC\x95\xE7\x94\xA8\xE3\x81\xA8quote", "\xEF\xB8\x8F-love"}),
+           "punctuation, symbols and emoji go as github-slugger removes them");
+    // 文字・数字・結合記号は残る: 「様々な設定」→ 様々な設定（々 は Lm）・「〇〇の件」→ 〇〇の件
+    // （〇 は Nl）・「⚠️ 注意」→ U+FE0F-注意・「Ａ＿Ｂ」→ Ａ＿Ｂ（＿ は Pc で `_` と同じく残る）。
+    expect(
+        slugged("# \xE6\xA7\x98\xE3\x80\x85\xE3\x81\xAA\xE8\xA8\xAD\xE5\xAE\x9A\n\n"
+                "# \xE3\x80\x87\xE3\x80\x87\xE3\x81\xAE\xE4\xBB\xB6\n\n"
+                "# \xE2\x9A\xA0\xEF\xB8\x8F \xE6\xB3\xA8\xE6\x84\x8F\n\n"
+                "# \xEF\xBC\xA1\xEF\xBC\xBF\xEF\xBC\xA2\n",
+                {"\xE6\xA7\x98\xE3\x80\x85\xE3\x81\xAA\xE8\xA8\xAD\xE5\xAE\x9A",
+                 "\xE3\x80\x87\xE3\x80\x87\xE3\x81\xAE\xE4\xBB\xB6",
+                 "\xEF\xB8\x8F-\xE6\xB3\xA8\xE6\x84\x8F", "\xEF\xBC\xA1\xEF\xBC\xBF\xEF\xBC\xA2"}),
+        "iteration marks, ideographic zero, the variation selector and full-width low line stay");
+    // 句読点と記号は日本語の文書でよく使うものも消える: 「設計・実装」→ 設計実装・「※ 注」→ -注・
+    // 「前→後」→ 前後・「① 準備」→ -準備（① は No）・「2×3」→ 23・「90°」→ 90・
+    // 「a&nbsp;b」→ ab（NBSP は Zs で、空白 U+0020 だけが `-` になる）。
+    expect(slugged("# \xE8\xA8\xAD\xE8\xA8\x88\xE3\x83\xBB\xE5\xAE\x9F\xE8\xA3\x85\n\n"
+                   "# \xE2\x80\xBB \xE6\xB3\xA8\n\n"
+                   "# \xE5\x89\x8D\xE2\x86\x92\xE5\xBE\x8C\n\n"
+                   "# \xE2\x91\xA0 \xE6\xBA\x96\xE5\x82\x99\n\n"
+                   "# 2\xC3\x97"
+                   "3\n\n"
+                   "# 90\xC2\xB0\n\n"
+                   "# a&nbsp;b\n",
+                   {"\xE8\xA8\xAD\xE8\xA8\x88\xE5\xAE\x9F\xE8\xA3\x85", "-\xE6\xB3\xA8",
+                    "\xE5\x89\x8D\xE5\xBE\x8C", "-\xE6\xBA\x96\xE5\x82\x99", "23", "90", "ab"}),
+           "the middle dot, reference mark, arrows, circled digits, Latin-1 signs and NBSP go");
+    // 非 ASCII の大文字は畳まない（github-slugger は「ＡＢＣ１」を「ａｂｃ１」に畳む・ADR
+    // の限界）。
+    expect(slugged("# \xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xEF\xBC\x91\n",
+                   {"\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xEF\xBC\x91"}),
+           "full-width letters and digits stay and are not folded");
+    expect(slugged("# **Bold** `code` [link](x)\n\nSetext\n===\n", {"bold-code-link", "setext"}),
+           "a decorated heading and a setext heading are named by their shown text");
+    expect(slugged("#\n\n#\n\ntext\n", {"", "-1"}), "an empty heading has an empty anchor");
+}
+
+// 名札の元は見出しの文字のうち名札に数えるものだけ（レビュー M3・R1）。画像は alt の文字だけで、
+// 表示の言語で変わる枠（[画像: …] など）は入らない。生の HTML のタグは入らず、中の文字は残る。
+void verify_heading_slug_sources()
+{
+    constexpr std::string_view imaged = "# ![logo](x.png) Title\n";
+    const std::vector<std::string> named{"logo-title"};
+    expect(slugs_of(imaged, core::DisplayLanguage::japanese) == named &&
+               slugs_of(imaged, core::DisplayLanguage::english) == named &&
+               slugs_of(imaged, core::DisplayLanguage::simplified_chinese) == named,
+           "an image adds only its alt and the anchor does not change with the display language");
+    const auto parsed = core::parse_markdown(imaged, MarkdownStop::never());
+    expect(parsed.has_value() && parsed.value().blocks.front().text != "logo Title",
+           "the shown text still frames the image");
+    expect(slugged("# <img src=\"a.png\" width=\"32\"> Title\n\n"
+                   "# <a name=\"x\"></a>Intro\n\n"
+                   "# <b>Bold</b> word\n",
+                   {"-title", "intro", "bold-word"}),
+           "raw HTML tags are not counted and the text between them is");
+}
+
+// 名札の列で `#…` を引く。
+void verify_heading_lookup()
+{
+    const auto parsed = core::parse_markdown(
+        "intro\n\n# Sample Section\n\n# \xE6\xA6\x82\xE8\xA6\x81\n", MarkdownStop::never());
+    expect(parsed.has_value(), "the headings parse");
+    const auto &headings = parsed.value().headings;
+    expect(headings.size() == 2 && headings.front().block == 1 && headings.back().block == 2,
+           "each anchor points at its heading block");
+    expect(core::heading_block_of(headings, "sample-section") == std::optional<std::size_t>{1} &&
+               core::heading_block_of(headings, "Sample-SECTION") == std::optional<std::size_t>{1},
+           "a fragment is matched without ASCII case");
+    expect(core::heading_block_of(headings, "%E6%A6%82%E8%A6%81") ==
+                   std::optional<std::size_t>{2} &&
+               core::heading_block_of(headings, "\xE6\xA6\x82\xE8\xA6\x81") ==
+                   std::optional<std::size_t>{2},
+           "a fragment is percent-decoded before it is matched");
+    expect(!core::heading_block_of(headings, "missing").has_value() &&
+               !core::heading_block_of(headings, "sample section").has_value(),
+           "an unknown fragment finds nothing");
+}
+
 void verify_link_destinations()
 {
     using enum core::LinkKind;
@@ -1403,6 +1566,10 @@ void verify_markdown_scope()
     verify_tables();
     verify_alerts();
     verify_link_targets();
+    verify_heading_slugs();
+    verify_heading_slugs_cjk();
+    verify_heading_slug_sources();
+    verify_heading_lookup();
     verify_link_destinations();
     verify_link_destination_uris();
     verify_link_destination_paths();

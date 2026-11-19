@@ -396,5 +396,6 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::link_card_hint_refused, "Ctrl+C {0} · Esc {1}"},
     {UiMessage::notice_link_open_failed, "リンクを開けませんでした"},
     {UiMessage::notice_link_copied, "宛先を写しました"},
+    {UiMessage::notice_heading_not_found, "この文書にその見出しはありません"},
 }};
 } // namespace nenenib::core
