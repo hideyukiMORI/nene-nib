@@ -35,6 +35,7 @@
 #include "VimBlockProbe.hpp"
 #include "VimFollowProbe.hpp"
 #include "WordObjectProbe.hpp"
+#include "WordTableProbe.hpp"
 
 #include "DeleteText.hpp"
 #include "DisplayLine.hpp"
@@ -1093,6 +1094,21 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     std::unreachable();
 }
 
+[[nodiscard]] constexpr std::size_t checked_index(WordTableWorkload workload)
+{
+    switch (workload)
+    {
+    case WordTableWorkload::first_ascii:
+    case WordTableWorkload::second_ascii:
+    case WordTableWorkload::rebuilt_ascii:
+    case WordTableWorkload::first_japanese:
+    case WordTableWorkload::second_japanese:
+    case WordTableWorkload::rebuilt_japanese:
+        return 280U + static_cast<std::size_t>(workload);
+    }
+    std::unreachable();
+}
+
 [[nodiscard]] constexpr std::size_t selection_index(ProbeSelection workload)
 {
     return std::visit([](auto value) { return checked_index(value); }, workload);
@@ -1108,7 +1124,7 @@ run_recorded(ProbeWorkload, const std::string &input, application::TimingPort &t
     return std::visit([](const auto &row) -> ProbeSelection { return row.workload; }, dispatch);
 }
 
-constexpr std::array<ProbeDispatch, 280> dispatches{{
+constexpr std::array<ProbeDispatch, 286> dispatches{{
     ProbeDispatchRow{ProbeWorkload::controller_open, "controller-open-utf8-16mib",
                      large_probe_input, run_opened},
     ProbeDispatchRow{ProbeWorkload::buffer_create, "buffer-from-utf8-16mib", large_probe_input,
@@ -1693,6 +1709,20 @@ constexpr std::array<ProbeDispatch, 280> dispatches{{
                      ex_lines_input, ex_lines_run},
     ProbeDispatchRow{ExLinesWorkload::delete_all_100k, "vim-delete-percent-100k-lines",
                      ex_lines_input, ex_lines_run},
+    ProbeDispatchRow{WordTableWorkload::first_ascii, "controller-word-table-first-ascii-1mib",
+                     word_table_input, word_table_completion},
+    ProbeDispatchRow{WordTableWorkload::second_ascii, "controller-word-table-second-ascii-1mib",
+                     word_table_input, word_table_completion},
+    ProbeDispatchRow{WordTableWorkload::rebuilt_ascii, "controller-word-table-rebuilt-ascii-1mib",
+                     word_table_input, word_table_completion},
+    ProbeDispatchRow{WordTableWorkload::first_japanese, "controller-word-table-first-japanese-1mib",
+                     word_table_input, word_table_completion},
+    ProbeDispatchRow{WordTableWorkload::second_japanese,
+                     "controller-word-table-second-japanese-1mib", word_table_input,
+                     word_table_completion},
+    ProbeDispatchRow{WordTableWorkload::rebuilt_japanese,
+                     "controller-word-table-rebuilt-japanese-1mib", word_table_input,
+                     word_table_completion},
 }};
 
 constexpr auto dispatch_names = []
@@ -1735,7 +1765,7 @@ constexpr auto dispatch_names = []
     }
     return true;
 }
-static_assert(dispatches.size() == 280U);
+static_assert(dispatches.size() == 286U);
 static_assert(dispatch_is_complete());
 
 } // namespace
