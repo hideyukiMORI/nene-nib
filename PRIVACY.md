@@ -1,6 +1,6 @@
 # Privacy Policy — NeNe Nib
 
-Last updated: 2026-11-17 · Publisher: Hideyuki Mori
+Last updated: 2026-11-19 · Publisher: Hideyuki Mori
 
 **NeNe Nib does not collect or transmit any personal information. The application itself makes no network
 connections. Everything it saves stays on your device.**
@@ -34,12 +34,12 @@ portable version, Windows may let the application use it directly.
 ## Network
 
 The application makes no network connections. It does not use any networking library: the libraries it may link
-are fixed by an allow-list in the build (`eng/architecture.json`), and none of them provides networking. It has no
-code that opens web pages, and the Markdown preview shows only images it can read as files; `http` and `https`
+are fixed by an allow-list in the build (`eng/architecture.json`), and none of them provides networking. It does
+not show web pages itself, and the Markdown preview shows only images it can read as files; `http` and `https`
 images are not downloaded and are shown as their alt text (`[Image: alt]`) instead, and images on a
 `\\server\share` path are refused.
 
-Two things can still reach a network because you chose them, not because the application does:
+Three things can still reach a network because you chose them, not because the application does:
 
 - **Files on a network.** If you open or save a file on a network share (for example `\\server\share`) or print to a
   network printer, Windows accesses that location for you. The same applies to Markdown preview images on a drive
@@ -51,6 +51,11 @@ Two things can still reach a network because you chose them, not because the app
   settings, the application starts that program on your device and exchanges the text of your named documents with
   it through standard input and output. Untitled documents are not sent. What that program does is up to that
   program; the application does not start any server you have not configured.
+- **Links in the Markdown preview.** When you click a link in the preview, the application first shows its real
+  destination in a small card and does nothing until you confirm. If you confirm, an `http` / `https` link is handed
+  to your default browser and a `mailto:` link to your default mail application; that application, not NeNe Nib,
+  then connects to the destination. A link to a text file opens in a new tab inside the application. Other kinds of
+  links are not opened.
 
 If you install the application from the Microsoft Store, the Store itself — not this application — handles download,
 installation and updates. That is covered by the
@@ -65,7 +70,7 @@ Questions: open an issue at <https://github.com/hideyukiMORI/nene-nib/issues>.
 
 # プライバシーポリシー（日本語）
 
-最終更新: 2026-11-17 · 発行者: Hideyuki Mori
+最終更新: 2026-11-19 · 発行者: Hideyuki Mori
 
 **NeNe Nib は個人情報を収集・送信しません。アプリ自身はネットワークに接続しません。保存するものはすべてお使いの端末の中に
 残ります。**
@@ -95,11 +100,11 @@ ZIP 版のフォルダがすでにあれば、Windows がそのフォルダを�
 ## ネットワーク
 
 アプリはネットワークに接続しません。通信用のライブラリを使っていません。結んでよいライブラリはビルドの許可表
-（`eng/architecture.json`）で決まっていて、通信の機能を持つものはありません。Web のページを開くコードも無く、
+（`eng/architecture.json`）で決まっていて、通信の機能を持つものはありません。アプリ自身は Web のページを表示せず、
 Markdown プレビューが表示する画像はファイルとして読めるものだけです。`http`・`https` の画像は取りに行かず、`[画像: alt]` と表示します。
 `\\server\share` の形のパスの画像は読みません。
 
-次の 2 つは、使う人が選んだときにネットワークへ届くことがあります。アプリが自分で通信するのではありません。
+次の 3 つは、使う人が選んだときにネットワークへ届くことがあります。アプリが自分で通信するのではありません。
 
 - **ネットワーク上のファイル。** 共有フォルダ（例: `\\server\share`）のファイルを開く・保存する、ネットワークのプリンタへ印刷する、
   を選ぶと、Windows がその場所へアクセスします。共有フォルダを割り当てたドライブ（例: `Z:\`）の上の画像を Markdown プレビューに
@@ -109,6 +114,9 @@ Markdown プレビューが表示する画像はファイルとして読める�
 - **言語サーバー（既定はオフ）。** 設定で `lsp` をオンにして `lsp.<言語>.command=` の行を書くと、アプリはその命令のプログラムを端末の中で起動し、
   名前のある文書の本文を標準入出力でやり取りします。無題の文書は送りません。そのプログラムが何をするかはそのプログラムしだいです。
   設定に書いていないサーバーをアプリが起動することはありません。
+- **Markdown プレビューのリンク。** プレビューのリンクをクリックすると、アプリはまず本当の宛先を小さな札で見せ、確かめるまで何もしません。
+  確かめると、`http`・`https` のリンクは既定のブラウザに、`mailto:` のリンクは既定のメールのアプリに渡します。宛先へ接続するのは
+  そのアプリで、NeNe Nib ではありません。テキストのファイルへのリンクはアプリの中の新しいタブで開きます。それ以外の種類のリンクは開きません。
 
 Microsoft Store から入れた場合、ダウンロード・インストール・更新を行うのは Store であり、このアプリではありません。
 その部分は [Microsoft のプライバシーに関する声明](https://privacy.microsoft.com/privacystatement)の対象です。
