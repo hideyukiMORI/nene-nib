@@ -12,6 +12,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::core
@@ -44,19 +45,93 @@ constexpr std::size_t code_point_bytes = 4;
     return words;
 }
 
-// 語の列を語の順の行にまとめる。数は 1 語につき sign。
-[[nodiscard]] Counts counted(std::vector<std::string_view> words, std::int64_t sign)
+// 表を作る間の 1 行: 語の先頭 8 バイトを大きい桁から詰めた鍵・語・数。tuple の < は鍵で比べ、
+// 鍵が同じときだけ語のバイト列で比べるので、並びは語のバイト列の順と同じ（#1872）。
+using Tally = std::tuple<std::uint64_t, std::string_view, std::int64_t>;
+// 語 → Tally の列の位置の開番地の表（線形の探索）。大きさは語の出現の数の 2 倍以上の 2 の冪なので、
+// 埋まりは半分までで作り直さない。1 枠は上位 32 ビットが語の hash の上位、
+// 下位 32 ビットが位置 + 1（0 は空の枠）。
+using Slots = std::vector<std::uint64_t>;
+
+constexpr std::uint64_t empty_slot = 0;
+constexpr std::size_t least_slots = 16;
+constexpr std::size_t key_bytes = sizeof(std::uint64_t);
+constexpr unsigned byte_bits = 8U;
+constexpr std::uint64_t low_half = 0xFFFF'FFFFULL;
+constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
+constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+
+[[nodiscard]] std::uint64_t order_key(std::string_view word) noexcept
 {
-    std::ranges::sort(words);
-    Counts counts;
+    std::uint64_t key = 0;
+    for (std::size_t at = 0; at < key_bytes; ++at)
+    {
+        const std::uint64_t byte = at < word.size() ? static_cast<unsigned char>(word[at]) : 0U;
+        key = (key << byte_bits) | byte;
+    }
+    return key;
+}
+
+// FNV-1a（語の表の中だけで使う・外へ出さない）。鍵を持たないので、細工した文書では探索が
+// 語の出現の数の 2 乗に近づきうる（使う人が自分で開いた文書だけが対象・#1874 の L2）。
+[[nodiscard]] std::uint64_t hashed(std::string_view word) noexcept
+{
+    std::uint64_t hash = fnv_offset;
+    for (const char unit : word)
+    {
+        hash = (hash ^ static_cast<unsigned char>(unit)) * fnv_prime;
+    }
+    return hash;
+}
+
+[[nodiscard]] std::size_t slot_count(std::size_t words) noexcept
+{
+    std::size_t count = least_slots;
+    while (count < words * 2)
+    {
+        count *= 2;
+    }
+    return count;
+}
+
+// 語の列の種類ごとの数（出てきた順）。数は 1 語につき sign。
+[[nodiscard]] std::vector<Tally> tallied(std::span<const std::string_view> words, std::int64_t sign)
+{
+    std::vector<Tally> tallies;
+    Slots slots(slot_count(words.size()), empty_slot);
+    const std::size_t mask = slots.size() - 1;
     for (const std::string_view word : words)
     {
-        if (!counts.empty() && counts.back().word == word)
+        const std::uint64_t hash = hashed(word);
+        const std::uint64_t tag = hash & ~low_half;
+        std::size_t at = static_cast<std::size_t>(hash) & mask;
+        while (slots[at] != empty_slot &&
+               ((slots[at] & ~low_half) != tag ||
+                std::get<1>(tallies[(slots[at] & low_half) - 1]) != word))
         {
-            counts.back().count += sign;
-            continue;
+            at = (at + 1) & mask;
         }
-        counts.push_back(WordCount{std::string{word}, sign});
+        if (slots[at] == empty_slot)
+        {
+            tallies.emplace_back(order_key(word), word, 0);
+            slots[at] = tag | tallies.size();
+        }
+        std::get<2>(tallies[(slots[at] & low_half) - 1]) += sign;
+    }
+    return tallies;
+}
+
+// 語の列を語の順の行にまとめる。数は 1 語につき sign。語ごとの std::string は種類ごとに 1 回だけ
+// 作り、並べるのは種類の列だけ（#1872）。
+[[nodiscard]] Counts counted(std::span<const std::string_view> words, std::int64_t sign)
+{
+    std::vector<Tally> tallies = tallied(words, sign);
+    std::ranges::sort(tallies);
+    Counts counts;
+    counts.reserve(tallies.size());
+    for (const Tally &tally : tallies)
+    {
+        counts.push_back(WordCount{std::string{std::get<1>(tally)}, std::get<2>(tally)});
     }
     return counts;
 }
