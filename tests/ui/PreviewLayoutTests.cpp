@@ -35,6 +35,7 @@
 #include "PreviewSelectionText.hpp"
 #include "PreviewTableCell.hpp"
 #include "PreviewTableMetrics.hpp"
+#include "PreviewTableScroll.hpp"
 #include "PreviewTaskPress.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
@@ -1855,6 +1856,22 @@ void check_table_scroll_metrics()
                win32::preview_table_track_pixels(scaled, 368, 144) == 552.0F &&
                win32::preview_table_track_dips(scaled, 552.0F, 144) == 368,
            "at 144 DPI the span and the track map pixels and DIP both ways");
+    // 画素で収まる表は DIP に丸めても広くしない（150% で枠 751 px・表 750.5 px と、字下げが小数の
+    // 100%・#1884 のレビュー M1）。画素で 0.5 だけ広い表は DIP で枠より 1 広い。
+    const win32::PreviewTableBand rounded{751.0F, 750.5F};
+    const auto fractional =
+        win32::preview_table_band(std::vector<float>{339.3F}, 400.0F, 16.4F, 96);
+    const win32::PreviewTableBand barely{750.5F, 751.0F};
+    expect(!win32::preview_table_overflows(rounded, 144) &&
+               !core::preview_table_wide(win32::preview_table_span(rounded, 144)) &&
+               win32::preview_table_shift(rounded, 50, 144) == 0.0F,
+           "a table that fits in pixels at 150% does not overflow after rounding to DIP");
+    expect(fractional.width < fractional.view && !win32::preview_table_overflows(fractional, 96) &&
+               !core::preview_table_wide(win32::preview_table_span(fractional, 96)),
+           "a table that fits beside a fractional indent does not overflow");
+    expect(win32::preview_table_overflows(barely, 144) &&
+               core::preview_table_wide(win32::preview_table_span(barely, 144)),
+           "a table wider by half a pixel overflows and its DIP span is wider too");
     expect(win32::preview_table_offset(std::vector<std::int32_t>{5, 7}, 1) == 7 &&
                win32::preview_table_offset(std::vector<std::int32_t>{5}, 3) == 0,
            "a table without an offset is unscrolled");
@@ -1942,6 +1959,11 @@ void check_table_scroll_pixels()
                        palette.body.background) <= 6 &&
                start != end,
            "a scrolled table moves its cells and is clipped at the left of the frame");
+    expect(distance_of(start, right + 3, static_cast<std::int32_t>(at.top(0)) + 12,
+                       palette.body.background) <= 6 &&
+               distance_of(start, right + 3, static_cast<std::int32_t>(at.top(1)) + 12,
+                           palette.body.background) <= 6,
+           "the cells that run past the frame are clipped at its right margin");
 }
 
 // 当たり: 棒と行は表、字下げの左・後の段落は表の外。つかんだ表の溝の位置。送った表の升の当たりは

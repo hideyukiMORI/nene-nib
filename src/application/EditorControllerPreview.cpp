@@ -465,13 +465,7 @@ void EditorController::collect_preview()
             view.notice.reset();
             // 選択の位置は前の結果の要素を指すので、差し替えたら捨てる（改訂 18）。
             view.selection.reset();
-            // 表の横の送りは表の数が同じなら残し、違えば捨てる（通し番号で引く・#1883）。つかみと
-            // 載せた棒は前の結果の表を指すので捨てる。
-            state_ = state_
-                         .with_table_scrolls(
-                             table_scrolls_for(state_.table_scrolls(), view.document->tables))
-                         .with_table_grip(std::nullopt)
-                         .with_table_hovered(std::nullopt);
+            adopt_table_scrolls(view.document->tables);
             changed = true;
             continue;
         }
@@ -618,6 +612,9 @@ void EditorController::place_preview(PreviewPlacement placement)
     {
         return;
     }
+    // 見せ方が替わると描く枠が替わるので、つかみと載せた棒を捨てる（送りの量は文書の値で残す・
+    // #1884 のレビュー L4）。
+    state_ = state_.with_table_grip(std::nullopt).with_table_hovered(std::nullopt);
     switch (placement)
     {
     case PreviewPlacement::off:
@@ -978,6 +975,8 @@ void EditorController::accept(const ScrollPreviewTable &intent)
     if (intent.table >= tables || intent.gesture == PreviewTableGesture::release ||
         !core::preview_table_wide(intent.span))
     {
+        // 何も変わらなければ描き直さない（離しでつかみが消えたときだけ描く・#1884 のレビュー L2）。
+        repaint_ = !(state_.table_grip() == grip);
         return;
     }
     const auto from = core::preview_table_scroll_clamped(
@@ -985,6 +984,7 @@ void EditorController::accept(const ScrollPreviewTable &intent)
     const auto moved = table_scroll_moved(intent, from, grip);
     if (!moved.has_value())
     {
+        repaint_ = !(state_.table_grip() == grip);
         return;
     }
     const auto next = moved.value();
@@ -996,6 +996,19 @@ void EditorController::accept(const ScrollPreviewTable &intent)
     }
     state_ = state_.with_table_scrolls(
         table_scroll_set(state_.table_scrolls(), tables, intent.table, next));
+}
+
+// 結果の差し替え（#1883）。表の横の送りは表の数が同じなら残し、違えば捨てる（通し番号で引く）。
+// つかみと載せた棒も、表の数が同じなら同じ表を指すので残し、違えば捨てる（#1884 のレビュー L1）。
+void EditorController::adopt_table_scrolls(std::size_t tables)
+{
+    if (state_.table_scrolls().tables == tables)
+    {
+        return;
+    }
+    state_ = state_.with_table_scrolls(table_scrolls_for(state_.table_scrolls(), tables))
+                 .with_table_grip(std::nullopt)
+                 .with_table_hovered(std::nullopt);
 }
 
 // 手の動き intent の後の送りの量（送りの前は from・つかみは grip）。press のつまみの上はつかみを

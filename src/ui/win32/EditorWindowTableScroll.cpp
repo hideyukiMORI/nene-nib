@@ -7,9 +7,11 @@
 
 #include "Direct2DRenderer.hpp"
 #include "HoverPreviewTable.hpp"
+#include "LinkCardTarget.hpp"
 #include "PreviewTableGesture.hpp"
 #include "PreviewTableHit.hpp"
 #include "ScrollPreviewTable.hpp"
+#include "SettingsPart.hpp"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -88,7 +90,7 @@ bool EditorWindow::wheel_table(std::int32_t delta, LPARAM data)
 {
     POINT point{GET_X_LPARAM(data), GET_Y_LPARAM(data)};
     ScreenToClient(window_, &point);
-    const auto hit = renderer_ == nullptr || controller_.command_palette_active()
+    const auto hit = renderer_ == nullptr || faces_cover(point.x, point.y)
                          ? std::nullopt
                          : renderer_->preview_table_at(point.x, point.y);
     if (!hit.has_value())
@@ -112,7 +114,7 @@ void EditorWindow::hover_table_bar(LPARAM data)
 {
     std::optional<std::size_t> table;
     if (renderer_ != nullptr && !table_dragging_.has_value() && !selecting_ && !preview_dragging_ &&
-        !controller_.command_palette_active())
+        !faces_cover(GET_X_LPARAM(data), GET_Y_LPARAM(data)))
     {
         const auto hit = renderer_->preview_table_at(GET_X_LPARAM(data), GET_Y_LPARAM(data));
         if (hit.has_value() && hit.value().bar)
@@ -121,6 +123,22 @@ void EditorWindow::hover_table_bar(LPARAM data)
         }
     }
     hover_table_bar_of(table);
+}
+
+bool EditorWindow::faces_cover(std::int32_t x, std::int32_t y) const
+{
+    if (controller_.command_palette_active())
+    {
+        return true;
+    }
+    if (renderer_ == nullptr)
+    {
+        return false;
+    }
+    return settings_target_under(x, y).part != core::SettingsPart::outside ||
+           (controller_.completion_active() && renderer_->completion_covers(x, y)) ||
+           renderer_->context_menu_covers(x, y) || renderer_->hover_tip_covers(x, y) ||
+           renderer_->link_card_target_at(x, y) != LinkCardTarget::outside;
 }
 
 // 前の値は application の状態が持つ。変わったときだけ意図を送る（HoverExplorer と同じ）。

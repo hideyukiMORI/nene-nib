@@ -30,13 +30,20 @@ PreviewTableBand preview_table_band(std::span<const float> columns, float frame_
 
 core::PreviewTableSpan preview_table_span(PreviewTableBand band, std::uint32_t dpi) noexcept
 {
-    return core::PreviewTableSpan{static_cast<std::int32_t>(std::floor(dips_of(band.view, dpi))),
-                                  static_cast<std::int32_t>(std::ceil(dips_of(band.width, dpi)))};
+    const auto view = static_cast<std::int32_t>(std::floor(dips_of(band.view, dpi)));
+    const auto table = static_cast<std::int32_t>(std::ceil(dips_of(band.width, dpi)));
+    // 広いかは物理画素で決める（preview_table_overflows）。画素で広い表は DIP でも 1 以上広く、
+    // 画素で収まる表は DIP でも広くしない（丸めで棒を出さない・#1884 のレビュー M1）。
+    if (!preview_table_overflows(band, dpi))
+    {
+        return core::PreviewTableSpan{view, std::min(table, view)};
+    }
+    return core::PreviewTableSpan{view, std::max(table, view + 1)};
 }
 
 bool preview_table_overflows(PreviewTableBand band, std::uint32_t dpi) noexcept
 {
-    return core::preview_table_wide(preview_table_span(band, dpi));
+    return dpi > 0 && band.view >= 1.0F && band.width > band.view;
 }
 
 std::int32_t preview_table_offset(std::span<const std::int32_t> scrolls, std::size_t table) noexcept
@@ -46,11 +53,11 @@ std::int32_t preview_table_offset(std::span<const std::int32_t> scrolls, std::si
 
 float preview_table_shift(PreviewTableBand band, std::int32_t offset, std::uint32_t dpi) noexcept
 {
-    const auto span = preview_table_span(band, dpi);
-    if (!core::preview_table_wide(span))
+    if (!preview_table_overflows(band, dpi))
     {
         return 0.0F;
     }
+    const auto span = preview_table_span(band, dpi);
     const auto clamped = core::preview_table_scroll_clamped(offset, span);
     // DIP の端（表は切り上げ）は画素の端を越え得るので、画素の端でも止める。
     return std::clamp(preview_pixels(static_cast<float>(clamped), dpi), 0.0F,

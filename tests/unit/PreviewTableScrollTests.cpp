@@ -14,6 +14,7 @@
 #include "MarkdownStop.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
+#include "OpenSettings.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewPoint.hpp"
@@ -26,9 +27,11 @@
 #include "ScrollPreviewTable.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "SwitchTab.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TogglePreview.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
@@ -273,6 +276,28 @@ void verify_intent_side()
     applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
     expect(offset_of(turned(editing, 0, 20), 0) == 50, "the full preview passes the table scroll");
 }
+// 7. 使う人の操作の側: Ctrl+Tab の歩きを確定し（keeps_tab_walk に無い）、設定の面は閉じない
+//    （only_scrolls・#1884 のレビュー L5）。
+void verify_operation_side()
+{
+    Editing editing;
+    open_previewed(editing, std::string(two_tables));
+    auto &controller = editing.controller();
+    applied(controller, app::NewTab{});
+    applied(controller, app::SwitchTab{0});
+    serve_parsed(editing);
+    applied(controller, app::WalkRecentTab{core::TabStep::next});
+    expect(controller.tab_walking(), "Ctrl+Tab starts a walk");
+    static_cast<void>(turned(editing, 0, 10));
+    expect(!controller.tab_walking(), "scrolling a table settles the walk");
+    applied(controller, app::SwitchTab{0});
+    serve_parsed(editing);
+    applied(controller, app::OpenSettings{});
+    expect(controller.settings_open(), "the settings panel opens");
+    const EditorFrame scrolled = turned(editing, 0, 10);
+    expect(controller.settings_open() && offset_of(scrolled, 0) == 10,
+           "scrolling a table keeps the settings panel open");
+}
 } // namespace
 
 void verify_preview_table_scope()
@@ -283,5 +308,6 @@ void verify_preview_table_scope()
     verify_bar();
     verify_reparse_and_tabs();
     verify_intent_side();
+    verify_operation_side();
 }
 } // namespace nenenib::tests

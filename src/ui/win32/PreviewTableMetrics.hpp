@@ -18,10 +18,12 @@ namespace nenenib::ui::win32
 // 表の行の横の寸法。columns は列の中身の幅、frame_width は枠の幅、indent は行の字下げ。
 [[nodiscard]] PreviewTableBand preview_table_band(std::span<const float> columns, float frame_width,
                                                   float indent, std::uint32_t dpi) noexcept;
-// 寸法の DIP（枠は切り捨て・表は切り上げ。意図に添える値と描く値は同じこの 1 本）。
+// 寸法の DIP（枠は切り捨て・表は切り上げ。意図に添える値と描く値は同じこの 1 本）。広いかは
+// 物理画素の preview_table_overflows で決め、広い表の DIP は枠より 1 以上広く、収まる表の DIP は
+// 枠より広くしない（丸めで広さが変わらない）。
 [[nodiscard]] core::PreviewTableSpan preview_table_span(PreviewTableBand band,
                                                         std::uint32_t dpi) noexcept;
-// 枠より広い表か（棒を出し、送る）。
+// 枠より広い表か（棒を出し、送る）。物理画素の 1 本（表の幅 > 枠の幅・DIP に丸めない）。
 [[nodiscard]] bool preview_table_overflows(PreviewTableBand band, std::uint32_t dpi) noexcept;
 // 送りの量の列 scrolls（表の通し番号ごとの DIP）の表 table の量（無ければ 0）。
 [[nodiscard]] std::int32_t preview_table_offset(std::span<const std::int32_t> scrolls,

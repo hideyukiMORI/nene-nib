@@ -690,6 +690,8 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.words_.reset();
     // 表の横の送りは前の本文の表のもの（#1883）。
     next.table_scrolls_ = PreviewTableScrolls{};
+    next.table_grip_.reset();
+    next.table_hovered_.reset();
     next.refresh_vim_text(true);
     return next;
 }
@@ -1163,6 +1165,9 @@ void EditorState::spread(const DocumentState &tab)
                    : vim_end_of_line_decided(text_, vim_entries_);
     words_ = tab.words;
     table_scrolls_ = tab.table_scrolls;
+    // つかみと載せた棒は前のタブの表を指すので、タブの切り替えの 1 か所で捨てる（#1884 の L4）。
+    table_grip_.reset();
+    table_hovered_.reset();
     refresh_vim_text(true);
 }
 

@@ -990,6 +990,7 @@ class EditorController final
     // 文書の値（EditorState::table_scrolls）、つかみとマウスを載せた棒は窓の値。
     void accept(const ScrollPreviewTable &intent);
     void accept(const HoverPreviewTable &intent);
+    void adopt_table_scrolls(std::size_t tables);
     [[nodiscard]] std::optional<std::int32_t>
     table_scroll_moved(const ScrollPreviewTable &intent, std::int32_t from,
                        const std::optional<PreviewTableGrip> &grip);
