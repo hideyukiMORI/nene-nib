@@ -1127,8 +1127,13 @@ EditorController::screen_rows_of(const LineView &shown) const
     {
         return 1;
     }
-    return ports_.text_layouts.rows(
-        TextLayoutRequest{presented_text(shown), state_.settings(), view_geometry_});
+    return ports_.text_layouts.rows(TextLayoutRequest{presented_text(shown),
+                                                      state_.settings(),
+                                                      view_geometry_,
+                                                      core::DisplayForm::text,
+                                                      {},
+                                                      {},
+                                                      shown.number});
 }
 
 GridLineMarks EditorController::grid_marks(const PaneSource &source, core::LineNumber line,

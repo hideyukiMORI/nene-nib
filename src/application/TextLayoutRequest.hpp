@@ -2,10 +2,12 @@
 
 #include "DisplayForm.hpp"
 #include "EditorSettings.hpp"
+#include "LineNumber.hpp"
 #include "LineWindow.hpp"
 #include "TextViewGeometry.hpp"
 
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -25,5 +27,9 @@ struct TextLayoutRequest
     // 巨大な行の窓（ADR 0139 の決定 4）。active なら text は窓の文字列で、layout は設定の
     // 折り返しにかかわらず折り返さない（1 画面行）。保持の鍵は今日どおり文字列と書式。
     LineWindow window{};
+    // 本文のどの論理行の文字列か（ADR 0114 の 2026-11-20
+    // の追補・#1902）。保持の鍵ではない。描く前に 作った layout を行ごとに最後の 1
+    // 本だけ残すための名札で、名札の無い問いは今日どおり 1 本だけ。
+    std::optional<core::LineNumber> line{};
 };
 } // namespace nenenib::application
