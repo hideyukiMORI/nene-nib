@@ -144,10 +144,11 @@ class EditorWindow final
     void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
     // タブのメニューの「ほかのタブを閉じる」「右のタブを閉じる」（ADR 0078 の追補 #1790）。帯の順に
     // 1 つずつ × と同じ閉じる道で閉じ、未保存のタブでは「保存しますか」（ask_save）を聞いて取消で
-    // 止める。閉じる相手でないタブ（残すタブか、閉じない側のアクティブ）を見せながら閉じるので、まだ
-    // 読んでいないタブは読まずに閉じる。
+    // 止める。アクティブでない相手を先に名指しで閉じ（まだ読んでいないタブは読まない）、アクティブが
+    // 相手なら最後に残すタブへ切り替えてから閉じる（切り替えが成り立たなければ止める）。
     void finish_tab_sweep(std::optional<application::TabSweep> sweep);
     void close_tabs_beside(application::TabSweep sweep);
+    [[nodiscard]] bool sweep_step(const application::TabSweep &sweep);
     // 帯の位置 tab の未保存のタブを見せて確かめ、home へ戻る。閉じてよければ真。
     [[nodiscard]] bool confirm_swept_tab(std::size_t tab, application::AutosaveId home);
     [[nodiscard]] bool close_swept_tab(std::size_t tab, application::AutosaveId home);
@@ -184,8 +185,10 @@ class EditorWindow final
     // 帯のタブの上の右の離し（#1790）。押したタブと離したタブが同じときだけ、そのタブのメニューを
     // 帯のすぐ下に開く。開いたら真。
     [[nodiscard]] bool release_right_on_tab(LPARAM data);
-    // 点の下の帯のタブ（× の上もタブ）。面が開いている間とタブの外は値なし。
+    // 点の下の帯のタブ（× の上もタブ）。Ctrl+P の面が開いている間とタブの外は値なし（設定の面と
+    // 補完の面の押しは press_right が先に取り、これを読まない）。
     [[nodiscard]] std::optional<core::TitleBarTarget> tab_under(LPARAM data) const;
+    [[nodiscard]] bool press_right_on_menu(POINT point);
     // WM_CONTEXTMENU。鍵（Shift+F10・メニューキー）の分だけ（lParam が -1）キャレットの位置に開く。
     [[nodiscard]] bool open_context_menu_from_keys(LPARAM data);
     // メニューが開いている間の左の押しと離しとマウスの動き。開いていなければ false（今の道へ）。
@@ -444,7 +447,9 @@ class EditorWindow final
     using OperationFunction = void (EditorWindow::*)();
     [[nodiscard]] static OperationFunction runner_of(core::EditorOperation operation) noexcept;
     // 表の本体（定義は EditorWindowOperations.cpp）。操作が 55 になり、表を runner_of の中に置くと
-    // 関数の長さの上限を超えたので、private の関数を指せる static メンバの変数にした（#1790）。
+    // 関数の長さの上限を超えたので、private の関数を指せる static
+    // メンバの変数にした（#1790）。宣言は static const、定義は constexpr で、runner_of の
+    // static_assert は定義の後ろにあるので表を読める。
     static const std::array<std::pair<core::EditorOperation, OperationFunction>,
                             core::operation_texts.size()>
         operation_runners;

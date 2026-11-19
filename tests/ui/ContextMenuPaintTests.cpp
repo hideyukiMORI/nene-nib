@@ -23,6 +23,10 @@
 #include "PaletteRowLayouts.hpp"
 #include "SoftwareTarget.hpp"
 #include "TabMenuSituation.hpp"
+#include "TabRightPress.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
 #include "WindowChecks.hpp"
 
 #include <algorithm>
@@ -277,10 +281,27 @@ void verify_tab_menu(const MenuStrip &strip, const core::Palette &palette)
     expect(differing(strip(named, 0), untitled, first_name) > 0,
            "a greyed tab row is drawn in another color");
 }
+
+// 右の押しの覚え（レビューの推奨 1）。タブの上で押して窓の外で離した後、面が取った押しを同じタブの
+// 上で離しても、古い押しと読んでタブのメニューを開かない。面が取らない押しは同じタブで開く。
+void verify_tab_right_press()
+{
+    using nenenib::ui::win32::tab_right_press_kept;
+    const core::TitleBarTarget tab{core::TitleBarHit::tab, 1};
+    auto pressed = tab_right_press_kept(false, tab);
+    expect(core::title_bar_released(pressed, tab) == std::optional{tab},
+           "a right press on a tab released on the same tab opens its menu");
+    pressed = tab_right_press_kept(true, std::nullopt);
+    expect(!core::title_bar_released(pressed, tab).has_value(),
+           "a press taken by a panel forgets the old tab press released outside the window");
+    expect(!tab_right_press_kept(true, tab).has_value(),
+           "a press taken by a panel never remembers the tab under it");
+}
 } // namespace
 
 void verify_context_menu_paint()
 {
+    verify_tab_right_press();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)

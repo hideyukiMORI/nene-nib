@@ -5,6 +5,7 @@
 #include "AutosaveId.hpp"
 #include "ChooseContextMenu.hpp"
 #include "CloseContextMenu.hpp"
+#include "CloseTab.hpp"
 #include "ContextMenu.hpp"
 #include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
@@ -37,6 +38,7 @@
 #include "TabMenuSituation.hpp"
 #include "TabNamePart.hpp"
 #include "TabSweep.hpp"
+#include "TabSweepMove.hpp"
 #include "TabSweepSide.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
@@ -44,6 +46,7 @@
 #include "UiTexts.hpp"
 #include "WorkCompleted.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <expected>
@@ -372,6 +375,81 @@ void verify_tab_unloaded()
            "reveal and copy on tabs not read yet use the path without reading them");
 }
 
+// まとめて閉じる道の一歩（決定 6・レビューの推奨 2）。アクティブでない相手が先、アクティブは最後。
+void verify_sweep_steps()
+{
+    const std::vector<app::AutosaveId> band{{1}, {2}, {3}};
+    const app::TabSweep others{app::AutosaveId{3}, app::TabSweepSide::others};
+    using Step = std::pair<app::TabSweepMove, std::size_t>;
+    expect(app::tab_sweep_step(band, others, 0) == Step{app::TabSweepMove::close, 1} &&
+               app::tab_sweep_step(band, others, 1) == Step{app::TabSweepMove::close, 0},
+           "a sweep closes the tabs that are not active first");
+    const std::vector<app::AutosaveId> left{{1}, {3}};
+    expect(app::tab_sweep_step(left, others, 0) == Step{app::TabSweepMove::switch_to_keep, 1} &&
+               app::tab_sweep_step(left, others, 1) == Step{app::TabSweepMove::close, 0},
+           "the active tab is left last and the sweep switches to the kept tab before it");
+    expect(app::tab_sweep_step({{3}}, others, 0).first == app::TabSweepMove::done &&
+               app::tab_sweep_step(band, app::TabSweep{app::AutosaveId{9}, others.side}, 0).first ==
+                   app::TabSweepMove::done,
+           "nothing is left to close when only the kept tab stays or it is gone");
+}
+
+// 窓の sweep_step と同じ 1 歩を controller に流す（未保存のタブは無い形）。続けてよければ真。
+[[nodiscard]] bool swept_one(app::EditorController &controller, const app::TabSweep &sweep)
+{
+    const auto [move, position] =
+        app::tab_sweep_step(controller.tab_ids(), sweep, controller.active_tab());
+    switch (move)
+    {
+    case app::TabSweepMove::close:
+        applied(controller, app::CloseTab{position});
+        return true;
+    case app::TabSweepMove::switch_to_keep:
+        applied(controller, app::SwitchTab{position});
+        return controller.tab_ids().at(controller.active_tab()) == sweep.keep;
+    case app::TabSweepMove::done:
+        return false;
+    }
+    std::unreachable();
+}
+
+void sweep_by_steps(app::EditorController &controller, const app::TabSweep &sweep)
+{
+    while (swept_one(controller, sweep))
+    {
+    }
+}
+
+[[nodiscard]] bool asked_for(Editing &editing, char name)
+{
+    const auto &requests = editing.reads().requests();
+    return std::ranges::any_of(requests, [name](const auto &request)
+                               { return request.path == work_path(name); });
+}
+
+// a と c はまだ読んでいない・b がアクティブ。c を残す「ほかのタブを閉じる」は a を読まずに閉じる。
+void verify_sweep_reads_nothing_beside()
+{
+    Editing deferred(three_restored(), hold_three);
+    deferred.reads().defer_above(0);
+    auto &waiting = deferred.controller();
+    const app::TabSweep keep_c{waiting.tab_ids().at(2), app::TabSweepSide::others};
+    sweep_by_steps(waiting, keep_c);
+    expect(!asked_for(deferred, 'a') && asked_for(deferred, 'c') && waiting.tab_ids().size() == 2 &&
+               waiting.frame().document.title.text() == "b.txt" &&
+               notice_of(waiting) == "読み込み中: c.txt",
+           "a sweep closes the unread side tab unread and keeps the active tab while the kept "
+           "one is read in the background");
+    Editing restored(three_restored(), hold_three);
+    auto &controller = restored.controller();
+    const app::TabSweep kept{controller.tab_ids().at(2), app::TabSweepSide::others};
+    sweep_by_steps(controller, kept);
+    expect(!asked_for(restored, 'a') && controller.tab_ids().size() == 1 &&
+               controller.tab_ids().front() == kept.keep &&
+               controller.frame().document.title.text() == "c.txt",
+           "a sweep switches to the kept tab last and closes the active one after it");
+}
+
 void verify_tab_menu_closes()
 {
     Editing editing;
@@ -402,6 +480,8 @@ void verify_tab_menu_contracts()
     verify_tab_closes();
     verify_tab_reveal();
     verify_tab_unloaded();
+    verify_sweep_steps();
+    verify_sweep_reads_nothing_beside();
     verify_tab_menu_closes();
 }
 } // namespace nenenib::tests

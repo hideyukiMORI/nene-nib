@@ -55,6 +55,7 @@
 #include "TabCommand.hpp"
 #include "TabNamePart.hpp"
 #include "TabSweep.hpp"
+#include "TabSweepMove.hpp"
 #include "TabSweepSide.hpp"
 #include "TextEncoding.hpp"
 #include "ToggleBookmark.hpp"
@@ -124,30 +125,39 @@ void EditorWindow::finish_tab_sweep(std::optional<application::TabSweep> sweep)
     }
 }
 
-// 帯の順に 1 つずつ閉じる（ADR 0078 の追補 #1790）。アクティブが閉じる相手なら先に残すタブへ切り
-// 替え、以後は閉じない側のタブ（home）を見せたまま脇のタブを閉じる（脇を閉じてもアクティブは動か
-// ず、まだ読んでいないタブを読まない）。未保存のタブは見せて確かめてから home へ戻る。取消・保存の
-// 失敗・窓が壊れた・閉じても本数が減らなかったら、そこで止める（残りは閉じない）。
+// 帯の順に 1 つずつ閉じる（ADR 0078 の追補 #1790 の決定 6）。次の一歩は application の
+// tab_sweep_step が毎回決める。アクティブでない相手を先に名指しで閉じ（切り替えない・まだ読んで
+// いないタブを読まない）、アクティブが相手なら最後に残すタブへ切り替えてから閉じる。切り替えが
+// 成り立たなければ（裏で読んでいる・読めずに外れた。知らせは controller の 1
+// 行）アクティブは閉じずに
+// 止める。未保存のタブは見せて確かめてから戻り、取消・保存の失敗・窓が壊れた・閉じても本数が
+// 減らなかったら、そこで止める（残りは閉じない・確かめたタブを見せたまま）。
 void EditorWindow::close_tabs_beside(application::TabSweep sweep)
 {
-    if (application::tab_swept(controller_.tab_ids(), sweep, controller_.active_tab()))
+    bool going = true;
+    while (going)
     {
-        const auto keep = application::tab_position(controller_.tab_ids(), sweep.keep);
-        if (keep.has_value())
-        {
-            send(application::SwitchTab{keep.value()});
-        }
+        going = window_ != nullptr && sweep_step(sweep);
     }
-    if (window_ == nullptr)
+}
+
+// まとめて閉じる道の 1 歩。続けてよければ真。
+bool EditorWindow::sweep_step(const application::TabSweep &sweep)
+{
+    const auto [move, position] =
+        application::tab_sweep_step(controller_.tab_ids(), sweep, controller_.active_tab());
+    switch (move)
     {
-        return;
+    case application::TabSweepMove::close:
+        return close_swept_tab(position, controller_.tab_ids().at(controller_.active_tab()));
+    case application::TabSweepMove::switch_to_keep:
+        send(application::SwitchTab{position});
+        return window_ != nullptr &&
+               controller_.tab_ids().at(controller_.active_tab()) == sweep.keep;
+    case application::TabSweepMove::done:
+        return false;
     }
-    const application::AutosaveId home = controller_.tab_ids().at(controller_.active_tab());
-    auto next = application::swept_tab(controller_.tab_ids(), sweep);
-    while (next.has_value() && close_swept_tab(next.value(), home))
-    {
-        next = application::swept_tab(controller_.tab_ids(), sweep);
-    }
+    std::unreachable();
 }
 
 // 帯の位置 tab のタブを閉じる。未保存なら見せて確かめてから。閉じて本数が減り、窓が残れば真。
@@ -430,7 +440,9 @@ runners_in_order(const std::array<OperationRunner, Size> &rows) noexcept
 
 // 操作 → メンバ関数の表（ADR 0078 の追補 #1188）。行は EditorOperation の順。private の関数を指す
 // ので、表は EditorWindow の static メンバの変数にする（関数の中に置くと 55 行で関数の長さの上限を
-// 超えた・#1790）。操作を足すときは行を 1 つと小さなメンバ関数を 1 つ足す。
+// 超えた・#1790）。操作を足すときは行を 1 つと小さなメンバ関数を 1 つ足す。ヘッダの宣言は static
+// const、ここの定義は constexpr（定数式で読めるのは定義の後ろだけなので、static_assert は下の
+// runner_of の中に置く）。
 constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow::operation_runners{
     {
         {core::EditorOperation::open_file, &EditorWindow::open_document},

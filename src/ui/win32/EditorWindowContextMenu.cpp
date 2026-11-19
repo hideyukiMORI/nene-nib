@@ -18,6 +18,7 @@
 #include "SelectionAnchoring.hpp"
 #include "StepContextMenu.hpp"
 #include "SwitchPane.hpp"
+#include "TabRightPress.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
@@ -65,35 +66,35 @@ bool EditorWindow::in_other_text_body(POINT point) const
     return other.has_value() && core::contains(other.value().content, point.x, point.y);
 }
 
+// 右の押し。設定の面の間（外なら面を閉じるだけ・#1836）・補完の面の上（面を閉じるだけ・#1844 の
+// L3b）・開いているメニューの上の押しは、本文のメニューもタブのメニューも開かない。面とメニューが
+// 取った押しでは本文とタブの両方の覚えを消す（窓の外で離した古いタブの押しを残さない・#1790 の
+// レビューの推奨 1）。
 void EditorWindow::press_right(LPARAM data)
 {
-    // 設定の面が開いている間の右の押しは本文のメニューを開かない（外なら面を閉じるだけ・#1836）。
-    if (press_settings_right(data))
-    {
-        right_pressed_ = std::nullopt;
-        return;
-    }
     const auto point = point_of(data);
-    // 補完の面の上の右の押しは面を閉じるだけで、面の下の位置でメニューを開かない（#1844 の L3b）。
-    if (close_completion_under(data))
+    const bool taken =
+        press_settings_right(data) || close_completion_under(data) || press_right_on_menu(point);
+    right_pressed_ = !taken && (in_text_body(point) || in_other_text_body(point))
+                         ? std::optional{point}
+                         : std::nullopt;
+    tab_right_pressed_ = tab_right_press_kept(taken, taken ? std::nullopt : tab_under(data));
+}
+
+// 開いているメニューの上の右の押しは取る（何もしない）。外の押しはメニューを閉じてから、新しい点の
+// 押しとして続ける。
+bool EditorWindow::press_right_on_menu(POINT point)
+{
+    if (!controller_.context_menu_active())
     {
-        right_pressed_ = std::nullopt;
-        return;
+        return false;
     }
-    // 開いているメニューの外の右の押しは閉じてから、新しい点の押しとして覚える（中は何もしない）。
-    if (controller_.context_menu_active())
+    if (renderer_ != nullptr && renderer_->context_menu_covers(point.x, point.y))
     {
-        if (renderer_ != nullptr && renderer_->context_menu_covers(point.x, point.y))
-        {
-            right_pressed_ = std::nullopt;
-            tab_right_pressed_ = std::nullopt;
-            return;
-        }
-        send(application::CloseContextMenu{});
+        return true;
     }
-    right_pressed_ =
-        in_text_body(point) || in_other_text_body(point) ? std::optional{point} : std::nullopt;
-    tab_right_pressed_ = tab_under(data);
+    send(application::CloseContextMenu{});
+    return false;
 }
 
 std::optional<core::TitleBarTarget> EditorWindow::tab_under(LPARAM data) const

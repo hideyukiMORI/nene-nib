@@ -13,8 +13,9 @@ namespace nenenib::adapters::win32
 // エクスプローラーで場所を開く呼び出しの前後（ADR 0078 の追補 #1790）。シェルを呼ぶ直前までと
 // 結果の読み替えは純関数で、試験は本物のエクスプローラーを開かずにここを試す。
 
-// シェルに渡す経路（UTF-16）。UTF-8 から変換できない・空なら failed。`\?\` は付けない（シェルの
-// 名前の解釈は付けた形を受けない）。
+// シェルに渡す経路（UTF-16）。UTF-8 から変換できない・空なら failed。`\\?\` は付けない（シェルの
+// 名前の解釈は付けた形を受けない）。経路が既に `\\?\` で始まる・MAX_PATH を超えるときは、シェルが
+// 受けずに failed の知らせになる見込み（実機のシェルでは確かめていない・ADR 0078 の追補 #1790）。
 [[nodiscard]] std::expected<std::wstring, application::RevealFailure>
 reveal_target(std::string_view utf8);
 
