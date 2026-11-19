@@ -3,8 +3,8 @@
 #include "FilePath.hpp"
 #include "ImageOutcome.hpp"
 #include "ImagePixels.hpp"
-#include "ImageReferenceRefusal.hpp"
 #include "ImageRequest.hpp"
+#include "LocalReferenceRefusal.hpp"
 #include "MarkdownDocument.hpp"
 #include "PreviewImageEntry.hpp"
 #include "PreviewImageStatus.hpp"
@@ -43,7 +43,7 @@ class PreviewImages final
     // 序数の画像の状態。出さない参照と、count 以上の序数は nullopt。
     [[nodiscard]] std::optional<PreviewImageStatus> status_of(std::size_t ordinal) const;
     // 序数の画像を出さない理由（出す参照と count 以上の序数は nullopt）。
-    [[nodiscard]] std::optional<core::ImageReferenceRefusal> refusal_of(std::size_t ordinal) const;
+    [[nodiscard]] std::optional<core::LocalReferenceRefusal> refusal_of(std::size_t ordinal) const;
     // 序数の画像の経路（出さない参照と count 以上の序数は nullptr）。
     [[nodiscard]] const core::FilePath *path_of(std::size_t ordinal) const;
     // 序数の画像の画素。loaded のときだけ値があり、ほかは null（「[画像: alt]」のまま描く）。
@@ -82,7 +82,7 @@ class PreviewImages final
     [[nodiscard]] std::optional<std::size_t> entry_of(std::size_t ordinal) const;
 
     std::vector<PreviewImageEntry> entries_;
-    std::vector<std::expected<std::size_t, core::ImageReferenceRefusal>> slots_;
+    std::vector<std::expected<std::size_t, core::LocalReferenceRefusal>> slots_;
     std::size_t held_bytes_ = 0;
 };
 } // namespace nenenib::application

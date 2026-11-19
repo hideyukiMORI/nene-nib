@@ -23,6 +23,13 @@ namespace nenenib::core
                                                               {}, ascii_folded, ascii_folded);
 }
 
+// left と right が同じか（ASCII の大文字小文字を区別しない・#1869 で 3 か所の写しを 1 本にした）。
+[[nodiscard]] constexpr bool ascii_equal_ignoring_case(std::string_view left,
+                                                       std::string_view right) noexcept
+{
+    return left.size() == right.size() && ascii_prefix_ignoring_case(left, right);
+}
+
 // 名前順: ASCII の大文字小文字を畳んで比べ、同じならバイト順（全順序）。
 [[nodiscard]] constexpr bool ascii_folded_before(std::string_view left,
                                                  std::string_view right) noexcept

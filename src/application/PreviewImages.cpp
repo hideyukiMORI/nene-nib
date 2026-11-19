@@ -3,8 +3,8 @@
 #include "FilePath.hpp"
 #include "ImageGeometry.hpp"
 #include "ImageLimits.hpp"
-#include "ImageReference.hpp"
 #include "ImageSize.hpp"
+#include "LocalReference.hpp"
 #include "PreviewImageWindow.hpp"
 
 #include <algorithm>
@@ -21,7 +21,7 @@ namespace nenenib::application
 {
 namespace
 {
-using Resolved = std::expected<core::FilePath, core::ImageReferenceRefusal>;
+using Resolved = std::expected<core::FilePath, core::LocalReferenceRefusal>;
 // PreviewImages::Reach と同じ形（entry ごとの「範囲の中か」と「錨の要素からの差」）。
 using Reach = std::pair<std::vector<bool>, std::vector<std::size_t>>;
 
@@ -138,7 +138,7 @@ PreviewImages PreviewImages::of(const core::MarkdownDocument &document,
     resolved.reserve(count);
     for (std::size_t ordinal = 0; ordinal < count; ++ordinal)
     {
-        resolved.push_back(core::resolve_image_reference(document.images.at(ordinal).source, base));
+        resolved.push_back(core::resolve_local_reference(document.images.at(ordinal).source, base));
     }
     const std::vector<std::size_t> owner = first_of_same_path(resolved);
     const std::vector<PreviewImageEntry> none;
@@ -188,7 +188,7 @@ std::optional<PreviewImageStatus> PreviewImages::status_of(std::size_t ordinal) 
     return entries_.at(entry.value()).status;
 }
 
-std::optional<core::ImageReferenceRefusal> PreviewImages::refusal_of(std::size_t ordinal) const
+std::optional<core::LocalReferenceRefusal> PreviewImages::refusal_of(std::size_t ordinal) const
 {
     if (ordinal >= slots_.size() || slots_.at(ordinal).has_value())
     {
