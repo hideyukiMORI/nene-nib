@@ -42,6 +42,7 @@
 #include "PreviewPanePainter.hpp"
 #include "PreviewPaneText.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewTableHit.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectHitText.hpp"
 #include "RenderFailure.hpp"
@@ -157,6 +158,11 @@ class Direct2DRenderer final
     // 最後に描いたプレビューの枠の点の真下の文字（文字の上のときだけ・リンクの札・#1869 の段 L2）。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_character_at(std::int32_t x,
                                                                          std::int32_t y);
+    // 最後に描いたプレビューの枠の点の下の枠より広い表と、つかんだ表の棒の溝の上の横の位置
+    // （#1883・PreviewPane::table_at / table_bar）。
+    [[nodiscard]] std::optional<PreviewTableHit> preview_table_at(std::int32_t x, std::int32_t y);
+    [[nodiscard]] std::optional<PreviewTableHit> preview_table_bar(std::size_t table,
+                                                                   std::int32_t x);
     // 最後に描いたリンクの札の点の下の部品（札を描いていなければ outside・#1869 の段 L2）。
     [[nodiscard]] LinkCardTarget link_card_target_at(std::int32_t x, std::int32_t y) const;
 

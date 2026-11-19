@@ -108,11 +108,19 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         lose_completion_press(message);
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
+        hover_table_bar_of(std::nullopt);
         hover(std::nullopt);
         return 0;
     case WM_MOUSEWHEEL:
         turn_wheel(word, data);
         return 0;
+    // 横のホイール（傾けるホイール・タッチパッド）はプレビューの広い表の上だけ（#1883）。右が正。
+    case WM_MOUSEHWHEEL:
+        if (wheel_table(static_cast<std::int16_t>(HIWORD(word)), data))
+        {
+            return 0;
+        }
+        break;
     case WM_CAPTURECHANGED:
         left_pressed_ =
             caption_step(message, core::TitleBarTarget{core::TitleBarHit::none, 0}, left_pressed_)
@@ -120,6 +128,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         start_pressed_ = std::nullopt;
         lose_completion_press(message);
         end_minimap_drag(message);
+        static_cast<void>(release_table_bar());
         lose_explorer_divider();
         end_selection_drag();
         return 0;
@@ -167,7 +176,8 @@ void EditorWindow::move_pointer(LPARAM data)
         return;
     }
     // ミニマップを押している間の動きは面の送りだけ（帯の hover・境のカーソルを動かさない）。
-    if (drag_minimap(data))
+    // プレビューの表の棒をつかんでいる間の動きもその表の送りだけ（#1883）。
+    if (drag_minimap(data) || drag_table_bar(data))
     {
         return;
     }
@@ -175,6 +185,7 @@ void EditorWindow::move_pointer(LPARAM data)
     hover_explorer_divider(data);
     drag_selection(data);
     hover_explorer_row(data);
+    hover_table_bar(data);
     point_at(data);
 }
 
@@ -213,6 +224,11 @@ void EditorWindow::release_left(LPARAM data)
     // ミニマップを押していたら、離したのはそのドラッグの終わりだけ（窓の操作の上で離しても閉じない・
     // #1464 と同じ）。
     if (release_minimap(data))
+    {
+        return;
+    }
+    // プレビューの表の棒をつかんでいたら、離したのはそのつかみの終わりだけ（#1883）。
+    if (release_table_bar())
     {
         return;
     }
@@ -860,6 +876,12 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     explorer_wheel_remainder_ = 0;
+    // Shift+縦のホイールはプレビューの広い表の上ならその表を横に送る（奥が左・#1883）。表の外は
+    // 今までどおり縦。
+    if ((GET_KEYSTATE_WPARAM(word) & MK_SHIFT) != 0 && wheel_table(-delta, data))
+    {
+        return;
+    }
     scroll_body(delta, data);
 }
 

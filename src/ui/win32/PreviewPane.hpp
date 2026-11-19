@@ -11,6 +11,8 @@
 #include "PreviewImages.hpp"
 #include "PreviewPictureKey.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewTableBand.hpp"
+#include "PreviewTableHit.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
 #include "PreviewViewport.hpp"
@@ -24,7 +26,9 @@
 #include <expected>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <vector>
 #include <wrl/client.h>
 
 namespace nenenib::ui::win32
@@ -79,6 +83,13 @@ class PreviewPane final
     // いない要素・描いていないときは nullopt（リンクの札の置き場・#1869 の段 L2）。
     [[nodiscard]] std::optional<core::LayoutRect> range_box(std::size_t block, std::size_t begin,
                                                             std::size_t end);
+    // 最後に描いた枠の中の点 (x, y) の下の枠より広い表（行と棒の上・横は行の原点から枠の右の余白
+    // まで・#1883）。収まる表・表の外は nullopt。Shift+ホイールと横のホイールと棒の押しと載せた
+    // マウスが引く。
+    [[nodiscard]] std::optional<PreviewTableHit> table_at(std::int32_t x, std::int32_t y);
+    // 最後に描いた枠で、通し番号 table の表の棒の溝の上の横の位置 x（つかんだ間のドラッグ・縦は
+    // 見ない）。表が測った範囲に無い・収まる表なら nullopt。
+    [[nodiscard]] std::optional<PreviewTableHit> table_bar(std::size_t table, std::int32_t x);
     // 作った layout の数（試験が frame をまたいだ再利用を確かめる）。
     [[nodiscard]] std::size_t created() const noexcept;
     // 要素を描いた回数（直接か bitmap へ）・保持の絵を DrawBitmap だけで使い回した回数・作った
@@ -123,6 +134,15 @@ class PreviewPane final
     [[nodiscard]] std::optional<D2D1_RECT_F> text_range_of(std::size_t index, std::size_t begin,
                                                            std::size_t end,
                                                            const PreviewTextStyle &style);
+    // 測った表の行 index の横の寸法と、描く所と同じ横の送り（物理画素・#1883）。
+    [[nodiscard]] PreviewTableBand table_band(std::size_t index, std::span<const float> columns,
+                                              std::uint32_t dpi) const;
+    [[nodiscard]] float table_shift(std::size_t index, std::span<const float> columns,
+                                    const PreviewTextStyle &style) const;
+    // 測った表の行 index の点（横は窓の x・縦は枠の上端からの local）の当たり（収まる表は
+    // nullopt）。
+    [[nodiscard]] std::optional<PreviewTableHit> table_hit(std::size_t index, std::int32_t x,
+                                                           float local);
     // 枠の大きさの描ける bitmap（大きさが同じなら今のもの）。作れなければ nullptr。
     [[nodiscard]] ID2D1Bitmap1 *picture_of(ID2D1DeviceContext &context, std::int32_t width,
                                            std::int32_t height);
@@ -138,8 +158,9 @@ class PreviewPane final
     std::optional<PreviewTextStyle> measured_style_;
     PreviewViewport measured_viewport_{0, 0.0F, 0.0F};
     std::optional<PreviewBlockTops> tops_;
-    // 最後に文書を描いた枠（hit test の原点）。
+    // 最後に文書を描いた枠（hit test の原点）と、その frame の表の横の送りの量（#1883）。
     std::optional<core::LayoutRect> area_;
+    std::vector<std::int32_t> table_scrolls_;
     std::string theme_;
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> picture_;
     std::optional<PreviewPictureKey> pictured_;

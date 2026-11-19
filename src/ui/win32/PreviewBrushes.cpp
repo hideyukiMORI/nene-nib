@@ -64,6 +64,8 @@ constexpr float full_channel = 255.0F;
         return to_color(theme.body.type);
     case PreviewInk::constant:
         return to_color(theme.body.constant);
+    case PreviewInk::text:
+        return to_color(theme.ui.text);
     }
     std::unreachable();
 }

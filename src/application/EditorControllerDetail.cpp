@@ -237,7 +237,8 @@ bool is_signal(const EditorIntent &intent) noexcept
 }
 
 // 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの
-// hover・窓が非アクティブになった知らせ（WindowDeactivated・ADR 0190 の決定 6）。keeps_tab_walk と
+// hover・窓が非アクティブになった知らせ（WindowDeactivated・ADR 0190 の決定 6）・プレビューの表の
+// 横の送りの棒に載せたマウス（HoverPreviewTable・#1883）。keeps_tab_walk と
 // begin_intent と `map` の待ちを保つ側と全面プレビューの振り分けが共用する。
 bool not_user_operation(const EditorIntent &intent) noexcept
 {
@@ -246,7 +247,8 @@ bool not_user_operation(const EditorIntent &intent) noexcept
            std::holds_alternative<RefreshAppearance>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<WindowDeactivated>(intent);
+           std::holds_alternative<WindowDeactivated>(intent) ||
+           std::holds_alternative<HoverPreviewTable>(intent);
 }
 
 bool is_settings_intent(const EditorIntent &intent) noexcept

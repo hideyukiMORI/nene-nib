@@ -2723,4 +2723,15 @@ std::optional<core::PreviewPoint> Direct2DRenderer::preview_character_at(std::in
 {
     return preview_.character_at(x, y);
 }
+
+std::optional<PreviewTableHit> Direct2DRenderer::preview_table_at(std::int32_t x, std::int32_t y)
+{
+    return preview_.table_at(x, y);
+}
+
+std::optional<PreviewTableHit> Direct2DRenderer::preview_table_bar(std::size_t table,
+                                                                   std::int32_t x)
+{
+    return preview_.table_bar(table, x);
+}
 } // namespace nenenib::ui::win32

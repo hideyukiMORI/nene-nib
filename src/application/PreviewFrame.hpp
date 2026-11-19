@@ -6,8 +6,11 @@
 #include "PreviewImages.hpp"
 #include "PreviewSelection.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -17,6 +20,9 @@ namespace nenenib::application
 // は全面プレビューの選択（改訂 18・側の枠は持たない）。images は画像の状態（ADR 0155 の追補 52・
 // null なら画像の節が無い）。序数の画像は images->pixels_of が値を返すときだけ画素で描き、ほかは
 // 「[画像: alt]」の文字のまま。images の指す先が変われば ui は錨から測り直す（段 3）。
+// table_scrolls は表の通し番号ごとの横の送りの量（DIP・無い表は 0・端へ寄せるのは ui
+// が描く枠の寸法で core::preview_table_scroll_clamped・#1883）、table_lit
+// はつまみを明るく描く表（つかんでいる表か、 マウスを載せた棒の表）。
 struct PreviewFrame
 {
     std::shared_ptr<const core::MarkdownDocument> document;
@@ -24,5 +30,7 @@ struct PreviewFrame
     std::optional<core::DisplayText> notice;
     std::optional<core::PreviewSelection> selection;
     std::shared_ptr<const PreviewImages> images = nullptr;
+    std::vector<std::int32_t> table_scrolls{};
+    std::optional<std::size_t> table_lit{};
 };
 } // namespace nenenib::application

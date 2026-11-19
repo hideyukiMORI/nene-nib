@@ -33,6 +33,8 @@
 #include "PreviewScene.hpp"
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
+#include "PreviewTableCell.hpp"
+#include "PreviewTableMetrics.hpp"
 #include "PreviewTaskPress.hpp"
 #include "PreviewTextLayouts.hpp"
 #include "PreviewTextStyle.hpp"
@@ -49,6 +51,7 @@
 #include <combaseapi.h>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -431,11 +434,17 @@ void check_pane_reuse()
 
 // 同じ文書・錨 anchor・枠を PreviewPainter で別の WIC の描画先に、新しい保持と brush で直接描いた
 // 画素（比べる相手）。
-[[nodiscard]] std::vector<std::uint8_t> directly_painted(const core::MarkdownDocument &document,
-                                                         const core::Theme &theme,
-                                                         const core::LayoutRect &area,
-                                                         std::size_t anchor = 4)
+// 表の横の送りの量と明るいつまみの表（#1883）。
+using TableScrolled = std::pair<std::vector<std::int32_t>, std::optional<std::size_t>>;
+// 描く枠と錨。
+using PaintPlace = std::pair<core::LayoutRect, std::size_t>;
+
+[[nodiscard]] std::vector<std::uint8_t> painted_with(const core::MarkdownDocument &document,
+                                                     const core::Theme &theme, PaintPlace place,
+                                                     const TableScrolled &table)
 {
+    const auto &[area, anchor] = place;
+    const auto &[scrolls, lit] = table;
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
     const auto target = wic_target(bitmap);
     PreviewTextLayouts layouts;
@@ -453,12 +462,21 @@ void check_pane_reuse()
     target->BeginDraw();
     target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
     win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
-    painter.paint(win32::PreviewScene{document, tops.value(), style, area, 0.0F, std::nullopt});
+    painter.paint(win32::PreviewScene{document, tops.value(), style, area, 0.0F, std::nullopt,
+                                      nullptr, nullptr, scrolls, lit});
     if (FAILED(target->EndDraw()) || failure.has_value())
     {
         return {};
     }
     return pixels_of(*bitmap.Get());
+}
+
+[[nodiscard]] std::vector<std::uint8_t> directly_painted(const core::MarkdownDocument &document,
+                                                         const core::Theme &theme,
+                                                         const core::LayoutRect &area,
+                                                         std::size_t anchor = 4)
+{
+    return painted_with(document, theme, PaintPlace{area, anchor}, TableScrolled{});
 }
 
 // 保持した layout は描くときに書式を変えず、位置も問わない（#1477・ADR 0155 の追補）。行内コード・
@@ -1387,7 +1405,7 @@ void check_table_pixels()
                            palette.body.background) <= 6,
            "the rules end at the table width and there is no outer frame");
     const auto second = static_cast<std::int32_t>(
-        at.indent(0) + win32::preview_table_cell_left(*columns.value(), 1, 96));
+        at.indent(0) + win32::preview_table_cell_left(*columns.value(), 1, 0.0F, 96));
     const auto band = [&at, second](std::size_t row)
     {
         return core::LayoutRect{second, static_cast<std::int32_t>(at.top(row)) + 2, 399,
@@ -1806,6 +1824,186 @@ void check_code_piece_seam()
     }
     expect(false, "a font size puts the seam between pixels");
 }
+// 枠より広い表の横の送り（#1883・施主決定 D107 の案 A）の見本。3 列の長い升の表（400 物理画素の枠に
+// 入らない）と、その後の段落。
+constexpr std::string_view wide_table = "| aaaaaaaaaaaaaaaaaaaaaaaa | bbbbbbbbbbbbbbbbbbbbbbbbbb | "
+                                        "cccccccccccccccccccccccc |\n|---|---|---|\n| 1 | 2 | 3 |\n"
+                                        "\nafter\n";
+
+// 寸法の写し（物理画素 ↔ DIP・端・溝の位置）。
+void check_table_scroll_metrics()
+{
+    const std::vector<float> narrow{100.0F, 200.0F};
+    const std::vector<float> broad{300.0F, 200.0F};
+    const auto fits = win32::preview_table_band(narrow, 400.0F, 16.0F, 96);
+    const auto over = win32::preview_table_band(broad, 400.0F, 16.0F, 96);
+    expect(fits.view == 368.0F && fits.width == 356.0F && !win32::preview_table_overflows(fits, 96),
+           "a table narrower than the frame fits and has no bar");
+    expect(win32::preview_table_overflows(over, 96) &&
+               win32::preview_table_span(over, 96).view == 368 &&
+               win32::preview_table_span(over, 96).table == 556,
+           "a wider table overflows and its span is in DIP");
+    expect(win32::preview_table_shift(over, 1000, 96) == 188.0F &&
+               win32::preview_table_shift(over, -5, 96) == 0.0F &&
+               win32::preview_table_shift(fits, 50, 96) == 0.0F,
+           "the shift is the offset held between 0 and the end, and 0 for a table that fits");
+    const std::vector<float> large{450.0F, 300.0F};
+    const auto scaled = win32::preview_table_band(large, 600.0F, 24.0F, 144);
+    expect(win32::preview_table_span(scaled, 144).view == 368 &&
+               win32::preview_table_span(scaled, 144).table == 556 &&
+               win32::preview_table_shift(scaled, 188, 144) == 282.0F &&
+               win32::preview_table_track_pixels(scaled, 368, 144) == 552.0F &&
+               win32::preview_table_track_dips(scaled, 552.0F, 144) == 368,
+           "at 144 DPI the span and the track map pixels and DIP both ways");
+    expect(win32::preview_table_offset(std::vector<std::int32_t>{5, 7}, 1) == 7 &&
+               win32::preview_table_offset(std::vector<std::int32_t>{5}, 3) == 0,
+           "a table without an offset is unscrolled");
+    const auto parsed =
+        core::parse_markdown("| a |\n|---|\n| 1 |\n| 2 |\n\nx\n", core::MarkdownStop::never());
+    expect(parsed.has_value() && !win32::preview_table_closes(parsed.value(), 0) &&
+               !win32::preview_table_closes(parsed.value(), 1) &&
+               win32::preview_table_closes(parsed.value(), 2) &&
+               !win32::preview_table_closes(parsed.value(), 3),
+           "only the last row of a table closes it");
+}
+
+// 広い表の最後の行だけが棒の分（4 + 6 DIP）高く、収まる表と途中の行は変わらない。
+void check_table_scroll_heights()
+{
+    const auto wide = core::parse_markdown(wide_table, core::MarkdownStop::never());
+    const auto narrow =
+        core::parse_markdown("| a | b |\n|---|---|\n| 1 | 2 |\n", core::MarkdownStop::never());
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto line = win32::preview_line_pixels(style);
+    const win32::PreviewViewport frame{0, 400.0F, 200.0F};
+    const auto wide_tops =
+        wide ? win32::PreviewBlockTops::measure(wide.value(), layouts, style, frame)
+             : std::unexpected(win32::RenderFailure::directwrite);
+    const auto narrow_tops =
+        narrow ? win32::PreviewBlockTops::measure(narrow.value(), layouts, style, frame)
+               : std::unexpected(win32::RenderFailure::directwrite);
+    if (!wide_tops || !narrow_tops || wide_tops.value().size() < 3)
+    {
+        expect(false, "the table samples are measured");
+        return;
+    }
+    const auto &at = wide_tops.value();
+    expect(at.bottom(0) - at.top(0) == line + 14.0F && at.bottom(1) - at.top(1) == line + 24.0F,
+           "only the last row of a wide table grows by the bar and its gap");
+    expect(at.top(2) > at.bottom(1), "the next block follows the bar");
+    const auto &fits = narrow_tops.value();
+    expect(fits.bottom(1) - fits.top(1) == line + 14.0F, "a table that fits does not grow");
+}
+
+// 描く: 溝は panel_border・つまみは muted（明るい表は text）で送りの量の位置。送った升は枠の左で
+// 切る（字下げの左に字を描かない）。
+void check_table_scroll_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto parsed = core::parse_markdown(wide_table, core::MarkdownStop::never());
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops =
+        parsed ? win32::PreviewBlockTops::measure(parsed.value(), layouts, style,
+                                                  win32::PreviewViewport{0, 400.0F, 200.0F})
+               : std::unexpected(win32::RenderFailure::directwrite);
+    if (!theme || !parsed || !tops)
+    {
+        expect(false, "the wide table sample parses and is measured");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto start = directly_painted(parsed.value(), palette, area, 0);
+    const auto end = painted_with(parsed.value(), palette, PaintPlace{area, 0},
+                                  TableScrolled{{10'000}, std::nullopt});
+    const auto lit =
+        painted_with(parsed.value(), palette, PaintPlace{area, 0}, TableScrolled{{}, 0U});
+    if (start.empty() || end.empty() || lit.empty())
+    {
+        expect(false, "the wide table paints");
+        return;
+    }
+    const auto &at = tops.value();
+    const auto left = static_cast<std::int32_t>(at.indent(1));
+    const auto right = 400 - 16;
+    const auto bar = static_cast<std::int32_t>(at.bottom(1)) - 3;
+    expect(distance_of(start, left + 4, bar, palette.ui.muted) <= 6 &&
+               distance_of(start, right - 4, bar, palette.ui.panel_border) <= 6,
+           "the unscrolled thumb is muted at the left of the panel_border track");
+    expect(distance_of(end, left + 4, bar, palette.ui.panel_border) <= 6 &&
+               distance_of(end, right - 4, bar, palette.ui.muted) <= 6,
+           "the scrolled thumb sits at the right end");
+    expect(distance_of(lit, left + 4, bar, palette.ui.text) <= 6,
+           "a lit thumb is drawn in the text colour");
+    expect(distance_of(end, left - 2, static_cast<std::int32_t>(at.top(0)) + 12,
+                       palette.body.background) <= 6 &&
+               start != end,
+           "a scrolled table moves its cells and is clipped at the left of the frame");
+}
+
+// 当たり: 棒と行は表、字下げの左・後の段落は表の外。つかんだ表の溝の位置。送った表の升の当たりは
+// 描く所と同じ送りを読む。
+void check_table_scroll_hits()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    auto parsed = core::parse_markdown(wide_table, core::MarkdownStop::never());
+    win32::PreviewPane pane;
+    if (target == nullptr || !theme || !parsed ||
+        !pane.prepare(*target.Get(), theme.value().view()).has_value())
+    {
+        expect(false, "the preview pane prepares for the wide table");
+        return;
+    }
+    const std::shared_ptr<const core::MarkdownDocument> shown =
+        std::make_shared<const core::MarkdownDocument>(std::move(parsed).value());
+    const auto style = style_of();
+    const core::LayoutRect area{0, 0, 400, 200};
+    PreviewTextLayouts layouts;
+    const auto tops = win32::PreviewBlockTops::measure(*shown, layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    const auto columns = layouts.table_columns(*shown, 0, style);
+    target->BeginDraw();
+    const auto painted = pane.paint(
+        *target.Get(),
+        application::PreviewFrame{shown, core::Offset{0}, {}, {}, nullptr, {50}, std::nullopt},
+        style, area);
+    if (FAILED(target->EndDraw()) || !painted || !tops || !columns)
+    {
+        expect(false, "the wide table is painted by the pane");
+        return;
+    }
+    const auto &at = tops.value();
+    const auto left = static_cast<std::int32_t>(at.indent(1));
+    const auto on_bar = pane.table_at(left + 20, static_cast<std::int32_t>(at.bottom(1)) - 3);
+    expect(on_bar.has_value() && on_bar.value().bar && on_bar.value().table == 0 &&
+               on_bar.value().span.view == 368 && on_bar.value().at == 20,
+           "a point on the bar hits the table's bar at its track position");
+    const auto on_row = pane.table_at(left + 20, static_cast<std::int32_t>(at.top(0)) + 5);
+    expect(on_row.has_value() && !on_row.value().bar, "a point on a row hits the table");
+    expect(!pane.table_at(left - 4, static_cast<std::int32_t>(at.top(0)) + 5).has_value() &&
+               !pane.table_at(left + 20, static_cast<std::int32_t>(at.top(2)) + 3).has_value(),
+           "the indent and the next paragraph are outside the table");
+    const auto dragged = pane.table_bar(0, left + 100);
+    expect(dragged.has_value() && dragged.value().at == 100,
+           "a grabbed table reads the pointer along its track");
+    const auto shift = win32::preview_table_shift(
+        win32::preview_table_band(*columns.value(), 400.0F, at.indent(0), 96), 50, 96);
+    const auto cell =
+        static_cast<std::int32_t>(at.indent(0) +
+                                  win32::preview_table_cell_left(*columns.value(), 1, shift, 96)) +
+        3;
+    const auto point = pane.point_at(cell, static_cast<std::int32_t>(at.top(0)) + 12);
+    expect(shift == 50.0F && point.has_value() && point.value().block == 0 &&
+               point.value().offset >= core::preview_table_cell_range(shown->blocks.at(0), 1).first,
+           "the cell under a point follows the same shift as the painting");
+}
+
 } // namespace
 
 void verify_preview_layouts()
@@ -1848,5 +2046,9 @@ void verify_preview_layouts()
     check_alert_pixels();
     check_large_table_cost();
     check_many_tables_kept();
+    check_table_scroll_metrics();
+    check_table_scroll_heights();
+    check_table_scroll_pixels();
+    check_table_scroll_hits();
 }
 } // namespace nenenib::tests::ui

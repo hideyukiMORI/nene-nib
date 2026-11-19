@@ -288,6 +288,9 @@ class EditorController final
     // マウスを載せた面の画面の行（HoverExplorer.line と同じ値・#1390）。窓がマウスの動くたびに
     // 「変わったか」を見る安い読みで、frame を作らない（title_bar_input の hovered と同じ形）。
     [[nodiscard]] std::optional<std::size_t> explorer_hovered() const noexcept;
+    // マウスを載せたプレビューの表の横の送りの棒の表の通し番号（HoverPreviewTable.table と同じ値・
+    // #1883）。窓がマウスの動くたびに「変わったか」を見る安い読みで、frame を作らない。
+    [[nodiscard]] std::optional<std::size_t> preview_table_hovered() const noexcept;
     // 帯の配置の入力を状態の 4 つの値（タブの本数・アクティブの位置・送り量・マウスを載せた要素）
     // から読むだけの口。行も題名も作らない（ADR 0056 の決定 9）。窓の hit test と hover が
     // マウスの動くたびに呼ぶ。width は帯の幅（物理画素）。値は title_bar_input(frame(), ...)
@@ -983,6 +986,15 @@ class EditorController final
     void copy_link_card(const LinkCardView &card);
     // WorkCompleted の道で開く頼みの結果を引き、失敗を 1 行知らせる（頼んでいなければ呼ばない）。
     void collect_link_opens();
+    // プレビューの表の横の送り（#1883・施主決定 D107・EditorControllerPreview.cpp）。送りの量は
+    // 文書の値（EditorState::table_scrolls）、つかみとマウスを載せた棒は窓の値。
+    void accept(const ScrollPreviewTable &intent);
+    void accept(const HoverPreviewTable &intent);
+    [[nodiscard]] std::optional<std::int32_t>
+    table_scroll_moved(const ScrollPreviewTable &intent, std::int32_t from,
+                       const std::optional<PreviewTableGrip> &grip);
+    // つまみを明るく描く表（つかんでいる表、無ければマウスを載せた棒の表）。
+    [[nodiscard]] std::optional<std::size_t> preview_table_lit() const;
     void settle_language_answers(LspRequestKind kind);
     void settle_hover_answer();
     void settle_definition_answer();

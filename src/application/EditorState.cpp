@@ -688,6 +688,8 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.vim_eol_ = vim_end_of_line_decided(next.text_, vim_entries_);
     // 語の表は開く道で作らない（最初に補完を使ったときに作る・設計席の追補 2026-11-18）。
     next.words_.reset();
+    // 表の横の送りは前の本文の表のもの（#1883）。
+    next.table_scrolls_ = PreviewTableScrolls{};
     next.refresh_vim_text(true);
     return next;
 }
@@ -1067,6 +1069,42 @@ EditorState EditorState::with_link_card(std::optional<LinkCardView> card) const
     return next;
 }
 
+const PreviewTableScrolls &EditorState::table_scrolls() const noexcept
+{
+    return table_scrolls_;
+}
+
+EditorState EditorState::with_table_scrolls(PreviewTableScrolls scrolls) const
+{
+    EditorState next(*this);
+    next.table_scrolls_ = std::move(scrolls);
+    return next;
+}
+
+const std::optional<PreviewTableGrip> &EditorState::table_grip() const noexcept
+{
+    return table_grip_;
+}
+
+EditorState EditorState::with_table_grip(std::optional<PreviewTableGrip> grip) const
+{
+    EditorState next(*this);
+    next.table_grip_ = grip;
+    return next;
+}
+
+std::optional<std::size_t> EditorState::table_hovered() const noexcept
+{
+    return table_hovered_;
+}
+
+EditorState EditorState::with_table_hovered(std::optional<std::size_t> table) const
+{
+    EditorState next(*this);
+    next.table_hovered_ = table;
+    return next;
+}
+
 // 置く（ADR 0056 の決定 1・4）。出ていく文書の選択はキャレットへ畳み（VISUAL を持ち越さない）、
 // undo の単位を閉じる。題名は置くこの 1 回だけ作り、frame は並べるだけにする。
 std::shared_ptr<const DocumentState> EditorState::parked_active() const
@@ -1095,7 +1133,8 @@ std::shared_ptr<const DocumentState> EditorState::parked_active() const
                                                                diagnostics_version_,
                                                                diagnostics_count_,
                                                                vim_eol_,
-                                                               words_});
+                                                               words_,
+                                                               table_scrolls_});
 }
 
 // 広げる（決定 1・4）。見えている行数は窓全体の値なので保ち、先頭行だけを文書から取る。
@@ -1123,6 +1162,7 @@ void EditorState::spread(const DocumentState &tab)
                    ? tab.vim_eol.value()
                    : vim_end_of_line_decided(text_, vim_entries_);
     words_ = tab.words;
+    table_scrolls_ = tab.table_scrolls;
     refresh_vim_text(true);
 }
 
