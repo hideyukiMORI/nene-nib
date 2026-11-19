@@ -45,6 +45,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <combaseapi.h>
 #include <cstddef>
 #include <cstdint>
@@ -1649,8 +1650,10 @@ void check_code_colors()
 // 密な JSON の 1 行の色の区間の数。
 [[nodiscard]] std::size_t json_row_colors()
 {
-    const auto colors =
-        core::preview_code_piece_colors(core::Language::json, "[1,2,3,4,5,6,7,8,9]\n").front();
+    constexpr std::string_view row = "[1,2,3,4,5,6,7,8,9]\n";
+    const auto colors = core::preview_code_piece_colors(core::Language::json, row,
+                                                        core::preview_code_piece_starts(row))
+                            .front();
     return colors.value_or(std::vector<core::PreviewCodeColor>{}).size();
 }
 
@@ -1715,6 +1718,94 @@ void check_code_piece_pixels()
                distance_of(pixels, right, static_cast<std::int32_t>(at.bottom(1)) - 1, panel) > 6,
            "the first piece rounds its top corner and the last piece its bottom corner");
 }
+
+// 錨 0 から 400 × 200 に style で描いた画素と、測った上端の列（どちらか失敗なら空）。
+[[nodiscard]] std::pair<std::vector<std::uint8_t>, std::optional<win32::PreviewBlockTops>>
+painted_in(const core::MarkdownDocument &document, const core::Theme &theme,
+           const win32::PreviewTextStyle &style)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    PreviewTextLayouts layouts;
+    win32::PreviewBrushes brushes;
+    auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                 win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !tops || FAILED(brushes.prepare(*target.Get(), theme)))
+    {
+        return {};
+    }
+    std::optional<win32::RenderFailure> failure;
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    painter.paint(win32::PreviewScene{document, tops.value(), style,
+                                      core::LayoutRect{0, 0, 400, 200}, 0.0F, std::nullopt});
+    if (FAILED(target->EndDraw()) || failure.has_value())
+    {
+        return {};
+    }
+    return {pixels_of(*bitmap.Get()), std::move(tops).value()};
+}
+
+// 継ぎ目の y（seam）の前後 3 行の、面の右端と中ほどの画素が面の色か（許容は差 2）。
+[[nodiscard]] bool seam_joined(const std::vector<std::uint8_t> &pixels, float seam,
+                               core::RgbColor panel)
+{
+    const auto row = static_cast<std::int32_t>(std::floor(seam));
+    const auto right = 400 - static_cast<std::int32_t>(win32::preview_side_margin(120)) - 1;
+    bool joined = true;
+    for (const std::int32_t y : {row - 1, row, row + 1})
+    {
+        joined = joined && distance_of(pixels, right, y, panel) <= 2 &&
+                 distance_of(pixels, 300, y, panel) <= 2;
+    }
+    return joined;
+}
+
+// 段落 1 つと、続く 2 つの切れ（first・last）の文書。
+[[nodiscard]] core::MarkdownDocument seam_document()
+{
+    core::MarkdownDocument document;
+    document.blocks.push_back(block_of(core::PreviewBlockKind::paragraph, "a"));
+    document.blocks.push_back(block_of(core::PreviewBlockKind::code, "a\nb\n"));
+    document.blocks.push_back(block_of(core::PreviewBlockKind::code, "c\nd\n"));
+    document.blocks.at(1).piece = core::PreviewCodePiece::first;
+    document.blocks.at(2).piece = core::PreviewCodePiece::last;
+    return document;
+}
+
+// 切れの継ぎ目が端数の y に来ても（120 DPI・囲みの上に段落・#1877 のレビュー R1）、継ぎ目の
+// 前後の行は面の色のまま（地の色が混ざった線が出ない）。字の大きさは継ぎ目が画素の間に来る最初の
+// ものを選ぶ。
+void check_code_piece_seam()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (!theme)
+    {
+        expect(false, "the theme for the seam check is found");
+        return;
+    }
+    const auto document = seam_document();
+    for (const float size : {13.5F, 14.0F, 15.0F, 12.0F, 11.0F, 16.0F})
+    {
+        const auto [pixels, tops] = painted_in(document, theme.value().view(),
+                                               win32::PreviewTextStyle{"Segoe UI", size, 120});
+        if (pixels.empty() || !tops.has_value() || tops.value().size() != 3U)
+        {
+            expect(false, "the seam sample measures and paints");
+            return;
+        }
+        const auto seam = tops.value().bottom(1);
+        if (seam != std::floor(seam))
+        {
+            expect(seam_joined(pixels, seam, theme.value().view().ui.panel),
+                   "a seam between pixels keeps the panel colour on its rows");
+            return;
+        }
+    }
+    expect(false, "a font size puts the seam between pixels");
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -1737,6 +1828,7 @@ void verify_preview_layouts()
     check_code_colors();
     check_large_fence_cost();
     check_code_piece_pixels();
+    check_code_piece_seam();
     check_unit_ranges_match_units();
     check_html_and_style();
     check_markers();

@@ -61,7 +61,8 @@ preview_selection_all(const MarkdownDocument &document) noexcept;
 // Shift+矢印で動く端の行き先（改訂 18）。左右は 1 文字（vim_character_end / vim_character_start
 // の 1 対・要素の端では隣の要素の端へ）、上下は要素の頭と終わり（頭・終わりに居れば前・次の要素
 // の頭・終わり）、Home / End は要素の頭と終わり、Ctrl+Home / End は文書の頭と終わり。語と
-// PgUp / PgDn は動かない。水平線は飛ばす。
+// PgUp / PgDn は動かない。水平線は飛ばす。囲みのコードの切れの列（#1863）は上下と Home / End
+// では 1 つの要素として扱う（列の最初の切れの頭と最後の切れの終わり）。
 [[nodiscard]] PreviewPoint preview_point_moved(const MarkdownDocument &document, PreviewPoint point,
                                                CaretMotion motion) noexcept;
 } // namespace nenenib::core

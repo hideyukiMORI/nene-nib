@@ -1,6 +1,7 @@
 // parse_markdown（ADR 0151 の決定 5〜8・#765）。入力は CommonMark 0.31 の例を 8 つの構文
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
+#include "CaretMotion.hpp"
 #include "FilePath.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
@@ -20,6 +21,7 @@
 #include "PreviewCodeColors.hpp"
 #include "PreviewCodePiece.hpp"
 #include "PreviewLink.hpp"
+#include "PreviewPoint.hpp"
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewSpan.hpp"
@@ -565,7 +567,9 @@ void verify_code_colors()
                colored(cpp, 7U, 11U, core::SyntaxRole::comment),
            "a cpp fence colours the comment with the body lexer");
     expect(cpp.code_colors ==
-               core::preview_code_piece_colors(core::Language::cpp, cpp.text).front(),
+               core::preview_code_piece_colors(core::Language::cpp, cpp.text,
+                                               core::preview_code_piece_starts(cpp.text))
+                   .front(),
            "the colours are the lexer's answer for the code text");
     const auto python = first_block("```Python\n\"\xE3\x81\x82\" # x\n```");
     expect(colored(python, 0U, 5U, core::SyntaxRole::string) &&
@@ -700,14 +704,48 @@ void verify_code_piece_copy()
            "a body position maps to the piece that holds its line");
 }
 
+// Shift+上下と Home / End は切れの列を 1 つの囲みとして動く（#1877 のレビュー R2）。文書は段落 a・
+// 300 行の囲み（切れ 1〜3）・段落 b。
+void verify_code_piece_motion()
+{
+    auto parsed =
+        core::parse_markdown("a\n\n" + fenced_lines("py", 300U) + "\nb\n", MarkdownStop::never());
+    if (!parsed.has_value() || parsed.value().blocks.size() != 5U)
+    {
+        expect(false, "the fence between two paragraphs parses into five elements");
+        return;
+    }
+    const auto &document = parsed.value();
+    const auto moved = [&document](std::size_t block, std::size_t offset, core::CaretMotion motion)
+    { return core::preview_point_moved(document, core::PreviewPoint{block, offset}, motion); };
+    const core::PreviewPoint head{1U, 0U};
+    const core::PreviewPoint end{3U, core::preview_shown_text(document.blocks.at(3)).size()};
+    expect(moved(2U, 5U, core::CaretMotion::line_start) == head &&
+               moved(2U, 5U, core::CaretMotion::line_end) == end,
+           "Home and End go to the head and the end of the whole fence");
+    expect(moved(2U, 5U, core::CaretMotion::previous_line) == head &&
+               moved(2U, 0U, core::CaretMotion::previous_line) == head &&
+               moved(1U, 0U, core::CaretMotion::previous_line) == core::PreviewPoint{0U, 0U},
+           "up goes to the head of the fence, then to the element before it");
+    expect(moved(2U, 5U, core::CaretMotion::next_line) == end &&
+               moved(3U, end.offset, core::CaretMotion::next_line) == core::PreviewPoint{4U, 1U} &&
+               moved(4U, 0U, core::CaretMotion::previous_line) == head,
+           "down goes to the end of the fence, then to the end of the element after it");
+    expect(moved(4U, 0U, core::CaretMotion::line_end) == core::PreviewPoint{4U, 1U} &&
+               moved(0U, 1U, core::CaretMotion::next_line) == end &&
+               moved(4U, 1U, core::CaretMotion::line_start) == core::PreviewPoint{4U, 0U},
+           "an element that is not a piece moves as before and reaches the fence as one");
+}
+
 // 色は囲み全体で 1 回読み、切れの text の位置に切り分ける。行をまたぐ状態は境を越え、区間の上限は
 // 切れごと（超えた切れだけ 1 色）。
 void verify_code_piece_colors()
 {
     const auto lines = core::preview_code_piece_lines;
     const auto three = blocks_of(fenced_lines("py", 300U, "x = 1  # c"));
-    const auto expected =
-        core::preview_code_piece_colors(core::Language::python, repeated("x = 1  # c\n", 300U));
+    const auto rows = repeated("x = 1  # c\n", 300U);
+    const auto expected = core::preview_code_piece_colors(core::Language::python, rows,
+                                                          core::preview_code_piece_starts(rows));
     expect(three.size() == 3U && expected.size() == 3U &&
                std::ranges::equal(three, expected, {}, &PreviewBlock::code_colors) &&
                three.at(1).code_colors == three.at(0).code_colors &&
@@ -717,6 +755,18 @@ void verify_code_piece_colors()
         blocks_of("```cpp\n" + repeated("int x;\n", lines - 1U) + "/* a\nb */ 1\n```\n");
     expect(comment.size() == 2U && colored(comment.back(), 0U, 4U, core::SyntaxRole::comment),
            "a block comment carries over the piece boundary");
+    const auto raw =
+        blocks_of("```cpp\n" + repeated("int x;\n", lines - 1U) + "R\"(a\nb)\" x\n```\n");
+    expect(raw.size() == 2U && colored(raw.back(), 0U, 3U, core::SyntaxRole::string),
+           "a raw string carries over the piece boundary");
+    const auto triple =
+        blocks_of("```py\n" + repeated("x = 1\n", lines - 1U) + "\"\"\"a\nb\"\"\"\n```\n");
+    expect(triple.size() == 2U && colored(triple.back(), 0U, 4U, core::SyntaxRole::string),
+           "a triple quoted string carries over the piece boundary");
+    const auto open = blocks_of("```py\n" + repeated("x = 1  # c\n", lines + 1U));
+    expect(pieces_are(open, {core::PreviewCodePiece::first, core::PreviewCodePiece::last}) &&
+               colored(open.back(), 7U, 10U, core::SyntaxRole::comment),
+           "a fence left open at the end of the document is split and coloured");
     const auto crowded = blocks_of("```cpp\n" + repeated("int x;\n", lines) +
                                    numbers_line(core::preview_code_color_count_limit + 1U) +
                                    "\n/* a\n" + repeated("int x;\n", lines - 2U) + "b */ 1\n```\n");
@@ -1331,6 +1381,7 @@ void verify_markdown_scope()
     verify_code_pieces();
     verify_code_piece_places();
     verify_code_piece_copy();
+    verify_code_piece_motion();
     verify_code_piece_colors();
     verify_rules();
     verify_entities();

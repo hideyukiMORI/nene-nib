@@ -335,22 +335,25 @@ template <typename Target> class PreviewPainter final
     }
 
     // 面を塗る。角を丸めるのは囲みの最初の切れの上と最後の切れの下だけで、続く切れの側は角の
-    // 無い矩形を重ねて塗る（middle は矩形だけ）。
+    // 無い矩形を重ねて塗る（middle は矩形だけ）。前の切れに続く側（middle・last）の矩形は上へ
+    // 1 物理画素伸ばして前の切れと重ねる（境が端数の y に来ても、antialias の 2 回の塗りで地の色が
+    // 混ざった線を出さない・#1877 のレビュー R1）。
     void fill_panel(const D2D1_RECT_F &panel, core::PreviewCodePiece piece, float radius)
     {
         auto *const ink = brushes_.of(PreviewInk::panel);
         const bool opens = core::preview_code_piece_opens(piece);
         const bool closes = core::preview_code_piece_closes(piece);
+        const auto top = opens ? panel.top : panel.top - 1.0F;
         if (!opens && !closes)
         {
-            target_.FillRectangle(panel, ink);
+            target_.FillRectangle(D2D1::RectF(panel.left, top, panel.right, panel.bottom), ink);
             return;
         }
         target_.FillRoundedRectangle(D2D1::RoundedRect(panel, radius, radius), ink);
         if (!opens || !closes)
         {
             const auto middle = (panel.top + panel.bottom) / 2.0F;
-            target_.FillRectangle(D2D1::RectF(panel.left, opens ? middle : panel.top, panel.right,
+            target_.FillRectangle(D2D1::RectF(panel.left, opens ? middle : top, panel.right,
                                               opens ? panel.bottom : middle),
                                   ink);
         }

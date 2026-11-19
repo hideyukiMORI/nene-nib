@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -19,12 +20,30 @@ enum class PreviewCodePiece : std::uint8_t
 // 面の上の余白と角を持つ切れ（囲みの最初）か。
 [[nodiscard]] constexpr bool preview_code_piece_opens(PreviewCodePiece piece) noexcept
 {
-    return piece == PreviewCodePiece::only || piece == PreviewCodePiece::first;
+    switch (piece)
+    {
+    case PreviewCodePiece::only:
+    case PreviewCodePiece::first:
+        return true;
+    case PreviewCodePiece::middle:
+    case PreviewCodePiece::last:
+        return false;
+    }
+    std::unreachable();
 }
 
 // 面の下の余白と角を持つ切れ（囲みの最後）か。
 [[nodiscard]] constexpr bool preview_code_piece_closes(PreviewCodePiece piece) noexcept
 {
-    return piece == PreviewCodePiece::only || piece == PreviewCodePiece::last;
+    switch (piece)
+    {
+    case PreviewCodePiece::only:
+    case PreviewCodePiece::last:
+        return true;
+    case PreviewCodePiece::first:
+    case PreviewCodePiece::middle:
+        return false;
+    }
+    std::unreachable();
 }
 } // namespace nenenib::core

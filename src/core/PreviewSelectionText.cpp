@@ -1,6 +1,7 @@
 #include "PreviewSelectionText.hpp"
 
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodePiece.hpp"
 #include "VimCharacterBoundary.hpp"
 
 #include <algorithm>
@@ -74,28 +75,60 @@ namespace
                : point;
 }
 
+// block を含む囲みのコードの切れの列（first から last まで）の最初と最後の要素。切れでない要素は
+// block 自身。上下と Home / End は切れの列を 1 つの囲みとして動く（#1877 のレビュー R2）。
+[[nodiscard]] std::size_t unit_first(const MarkdownDocument &document, std::size_t block) noexcept
+{
+    while (block > 0 && !preview_code_piece_opens(document.blocks.at(block).piece))
+    {
+        --block;
+    }
+    return block;
+}
+
+[[nodiscard]] std::size_t unit_last(const MarkdownDocument &document, std::size_t block) noexcept
+{
+    while (block + 1 < document.blocks.size() &&
+           !preview_code_piece_closes(document.blocks.at(block).piece))
+    {
+        ++block;
+    }
+    return block;
+}
+
+[[nodiscard]] PreviewPoint unit_head(const MarkdownDocument &document, std::size_t block) noexcept
+{
+    return PreviewPoint{unit_first(document, block), 0};
+}
+
+[[nodiscard]] PreviewPoint unit_end(const MarkdownDocument &document, std::size_t block) noexcept
+{
+    const auto last = unit_last(document, block);
+    return PreviewPoint{last, shown_size(document, last)};
+}
+
 [[nodiscard]] PreviewPoint block_above(const MarkdownDocument &document,
                                        PreviewPoint point) noexcept
 {
-    if (point.offset > 0)
+    const auto head = unit_head(document, point.block);
+    if (head != point)
     {
-        return PreviewPoint{point.block, 0};
+        return head;
     }
-    const auto previous = previous_selectable(document, point.block);
-    return previous.has_value() ? PreviewPoint{previous.value(), 0} : point;
+    const auto previous = previous_selectable(document, head.block);
+    return previous.has_value() ? unit_head(document, previous.value()) : point;
 }
 
 [[nodiscard]] PreviewPoint block_below(const MarkdownDocument &document,
                                        PreviewPoint point) noexcept
 {
-    const auto end = shown_size(document, point.block);
-    if (point.offset < end)
+    const auto end = unit_end(document, point.block);
+    if (end != point)
     {
-        return PreviewPoint{point.block, end};
+        return end;
     }
-    const auto next = next_selectable(document, point.block);
-    return next.has_value() ? PreviewPoint{next.value(), shown_size(document, next.value())}
-                            : point;
+    const auto next = next_selectable(document, end.block);
+    return next.has_value() ? unit_end(document, next.value()) : point;
 }
 } // namespace
 
@@ -250,9 +283,9 @@ PreviewPoint preview_point_moved(const MarkdownDocument &document, PreviewPoint 
     case CaretMotion::next_line:
         return block_below(document, at);
     case CaretMotion::line_start:
-        return PreviewPoint{at.block, 0};
+        return unit_head(document, at.block);
     case CaretMotion::line_end:
-        return PreviewPoint{at.block, shown_size(document, at.block)};
+        return unit_end(document, at.block);
     case CaretMotion::document_start:
         return PreviewPoint{0, 0};
     case CaretMotion::document_end:

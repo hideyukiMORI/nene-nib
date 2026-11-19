@@ -36,11 +36,13 @@ inline constexpr std::size_t preview_code_piece_lines = 128;
 // （128 行ちょうどの囲みは切れ 1 つ）。
 [[nodiscard]] std::vector<std::size_t> preview_code_piece_starts(std::string_view text);
 
-// text を language の字句器で囲み全体で 1 回読んだ、切れ（preview_code_piece_starts と同じ順）
-// ごとの色の区間。区間は切れの text の中のバイト位置で、昇順・重ならない・空の区間を含まない・
-// 隣り合う同じ役の区間は 1 つに畳む。行をまたぐ状態は切れの境を越えて引き継ぎ、始まりの状態は
-// lex_start_state(language, false)。囲み全体が行かバイトの上限を超えれば全部の切れが空（1 色・
+// text を language の字句器で囲み全体で 1 回読んだ、切れ（starts は preview_code_piece_starts(text)
+// の答え）ごとの色の区間。区間は切れの text
+// の中のバイト位置で、昇順・重ならない・空の区間を含まない・ 隣り合う同じ役の区間は 1
+// つに畳む。行をまたぐ状態は切れの境を越えて引き継ぎ、始まりの状態は lex_start_state(language,
+// false)。囲み全体が行かバイトの上限を超えれば全部の切れが空（1 色・
 // 字句解析もしない）。区間の数の上限を超えた切れだけ空で、その切れの区間はその時点で捨てる。
 [[nodiscard]] std::vector<std::optional<std::vector<PreviewCodeColor>>>
-preview_code_piece_colors(Language language, std::string_view text);
+preview_code_piece_colors(Language language, std::string_view text,
+                          const std::vector<std::size_t> &starts);
 } // namespace nenenib::core

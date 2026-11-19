@@ -71,9 +71,9 @@ namespace nenenib::ui::win32
                                           core::PreviewTableAlign align) noexcept;
 // alert の左の線の太さ（3 DIP・ふつうの引用は 2 DIP）。
 [[nodiscard]] float preview_quote_rule(bool alert, std::uint32_t dpi) noexcept;
-// 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高・囲みのコードの
-// 続く切れの間は 0）。same_list は同じリストの続く項目（間は
-// 0）で、種類の違うリストの境は段落と同じ半行。
+// 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高）。
+// 囲みのコードの続く切れの間は 0（#1863）。same_list は同じリストの続く項目（間は 0）で、
+// 種類の違うリストの境は段落と同じ半行。
 [[nodiscard]] float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,
                                 const PreviewTextStyle &style, bool same_list) noexcept;
 // 要素の縦の大きさ。text_height は layout の GetMetrics().height（水平線は使わない）。面に描く

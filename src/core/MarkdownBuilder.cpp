@@ -488,7 +488,7 @@ void MarkdownBuilder::place_code(PreviewBlock block)
 {
     const auto starts = preview_code_piece_starts(block.text);
     auto colors = code_language_.has_value()
-                      ? preview_code_piece_colors(code_language_.value(), block.text)
+                      ? preview_code_piece_colors(code_language_.value(), block.text, starts)
                       : std::vector<std::optional<std::vector<PreviewCodeColor>>>(starts.size());
     if (starts.size() == 1U)
     {

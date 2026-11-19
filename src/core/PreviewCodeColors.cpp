@@ -149,9 +149,9 @@ std::vector<std::size_t> preview_code_piece_starts(std::string_view text)
 }
 
 std::vector<std::optional<std::vector<PreviewCodeColor>>>
-preview_code_piece_colors(Language language, std::string_view text)
+preview_code_piece_colors(Language language, std::string_view text,
+                          const std::vector<std::size_t> &starts)
 {
-    const auto starts = preview_code_piece_starts(text);
     std::vector<std::optional<std::vector<PreviewCodeColor>>> pieces(starts.size());
     if (text.size() > preview_code_color_byte_limit ||
         newline_count(text) > preview_code_color_line_limit)
