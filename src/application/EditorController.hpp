@@ -973,6 +973,9 @@ class EditorController final
     void accept(const ClickPreviewLink &intent);
     void accept(const ActOnLinkCard &intent);
     void close_link_card_before(const EditorIntent &intent);
+    // 札を開いたタブがアクティブでなくなったら札を消す（#1876 のレビュー R1）。
+    void drop_stale_link_card();
+    [[nodiscard]] AutosaveId active_tab_id() const;
     // frame に載せる札（見せている結果の同じ要素に同じリンクがある間だけ）。
     [[nodiscard]] std::optional<LinkCardView> shown_link_card() const;
     void open_link_card(const LinkCardView &card);

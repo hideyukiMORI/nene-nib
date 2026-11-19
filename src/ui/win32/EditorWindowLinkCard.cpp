@@ -1,9 +1,9 @@
-// プレビューのリンクの札の窓の側（施主決定 D105・D106・#1869 の段
-// L2）。プレビューの文字の上の押しと 離しの文字の位置を renderer
-// の当たり（PreviewPane::character_at）で引いて ClickPreviewLink を送り、 札が出ている間の
-// Enter・Esc・Ctrl+C と札のボタンを ActOnLinkCard にする。どの文字がリンクか・
-// 宛先の種類・何で閉じるかは controller が決め、窓は意図を送るだけ（ARC-011）。ほかの鍵は受けずに
-// 今までの道へ通す（controller がその意図の前に札を閉じる）。
+// プレビューのリンクの札の窓の側（施主決定 D105・D106・#1869 の段 L2）。
+// プレビューの文字の上の押しと離しの文字の位置を renderer の当たり
+// （PreviewPane::character_at）で引いて ClickPreviewLink を送る。
+// 札が出ている間の Enter・Esc・Ctrl+C と札のボタンは ActOnLinkCard にする。
+// どの文字がリンクか・宛先の種類・何で閉じるかは controller が決め、窓は意図を送るだけ（ARC-011）。
+// ほかの鍵は受けずに今までの道へ通す（controller がその意図の前に札を閉じる）。
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
@@ -11,6 +11,7 @@
 #include "ClickPreviewLink.hpp"
 #include "Direct2DRenderer.hpp"
 #include "LinkCardAction.hpp"
+#include "LinkCardKeys.hpp"
 #include "LinkCardTarget.hpp"
 
 #include <windows.h>
@@ -23,19 +24,45 @@ namespace nenenib::ui::win32
 {
 using detail::held;
 
-// 札が出ている間の Enter・Esc・Ctrl+C
-// を札が受けたか。修飾の違う鍵とほかの鍵は受けない（Enter・Esc・ Ctrl+C の後の WM_CHAR
-// は制御文字なので type_character が捨てる）。
-bool EditorWindow::take_link_card_key(UINT message, WPARAM word)
+// 札が出ている間の Enter・Esc・Ctrl+C を札が受けたか。修飾の違う鍵とほかの鍵は受けない。
+// Enter・Esc・Ctrl+C の後の WM_CHAR は制御文字なので type_character が捨てる。
+bool EditorWindow::take_link_card_key(UINT message, WPARAM word, LPARAM data)
 {
+    if (follow_link_card_enter(message, word, data))
+    {
+        return true;
+    }
     if (message != WM_KEYDOWN || !controller_.link_card_active() || held(VK_MENU))
     {
         return false;
     }
+    return press_link_card_key(word);
+}
+
+// 札の Enter の押し続けの反復なら真（捨てる）。離したら覚えを下ろし、ほかの押しでも下ろす（#1876 の
+// レビューの軽い 5）。
+bool EditorWindow::follow_link_card_enter(UINT message, WPARAM word, LPARAM data)
+{
+    if (message == WM_KEYUP && word == VK_RETURN)
+    {
+        link_card_enter_held_ = false;
+        return false;
+    }
+    if (message != WM_KEYDOWN)
+    {
+        return false;
+    }
+    link_card_enter_held_ = link_card_enter_repeat(link_card_enter_held_, word, data);
+    return link_card_enter_held_;
+}
+
+bool EditorWindow::press_link_card_key(WPARAM word)
+{
     const bool control = held(VK_CONTROL);
     const bool shift = held(VK_SHIFT);
     if (word == VK_RETURN && !control && !shift)
     {
+        link_card_enter_held_ = true;
         send(application::ActOnLinkCard{application::LinkCardAction::open});
         return true;
     }

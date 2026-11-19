@@ -7,6 +7,7 @@
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
 #include "PreviewFrame.hpp"
+#include "PreviewHitMode.hpp"
 #include "PreviewImages.hpp"
 #include "PreviewPictureKey.hpp"
 #include "PreviewPoint.hpp"
@@ -103,17 +104,16 @@ class PreviewPane final
                                                                 const PreviewPictureKey &key,
                                                                 const core::LayoutRect &frame);
     // 測った要素 index の layout の中の点 point（枠の左上から）の文字の位置。tops は保持の縦の
-    // 位置で、枠は最後に描いた枠（area_）。on_character は文字の上のときだけ文字の始まり
-    // （character_at）、偽は端の位置（point_at）。
+    // 位置で、枠は最後に描いた枠（area_）。mode は引き方（PreviewHitMode）。
     [[nodiscard]] std::optional<core::PreviewPoint> hit_block(const PreviewBlockTops &tops,
                                                               std::size_t index,
                                                               D2D1_POINT_2F point,
-                                                              bool on_character);
+                                                              PreviewHitMode mode);
     // 表の行 index の点 point（行の原点から・#1848）の文字の位置。列の左右の余白を含めた範囲で
     // 升を選び、描く所と同じ升の文字組みと揃えで升の中の位置を引いて、行の文字の位置に写す。
     [[nodiscard]] std::optional<core::PreviewPoint> hit_cell(std::size_t index, D2D1_POINT_2F point,
                                                              const PreviewTextStyle &style,
-                                                             bool on_character);
+                                                             PreviewHitMode mode);
     // 表の行 index の text の範囲 [begin, end)
     // を囲む矩形（行の原点から）。範囲の始まりの升の中だけ。
     [[nodiscard]] std::optional<D2D1_RECT_F> cell_range_box(std::size_t index, std::size_t begin,

@@ -170,7 +170,7 @@ void EditorWindow::lose_focus()
 //   本文へ通し、controller がその意図の前に札を閉じる。札とほかの面は同時に開かない。
 bool EditorWindow::take_face_key(UINT message, WPARAM word, LPARAM data)
 {
-    return take_link_card_key(message, word) || take_context_menu_key(message, word) ||
+    return take_link_card_key(message, word, data) || take_context_menu_key(message, word) ||
            take_settings_key(message, word, data) || take_completion_key(message, word);
 }
 

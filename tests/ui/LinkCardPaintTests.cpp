@@ -9,6 +9,7 @@
 #include "LinkCardContent.hpp"
 #include "LinkCardFormats.hpp"
 #include "LinkCardInks.hpp"
+#include "LinkCardKeys.hpp"
 #include "LinkCardLayout.hpp"
 #include "LinkCardPaint.hpp"
 #include "LinkCardPlace.hpp"
@@ -192,10 +193,24 @@ void check_theme(SoftwareTarget &target, IDWriteFactory &factory,
     check_pixels(target, paint.value(), palette,
                  appearance == core::Appearance::dark ? " (dark)" : " (light)");
 }
+// 札の Enter の押し続け（#1876 のレビューの軽い 5）。札で受けた後の反復（lParam の bit
+// 30）だけを捨てる。
+void check_enter_repeat()
+{
+    constexpr LPARAM fresh = 1;
+    constexpr LPARAM repeated = (LPARAM{1} << 30U) | 1;
+    expect(win32::link_card_enter_repeat(true, VK_RETURN, repeated),
+           "a repeated Enter after the card took it is swallowed");
+    expect(!win32::link_card_enter_repeat(true, VK_RETURN, fresh) &&
+               !win32::link_card_enter_repeat(false, VK_RETURN, repeated) &&
+               !win32::link_card_enter_repeat(true, VK_ESCAPE, repeated),
+           "a fresh Enter, an Enter the card did not take and other keys go through");
+}
 } // namespace
 
 void verify_link_card_paint()
 {
+    check_enter_repeat();
     SoftwareTarget target;
     auto factory = directwrite_factory();
     win32::LinkCardFormats formats;

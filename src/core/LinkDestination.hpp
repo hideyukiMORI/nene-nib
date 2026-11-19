@@ -43,4 +43,9 @@ struct LinkDestination
 //   ほかは document。
 [[nodiscard]] LinkDestination link_destination(std::string_view target,
                                                const std::optional<FilePath> &document);
+
+// 確かめで見せる綴りを偽れる字か（C1 制御・幅 0 の字・双方向の制御・行と段落の区切り・
+// ハングルの埋め字・タグ文字）。link_destination の拒否と札の表示（link_card_shown_text）が
+// 同じ 1 本を読む。
+[[nodiscard]] bool link_deceptive_code_point(char32_t value) noexcept;
 } // namespace nenenib::core

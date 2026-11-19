@@ -103,7 +103,6 @@
 #include "SwitchTab.hpp"
 #include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
-
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"

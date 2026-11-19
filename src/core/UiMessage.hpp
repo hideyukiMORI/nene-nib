@@ -10,8 +10,8 @@ namespace nenenib::core
 // （UiTextsJapanese.hpp・UiTextsEnglish.hpp・UiTextsSimplifiedChinese.hpp）が 1 行ずつ文を持ち、
 // 読む口は ui_text と ui_text_filled の 1 本（UiTexts.hpp）。名前は場面の接頭辞 ＋ 意味（operation_
 // app_error_ notice_ shell_ palette_ label_（2 つ以上の場面の同じ語）status_ tab_ default_ preview_
-// prompt_ guide_ explorer_ dialog_ os_ start_ link_card_）。差し込む値は文の中の置き場 {0} {1}
-// で受ける。 足し方（5 行）:
+// prompt_ guide_ explorer_ dialog_ os_ start_ link_card_）。
+// 差し込む値は文の中の置き場 {0} {1} で受ける。足し方（5 行）:
 // 1. 同じ場面の群の中に 1 値足す（最後の値の後ろに足したら ui_message_count の名指しも移す）。
 // 2. 3 つの列のファイルの、enum と同じ位置に 1 行ずつ足す（並び・空でない・UTF-8・置き場は
 // UiTexts.cpp の static_assert、列挙子の数・最後の値・3 列の行の数と順は eng/conformance.py の

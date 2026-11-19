@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace nenenib::core
@@ -52,6 +54,11 @@ inline constexpr std::int32_t link_card_button_radius_dips = 6;
 // refused は最後の `\` か `/` の後ろ（refused でも `://` があればホスト）。空の範囲もある。
 [[nodiscard]] std::pair<std::size_t, std::size_t>
 link_card_emphasis(const LinkDestination &destination) noexcept;
+
+// 札に描く宛先の綴り（#1876 のレビューの軽い 4）。制御文字（C0・DEL）と link_deceptive_code_point
+// の 字は U+FFFD に置き換えて見せる。不正な UTF-8 は ASCII の印字できる字のほかの 1 バイトずつを
+// U+FFFD にする。写す（Ctrl+C）のは元の綴りのまま。
+[[nodiscard]] std::string link_card_shown_text(std::string_view text);
 
 // 札の幅（物理画素）。上限と、領域の幅 − 2 × 端の空きの小さい方（負なら 0）。
 [[nodiscard]] std::int32_t link_card_width(std::int32_t area_width, std::uint32_t dpi) noexcept;

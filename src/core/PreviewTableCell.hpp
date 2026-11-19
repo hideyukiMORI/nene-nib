@@ -18,9 +18,10 @@ namespace nenenib::core
 [[nodiscard]] std::pair<std::size_t, std::size_t> preview_table_cell_range(const PreviewBlock &row,
                                                                            std::size_t column);
 
-// row の column 番目の升の要素。種類は table_row のまま（保持の鍵が本文の要素と混ざらない）、
-// 文字は升の文字、装飾とリンク（升に収まるもの・#1869）は升の中へ写し、見出しの行は升の全体に
-// strong を先頭に足す。深さ・記号・ 位置・升は持たない（升の文字組みの鍵を行の位置に依らせない）。
+// row の column 番目の升の要素。種類は table_row のまま（保持の鍵が本文の要素と混ざらない）。
+// 文字は升の文字で、装飾とリンク（升に収まるもの・#1869）は升の中へ写す。
+// 見出しの行は升の全体に strong を先頭に足す。
+// 深さ・記号・位置・升は持たない（升の文字組みの鍵を行の位置に依らせない）。
 [[nodiscard]] PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column);
 
 // index の要素（table_row）が属する表の行の範囲 [first, second)（文書の要素の番号）。表の最初の行は

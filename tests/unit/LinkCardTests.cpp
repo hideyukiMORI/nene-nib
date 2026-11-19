@@ -8,7 +8,9 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "FilePath.hpp"
 #include "InsertText.hpp"
+#include "LinkCard.hpp"
 #include "LinkCardAction.hpp"
 #include "LinkKind.hpp"
 #include "LinkOpenFailure.hpp"
@@ -255,6 +257,60 @@ void verify_edit_closes()
                !editing.controller().link_card_active(),
            "editing the document closes the card");
 }
+
+// 9. 裏の読みでアクティブなタブが替わったら札を消す（同じ形の文書が解析されても札は戻らない・
+//    古い文書のフォルダで解いた宛先を開かない・#1876 のレビュー R1）。
+void verify_background_tab_switch()
+{
+    Editing editing;
+    const auto other = core::FilePath::parse("C:\\other\\note.md").value();
+    editing.files().hold_at(std::string(other.text()), Bytes{std::string(links_text)});
+    open_previewed(editing, std::string(links_text));
+    auto &controller = editing.controller();
+    editing.reads().defer_above(0);
+    applied(controller, app::OpenDocument{other});
+    expect(carded(clicked(editing, 3), core::LinkKind::document, "C:\\work\\other.md"),
+           "the card opens while the other file is read in the background");
+    editing.reads().finish(editing.reads().requests().back().ticket);
+    applied(controller, app::WorkCompleted{});
+    serve_parsed(editing);
+    const EditorFrame switched = controller.frame();
+    expect(switched.tabs.size() == 2 && !switched.link_card.has_value() &&
+               !controller.link_card_active(),
+           "a tab switched by the background read drops the card even for the same links");
+    applied(controller, app::ActOnLinkCard{LinkCardAction::open});
+    expect(controller.frame().tabs.size() == 2 && editing.links().touches() == 0,
+           "Enter after the switch opens nothing");
+}
+
+// 10. 札に出す綴りは見えない字を U+FFFD に置き換え、写すのは元の綴りのまま（#1876 のレビューの軽い
+// 4）。
+void verify_shown_text()
+{
+    expect(core::link_card_shown_text("https://example.com/a") == "https://example.com/a",
+           "a plain spelling is shown as it is");
+    expect(core::link_card_shown_text("a\xE2\x80\xAE"
+                                      "b\x01"
+                                      "c") == "a\xEF\xBF\xBD"
+                                              "b\xEF\xBF\xBD"
+                                              "c",
+           "a bidirectional control and a C0 control are shown as the replacement mark");
+    expect(core::link_card_shown_text("x\xFF"
+                                      "y") == "x\xEF\xBF\xBD"
+                                              "y",
+           "a byte of broken UTF-8 is shown as the replacement mark");
+    Editing editing;
+    open_previewed(editing, "[t](C:\\a\xE2\x80\xAE"
+                            "exe.txt)");
+    const EditorFrame card = clicked(editing, 0);
+    expect(card.link_card.has_value() &&
+               card.link_card.value().destination.kind == core::LinkKind::refused,
+           "a path with a bidirectional control opens the refused card");
+    applied(editing.controller(), app::ActOnLinkCard{LinkCardAction::copy});
+    expect(editing.clipboard().read().value_or(std::string{}) == "C:\\a\xE2\x80\xAE"
+                                                                 "exe.txt",
+           "copying keeps the original spelling");
+}
 } // namespace
 
 void verify_link_card_scope()
@@ -267,5 +323,7 @@ void verify_link_card_scope()
     verify_document_and_heading();
     verify_table_cell();
     verify_edit_closes();
+    verify_background_tab_switch();
+    verify_shown_text();
 }
 } // namespace nenenib::tests

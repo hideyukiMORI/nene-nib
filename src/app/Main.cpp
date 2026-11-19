@@ -305,13 +305,13 @@ last_resort_for(nenenib::application::EditorController &controller)
 // プレビューのリンクを OS に渡す口（#1869 の段 L2）も同じワーカーを借りる。
 // 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
 // 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
-// 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
-// 2）は controller が起動の 1 回だけ呼ぶ。字体の一覧は ui/win32 が DirectWrite から読み、adapters
-// が OS の照合順に並べる（#696）。起動の最初の節目 document_opened は引数の解析・adapters の構築・
-// 起動引数の読み込みと復号の後（Issue
-// #19）。前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で 読む（ADR 0059 の決定
-// 2・3・6）。閉じたファイルの履歴は閉じたときに書き Ctrl+P の面を開くときに読む （ADR 0060 決定
-// 8）。
+// 借りるので、ワーカーより先に作って後に壊す。
+// 表示言語の観測（ADR 0123 の追補 2026-11-13 の決定 2）は controller が起動の 1 回だけ呼ぶ。
+// 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
+// 起動の最初の節目 document_opened は、引数の解析・adapters の構築・
+// 起動引数の読み込みと復号の後（Issue #19）。
+// 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
+// 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();

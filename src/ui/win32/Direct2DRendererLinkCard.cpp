@@ -13,6 +13,7 @@
 #include "LinkCardLayout.hpp"
 #include "LinkCardPlace.hpp"
 #include "LinkCardTarget.hpp"
+#include "LinkDestination.hpp"
 #include "LinkKind.hpp"
 #include "UiLocale.hpp"
 
@@ -52,9 +53,12 @@ void Direct2DRenderer::draw_link_card(const application::EditorFrame &frame,
                           .value_or(core::LayoutRect{area.left, area.top, area.left, area.top});
     const bool refused = card.destination.kind == core::LinkKind::refused ||
                          card.destination.kind == core::LinkKind::heading;
+    // 見えない字は印に置き換えて描く（写すのは元の綴り・#1876 のレビューの軽い 4）。
+    const core::LinkDestination shown{card.destination.kind,
+                                      core::link_card_shown_text(card.destination.text)};
     const LinkCardContent content{
-        core::link_card_texts(card.destination.kind, frame.language), card.destination.text,
-        core::link_card_emphasis(card.destination),
+        core::link_card_texts(card.destination.kind, frame.language), shown.text,
+        core::link_card_emphasis(shown),
         LinkCardInks{to_color(frame.palette.panel), to_color(frame.palette.panel_border),
                      to_color(frame.palette.text), to_color(frame.body.comment),
                      to_color(refused ? frame.body.error : frame.palette.text),

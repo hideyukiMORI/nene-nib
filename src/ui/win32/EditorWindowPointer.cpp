@@ -675,7 +675,7 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     // 選択（本文のキャレットも枠も動かさない・ADR 0155 の改訂 15・18・追補 24）。
     if (full_previewing())
     {
-        press_preview(data, true);
+        press_full_preview(data);
         return;
     }
     // 起動画面の行の上の押しは行を覚えるだけ（本文のキャレットを動かさない・ADR 0172 の決定 4）。
@@ -691,7 +691,7 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     {
         if (previewing())
         {
-            press_preview(data, false);
+            press_side_preview(data);
             return;
         }
         send(application::SwitchPane{});

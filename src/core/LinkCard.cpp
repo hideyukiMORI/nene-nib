@@ -1,8 +1,11 @@
 #include "LinkCard.hpp"
 
 #include "DevicePixels.hpp"
+#include "LinkDestination.hpp"
+#include "Offset.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
+#include "Utf8.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -165,6 +168,45 @@ std::pair<std::size_t, std::size_t> link_card_emphasis(const LinkDestination &de
         return last_name_of(text);
     }
     std::unreachable();
+}
+
+namespace
+{
+constexpr std::string_view replacement_mark = "\xEF\xBF\xBD";
+
+// 不正な UTF-8 の綴り。ASCII の印字できる字のほかの 1 バイトずつを U+FFFD にする。
+[[nodiscard]] std::string shown_bytes(std::string_view text)
+{
+    std::string shown;
+    shown.reserve(text.size());
+    for (const char unit : text)
+    {
+        const auto byte = static_cast<unsigned char>(unit);
+        const bool printable = byte >= 0x20U && byte < 0x7FU;
+        shown.append(printable ? std::string_view(&unit, 1) : replacement_mark);
+    }
+    return shown;
+}
+} // namespace
+
+std::string link_card_shown_text(std::string_view text)
+{
+    if (!validate_utf8(text).has_value())
+    {
+        return shown_bytes(text);
+    }
+    constexpr std::string_view replacement = replacement_mark;
+    std::string shown;
+    shown.reserve(text.size());
+    for (Offset at{0U}; at.value < text.size();)
+    {
+        const auto next = next_code_point(text, at);
+        const char32_t value = code_point_at(text, at);
+        const bool hidden = value < 0x20U || value == 0x7FU || link_deceptive_code_point(value);
+        shown.append(hidden ? replacement : text.substr(at.value, next.value - at.value));
+        at = next;
+    }
+    return shown;
 }
 
 std::int32_t link_card_width(std::int32_t area_width, std::uint32_t dpi) noexcept

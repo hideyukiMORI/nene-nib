@@ -3,6 +3,7 @@
 #include "MarkdownImage.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewHitMode.hpp"
 #include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
@@ -21,20 +22,21 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-// layout の点 point の UTF-16 の位置。on_character は文字の上（isInside）のときだけその文字の
-// 始まり、偽は近い端（後ろ半分なら文字の後ろ）。測れなければ nullopt。
+// layout の点 point の UTF-16 の位置。character は文字の上（isInside）のときだけその文字の
+// 始まり、edge は近い端（後ろ半分なら文字の後ろ）。測れなければ nullopt。
 [[nodiscard]] std::optional<std::uint32_t> hit_units(IDWriteTextLayout &layout, D2D1_POINT_2F point,
-                                                     bool on_character)
+                                                     PreviewHitMode mode)
 {
     BOOL trailing = FALSE;
     BOOL inside = FALSE;
     DWRITE_HIT_TEST_METRICS metrics{};
     if (FAILED(layout.HitTestPoint(point.x, point.y, &trailing, &inside, &metrics)) ||
-        (on_character && inside == FALSE))
+        (mode == PreviewHitMode::character && inside == FALSE))
     {
         return std::nullopt;
     }
-    return metrics.textPosition + (!on_character && trailing != FALSE ? metrics.length : 0U);
+    return metrics.textPosition +
+           (mode == PreviewHitMode::edge && trailing != FALSE ? metrics.length : 0U);
 }
 
 [[nodiscard]] bool same_viewport(const PreviewViewport &left, const PreviewViewport &right) noexcept
@@ -299,7 +301,8 @@ std::optional<core::PreviewPoint> PreviewPane::point_at(std::int32_t x, std::int
     {
         return core::PreviewPoint{index, core::preview_shown_text(block).size()};
     }
-    return hit_block(tops, index, D2D1::Point2F(static_cast<float>(x - area.left), local), false);
+    return hit_block(tops, index, D2D1::Point2F(static_cast<float>(x - area.left), local),
+                     PreviewHitMode::edge);
 }
 
 std::optional<core::PreviewPoint> PreviewPane::character_at(std::int32_t x, std::int32_t y)
@@ -319,7 +322,8 @@ std::optional<core::PreviewPoint> PreviewPane::character_at(std::int32_t x, std:
             return measured_->blocks.at(index).kind == core::PreviewBlockKind::rule
                        ? std::nullopt
                        : hit_block(tops, index,
-                                   D2D1::Point2F(static_cast<float>(x - area.left), local), true);
+                                   D2D1::Point2F(static_cast<float>(x - area.left), local),
+                                   PreviewHitMode::character);
         }
     }
     return std::nullopt;
@@ -381,7 +385,7 @@ std::optional<D2D1_RECT_F> PreviewPane::text_range_of(std::size_t index, std::si
 
 std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops &tops,
                                                          std::size_t index, D2D1_POINT_2F point,
-                                                         bool on_character)
+                                                         PreviewHitMode mode)
 {
     if (!measured_style_.has_value() || !area_.has_value())
     {
@@ -394,7 +398,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     {
         return hit_cell(index,
                         D2D1::Point2F(point.x - tops.indent(index), point.y - tops.top(index)),
-                        style, on_character);
+                        style, mode);
     }
     // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ下げる。
     const auto inset = preview_paneled(block.kind) ? preview_code_padding(style.dpi) : 0.0F;
@@ -412,7 +416,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     const auto units = hit_units(
         *layout.value().Get(),
         D2D1::Point2F(point.x - tops.indent(index) - inset, point.y - tops.top(index) - inset),
-        on_character);
+        mode);
     if (!units.has_value())
     {
         return std::nullopt;
@@ -423,7 +427,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
 
 std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_POINT_2F point,
                                                         const PreviewTextStyle &style,
-                                                        bool on_character)
+                                                        PreviewHitMode mode)
 {
     const auto &block = measured_->blocks.at(index);
     if (!block.table.has_value())
@@ -458,7 +462,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_
         preview_table_aligned(widths.at(column), metrics.width, table.aligns.at(column));
     const auto units = hit_units(
         *layout.value().Get(),
-        D2D1::Point2F(point.x - left, point.y - preview_table_padding_y(style.dpi)), on_character);
+        D2D1::Point2F(point.x - left, point.y - preview_table_padding_y(style.dpi)), mode);
     if (!units.has_value())
     {
         return std::nullopt;

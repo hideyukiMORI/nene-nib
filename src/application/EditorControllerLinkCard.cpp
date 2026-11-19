@@ -8,6 +8,7 @@
 #include "EditorControllerDetail.hpp"
 
 #include "ActOnLinkCard.hpp"
+#include "AutosaveId.hpp"
 #include "ClickPreviewLink.hpp"
 #include "EditorIntent.hpp"
 #include "FilePath.hpp"
@@ -64,8 +65,8 @@ std::optional<LinkCardView> EditorController::shown_link_card() const
 {
     const auto &card = state_.link_card();
     const PreviewView *preview = state_.shown_preview();
-    if (!card.has_value() || preview == nullptr || preview->document == nullptr ||
-        card.value().block >= preview->document->blocks.size())
+    if (!card.has_value() || !(card.value().tab == active_tab_id()) || preview == nullptr ||
+        preview->document == nullptr || card.value().block >= preview->document->blocks.size())
     {
         return std::nullopt;
     }
@@ -73,10 +74,26 @@ std::optional<LinkCardView> EditorController::shown_link_card() const
     return std::ranges::find(links, card.value().link) == links.end() ? std::nullopt : card;
 }
 
+AutosaveId EditorController::active_tab_id() const
+{
+    return state_.autosave_ids().at(state_.active_tab());
+}
+
 void EditorController::close_link_card_before(const EditorIntent &intent)
 {
     if (state_.link_card().has_value() && !is_link_card_intent(intent) &&
         !detail::not_user_operation(intent))
+    {
+        state_ = state_.with_link_card(std::nullopt);
+    }
+}
+
+// アクティブな文書が札を開いたタブでなくなったら札を消す（合図の道でタブが替わったときも・#1876 の
+// レビュー R1）。古い文書のフォルダで解いた宛先を、別のタブで開かない。
+void EditorController::drop_stale_link_card()
+{
+    const auto &card = state_.link_card();
+    if (card.has_value() && !(card.value().tab == active_tab_id()))
     {
         state_ = state_.with_link_card(std::nullopt);
     }
@@ -106,8 +123,8 @@ void EditorController::accept(const ClickPreviewLink &intent)
     {
         return;
     }
-    state_ =
-        state_.with_link_card(LinkCardView{intent.pressed.block, link, std::move(destination)});
+    state_ = state_.with_link_card(
+        LinkCardView{intent.pressed.block, link, std::move(destination), active_tab_id()});
 }
 
 void EditorController::accept(const ActOnLinkCard &intent)
@@ -193,6 +210,8 @@ void EditorController::copy_link_card(const LinkCardView &card)
 
 void EditorController::collect_link_opens()
 {
+    // 合図の道の読み（collect_reads）の後に呼ばれるので、裏の読みで替わったタブの札もここで消す。
+    drop_stale_link_card();
     if (link_opens_pending_ == 0)
     {
         return;

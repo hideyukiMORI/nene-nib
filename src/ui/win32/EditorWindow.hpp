@@ -265,9 +265,10 @@ class EditorWindow final
     // プレビューの枠のチェックボックス（ADR 0155 の追補 24）。押した要素を覚え、離した要素が同じ
     // ときだけ TogglePreviewTask を送る（ADR 0056 の決定 9 の形）。
     void press_preview_task(LPARAM data);
-    // プレビューの枠の押しの 1 本（チェックボックスが無ければリンクの文字を覚え、selecting なら
-    // 全面の選択も始める・#1869 の段 L2）。
-    void press_preview(LPARAM data, bool selecting);
+    // プレビューの枠の押し（チェックボックスが無ければリンクの文字を覚える・全面は選択も始める・
+    // #1869 の段 L2）。
+    void press_side_preview(LPARAM data);
+    void press_full_preview(LPARAM data);
     void release_preview_task(LPARAM data);
     // 全面プレビューの描いた文字の上の押しとドラッグ（ADR 0155 の改訂 18）。押した点の文字の位置を
     // renderer の hit test で引いて PointPreview を送り（Shift つきは選択を伸ばす）、捕まえて
@@ -278,7 +279,9 @@ class EditorWindow final
     // いる間の Enter・Esc・Ctrl+C を受けたら真。札の上の押しと離しはその部品だけ（受けたら真）で、
     // 札の外の押しは札を閉じて偽（今までの道へ）。プレビューの文字の押しを覚え、離した文字と組んで
     // ClickPreviewLink を送る。
-    [[nodiscard]] bool take_link_card_key(UINT message, WPARAM word);
+    [[nodiscard]] bool take_link_card_key(UINT message, WPARAM word, LPARAM data);
+    [[nodiscard]] bool follow_link_card_enter(UINT message, WPARAM word, LPARAM data);
+    [[nodiscard]] bool press_link_card_key(WPARAM word);
     [[nodiscard]] bool press_link_card(LPARAM data);
     [[nodiscard]] bool release_link_card(LPARAM data);
     void press_preview_link(LPARAM data);
@@ -619,6 +622,8 @@ class EditorWindow final
     // 消す・#1869 の段 L2）。
     std::optional<core::PreviewPoint> preview_link_pressed_;
     std::optional<LinkCardTarget> link_card_pressed_;
+    // 札を Enter で開いてから、その Enter がまだ離されていない（反復を捨てる・#1876 のレビュー）。
+    bool link_card_enter_held_ = false;
     // OSの捕捉の寿命だけ。選択のanchor/caretの正本はcontrollerにある。
     bool selecting_ = false;
     // 全面プレビューの文字をドラッグで選んでいる間（ADR 0155 の改訂 18）。
