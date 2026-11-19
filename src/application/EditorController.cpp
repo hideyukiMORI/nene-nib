@@ -643,6 +643,8 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
     settle_tab_tip(intent);
     settle_hover(intent);
+    // リンクの札も、札の意図と使う人の操作でない意図のほかで閉じる（#1869 の段 L2）。
+    close_link_card_before(intent);
     if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
@@ -874,6 +876,8 @@ void EditorController::accept(const WorkCompleted &)
     collect_project_search();
     // プレビュー欄の窓（ADR 0189 の決定 4）。頼んでいなければ呼ばない。
     collect_finder_preview();
+    // リンクを OS に渡す頼みの失敗（#1869 の段 L2）。頼んでいなければ呼ばない。
+    collect_link_opens();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
@@ -1381,6 +1385,9 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.tab_tip = shown_tab_tip();
     // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
     result.hover = shown_hover();
+    // リンクの札（#1869 の段 L2）。見せている結果に同じリンクがある間だけ（shown_link_card
+    // の入口）。
+    result.link_card = shown_link_card();
     if (gridded)
     {
         GridTally tally{0, 0, lexed};

@@ -10,8 +10,8 @@ namespace nenenib::core
 // （UiTextsJapanese.hpp・UiTextsEnglish.hpp・UiTextsSimplifiedChinese.hpp）が 1 行ずつ文を持ち、
 // 読む口は ui_text と ui_text_filled の 1 本（UiTexts.hpp）。名前は場面の接頭辞 ＋ 意味（operation_
 // app_error_ notice_ shell_ palette_ label_（2 つ以上の場面の同じ語）status_ tab_ default_ preview_
-// prompt_ guide_ explorer_ dialog_ os_ start_）。差し込む値は文の中の置き場 {0} {1} で受ける。
-// 足し方（5 行）:
+// prompt_ guide_ explorer_ dialog_ os_ start_ link_card_）。差し込む値は文の中の置き場 {0} {1}
+// で受ける。 足し方（5 行）:
 // 1. 同じ場面の群の中に 1 値足す（最後の値の後ろに足したら ui_message_count の名指しも移す）。
 // 2. 3 つの列のファイルの、enum と同じ位置に 1 行ずつ足す（並び・空でない・UTF-8・置き場は
 // UiTexts.cpp の static_assert、列挙子の数・最後の値・3 列の行の数と順は eng/conformance.py の
@@ -337,10 +337,29 @@ enum class UiMessage : std::uint16_t
     settings_finder_preview_below,
     settings_finder_preview_off,
     settings_lsp_no_commands,
+    // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2）: 種類ごとの題・開き方の 1 行・
+    // ボタンの名前・鍵の案内（鍵の名前は訳さない）と、開けなかった・写した知らせ。
+    link_card_title_web,
+    link_card_title_mail,
+    link_card_title_document,
+    link_card_title_refused,
+    link_card_way_web,
+    link_card_way_mail,
+    link_card_way_document,
+    link_card_way_refused,
+    link_card_open,
+    link_card_write,
+    link_card_cancel,
+    link_card_close,
+    link_card_copy,
+    link_card_hint,
+    link_card_hint_refused,
+    notice_link_open_failed,
+    notice_link_copied,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::settings_lsp_no_commands) + 1U;
+    std::to_underlying(UiMessage::notice_link_copied) + 1U;
 } // namespace nenenib::core

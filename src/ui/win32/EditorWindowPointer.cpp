@@ -103,6 +103,8 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_MOUSELEAVE:
         // 窓の外で離した押しは残さない（捕まえを取らないので離しが届かない・追補 24）。
         start_pressed_ = std::nullopt;
+        preview_link_pressed_.reset();
+        link_card_pressed_.reset();
         lose_completion_press(message);
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
@@ -193,6 +195,11 @@ void EditorWindow::release_left(LPARAM data)
     {
         return;
     }
+    // リンクの札の上で押した左の離しは、そのボタンだけ（#1869 の段 L2）。
+    if (release_link_card(data))
+    {
+        return;
+    }
     // 窓の操作を押して捕まえていたら、離したのはその押しの終わりだけ（#1464）。
     if (release_caption(data))
     {
@@ -210,6 +217,8 @@ void EditorWindow::release_left(LPARAM data)
         return;
     }
     drag_selection(data);
+    // 全面の選択の捕まえを放す前に、押した文字と離した文字を組んで送る（#1869 の段 L2）。
+    release_preview_link(data);
     end_selection_drag();
     release_preview_task(data);
     release_start_entry(data);
@@ -584,6 +593,11 @@ void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
     {
         return;
     }
+    // リンクの札の上の押しは札へ（外なら閉じてから今までどおり・#1869 の段 L2）。
+    if (press_link_card(data))
+    {
+        return;
+    }
     click_client(data, clicks);
 }
 
@@ -592,6 +606,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
     left_pressed_ = std::nullopt;
     start_pressed_ = std::nullopt;
     preview_task_press_.forget();
+    preview_link_pressed_.reset();
     if (controller_.command_palette_active())
     {
         click_palette(data);
@@ -660,11 +675,7 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     // 選択（本文のキャレットも枠も動かさない・ADR 0155 の改訂 15・18・追補 24）。
     if (full_previewing())
     {
-        press_preview_task(data);
-        if (!preview_task_press_.pressed())
-        {
-            press_preview_text(data);
-        }
+        press_preview(data, true);
         return;
     }
     // 起動画面の行の上の押しは行を覚えるだけ（本文のキャレットを動かさない・ADR 0172 の決定 4）。
@@ -680,7 +691,7 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     {
         if (previewing())
         {
-            press_preview_task(data);
+            press_preview(data, false);
             return;
         }
         send(application::SwitchPane{});

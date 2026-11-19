@@ -44,6 +44,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
@@ -402,6 +403,7 @@ void verify_quiet_start_with_files()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -412,7 +414,8 @@ void verify_quiet_start_with_files()
                     themes,       session,         history,     folders,        bookmarks,
                     text_layouts, autosave,        fonts,       bell,           markdown,
                     reads,        language_server, wall_clock,  printer,        shell_registration,
-                    images,       start_lists,     ui_language, project_search, previews},
+                    images,       start_lists,     ui_language, project_search, previews,
+                    links},
         nenenib::core::Distribution::unpackaged, {work_open('a'), work_open('b')});
     // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
     // 3）。
@@ -423,7 +426,7 @@ void verify_quiet_start_with_files()
                markdown.collects() == 0 && language_server.touches() == 0 &&
                wall_clock.calls() == 0 && printer.jobs().empty() &&
                shell_registration.touches() == 0 && images.touches() == 0 &&
-               start_lists.touches() == 0 && previews.touches() == 0,
+               start_lists.touches() == 0 && previews.touches() == 0 && links.touches() == 0,
            "starting with file arguments never touches the history, the folder, autosave, the "
            "bell, the clock, the printer, the shell registration, the preview images nor the "
            "start screen lists");
@@ -547,7 +550,7 @@ void verify_quiet_restore()
                restored.language_server().touches() == 0 && restored.wall_clock().calls() == 0 &&
                restored.printer().jobs().empty() && restored.shell_registration().touches() == 0 &&
                restored.images().touches() == 0 && restored.start_lists().touches() == 0 &&
-               restored.previews().touches() == 0,
+               restored.previews().touches() == 0 && restored.links().touches() == 0,
            "restoring the last tabs never touches the history, the folder, autosave, the bell, "
            "the clock, the printer, the shell registration nor the preview images");
 }
@@ -595,7 +598,7 @@ void verify_quiet_paths()
                editing.printer().jobs().empty() && editing.shell_registration().touches() == 0 &&
                editing.images().touches() == 0 && editing.start_lists().requests() == 1 &&
                editing.start_lists().collects() == 0 && editing.project_search().touches() == 0 &&
-               editing.previews().touches() == 0,
+               editing.previews().touches() == 0 && editing.links().touches() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
            "autosave, the bell, the clipboard, the language server (lsp off), the clock, the "
            "printer nor the preview images, and only opening asks the read port");

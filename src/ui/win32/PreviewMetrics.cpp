@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -346,6 +347,36 @@ std::size_t preview_byte_of_units(std::string_view shown, std::uint32_t units)
         at = next;
     }
     return shown.size();
+}
+
+std::optional<D2D1_RECT_F> preview_text_range_box(IDWriteTextLayout &layout, std::uint32_t first,
+                                                  std::uint32_t length, D2D1_POINT_2F origin)
+{
+    UINT32 count = 0;
+    // 1 回目は数を知るだけ（E_NOT_SUFFICIENT_BUFFER が返る）。
+    static_cast<void>(
+        layout.HitTestTextRange(first, length, origin.x, origin.y, nullptr, 0, &count));
+    if (count == 0)
+    {
+        return std::nullopt;
+    }
+    std::vector<DWRITE_HIT_TEST_METRICS> rows(count);
+    if (FAILED(layout.HitTestTextRange(first, length, origin.x, origin.y, rows.data(), count,
+                                       &count)) ||
+        count == 0)
+    {
+        return std::nullopt;
+    }
+    D2D1_RECT_F box{rows.front().left, rows.front().top, rows.front().left, rows.front().top};
+    for (std::size_t index = 0; index < count && index < rows.size(); ++index)
+    {
+        const auto &row = rows.at(index);
+        box.left = std::min(box.left, row.left);
+        box.top = std::min(box.top, row.top);
+        box.right = std::max(box.right, row.left + row.width);
+        box.bottom = std::max(box.bottom, row.top + row.height);
+    }
+    return box;
 }
 
 std::string_view preview_marker(const core::PreviewBlock &block) noexcept

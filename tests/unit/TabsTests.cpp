@@ -48,6 +48,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
@@ -557,6 +558,7 @@ void verify_open_failure_adds_no_tab()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -567,7 +569,8 @@ void verify_open_failure_adds_no_tab()
                     themes,       session,         history,     folders,        bookmarks,
                     text_layouts, autosave,        fonts,       bell,           markdown,
                     reads,        language_server, wall_clock,  printer,        shell_registration,
-                    images,       start_lists,     ui_language, project_search, previews},
+                    images,       start_lists,     ui_language, project_search, previews,
+                    links},
         nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }
@@ -1192,6 +1195,7 @@ void verify_recent_after_startup()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -1202,7 +1206,8 @@ void verify_recent_after_startup()
                     themes,       session,         history,     folders,        bookmarks,
                     text_layouts, autosave,        fonts,       bell,           markdown,
                     reads,        language_server, wall_clock,  printer,        shell_registration,
-                    images,       start_lists,     ui_language, project_search, previews},
+                    images,       start_lists,     ui_language, project_search, previews,
+                    links},
         nenenib::core::Distribution::unpackaged,
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});

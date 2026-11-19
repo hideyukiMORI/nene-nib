@@ -16,6 +16,9 @@
 #include "FindHandle.hpp"
 #include "FinderPreview.hpp"
 #include "HtmlClipboardFormat.hpp"
+#include "LinkOpenCall.hpp"
+#include "LinkOpenFailure.hpp"
+#include "LinkOpenShelf.hpp"
 #include "MapRow.hpp"
 #include "Milestone.hpp"
 #include "PlacementCleanup.hpp"
@@ -2543,6 +2546,42 @@ nenenib::core::ShellRegistrationPlan shell_test_plan(const std::string &exe_path
         .value_or(nenenib::core::ShellRegistrationPlan{});
 }
 
+// リンクを OS に渡す呼び出しの前後（#1869 の段 L2）。本物のブラウザ・メールは開かない: 入口の守り
+// （scheme と ASCII の URI の字）・UTF-16 の写し・棚の順と合図だけを測る。
+void verify_link_open_calls()
+{
+    using nenenib::adapters::win32::link_open_target;
+    using nenenib::application::LinkOpenFailure;
+    const auto web = link_open_target("https://example.com/a?b=c#d");
+    expect(web.has_value() && web.value() == L"https://example.com/a?b=c#d",
+           "an https URI is handed over as its UTF-16 spelling");
+    expect(link_open_target("HTTP://Example.com/").has_value() &&
+               link_open_target("mailto:a@example.com?subject=x%20y").has_value(),
+           "the scheme is compared without ASCII case and mailto is allowed");
+    expect(link_open_target("ftp://example.com/").error() == LinkOpenFailure::refused &&
+               link_open_target("file:///C:/a.txt").error() == LinkOpenFailure::refused &&
+               link_open_target("javascript:run").error() == LinkOpenFailure::refused &&
+               link_open_target("C:\\work\\a.exe").error() == LinkOpenFailure::refused,
+           "any other scheme or a path is refused before the shell is called");
+    expect(link_open_target("https://example.com/\xE3\x81\x82").error() ==
+                   LinkOpenFailure::refused &&
+               link_open_target("https://example.com/a b").error() == LinkOpenFailure::refused &&
+               link_open_target("https://example.com/\"x\"").error() == LinkOpenFailure::refused,
+           "a spelling with a character outside the ASCII URI characters is refused");
+    nenenib::adapters::win32::LinkOpenShelf shelf;
+    std::size_t signals = 0;
+    shelf.bind([&signals] { ++signals; });
+    shelf.deliver({});
+    shelf.deliver(std::unexpected(LinkOpenFailure::failed));
+    const auto taken = shelf.take();
+    expect(signals == 1 && taken.size() == 2 && taken.at(0).has_value() &&
+               taken.at(1).error() == LinkOpenFailure::failed && shelf.take().empty(),
+           "the link shelf keeps the results in order and signals once when it fills");
+    shelf.close();
+    shelf.deliver({});
+    expect(signals == 1 && shelf.take().empty(), "a closed link shelf keeps nothing");
+}
+
 // 書く → 読む → 別の exe の計画 → 消す → 読む → 根ごと片付けて残骸 0。
 void verify_shell_registration_round_trip(Win32ShellRegistration &registration,
                                           const std::wstring &root)
@@ -2607,6 +2646,8 @@ void verify_partial_shell_registration(Win32ShellRegistration &registration,
 
 void verify_shell_registration()
 {
+    // リンクを OS に渡す呼び出しの前後も、同じシェルの群で測る（#1869 の段 L2）。
+    verify_link_open_calls();
     reclaim_shell_test_roots();
     const auto root = shell_test_root(GetCurrentProcessId());
     RegDeleteTreeW(HKEY_CURRENT_USER, root.c_str());

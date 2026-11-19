@@ -68,6 +68,16 @@ class PreviewPane final
     // 下はその終わり、水平線は頭。枠の外の点も縦の位置で引く（ドラッグが枠を出ても選び続ける）。
     // 描いていない・文書が空・layout を作れなければ nullopt。
     [[nodiscard]] std::optional<core::PreviewPoint> point_at(std::int32_t x, std::int32_t y);
+    // 最後に描いた枠の中の点 (x, y) の真下の文字の位置（リンクの札・#1869 の段 L2）。point_at
+    // と同じ layout の HitTestPoint
+    // で、文字の上（isInside）のときだけその文字の始まりを返す。枠の外・要素の
+    // 間の余白・水平線・文字の外は nullopt。
+    [[nodiscard]] std::optional<core::PreviewPoint> character_at(std::int32_t x, std::int32_t y);
+    // 最後に描いた枠の中で、要素 block の text の範囲 [begin, end) を囲む矩形（描画先の物理画素・
+    // 折り返した範囲は全部の行を囲む）。描く所と同じ原点と layout の HitTestTextRange で、測って
+    // いない要素・描いていないときは nullopt（リンクの札の置き場・#1869 の段 L2）。
+    [[nodiscard]] std::optional<core::LayoutRect> range_box(std::size_t block, std::size_t begin,
+                                                            std::size_t end);
     // 作った layout の数（試験が frame をまたいだ再利用を確かめる）。
     [[nodiscard]] std::size_t created() const noexcept;
     // 要素を描いた回数（直接か bitmap へ）・保持の絵を DrawBitmap だけで使い回した回数・作った
@@ -92,16 +102,27 @@ class PreviewPane final
     [[nodiscard]] std::expected<void, RenderFailure> draw_scene(ID2D1RenderTarget &target,
                                                                 const PreviewPictureKey &key,
                                                                 const core::LayoutRect &frame);
-    // 測った要素 index の layout の中の点 point（枠の左上から）の文字の位置。tops と area は
-    // 保持の縦の位置と最後に描いた枠。
+    // 測った要素 index の layout の中の点 point（枠の左上から）の文字の位置。tops は保持の縦の
+    // 位置で、枠は最後に描いた枠（area_）。on_character は文字の上のときだけ文字の始まり
+    // （character_at）、偽は端の位置（point_at）。
     [[nodiscard]] std::optional<core::PreviewPoint> hit_block(const PreviewBlockTops &tops,
-                                                              const core::LayoutRect &area,
                                                               std::size_t index,
-                                                              D2D1_POINT_2F point);
+                                                              D2D1_POINT_2F point,
+                                                              bool on_character);
     // 表の行 index の点 point（行の原点から・#1848）の文字の位置。列の左右の余白を含めた範囲で
     // 升を選び、描く所と同じ升の文字組みと揃えで升の中の位置を引いて、行の文字の位置に写す。
     [[nodiscard]] std::optional<core::PreviewPoint> hit_cell(std::size_t index, D2D1_POINT_2F point,
-                                                             const PreviewTextStyle &style);
+                                                             const PreviewTextStyle &style,
+                                                             bool on_character);
+    // 表の行 index の text の範囲 [begin, end)
+    // を囲む矩形（行の原点から）。範囲の始まりの升の中だけ。
+    [[nodiscard]] std::optional<D2D1_RECT_F> cell_range_box(std::size_t index, std::size_t begin,
+                                                            std::size_t end,
+                                                            const PreviewTextStyle &style);
+    // 文字の要素 index の text の範囲 [begin, end) を囲む矩形（要素の原点から）。
+    [[nodiscard]] std::optional<D2D1_RECT_F> text_range_of(std::size_t index, std::size_t begin,
+                                                           std::size_t end,
+                                                           const PreviewTextStyle &style);
     // 枠の大きさの描ける bitmap（大きさが同じなら今のもの）。作れなければ nullptr。
     [[nodiscard]] ID2D1Bitmap1 *picture_of(ID2D1DeviceContext &context, std::int32_t width,
                                            std::int32_t height);

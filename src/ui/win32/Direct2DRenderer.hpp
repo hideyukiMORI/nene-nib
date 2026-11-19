@@ -28,6 +28,9 @@
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
 #include "LineView.hpp"
+#include "LinkCardFormats.hpp"
+#include "LinkCardPaint.hpp"
+#include "LinkCardTarget.hpp"
 #include "MinimapPicture.hpp"
 #include "MotionLabel.hpp"
 #include "OperationGuideLayout.hpp"
@@ -151,6 +154,11 @@ class Direct2DRenderer final
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
                                                                      std::int32_t y);
+    // 最後に描いたプレビューの枠の点の真下の文字（文字の上のときだけ・リンクの札・#1869 の段 L2）。
+    [[nodiscard]] std::optional<core::PreviewPoint> preview_character_at(std::int32_t x,
+                                                                         std::int32_t y);
+    // 最後に描いたリンクの札の点の下の部品（札を描いていなければ outside・#1869 の段 L2）。
+    [[nodiscard]] LinkCardTarget link_card_target_at(std::int32_t x, std::int32_t y) const;
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
@@ -235,6 +243,10 @@ class Direct2DRenderer final
     // で描いたキャレットの矩形の上（入らなければ下）に、 本文の領域 area
     // の中で描く。文が無ければ何もしない。
     void draw_hover_tip(const application::EditorFrame &frame, const core::LayoutRect &area);
+    // リンクの札（施主決定 D106・#1869 の段 L2）。この frame で描いたプレビューのリンクの下（入らな
+    // ければ上）に、本文の領域 area の中で描く。札が無ければ配置の覚えを捨てる。
+    void draw_link_card(const application::EditorFrame &frame, const core::LayoutRect &area);
+    [[nodiscard]] bool link_card_formats_made();
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     // 本文の layout を描く経路（保持した字形・範囲の描き直し・置き換え）は BodyTextPainter の
     // 1 本（ADR 0073・#531）。本文を描いている間の縦の範囲を渡した 1 回分を作る。
@@ -572,6 +584,10 @@ class Direct2DRenderer final
     // 設定の面の書式（最初に描くときに作る）・文字組み・最後に描いた配置と帯（#1836）。書式の
     // 作り直しで書式と文字組みを捨て、面を閉じたら文字組みと配置を捨てる。
     SettingsPanelFormats settings_formats_;
+    // リンクの札の書式（最初に描くときに作り、書式の作り直しで捨てる）と、最後に描いた札（当たりが
+    // 描画と同じ値を読む・#1869 の段 L2）。
+    LinkCardFormats link_card_formats_;
+    std::optional<LinkCardPaint> link_card_paint_;
     PaletteRowLayouts settings_layouts_{SettingsPanelPainter::retained};
     std::optional<core::SettingsLayout> settings_layout_;
     core::LayoutRect settings_area_{};

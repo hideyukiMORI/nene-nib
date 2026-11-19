@@ -22,6 +22,7 @@
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
 #include "LineEnding.hpp"
+#include "LinkCardView.hpp"
 #include "ParkedTab.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewView.hpp"
@@ -326,6 +327,11 @@ class EditorState final
     // 面・札・跳ぶ道（段 B / C）が読んで消す。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     [[nodiscard]] EditorState with_language_answers(LanguageAnswers answers) const;
+    // 開いているリンクの札（施主決定 D106・#1869 の段 L2）。置くのは controller の
+    // ClickPreviewLink、消すのは入口の close_link_card_before と札の意図。frame に載せるのは
+    // 見せている結果の同じ要素に同じリンクがある間だけ（EditorController::shown_link_card）。
+    [[nodiscard]] const std::optional<LinkCardView> &link_card() const noexcept;
+    [[nodiscard]] EditorState with_link_card(std::optional<LinkCardView> card) const;
 
     // 枠（ADR 0148 の決定 2・3・5・9）。操作中の枠は上の欄そのもので、もう 1 つの枠は受け身の
     // 表示 PaneView として脇に 1 つだけ置く。layout == none ⇔ other が値なしで、1 枠の active_side
@@ -475,6 +481,7 @@ class EditorState final
     std::optional<core::TitleBarTarget> hovered_;
     TabTipPhase tab_tip_ = TabTipPhase::hidden;
     LanguageAnswers language_answers_;
+    std::optional<LinkCardView> link_card_;
     SplitState split_;
     // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
     std::optional<PreviewView> full_preview_;

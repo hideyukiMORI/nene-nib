@@ -43,6 +43,21 @@ void EditorWindow::press_preview_task(LPARAM data)
                              : renderer_->preview_task_at(GET_X_LPARAM(data), GET_Y_LPARAM(data)));
 }
 
+// プレビューの枠の押し（チェックボックス → リンクの文字 → 全面なら選択の始まり・#1869 の段 L2）。
+void EditorWindow::press_preview(LPARAM data, bool selecting)
+{
+    press_preview_task(data);
+    if (preview_task_press_.pressed())
+    {
+        return;
+    }
+    press_preview_link(data);
+    if (selecting)
+    {
+        press_preview_text(data);
+    }
+}
+
 void EditorWindow::release_preview_task(LPARAM data)
 {
     if (!preview_task_press_.pressed())

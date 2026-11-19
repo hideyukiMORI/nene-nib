@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ActOnLinkCard.hpp"
 #include "ActivateCommandChoice.hpp"
 #include "AdjustFontSize.hpp"
 #include "AutosaveTick.hpp"
@@ -14,6 +15,7 @@
 #include "ChooseContextMenu.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "ChooseStartEntry.hpp"
+#include "ClickPreviewLink.hpp"
 #include "ClipboardAction.hpp"
 #include "CloseCompletion.hpp"
 #include "CloseContextMenu.hpp"
@@ -98,6 +100,7 @@
 #include "SwitchTab.hpp"
 #include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
+
 #include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
@@ -135,5 +138,6 @@ using EditorIntent = std::variant<
     CycleFinderPreview, TabTipTick, OpenCompletion, StepCompletion, ChooseCompletion,
     CloseCompletion, ScrollCompletion, QueryLanguage, WindowDeactivated, OpenSettings,
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
-    FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings>;
+    FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, ClickPreviewLink,
+    ActOnLinkCard>;
 } // namespace nenenib::application

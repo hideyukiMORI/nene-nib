@@ -2,6 +2,7 @@
 
 #include "Offset.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewLink.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableRow.hpp"
@@ -10,10 +11,32 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace nenenib::core
 {
+namespace
+{
+// 升 [first, second) の中のリンク（#1869 の段 L2）。升に始まりと終わりが収まるものだけを升の位置へ
+// 写す。
+[[nodiscard]] std::vector<PreviewLink> cell_links(const PreviewBlock &row, std::size_t first,
+                                                  std::size_t second)
+{
+    std::vector<PreviewLink> links;
+    for (const auto &link : row.links)
+    {
+        if (link.begin.value >= first && link.end.value <= second &&
+            link.end.value > link.begin.value)
+        {
+            links.push_back(PreviewLink{Offset{link.begin.value - first},
+                                        Offset{link.end.value - first}, link.target});
+        }
+    }
+    return links;
+}
+} // namespace
+
 std::pair<std::size_t, std::size_t> preview_table_cell_range(const PreviewBlock &row,
                                                              std::size_t column)
 {
@@ -48,6 +71,7 @@ PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column)
             spans.push_back(PreviewSpan{Offset{begin - first}, Offset{end - first}, span.style});
         }
     }
+    auto links = cell_links(row, first, second);
     return PreviewBlock{.kind = PreviewBlockKind::table_row,
                         .level = 0U,
                         .quote_depth = 0U,
@@ -60,7 +84,7 @@ PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column)
                         .table = std::nullopt,
                         .alert = std::nullopt,
                         .code_colors = std::nullopt,
-                        .links = {}};
+                        .links = std::move(links)};
 }
 
 namespace

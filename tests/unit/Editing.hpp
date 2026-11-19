@@ -19,6 +19,7 @@
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
@@ -211,6 +212,10 @@ class Editing final
     {
         return previews_;
     }
+    [[nodiscard]] ScriptedLinkOpen &links() noexcept
+    {
+        return links_;
+    }
 
   private:
     [[nodiscard]] nenenib::application::EditorPorts
@@ -234,7 +239,8 @@ class Editing final
             themes_,       session_,         history_,     folders_,        bookmarks_,
             text_layouts_, autosave_,        fonts_,       bell_,           markdown_,
             reads_,        language_server_, wall_clock_,  printer_,        shell_registration_,
-            images_,       start_lists_,     ui_language_, project_search_, previews_};
+            images_,       start_lists_,     ui_language_, project_search_, previews_,
+            links_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -262,6 +268,7 @@ class Editing final
     ScriptedUiLanguage ui_language_;
     ScriptedProjectSearch project_search_;
     ScriptedPreview previews_;
+    ScriptedLinkOpen links_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

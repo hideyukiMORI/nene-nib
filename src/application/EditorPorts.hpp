@@ -14,6 +14,7 @@
 #include "HistoryPort.hpp"
 #include "ImagePort.hpp"
 #include "LanguageServerPort.hpp"
+#include "LinkOpenPort.hpp"
 #include "MarkdownPort.hpp"
 #include "PreviewPort.hpp"
 #include "PrintPort.hpp"
@@ -77,5 +78,8 @@ struct EditorPorts
     ProjectSearchPort &project_search;
     // 探して見る面のプレビューの窓の読み（ADR 0189 の決定 4）。
     PreviewPort &previews;
+    // プレビューのリンク（web と mail）を OS の既定の道に渡す（施主決定 D105・#1869 の段 L2）。
+    // 札で開くときと、頼んだ後の合図のときだけ呼ぶ。
+    LinkOpenPort &links;
 };
 } // namespace nenenib::application

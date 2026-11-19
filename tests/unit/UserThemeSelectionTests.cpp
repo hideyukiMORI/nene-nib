@@ -39,6 +39,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
@@ -260,20 +261,26 @@ void verify_theme_startup_notice()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, pages};
     ScriptedLanguageServer language_server;
+    // 設定の口だけを替えた借用（同じ試験の 2 つの controller）。
+    const auto ports_with = [&](ScriptedSettings &chosen)
+    {
+        return app::EditorPorts{appearance,      clipboard,   files,        pages,
+                                chosen,          themes,      session,      history,
+                                folders,         bookmarks,   text_layouts, autosave,
+                                fonts,           bell,        markdown,     reads,
+                                language_server, wall_clock,  printer,      shell_registration,
+                                images,          start_lists, ui_language,  project_search,
+                                previews,        links};
+    };
     const std::vector initial{app::OpenDocument{FilePath::parse("initial.txt").value()}};
-    EditorController controller{
-        app::EditorPorts{
-            appearance,   clipboard,       files,       pages,          settings,
-            themes,       session,         history,     folders,        bookmarks,
-            text_layouts, autosave,        fonts,       bell,           markdown,
-            reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
-        nenenib::core::Distribution::unpackaged, initial};
+    EditorController controller{ports_with(settings), nenenib::core::Distribution::unpackaged,
+                                initial};
     auto frame = controller.frame();
     expect(frame.lines.front().text == "initial body", "initial document uses normal file load");
     expect(frame.command_message.value_or(fixed_text("none")).text() ==
@@ -285,14 +292,8 @@ void verify_theme_startup_notice()
     expect(!frame.command_message.has_value() && themes.reads() == 1,
            "user input clears notice without rereading themes");
     ScriptedSettings broken{SettingsReading{std::unexpect, app::SettingsFailure::malformed}};
-    EditorController unreadable{
-        app::EditorPorts{
-            appearance,   clipboard,       files,       pages,          broken,
-            themes,       session,         history,     folders,        bookmarks,
-            text_layouts, autosave,        fonts,       bell,           markdown,
-            reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
-        nenenib::core::Distribution::unpackaged, initial};
+    EditorController unreadable{ports_with(broken), nenenib::core::Distribution::unpackaged,
+                                initial};
     expect(unreadable.frame().lines.front().text == "initial body" &&
                unreadable.frame().settings_failure == app::SettingsFailure::malformed,
            "failed settings do not prevent opening initial document");

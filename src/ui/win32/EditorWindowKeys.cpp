@@ -166,10 +166,12 @@ void EditorWindow::lose_focus()
 // - 設定の面が開いている間の鍵と文字は面へ（本文へ通さない・#1836）。
 // - 補完の面が見えている間の上下・Enter・Tab・Esc は面へ（ADR 0190 の決定 5）。ほかの鍵と文字は
 //   本文へ通す。設定の面と補完の面は同時に開かない。
+// - プレビューのリンクの札が出ている間の Enter・Esc・Ctrl+C は札へ（#1869 の段 L2）。ほかの鍵は
+//   本文へ通し、controller がその意図の前に札を閉じる。札とほかの面は同時に開かない。
 bool EditorWindow::take_face_key(UINT message, WPARAM word, LPARAM data)
 {
-    return take_context_menu_key(message, word) || take_settings_key(message, word, data) ||
-           take_completion_key(message, word);
+    return take_link_card_key(message, word) || take_context_menu_key(message, word) ||
+           take_settings_key(message, word, data) || take_completion_key(message, word);
 }
 
 LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
