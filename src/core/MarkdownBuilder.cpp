@@ -1,5 +1,7 @@
 #include "MarkdownBuilder.hpp"
 
+#include "HeadingSlug.hpp"
+#include "HeadingSource.hpp"
 #include "MarkdownAlert.hpp"
 #include "MarkdownImage.hpp"
 #include "MarkdownTask.hpp"
@@ -567,6 +569,12 @@ void MarkdownBuilder::close_leaf()
     }
     single_strikes_.clear();
     pending_strikes_.clear();
+    // 見出しは名札に数える文字を名札の元として覚える（名札を作るのは finished の 1 回）。
+    if (block.kind == PreviewBlockKind::heading)
+    {
+        heading_sources_.push_back(HeadingSource{blocks_.size(), std::move(heading_text_)});
+    }
+    heading_text_.clear();
     // 囲みのコードは切れの列にして色の区間を置く（#1863）。
     if (block.kind == PreviewBlockKind::code)
     {
@@ -700,6 +708,20 @@ void MarkdownBuilder::finish_image(const PreviewBlock &block, bool closed)
 
 void MarkdownBuilder::text(std::string_view shown, std::string_view source)
 {
+    append_shown(shown, source);
+    if (leaf_.has_value() && leaf_.value().kind == PreviewBlockKind::heading)
+    {
+        heading_text_.append(shown);
+    }
+}
+
+void MarkdownBuilder::html(std::string_view shown, std::string_view source)
+{
+    append_shown(shown, source);
+}
+
+void MarkdownBuilder::append_shown(std::string_view shown, std::string_view source)
+{
     auto &leaf = ensure_leaf();
     const auto from = leaf.text.size();
     leaf.text.append(shown);
@@ -735,7 +757,8 @@ MarkdownDocument MarkdownBuilder::finished() &&
     close_implicit();
     flush_marker();
     close_leaf();
-    return MarkdownDocument{std::move(blocks_), std::move(images_)};
+    return MarkdownDocument{std::move(blocks_), std::move(images_),
+                            heading_slugs(heading_sources_)};
 }
 
 std::optional<std::size_t> MarkdownBuilder::located(std::string_view source) const

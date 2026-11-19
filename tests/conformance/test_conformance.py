@@ -22,6 +22,7 @@ vim_oracle = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vim_oracle)
 CASE_MAPPING = cnf.case_mapping.case_mapping_header().encode("utf-8")
 MARKDOWN_ENTITIES = cnf.markdown_entities.markdown_entities_header().encode("utf-8")
+HEADING_SLUG_TABLE = cnf.heading_slug_table.heading_slug_table_header().encode("utf-8")
 RULES = json.loads((ROOT / "eng/conformance-rules.json").read_text(encoding="utf-8"))
 TODAY = datetime.date(2026, 9, 15)
 
@@ -622,6 +623,40 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_markdown_entities_missing_negative(self):
         self.assertTrue(any("CNF-010" in detail and "missing" in detail
                             for detail in self.markdown_entities_details()))
+
+    # CNF-010 — 生成物 HeadingSlugTable.hpp は eng/heading-slug-table.py の heading_slug_table_header()
+    # が作る全文とバイト一致する（#1869）。正例は同じ関数の出力と保存されているファイルをそのまま読ませる。
+    def heading_slug_table_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.heading_slug_table_checks(self.root)]
+
+    def seed_heading_slug_table(self, content):
+        path = self.root / "src/core/HeadingSlugTable.hpp"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def test_cnf010_heading_slug_table_positive(self):
+        self.seed_heading_slug_table(HEADING_SLUG_TABLE)
+        self.assertEqual([], self.heading_slug_table_details())
+        self.seed_heading_slug_table((ROOT / "src/core/HeadingSlugTable.hpp").read_bytes())
+        self.assertEqual([], self.heading_slug_table_details())
+
+    def test_cnf010_heading_slug_table_edited_negative(self):
+        cases = {
+            "wrong range": HEADING_SLUG_TABLE.replace(b"{0x0000, 0x001F},", b"{0x0000, 0x0020},", 1),
+            "dropped row": HEADING_SLUG_TABLE.replace(b"    {0x0021, 0x002C},\n", b"", 1),
+            "CRLF": HEADING_SLUG_TABLE.replace(b"\n", b"\r\n"),
+        }
+        for name, content in cases.items():
+            with self.subTest(case=name):
+                self.assertNotEqual(HEADING_SLUG_TABLE, content)
+                self.seed_heading_slug_table(content)
+                details = self.heading_slug_table_details()
+                self.assertTrue(details)
+                self.assertTrue(all(detail.startswith("CNF-010") and "--write" in detail for detail in details))
+
+    def test_cnf010_heading_slug_table_missing_negative(self):
+        self.assertTrue(any("CNF-010" in detail and "missing" in detail
+                            for detail in self.heading_slug_table_details()))
 
     # CNF-011 — fixtures.json は生成器が書く 1 つの形（1 行 1 件）だけを許す（Issue #98）。
     # 正例は oracle の canonical_fixtures_json が書いたバイト列そのままを読ませる。

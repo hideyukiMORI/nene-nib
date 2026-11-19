@@ -30,6 +30,28 @@ md4c (Markdown parser for C)
   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
   IN THE SOFTWARE.
 
+github-slugger (the code points a GitHub heading anchor removes)
+  Version: 2.0.0
+  Source: https://github.com/Flet/github-slugger
+  Files: third_party/github-slugger/regex.js, third_party/github-slugger/license
+  (kept unchanged as the input of eng/heading-slug-table.py, which writes the
+  ranges of regex.js into src/core/HeadingSlugTable.hpp; the JavaScript is not
+  run or shipped; see docs/adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)
+
+  Copyright (c) 2015, Dan Flettre <fletd01@yahoo.com>
+
+  Permission to use, copy, modify, and/or distribute this software for any
+  purpose with or without fee is hereby granted, provided that the above
+  copyright notice and this permission notice appear in all copies.
+
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+  SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER
+  RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF
+  CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+  CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 
 NeNe Nib — palette acknowledgements
 ==================================

@@ -7,6 +7,8 @@
   "lineSuppressionPattern": "NOLINTNEXTLINE\\([A-Za-z0-9,.-]+\\)",
   "taskMarkerPattern": "\\b(?:TODO|FIXME)\\b",
   "thirdPartyDigests": {
+    "third_party/github-slugger/license": "542aefa99456832996da0cc63b14d8b89f04a30ba403e241dbe3e5aaf49fa372",
+    "third_party/github-slugger/regex.js": "3bcbb3836a4e76f0f343c34d223ddd9eac83cc73a4e2c7a1118ef0829bc9129b",
     "third_party/md4c/LICENSE.md": "d30937367d5413e7eaa218b1640b8946ff76fd34d97152f6979fd96169d5d0fc",
     "third_party/md4c/md4c.c": "52e39843b96b64d0281bf795128bcc88c9c4dc52d7436737e9f4306648dc4590",
     "third_party/md4c/md4c.h": "4efd19bf7ec270691d5b4189f496886e421768a814b5e817eb945aa85e859f18"
