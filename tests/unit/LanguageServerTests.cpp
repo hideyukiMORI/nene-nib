@@ -1878,6 +1878,28 @@ void verify_document_sync_kinds()
            "an Incremental server keeps getting ranges");
 }
 
+// 2026-11-20 の追補の限界（#1907 のレビュー L3）: none のサーバーの診断は didOpen
+// の版の本文で写し、 編集でずらさずに今の本文へ置く。本文の外を指す診断でも落ちない。
+void verify_unsynced_diagnostics()
+{
+    Editing editing(lsp_settings(true));
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
+    started_with(editing, R"({"textDocumentSync":0})");
+    applied(editing.controller(), app::InsertText{"xy"});
+    auto &server = editing.language_server();
+    server.publish(source_uri, 0, main_error);
+    const auto placed = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(server.notifications("textDocument/didChange").empty() &&
+               underlined(placed.lines.at(0), 5, 9, core::DiagnosticSeverity::error),
+           "an unsynced server's diagnostics are placed by the opened text without shifting");
+    server.publish(
+        source_uri, std::nullopt,
+        R"([{"range":{"start":{"line":7,"character":40},"end":{"line":9,"character":2}},"severity":1,"message":"far"}])");
+    const auto far = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(far.lines.size() == placed.lines.size(),
+           "a diagnostic past the current text is placed without breaking the frame");
+}
+
 // 2026-11-20 の追補（#1897）: `save` を求めるサーバーには保存の後に `didSave`（`includeText` なら
 // 本文つき）。求めないサーバー・別のパスへの保存では送らない。積んだ変更を先に流す。
 void verify_did_save()
@@ -2007,6 +2029,7 @@ void verify_language_server_contracts()
     verify_requests_need_a_sent_document();
     verify_answers_after_restart();
     verify_document_sync_kinds();
+    verify_unsynced_diagnostics();
     verify_did_save();
     verify_diagnostics_uri_forms();
     verify_start_failure_notices();

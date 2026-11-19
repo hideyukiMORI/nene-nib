@@ -2,8 +2,9 @@
 // 固定 seed の決定的な生成器で作った編集の列（打鍵・Backspace と Delete・語の削除・キャレットの
 // 移動・CRLF と代理対と結合文字を含む貼り付け・undo / redo・Vim の鍵とマクロと `.`）を替え玉の
 // サーバーに繋いだ controller に流し、送った `didOpen` の本文に送った `didChange` の列を順に当てた
-// 本文が、controller の今の本文と同じことを確かめる。当てる側の位置の写しは core の lsp_offset_of
-// の 1 本（サーバーの側の読み方の模型）。同期の種類は incremental（utf-16 と utf-8）と full。
+// 本文が、controller の今の本文と同じこと・版が狭義に増えることを確かめる。当てる側（サーバーの
+// 模型）は製品の core の写しを使わない素朴な別実装（#1907 のレビュー R1）。同期の種類は
+// incremental（utf-16 と utf-8）と full。
 // 生成器は std::mt19937_64 の剰余だけを使い、分布の型は使わない。時計と環境変数を読まない。
 #include "ClipboardAction.hpp"
 #include "ClipboardOperation.hpp"
@@ -22,7 +23,6 @@
 #include "JsonValue.hpp"
 #include "LineNumber.hpp"
 #include "LspJsonRead.hpp"
-#include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
@@ -38,6 +38,7 @@
 #include "VimTestSupport.hpp"
 #include "WorkCompleted.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -85,65 +86,145 @@ constexpr std::array<std::string_view, 16> vim_moves{
     return text.text_range(core::Offset{0}, core::Offset{text.size_bytes()});
 }
 
+// サーバーの側の模型（#1907 のレビュー R1）。製品の core の写し（lsp_offset_of・TextBuffer の行の
+// 索引・Utf16）を使わず、本文を std::string のまま持ち、行は `\n` で割り（内容は `\r\n` の `\r` を
+// 含まない）、桁は UTF-8 の先頭バイトから文字の長さを読んで素朴に数える。公開 aggregate。
+struct ServerModel
+{
+    std::string text;
+    std::optional<std::uint64_t> version;
+    bool versions_rose = true;
+};
+
+// UTF-8 の先頭バイト → 文字のバイト数（正しい UTF-8 だけが届く前提）。
+[[nodiscard]] std::size_t utf8_length(unsigned char lead) noexcept
+{
+    constexpr unsigned char two = 0xC0;
+    constexpr unsigned char three = 0xE0;
+    constexpr unsigned char four = 0xF0;
+    return lead < two ? 1 : lead < three ? 2 : lead < four ? 3 : 4;
+}
+
+// 行 line の内容の [begin, end)（行が本文の外なら本文の末尾の空の区間）。
+[[nodiscard]] std::pair<std::size_t, std::size_t> line_span(std::string_view text, std::size_t line)
+{
+    std::size_t begin = 0;
+    for (std::size_t passed = 0; passed < line; ++passed)
+    {
+        const std::size_t newline = text.find('\n', begin);
+        if (newline == std::string_view::npos)
+        {
+            return {text.size(), text.size()};
+        }
+        begin = newline + 1;
+    }
+    std::size_t end = std::min(text.find('\n', begin), text.size());
+    end = end > begin && text[end - 1] == '\r' ? end - 1 : end;
+    return {begin, end};
+}
+
+// Position → バイト位置（桁が行の内容の外なら行末・LSP の既定）。
+[[nodiscard]] std::size_t model_offset(std::string_view text, std::size_t line,
+                                       std::size_t character, core::LspPositionEncoding encoding)
+{
+    const auto [begin, end] = line_span(text, line);
+    std::size_t at = begin;
+    std::size_t units = 0;
+    constexpr std::size_t pair_bytes = 4;
+    while (at < end && units < character)
+    {
+        const std::size_t length = utf8_length(static_cast<unsigned char>(text[at]));
+        units += encoding == core::LspPositionEncoding::utf8 ? length
+                 : length == pair_bytes                      ? 2
+                                                             : 1;
+        at += length;
+    }
+    return std::min(at, end);
+}
+
+// range の端 key の Position（line と character）をバイト位置へ。
+[[nodiscard]] std::optional<std::size_t> model_end(std::string_view text,
+                                                   const core::JsonObject &range,
+                                                   std::string_view key,
+                                                   core::LspPositionEncoding encoding)
+{
+    const auto *position = core::json_object_member(range, key);
+    const auto line =
+        position != nullptr ? core::json_count_member(*position, "line") : std::nullopt;
+    const auto character =
+        position != nullptr ? core::json_count_member(*position, "character") : std::nullopt;
+    if (!line.has_value() || !character.has_value())
+    {
+        return std::nullopt;
+    }
+    return model_offset(text, line.value(), character.value(), encoding);
+}
+
 // 1 つの `TextDocumentContentChangeEvent` を模型の本文に当てる（range が無ければ全文）。
-[[nodiscard]] core::TextBuffer changed(const core::TextBuffer &text, const core::JsonObject &change,
-                                       core::LspPositionEncoding encoding)
+void changed(std::string &text, const core::JsonObject &change, core::LspPositionEncoding encoding)
 {
     const auto *inserted = core::json_text_member(change, "text");
     const auto *range = core::json_object_member(change, "range");
     if (inserted == nullptr)
     {
-        return text;
+        return;
     }
     if (range == nullptr)
     {
-        return core::TextBuffer::from_utf8(*inserted).value_or(text);
+        text = *inserted;
+        return;
     }
-    const auto start = core::lsp_position_member(*range, "start");
-    const auto end = core::lsp_position_member(*range, "end");
-    const auto begin =
-        start.has_value() ? core::lsp_offset_of(text, start.value(), encoding) : std::nullopt;
-    const auto stop =
-        end.has_value() ? core::lsp_offset_of(text, end.value(), encoding) : std::nullopt;
-    if (!begin.has_value() || !stop.has_value())
+    const auto begin = model_end(text, *range, "start", encoding);
+    const auto end = model_end(text, *range, "end", encoding);
+    if (begin.has_value() && end.has_value() && begin.value() <= end.value())
     {
-        return text;
+        text.replace(begin.value(), end.value() - begin.value(), *inserted);
     }
-    return text.replaced(begin.value(), stop.value(), *inserted);
 }
 
-// 届いた 1 通の object の鍵 key の object と、`method` の文字列（無ければ nullptr）。
 [[nodiscard]] const std::string *method_of(const core::JsonObject *message)
 {
     return message != nullptr ? core::json_text_member(*message, "method") : nullptr;
 }
 
-// didOpen の params → 模型の本文（全文）。
-[[nodiscard]] core::TextBuffer opened(const core::JsonObject &params)
+// params の `textDocument` の `version`（無ければ値なし）。
+[[nodiscard]] std::optional<std::uint64_t> version_of(const core::JsonObject &params)
+{
+    const auto *item = core::json_object_member(params, "textDocument");
+    return item != nullptr ? core::json_count_member(*item, "version") : std::nullopt;
+}
+
+// didOpen の params → 模型の本文と版。
+void opened(ServerModel &model, const core::JsonObject &params)
 {
     const auto *item = core::json_object_member(params, "textDocument");
     const auto *text = item != nullptr ? core::json_text_member(*item, "text") : nullptr;
-    return core::TextBuffer::from_utf8(text != nullptr ? *text : "").value();
+    model.text = text != nullptr ? *text : "";
+    model.version = version_of(params);
 }
 
-// didChange の params の `contentChanges` を順に当てる。
-[[nodiscard]] core::TextBuffer changed_all(core::TextBuffer model, const core::JsonObject &params,
-                                           core::LspPositionEncoding encoding)
+// didChange の params: 版が狭義に増えることを見て、`contentChanges` を順に当てる。
+void changed_all(ServerModel &model, const core::JsonObject &params,
+                 core::LspPositionEncoding encoding)
 {
+    const auto version = version_of(params);
+    model.versions_rose = model.versions_rose && version.has_value() && model.version.has_value() &&
+                          version.value_or(0) > model.version.value_or(0);
+    model.version = version;
     const auto changes = core::json_member(params, "contentChanges");
     const auto *list =
         changes.has_value() ? std::get_if<core::JsonArray>(&changes.value().get().value) : nullptr;
     for (const core::JsonValue &entry : list != nullptr ? *list : core::JsonArray{})
     {
-        const auto *change = core::json_object_of(entry);
-        model = change != nullptr ? changed(model, *change, encoding) : model;
+        if (const auto *change = core::json_object_of(entry))
+        {
+            changed(model.text, *change, encoding);
+        }
     }
-    return model;
 }
 
 // 送った 1 通を模型に当てる（didOpen は全文で置き、didChange は順に当て、ほかは何もしない）。
-[[nodiscard]] core::TextBuffer stepped(core::TextBuffer model, const std::string &body,
-                                       core::LspPositionEncoding encoding)
+void stepped(ServerModel &model, const std::string &body, core::LspPositionEncoding encoding)
 {
     const auto value = core::parse_json(body);
     const auto *message = value.has_value() ? core::json_object_of(value.value()) : nullptr;
@@ -152,26 +233,37 @@ constexpr std::array<std::string_view, 16> vim_moves{
         message != nullptr ? core::json_object_member(*message, "params") : nullptr;
     if (method == nullptr || params == nullptr)
     {
-        return model;
+        return;
     }
     if (*method == "textDocument/didOpen")
     {
-        return opened(*params);
+        opened(model, *params);
     }
-    return *method == "textDocument/didChange" ? changed_all(std::move(model), *params, encoding)
-                                               : model;
+    else if (*method == "textDocument/didChange")
+    {
+        changed_all(model, *params, encoding);
+    }
 }
 
-// 送った列（didOpen で始め、didChange を順に当てる）から、サーバーが持つ本文を作り直す。
-[[nodiscard]] std::string replayed(const std::vector<std::string> &sent,
+// 送った列（didOpen で始め、didChange を順に当てる）から、サーバーが持つ本文と版を作り直す。
+[[nodiscard]] ServerModel replayed(const std::vector<std::string> &sent,
                                    core::LspPositionEncoding encoding)
 {
-    core::TextBuffer model = core::TextBuffer::empty();
+    ServerModel model;
     for (const std::string &body : sent)
     {
-        model = stepped(std::move(model), body, encoding);
+        stepped(model, body, encoding);
     }
-    return whole(model);
+    return model;
+}
+
+// 模型の本文が controller の本文と同じで、版が増え続け、実際に変更が送られたか。
+[[nodiscard]] bool replays_to_text(Editing &editing, core::LspPositionEncoding encoding)
+{
+    const ServerModel model = replayed(editing.language_server().sent(), encoding);
+    return model.text == whole(editing.controller().text()) && model.versions_rose &&
+           model.text != first_text &&
+           editing.language_server().notifications("textDocument/didChange").size() > steps / 4;
 }
 
 // 開いて `initialize` に capabilities で答え、`initialized` まで進める。
@@ -237,11 +329,7 @@ void verify_normal_runs(std::string_view capabilities, core::LspPositionEncoding
         {
             normal_step(editing, random);
         }
-        const std::string sent = replayed(editing.language_server().sent(), encoding);
-        expect(sent == whole(editing.controller().text()) && sent != first_text &&
-                   editing.language_server().notifications("textDocument/didChange").size() >
-                       steps / 4,
-               what);
+        expect(replays_to_text(editing, encoding), what);
     }
 }
 
@@ -267,11 +355,7 @@ void verify_vim_runs(std::string_view capabilities, core::LspPositionEncoding en
         {
             vim_step(editing, random);
         }
-        const std::string sent = replayed(editing.language_server().sent(), encoding);
-        expect(sent == whole(editing.controller().text()) && sent != first_text &&
-                   editing.language_server().notifications("textDocument/didChange").size() >
-                       steps / 4,
-               what);
+        expect(replays_to_text(editing, encoding), what);
     }
 }
 } // namespace

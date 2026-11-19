@@ -334,10 +334,13 @@ void verify_relative_is_not_found()
 }
 
 // `.cmd` / `.bat` は cmd.exe を挟むので、在るかを見ずに起こさず断る（ADR 0160 の 2026-11-20 の
-// 追補）。拡張子の大小は問わない。
+// 追補）。拡張子の大小と末尾の点・空白は問わない（末尾の点と空白は Win32 の正規化で落ちて
+// cmd.exe が起きるので、落とした綴りで断る・#1907 のレビュー M1）。
 void verify_batch_script_refused()
 {
-    for (const std::string_view name : {R"(C:\npm\server.cmd)", R"(C:\tools\SERVER.BAT)"})
+    for (const std::string_view name :
+         {R"(C:\npm\server.cmd)", R"(C:\tools\SERVER.BAT)", R"(C:\npm\server.cmd.)",
+          R"(C:\tools\SERVER.BAT )", R"(C:\npm\T.CmD .. )"})
     {
         adapters::Win32LanguageServer server([] {});
         const auto started = server.start(ServerLaunch{path_of(name), {}, path_of(".")});

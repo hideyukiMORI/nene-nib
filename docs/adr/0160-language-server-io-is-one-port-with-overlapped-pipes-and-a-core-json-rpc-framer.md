@@ -73,6 +73,6 @@ LSP 3.17 は子プロセスと stdio で JSON-RPC 2.0 を話す（`Content-Lengt
 
 ## 追補（2026-11-20・#1897・設計席の決め・LSP 段 S1）: 起こせない理由を分ける
 
-- **決定 6 の失敗の値**: `ServerFailure` に `not_absolute`（実行ファイルが絶対パスでない）と `script_refused`（`.cmd` / `.bat`・大小を問わない）を足す。2026-10-28 の追補の「絶対パスでなければ `not_found`」は `not_absolute` に改める。adapter の `ServerChild::spawn` は起こす前に「絶対パスか → `.cmd` / `.bat` でないか（在るかを見ずに断る）→ 在るか」の順に見る。`.cmd` / `.bat` は `CreateProcessW` が暗黙に `cmd.exe` を挟み、引数の引用の規則が変わる（BatBadBut の種類の問題）ので起こさない。npm の言語サーバーは `node.exe` とスクリプトの形で書く。
+- **決定 6 の失敗の値**: `ServerFailure` に `not_absolute`（実行ファイルが絶対パスでない）と `script_refused`（`.cmd` / `.bat`・大小を問わない）を足す。2026-10-28 の追補の「絶対パスでなければ `not_found`」は `not_absolute` に改める。adapter の `ServerChild::spawn` は起こす前に「絶対パスか → `.cmd` / `.bat` でないか（在るかを見ずに断る）→ 在るか」の順に見る。`.cmd` / `.bat` は `CreateProcessW` が暗黙に `cmd.exe` を挟み、引数の引用の規則が変わる（BatBadBut の種類の問題）ので起こさない。npm の言語サーバーは `node.exe` とスクリプトの形で書く。判定の前に実行ファイルの綴りの末尾の `.` と空白を落とし、`CreateProcessW` にも落とした綴りを渡す（Win32 の経路の正規化がそれらを落とすので、`server.cmd.` や `server.cmd ` も cmd.exe を起こす・#1907 のレビュー M1）。
 - **知らせ**: controller の `start_failure_message` の 1 本が `not_found`・`not_absolute`・`script_refused` を `UiMessage` の 3 値（`notice_language_server_not_found` `_not_absolute` `_script`・3 列）に、ほかを今までの「言語サーバーを起こせませんでした」に写す。PATH の探索と設定の面の候補は段 S4。
 - **契約**: `nib_language_server_tests`（相対は `not_absolute`・`.cmd` `.BAT` は `script_refused`）・`nib_tests --language-server`（4 種の文）。
