@@ -665,37 +665,40 @@ def ui_text_literal_checks(path: str, text: str, rules: dict) -> list[Finding]:
             for number in japanese_literal_lines(text)]
 
 
-def ui_message_names(enum_text: str) -> list[str]:
-    """The enumerators of `enum class UiMessage`, in order (comments are skipped)."""
+def enum_names(enum_text: str, enum: str) -> list[str]:
+    """The enumerators of `enum class <enum>`, in order (comments are skipped)."""
     code = cpp_code(enum_text)
-    body = re.search(r"\benum\s+class\s+UiMessage\b[^{;]*\{(?P<body>[^}]*)\}", code)
+    body = re.search(r"\benum\s+class\s+" + re.escape(enum) + r"\b[^{;]*\{(?P<body>[^}]*)\}", code)
     if body is None:
         return []
     return [part.strip() for part in body["body"].split(",") if part.strip()]
 
 
-def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[tuple[str, str]]:
-    """CNF-016: what is wrong with the UiMessage enum and its columns, as (path or "", detail).
+def enum_table_problems(enum: str, count: str, enum_text: str, count_text: str,
+                        columns: dict[str, str]) -> list[tuple[str, str]]:
+    """CNF-016: what is wrong with a closed enum, its count and its tables, as (path or "", detail).
 
-    The C++ static_asserts check that each column holds every value once in enum order, but an
-    enumerator added after the last one with no row and no change to `ui_message_count` passes them
-    and makes `ui_text` read past the end of the column (review A-M1). C++23 cannot count
-    enumerators, so the count is checked here.
+    The C++ static_asserts check that each table holds every value once in enum order, but an
+    enumerator added after the last one with no row and no change to the count passes them and
+    makes the lookup read past the end of the table (review A-M1). C++23 cannot count enumerators,
+    so the count names the last value (`<count> = std::to_underlying(<enum>::<last>) + 1U`, or a
+    function that returns it) and the name is checked here. Used for UiMessage and for
+    EditorOperation (#1790: the exhaustive switch outgrew the function size limit at 55 values).
     """
-    names = ui_message_names(enum_text)
+    names = enum_names(enum_text, enum)
     if not names:
-        return [("", "enum class UiMessage is missing")]
+        return [("", f"enum class {enum} is missing")]
     problems = []
-    counted = re.search(r"\bui_message_count\s*=\s*std::to_underlying\(\s*UiMessage::(\w+)\s*\)\s*\+\s*1U?\s*;",
-                        cpp_code(enum_text))
+    counted = re.search(r"\b" + re.escape(count) + r"\b[^;{=]*(?:=|\{\s*return)\s*std::to_underlying\(\s*"
+                        + re.escape(enum) + r"::(\w+)\s*\)\s*\+\s*1U?\s*;", cpp_code(count_text))
     if counted is None:
-        problems.append(("", "ui_message_count is not std::to_underlying(UiMessage::<last>) + 1U"))
+        problems.append(("", f"{count} is not std::to_underlying({enum}::<last>) + 1U"))
     elif counted[1] != names[-1]:
-        problems.append(("", f"ui_message_count names {counted[1]}, but the last enumerator is {names[-1]}"))
+        problems.append(("", f"{count} names {counted[1]}, but the last enumerator is {names[-1]}"))
     for path, text in columns.items():
-        rows = re.findall(r"\{\s*UiMessage::(\w+)\s*,", cpp_code(text))
+        rows = re.findall(r"\{\s*" + re.escape(enum) + r"::(\w+)\s*,", cpp_code(text))
         if len(rows) != len(names):
-            problems.append((path, f"{len(rows)} rows for {len(names)} UiMessage values"))
+            problems.append((path, f"{len(rows)} rows for {len(names)} {enum} values"))
             continue
         mismatch = next((index for index, (row, name) in enumerate(zip(rows, names)) if row != name), None)
         if mismatch is not None:
@@ -703,16 +706,33 @@ def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[t
     return problems
 
 
-def ui_message_table_checks(root: Path, rules: dict) -> list[Finding]:
-    table = rules["uiMessageTable"]
-    enum_path = table["enum"]
-    paths = [enum_path] + table["columns"]
-    missing = [name for name in paths if not (root / name).is_file()]
-    if missing:
-        return [Finding("CNF-016", name, "the UiMessage table file is missing") for name in missing]
-    columns = {name: (root / name).read_text(encoding="utf-8") for name in table["columns"]}
-    return [Finding("CNF-016", path or enum_path, detail)
-            for path, detail in ui_message_table_problems((root / enum_path).read_text(encoding="utf-8"), columns)]
+def ui_message_names(enum_text: str) -> list[str]:
+    """The enumerators of `enum class UiMessage`, in order (comments are skipped)."""
+    return enum_names(enum_text, "UiMessage")
+
+
+def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[tuple[str, str]]:
+    """CNF-016 for UiMessage: the count sits beside the enum (ui_message_count)."""
+    return enum_table_problems("UiMessage", "ui_message_count", enum_text, enum_text, columns)
+
+
+def enum_table_checks(root: Path, rules: dict) -> list[Finding]:
+    """CNF-016 for every table in `enumTables` (UiMessage and EditorOperation)."""
+    findings = []
+    for table in rules["enumTables"]:
+        enum_path = table["enumFile"]
+        count_path = table.get("countFile", enum_path)
+        paths = list(dict.fromkeys([enum_path, count_path] + table["columns"]))
+        missing = [name for name in paths if not (root / name).is_file()]
+        if missing:
+            findings.extend(Finding("CNF-016", name, f"the {table['enum']} table file is missing") for name in missing)
+            continue
+        columns = {name: (root / name).read_text(encoding="utf-8") for name in table["columns"]}
+        problems = enum_table_problems(table["enum"], table["count"], (root / enum_path).read_text(encoding="utf-8"),
+                                       (root / count_path).read_text(encoding="utf-8"), columns)
+        findings.extend(Finding("CNF-016", path or (count_path if detail.startswith(table["count"]) else enum_path), detail)
+                        for path, detail in problems)
+    return findings
 
 
 # 1 つの翻訳単位の行数の上限（ADR 0158 の決定 6）。超えたファイルは ADR の群の表に群を足して分ける。
@@ -903,7 +923,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(third_party_digest_checks(root, paths, rules))
     findings.extend(translation_unit_size_checks(root, paths))
     findings.extend(feature_cost_checks(root))
-    findings.extend(ui_message_table_checks(root, rules))
+    findings.extend(enum_table_checks(root, rules))
     findings.extend(architecture_checks(root, paths, build_dir))
     signatures = sdk_abi_signatures(root)
     for path in paths:

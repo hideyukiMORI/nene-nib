@@ -3,9 +3,12 @@
 // の面が敷かれて左右 4 DIP は地のまま・使えない行の名前は使える行と違う色（muted）で描かれる・鍵の
 // 表示は行の右端にあり名前との間に墨が無い・行の文字組みの保持が描き直しで増えないことを、ダークと
 // ライトで確かめる。配置は製品と同じ core::context_menu_layout。窓・device
-// は作らない。字の画素は字体 に依るので、Segoe UI と Consolas が無い機械では測らない（QLT-013）。
+// は作らない。タブのメニュー（#1790）も同じ部品で 8 行と 2 本の区切り線を描き、無題のタブの薄い行が
+// 違う色で描かれることを確かめる。字の画素は字体 に依るので、Segoe UI と Consolas
+// が無い機械では測らない（QLT-013）。
 #include "Appearance.hpp"
 #include "ContextMenu.hpp"
+#include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuPainter.hpp"
 #include "ContextMenuRequest.hpp"
@@ -13,11 +16,17 @@
 #include "ContextMenuText.hpp"
 #include "ContextMenuView.hpp"
 #include "DirectWriteFactory.hpp"
+#include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "SoftwareTarget.hpp"
+#include "TabMenuSituation.hpp"
+#include "TabRightPress.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
 #include "WindowChecks.hpp"
 
 #include <algorithm>
@@ -117,15 +126,38 @@ constexpr core::LayoutRect bounds{0, -1000, 1300, 1000};
 {
     const auto items = core::context_menu_items(
         core::ContextMenuSituation{core::ContextMenuMode::ordinary, false});
-    app::ContextMenuView view{menu_left, 0, {}, highlighted};
+    app::ContextMenuView view{menu_left, 0, core::ContextMenuKind::body, {}, highlighted};
     const std::array<std::string, 7> names{"切り取り",   "コピー", "貼り付け", "削除",
                                            "すべて選択", "検索",   "置換"};
     for (std::size_t index = 0; index < items.size(); ++index)
     {
-        view.rows.at(index) = app::ContextMenuRow{
+        view.rows.push_back(app::ContextMenuRow{
             items.at(index).operation, names.at(index),
             core::context_menu_key(items.at(index).operation, core::ContextMenuMode::ordinary),
-            index == 0 ? cut_enabled : true, items.at(index).separated};
+            index == 0 ? cut_enabled : true, items.at(index).separated});
+    }
+    return view;
+}
+
+// タブのメニュー（#1790）。named が偽なら無題のタブ（パスの 3 つが薄い）。
+[[nodiscard]] app::ContextMenuView tab_view(bool named)
+{
+    const auto items = core::tab_menu_items(core::TabMenuSituation{named, true, true, true});
+    app::ContextMenuView view{menu_left, 0, core::ContextMenuKind::tab, {}, std::nullopt};
+    const std::array<std::string, 8> names{"エクスプローラーで場所を開く",
+                                           "パスをコピー",
+                                           "ファイル名をコピー",
+                                           "保存",
+                                           "名前を付けて保存",
+                                           "タブを閉じる",
+                                           "ほかのタブを閉じる",
+                                           "右のタブを閉じる"};
+    for (std::size_t index = 0; index < items.size(); ++index)
+    {
+        view.rows.push_back(app::ContextMenuRow{
+            items.at(index).operation, names.at(index),
+            core::tab_menu_key(items.at(index).operation, core::EditMode::ordinary),
+            items.at(index).enabled, items.at(index).separated});
     }
     return view;
 }
@@ -143,8 +175,8 @@ class MenuStrip final
                                                     std::int32_t top) const
     {
         const auto widths = measure(view);
-        return core::context_menu_layout(
-            core::ContextMenuRequest{menu_left, top, bounds, widths.first, widths.second, dpi});
+        return core::context_menu_layout(core::ContextMenuRequest{
+            menu_left, top, bounds, widths.first, widths.second, dpi, view.kind});
     }
     [[nodiscard]] Pixels operator()(const app::ContextMenuView &view, std::int32_t top) const
     {
@@ -221,10 +253,55 @@ void verify_separator(const MenuStrip &strip, const core::Palette &palette)
     expect(pixel_is(pixels, layout.panel.left - 2, line.top, core::RgbColor{0, 0, 0}),
            "nothing is drawn outside the menu (no shadow)");
 }
+// タブのメニューは同じ部品で 8 行と 2 本の区切り線を描き、無題のタブの薄い行は違う色（#1790）。
+void verify_tab_menu(const MenuStrip &strip, const core::Palette &palette)
+{
+    const auto named = tab_view(true);
+    const auto probe = strip.layout_of(named, 0);
+    expect(probe.row_count == 8 && probe.separator_count == 2,
+           "the tab menu lays out 8 rows and 2 separators");
+    // 2 本目の区切り線（名前を付けて保存の下・タブを閉じるの上）が bitmap の y 28 に来る高さ。
+    const auto top = 28 - probe.separators.at(1).top;
+    const auto layout = strip.layout_of(named, top);
+    const auto pixels = strip(named, top);
+    const auto line = layout.separators.at(1);
+    expect(line.top == 28 && pixel_is(pixels, line.left + 4, line.top, palette.panel_border) &&
+               pixel_is(pixels, line.left + 4, line.top - 2, palette.panel),
+           "the second tab menu separator is drawn above close");
+    // 最後の行（右のタブを閉じる）が bitmap の y 25 から始まる高さ。
+    const auto last_top = 25 - probe.rows.at(7).top;
+    const auto last = strip(named, last_top);
+    const auto inside = core::context_menu_row_inside(strip.layout_of(named, last_top), 7);
+    const core::LayoutRect last_name{inside.left, inside.top, inside.left + 40, inside.bottom};
+    expect(inked(last, last_name, palette.panel) > 0, "the eighth row of the tab menu is drawn");
+    // 無題のタブの最初の行（エクスプローラーで場所を開く）は薄い。
+    const auto first = core::context_menu_row_inside(probe, 0);
+    const core::LayoutRect first_name{first.left, first.top, first.left + 40, first.bottom};
+    const auto untitled = strip(tab_view(false), 0);
+    expect(differing(strip(named, 0), untitled, first_name) > 0,
+           "a greyed tab row is drawn in another color");
+}
+
+// 右の押しの覚え（レビューの推奨 1）。タブの上で押して窓の外で離した後、面が取った押しを同じタブの
+// 上で離しても、古い押しと読んでタブのメニューを開かない。面が取らない押しは同じタブで開く。
+void verify_tab_right_press()
+{
+    using nenenib::ui::win32::tab_right_press_kept;
+    const core::TitleBarTarget tab{core::TitleBarHit::tab, 1};
+    auto pressed = tab_right_press_kept(false, tab);
+    expect(core::title_bar_released(pressed, tab) == std::optional{tab},
+           "a right press on a tab released on the same tab opens its menu");
+    pressed = tab_right_press_kept(true, std::nullopt);
+    expect(!core::title_bar_released(pressed, tab).has_value(),
+           "a press taken by a panel forgets the old tab press released outside the window");
+    expect(!tab_right_press_kept(true, tab).has_value(),
+           "a press taken by a panel never remembers the tab under it");
+}
 } // namespace
 
 void verify_context_menu_paint()
 {
+    verify_tab_right_press();
     SoftwareTarget target;
     const auto factory = directwrite_factory();
     if (!target.ready() || factory == nullptr)
@@ -252,6 +329,7 @@ void verify_context_menu_paint()
         const MenuStrip strip(target, text, layouts, palette);
         verify_rows(strip, layouts, palette);
         verify_separator(strip, palette);
+        verify_tab_menu(strip, palette);
     }
 }
 } // namespace nenenib::tests::ui

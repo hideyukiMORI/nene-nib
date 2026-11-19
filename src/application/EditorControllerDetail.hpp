@@ -64,6 +64,10 @@ namespace nenenib::application::detail
 parked_path(const std::shared_ptr<const DocumentState> &tab);
 [[nodiscard]] std::optional<core::FilePath>
 parked_path(const std::shared_ptr<const UnloadedDocument> &tab);
+// 帯の位置 position のタブのパス（無題なら無し・まだ読んでいないタブも読まずに・#1790 で
+// EditorControllerTabs.cpp から公開した）。
+[[nodiscard]] std::optional<core::FilePath> tab_path_at(const EditorState &state,
+                                                        std::size_t position);
 [[nodiscard]] core::LineNumber line_within(const core::TextBuffer &text, core::LineNumber line);
 inline constexpr std::string_view clipped_mark = "…";
 // 名前を 1 つ載せる 1 行。名前は prefix と suffix の残りに収まるよう末尾をコードポイントの境目で

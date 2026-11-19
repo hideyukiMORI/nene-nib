@@ -33,12 +33,12 @@ namespace nenenib::application
 using detail::not_user_operation;
 using detail::parked_path;
 using detail::scroll_extent_for;
+using detail::tab_path_at;
 
-namespace
+namespace detail
 {
 // 帯の位置 position のタブのパス（無題なら無し）。脇の束は帯の位置からアクティブを抜いた順。
-[[nodiscard]] std::optional<core::FilePath> tab_path_at(const EditorState &state,
-                                                        std::size_t position)
+std::optional<core::FilePath> tab_path_at(const EditorState &state, std::size_t position)
 {
     if (position == state.active_tab())
     {
@@ -48,7 +48,7 @@ namespace
     return std::visit([](const auto &value) { return std::optional{parked_path(value)}; },
                       state.parked().at(parked));
 }
-} // namespace
+} // namespace detail
 
 void EditorController::adjust_other(const core::Edit &edit, const core::TextBuffer &after)
 {

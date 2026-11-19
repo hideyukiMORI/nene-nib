@@ -27,5 +27,8 @@ struct OperationText
     // 行の右端の鍵の表示も同じ文字列。空ならそのモードでは薄く出して選べない。訳さない。
     std::string_view vim_normal_keys{};
     std::string_view vim_visual_keys{};
+    // タブの右クリックのメニューの置き場（ADR 0078 の追補
+    // #1790）。無ければタブのメニューに載らない。
+    std::optional<ContextMenuSlot> tab_menu{};
 };
 } // namespace nenenib::core
