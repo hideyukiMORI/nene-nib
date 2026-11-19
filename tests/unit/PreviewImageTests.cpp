@@ -11,11 +11,11 @@
 #include "ImageLimits.hpp"
 #include "ImageOutcome.hpp"
 #include "ImagePixels.hpp"
-#include "ImageReference.hpp"
-#include "ImageReferenceRefusal.hpp"
 #include "ImageRequest.hpp"
 #include "ImageSize.hpp"
 #include "InsertText.hpp"
+#include "LocalReference.hpp"
+#include "LocalReferenceRefusal.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownImage.hpp"
 #include "MarkdownOutcome.hpp"
@@ -61,8 +61,8 @@ namespace
 namespace app = nenenib::application;
 namespace core = nenenib::core;
 using core::ImageFormat;
-using core::ImageReferenceRefusal;
 using core::ImageSize;
+using core::LocalReferenceRefusal;
 using Status = app::PreviewImageStatus;
 
 constexpr std::string_view readme = "C:\\docs\\readme.md";
@@ -161,15 +161,15 @@ void verify_image_order()
 [[nodiscard]] std::string resolved(std::string_view reference,
                                    const std::optional<core::FilePath> &document)
 {
-    const auto path = core::resolve_image_reference(reference, document);
+    const auto path = core::resolve_local_reference(reference, document);
     return path ? std::string(path.value().text()) : std::string("<refused>");
 }
 
 [[nodiscard]] bool refused(std::string_view reference,
                            const std::optional<core::FilePath> &document,
-                           ImageReferenceRefusal reason)
+                           LocalReferenceRefusal reason)
 {
-    const auto path = core::resolve_image_reference(reference, document);
+    const auto path = core::resolve_local_reference(reference, document);
     return !path && path.error() == reason;
 }
 
@@ -195,15 +195,15 @@ void verify_relative_references()
     expect(resolved("/root/a.png", base) == "C:\\root\\a.png" &&
                resolved("\\root\\a.png", base) == "C:\\root\\a.png",
            "a path starting with a separator is resolved from the root of the drive");
-    expect(refused("a.png", std::nullopt, ImageReferenceRefusal::no_base) &&
-               refused("/a.png", std::nullopt, ImageReferenceRefusal::no_base),
+    expect(refused("a.png", std::nullopt, LocalReferenceRefusal::no_base) &&
+               refused("/a.png", std::nullopt, LocalReferenceRefusal::no_base),
            "an untitled document cannot resolve a relative path");
-    expect(refused("a.png", path_of("\\\\server\\share\\doc.md"), ImageReferenceRefusal::network),
+    expect(refused("a.png", path_of("\\\\server\\share\\doc.md"), LocalReferenceRefusal::network),
            "a relative path from a document on the network is refused");
-    expect(refused("a.png", path_of("doc.md"), ImageReferenceRefusal::no_base),
+    expect(refused("a.png", path_of("doc.md"), LocalReferenceRefusal::no_base),
            "a document place that is not an absolute drive path cannot be a base");
-    expect(refused("%FF.png", base, ImageReferenceRefusal::malformed) &&
-               refused("%00a.png", base, ImageReferenceRefusal::malformed),
+    expect(refused("%FF.png", base, LocalReferenceRefusal::malformed) &&
+               refused("%00a.png", base, LocalReferenceRefusal::malformed),
            "a decoded path that is not UTF-8 or has a control character is malformed");
 }
 
@@ -222,14 +222,14 @@ void verify_absolute_references()
                resolved("file:/C:/a.png", std::nullopt) == "C:\\a.png" &&
                resolved("file:///C:/a.png?x#y", base) == "C:\\a.png",
            "a file URL is decoded to a drive path");
-    expect(refused("file://server/share/a.png", base, ImageReferenceRefusal::network) &&
-               refused("file:///etc/a.png", base, ImageReferenceRefusal::malformed) &&
-               refused("file:", base, ImageReferenceRefusal::malformed),
+    expect(refused("file://server/share/a.png", base, LocalReferenceRefusal::network) &&
+               refused("file:///etc/a.png", base, LocalReferenceRefusal::malformed) &&
+               refused("file:", base, LocalReferenceRefusal::malformed),
            "a file URL with a host or without a drive path is refused");
-    expect(refused("\\\\server\\share\\a.png", base, ImageReferenceRefusal::network) &&
-               refused("//host/a.png", base, ImageReferenceRefusal::network),
+    expect(refused("\\\\server\\share\\a.png", base, LocalReferenceRefusal::network) &&
+               refused("//host/a.png", base, LocalReferenceRefusal::network),
            "UNC paths and host relative references are network places");
-    expect(refused("C:a.png", base, ImageReferenceRefusal::malformed),
+    expect(refused("C:a.png", base, LocalReferenceRefusal::malformed),
            "a drive relative path is malformed");
 }
 
@@ -237,20 +237,20 @@ void verify_absolute_references()
 void verify_reference_pins()
 {
     const std::optional<core::FilePath> base = path_of(readme);
-    expect(refused("\\\\?\\C:\\a.png", base, ImageReferenceRefusal::network) &&
-               refused("\\\\.\\CON", base, ImageReferenceRefusal::network) &&
-               refused("\\\\?\\UNC\\s\\x", base, ImageReferenceRefusal::network),
+    expect(refused("\\\\?\\C:\\a.png", base, LocalReferenceRefusal::network) &&
+               refused("\\\\.\\CON", base, LocalReferenceRefusal::network) &&
+               refused("\\\\?\\UNC\\s\\x", base, LocalReferenceRefusal::network),
            "device paths are refused as network places");
-    expect(refused("file:////server/share/a.png", base, ImageReferenceRefusal::malformed) &&
+    expect(refused("file:////server/share/a.png", base, LocalReferenceRefusal::malformed) &&
                refused("file:///%5C%5Cserver%5Cshare%5Ca.png", base,
-                       ImageReferenceRefusal::malformed) &&
-               refused("file://%5C%5Cserver/a.png", base, ImageReferenceRefusal::network),
+                       LocalReferenceRefusal::malformed) &&
+               refused("file://%5C%5Cserver/a.png", base, LocalReferenceRefusal::network),
            "a file URL never reaches the network through extra slashes or encoded backslashes");
     expect(
         resolved("%5C%5Cserver%5Cshare%5Ca.png", base) == "C:\\server\\share\\a.png" &&
             resolved("%2F%2Fhost%2Fa.png", base) == "C:\\host\\a.png",
         "an encoded UNC prefix is resolved from the drive root and never becomes a network path");
-    expect(refused("file:///c|/a.png", base, ImageReferenceRefusal::malformed),
+    expect(refused("file:///c|/a.png", base, LocalReferenceRefusal::malformed),
            "the old form file:///c|/ is refused");
     // 予約のデバイス名は経路としては通る（段 2 の adapter が開いた後に GetFileType が
     // FILE_TYPE_DISK でなければ断る・追補 54）。
@@ -263,7 +263,7 @@ void verify_reference_pins()
     expect(resolved("a%2F..%2F..%2F..%2Fwindows%2Fwin.ini", base) == "C:\\windows\\win.ini" &&
                resolved("/a.png", base) == "C:\\a.png",
            "a reference may leave the folder of the document (a local file)");
-    expect(refused("a.png:stream", base, ImageReferenceRefusal::unknown_scheme) &&
+    expect(refused("a.png:stream", base, LocalReferenceRefusal::unknown_scheme) &&
                resolved("%zz.png", base) == "C:\\docs\\%zz.png" &&
                resolved("C%3A%5Cwindows%5Cwin.ini", base) == "C:\\docs\\C:\\windows\\win.ini",
            "a stream name is a scheme, a bad escape stays and an encoded drive is not a drive");
@@ -272,18 +272,18 @@ void verify_reference_pins()
 void verify_refused_schemes()
 {
     const std::optional<core::FilePath> base = path_of(readme);
-    expect(refused("http://example.com/a.png", base, ImageReferenceRefusal::remote) &&
-               refused("HTTPS://example.com/a.png", base, ImageReferenceRefusal::remote),
+    expect(refused("http://example.com/a.png", base, LocalReferenceRefusal::remote) &&
+               refused("HTTPS://example.com/a.png", base, LocalReferenceRefusal::remote),
            "images on the net are never fetched");
-    expect(refused("data:image/png;base64,AAAA", base, ImageReferenceRefusal::data),
+    expect(refused("data:image/png;base64,AAAA", base, LocalReferenceRefusal::data),
            "data URIs are not shown");
-    expect(refused("ftp://example.com/a.png", base, ImageReferenceRefusal::unknown_scheme) &&
-               refused("mailto:a@example.com", base, ImageReferenceRefusal::unknown_scheme) &&
-               refused("x-y.z+w:a", base, ImageReferenceRefusal::unknown_scheme),
+    expect(refused("ftp://example.com/a.png", base, LocalReferenceRefusal::unknown_scheme) &&
+               refused("mailto:a@example.com", base, LocalReferenceRefusal::unknown_scheme) &&
+               refused("x-y.z+w:a", base, LocalReferenceRefusal::unknown_scheme),
            "other schemes are refused");
-    expect(refused("", base, ImageReferenceRefusal::empty) &&
-               refused("#top", base, ImageReferenceRefusal::empty) &&
-               refused("?q", base, ImageReferenceRefusal::empty),
+    expect(refused("", base, LocalReferenceRefusal::empty) &&
+               refused("#top", base, LocalReferenceRefusal::empty) &&
+               refused("?q", base, LocalReferenceRefusal::empty),
            "an empty destination is refused");
 }
 
@@ -439,7 +439,7 @@ void verify_slots()
                                           "![d](sub/d.png)");
     const auto images = app::PreviewImages::of(document, path_of(readme), nullptr);
     expect(images.count() == 4U && images.status_of(0) == Status::waiting &&
-               images.refusal_of(1) == ImageReferenceRefusal::remote &&
+               images.refusal_of(1) == LocalReferenceRefusal::remote &&
                !images.status_of(1).has_value() && images.status_of(3) == Status::waiting,
            "each image node is a waiting path or a refusal");
     expect(images.path_of(0) != nullptr && images.path_of(2) != nullptr &&
@@ -449,8 +449,8 @@ void verify_slots()
     expect(images.pixels_of(0) == nullptr && images.held_bytes() == 0U && !images.status_of(4),
            "nothing is held before reading and an ordinal past the nodes has no state");
     const auto untitled = app::PreviewImages::of(document, std::nullopt, nullptr);
-    expect(untitled.refusal_of(0) == ImageReferenceRefusal::no_base &&
-               untitled.refusal_of(3) == ImageReferenceRefusal::no_base,
+    expect(untitled.refusal_of(0) == LocalReferenceRefusal::no_base &&
+               untitled.refusal_of(3) == LocalReferenceRefusal::no_base,
            "an untitled document shows no relative image");
     const auto many =
         app::PreviewImages::of(parsed_document(paragraphs(300U)), path_of(readme), nullptr);
@@ -947,7 +947,7 @@ void verify_untitled_relative_stays_text()
     applied(controller, app::InsertText{"![a](a.png)\n\n![b](C:\\pics\\b.png)\n"});
     applied(controller, app::TogglePreview{});
     const auto shown = parsed_back(editing);
-    expect(preview_of(shown)->images->refusal_of(0) == ImageReferenceRefusal::no_base &&
+    expect(preview_of(shown)->images->refusal_of(0) == LocalReferenceRefusal::no_base &&
                requested_paths(editing.images()) == std::vector<std::string>{"C:\\pics\\b.png"},
            "an untitled document requests only absolute paths");
 }

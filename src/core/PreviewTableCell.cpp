@@ -59,7 +59,8 @@ PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column)
                         .task = std::nullopt,
                         .table = std::nullopt,
                         .alert = std::nullopt,
-                        .code_colors = std::nullopt};
+                        .code_colors = std::nullopt,
+                        .links = {}};
 }
 
 namespace

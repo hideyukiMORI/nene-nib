@@ -1,9 +1,12 @@
 // parse_markdown（ADR 0151 の決定 5〜8・#765）。入力は CommonMark 0.31 の例を 8 つの構文
 // （見出し・段落・強調・リンク・リスト・引用・コード・水平線）と実体参照・改行の範囲で写したもの。
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
+#include "FilePath.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "Lexer.hpp"
+#include "LinkDestination.hpp"
+#include "LinkKind.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownFailure.hpp"
 #include "MarkdownParse.hpp"
@@ -15,6 +18,7 @@
 #include "PreviewBlockKind.hpp"
 #include "PreviewCodeColor.hpp"
 #include "PreviewCodeColors.hpp"
+#include "PreviewLink.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
@@ -29,6 +33,7 @@
 #include <cstdio>
 #include <limits>
 #include <new>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -79,7 +84,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .task = std::nullopt,
                         .table = std::nullopt,
                         .alert = std::nullopt,
-                        .code_colors = std::nullopt};
+                        .code_colors = std::nullopt,
+                        .links = {}};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -93,6 +99,18 @@ static_assert(!LendsStop<decltype(never_stop)>);
 {
     block.spans = std::move(spans);
     return block;
+}
+
+// リンクの宛先の列（#1869）。各リンクは text の中の範囲と宛先。
+[[nodiscard]] PreviewBlock linked(PreviewBlock block, std::vector<core::PreviewLink> links)
+{
+    block.links = std::move(links);
+    return block;
+}
+
+[[nodiscard]] core::PreviewLink to(std::size_t begin, std::size_t end, std::string target)
+{
+    return core::PreviewLink{Offset{begin}, Offset{end}, std::move(target)};
 }
 
 [[nodiscard]] PreviewBlock listed(PreviewBlock block, std::uint8_t depth, std::string_view marker)
@@ -157,6 +175,11 @@ void dump_table(const PreviewBlock &block)
     if (block.alert.has_value())
     {
         std::fprintf(stderr, " alert(%d)", static_cast<int>(block.alert.value()));
+    }
+    for (const auto &listed_link : block.links)
+    {
+        std::fprintf(stderr, " link(%zu,%zu,[%s])", listed_link.begin.value, listed_link.end.value,
+                     listed_link.target.c_str());
     }
 }
 
@@ -267,15 +290,19 @@ void verify_inline_code_and_links()
     expect_blocks("`` foo ` bar ``",
                   {styled(leaf(paragraph, "foo ` bar", 3U), {span(0U, 9U, inline_code)})},
                   "a double backtick code span keeps a single backtick");
-    expect_blocks("[link](/uri \"title\")",
-                  {styled(leaf(paragraph, "link", 1U), {span(0U, 4U, link)})},
-                  "an inline link keeps only its text");
+    expect_blocks(
+        "[link](/uri \"title\")",
+        {linked(styled(leaf(paragraph, "link", 1U), {span(0U, 4U, link)}), {to(0U, 4U, "/uri")})},
+        "an inline link keeps only its text");
     expect_blocks("<https://foo.bar.baz>",
-                  {styled(leaf(paragraph, "https://foo.bar.baz", 1U), {span(0U, 19U, link)})},
+                  {linked(styled(leaf(paragraph, "https://foo.bar.baz", 1U), {span(0U, 19U, link)}),
+                          {to(0U, 19U, "https://foo.bar.baz")})},
                   "an autolink shows its address");
-    expect_blocks("[*a*](u)",
-                  {styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)})},
-                  "emphasis inside a link");
+    expect_blocks(
+        "[*a*](u)",
+        {linked(styled(leaf(paragraph, "a", 2U), {span(0U, 1U, link), span(0U, 1U, emphasis)}),
+                {to(0U, 1U, "u")})},
+        "emphasis inside a link");
     // "[画像: " は 9 バイト（[ 1・画像 6・: 1・空白 1）。
     expect_blocks(
         "![foo](/url)",
@@ -655,15 +682,18 @@ void verify_strikethrough()
 // 末尾の句読点はリンクに入らない。
 void verify_bare_links()
 {
-    expect_blocks(
-        "see https://example.com/a?b=1.",
-        {styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U), {span(4U, 29U, link)})},
-        "a bare URL is a link without its trailing period");
+    expect_blocks("see https://example.com/a?b=1.",
+                  {linked(styled(leaf(paragraph, "see https://example.com/a?b=1.", 0U),
+                                 {span(4U, 29U, link)}),
+                          {to(4U, 29U, "https://example.com/a?b=1")})},
+                  "a bare URL is a link without its trailing period");
     expect_blocks("www.example.com",
-                  {styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)})},
+                  {linked(styled(leaf(paragraph, "www.example.com", 0U), {span(0U, 15U, link)}),
+                          {to(0U, 15U, "http://www.example.com")})},
                   "a www address is a link shown as written");
     expect_blocks("mail a@example.com",
-                  {styled(leaf(paragraph, "mail a@example.com", 0U), {span(5U, 18U, link)})},
+                  {linked(styled(leaf(paragraph, "mail a@example.com", 0U), {span(5U, 18U, link)}),
+                          {to(5U, 18U, "mailto:a@example.com")})},
                   "an e-mail address is a link");
     expect_blocks("example.com", {leaf(paragraph, "example.com", 0U)},
                   "a host without a scheme or www is text");
@@ -734,8 +764,9 @@ void verify_tables()
     expect_blocks("| *a* | `b` |\n|---|---|\n| ~~c~~ | [d](u) |",
                   {styled(rowed("a\tb", 3U, 0U, {{0U, left}, {2U, left}}),
                           {span(0U, 1U, emphasis), span(2U, 3U, inline_code)}),
-                   styled(rowed("c\td", 28U, 1U, {{0U, left}, {2U, left}}),
-                          {span(0U, 1U, PreviewStyle::strikethrough), span(2U, 3U, link)})},
+                   linked(styled(rowed("c\td", 28U, 1U, {{0U, left}, {2U, left}}),
+                                 {span(0U, 1U, PreviewStyle::strikethrough), span(2U, 3U, link)}),
+                          {to(2U, 3U, "u")})},
                   "spans inside cells keep their style in the row text");
     expect_blocks("| a \\| b |\n|---|\n| c |",
                   {rowed("a | b", 2U, 0U, {{0U, left}}), rowed("c", 19U, 1U, {{0U, left}})},
@@ -808,6 +839,201 @@ void verify_alerts()
         {alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U), {span(0U, 4U, title)}), note),
          quoted(leaf(paragraph, "b", 17U), 1U)},
         "the next quote after a blank line is a new ordinary quote");
+}
+
+// リンクの宛先の列（ADR 0151 の追補 2026-11-19・#1869）。範囲は link の装飾と同じで、宛先は
+// 実体参照と `\` のエスケープを解いた href（`%` は解かない）。画像の宛先は載らない。
+void verify_link_targets()
+{
+    expect_blocks("[a][1]\n\n[1]: http://x.y/z \"t\"",
+                  {linked(styled(leaf(paragraph, "a", 1U), {span(0U, 1U, link)}),
+                          {to(0U, 1U, "http://x.y/z")})},
+                  "a reference link takes the destination of its definition");
+    expect_blocks(
+        "[a](1) [b](2)",
+        {linked(styled(leaf(paragraph, "a b", 1U), {span(0U, 1U, link), span(2U, 3U, link)}),
+                {to(0U, 1U, "1"), to(2U, 3U, "2")})},
+        "links are listed in the order they open");
+    expect_blocks(
+        "[a](b\\_c&amp;d%20e)",
+        {linked(styled(leaf(paragraph, "a", 1U), {span(0U, 1U, link)}), {to(0U, 1U, "b_c&d%20e")})},
+        "escapes and entities are resolved and percent signs are kept");
+    expect_blocks("<a@example.com>",
+                  {linked(styled(leaf(paragraph, "a@example.com", 1U), {span(0U, 13U, link)}),
+                          {to(0U, 13U, "mailto:a@example.com")})},
+                  "an e-mail autolink in angle brackets gets mailto:");
+    expect_blocks("<https://x.y/a\\_b>",
+                  {linked(styled(leaf(paragraph, "https://x.y/a\\_b", 1U), {span(0U, 16U, link)}),
+                          {to(0U, 16U, "https://x.y/a\\_b")})},
+                  "an autolink keeps its backslashes");
+    // "[画像: " は 9 バイト。
+    expect_blocks("![i](p.png) [l](q)",
+                  {linked(styled(leaf(paragraph, "[\xE7\x94\xBB\xE5\x83\x8F: i] l", 2U),
+                                 {span(0U, 11U, image), span(12U, 13U, link)}),
+                          {to(12U, 13U, "q")})},
+                  "an image destination is not listed");
+    expect_blocks("# [h](#x)",
+                  {linked(styled(titled(1U, "h", 3U), {span(0U, 1U, link)}), {to(0U, 1U, "#x")})},
+                  "a link inside a heading");
+    expect_blocks(
+        "> [!NOTE]\n> [a](u)",
+        {linked(alerted(styled(quoted(leaf(paragraph, "NOTE\na", 2U), 1U),
+                               {span(0U, 4U, PreviewStyle::alert_title), span(5U, 6U, link)}),
+                        core::PreviewAlert::note),
+                {to(5U, 6U, "u")})},
+        "a link after an alert marker moves with the spans");
+    expect_blocks(
+        "~a [b](u)~",
+        {linked(styled(leaf(paragraph, "~a b~", 1U), {span(3U, 4U, link)}), {to(3U, 4U, "u")})},
+        "a link after a restored single tilde moves with the spans");
+}
+
+// リンクの宛先の種類（ADR 0151 の追補 2026-11-19・#1869）。文書へのリンクは画像と同じ
+// resolve_local_reference で解く。
+[[nodiscard]] bool destined(std::string_view target, const std::optional<core::FilePath> &document,
+                            core::LinkKind kind, std::string_view text)
+{
+    const auto found = core::link_destination(target, document);
+    const bool same = found == core::LinkDestination{.kind = kind, .text = std::string(text)};
+    if (!same)
+    {
+        std::fprintf(stderr, "  link_destination([%.*s]) = (%d, [%s])\n",
+                     static_cast<int>(target.size()), target.data(), static_cast<int>(found.kind),
+                     found.text.c_str());
+    }
+    return same;
+}
+
+[[nodiscard]] bool refused_link(std::string_view target,
+                                const std::optional<core::FilePath> &document)
+{
+    return destined(target, document, core::LinkKind::refused, target);
+}
+
+void verify_link_destinations()
+{
+    using enum core::LinkKind;
+    const std::optional<core::FilePath> base = core::FilePath::parse("C:\\docs\\a.md").value();
+    const std::optional<core::FilePath> untitled;
+    expect(destined("https://x.y/a?b#c", base, web, "https://x.y/a?b#c") &&
+               destined("HTTP://X.Y", base, web, "HTTP://X.Y") &&
+               destined("MailTo:a@b.c", base, mail, "MailTo:a@b.c"),
+           "http, https and mailto are matched without case and keep their spelling");
+    expect(refused_link("javascript:alert(1)", base) && refused_link("ms-settings:x", base) &&
+               refused_link("data:text/plain,x", base) && refused_link("a.md:stream", base),
+           "any other scheme is refused");
+    expect(destined("#sec", base, heading, "sec") && destined("#", untitled, heading, ""),
+           "a hash first is a heading");
+    expect(destined("C:\\x\\b.md", base, document, "C:\\x\\b.md") &&
+               destined("c:/x/b.md", base, document, "c:\\x\\b.md"),
+           "a one-letter scheme is a drive and an absolute path is a document");
+    expect(destined("b.md", base, document, "C:\\docs\\b.md") &&
+               destined("../c/./d.md", base, document, "C:\\c\\d.md") &&
+               destined("sub/e%20f.md", base, document, "C:\\docs\\sub\\e f.md") &&
+               destined("b.md#sec", base, document, "C:\\docs\\b.md") &&
+               destined("b.md?q", base, document, "C:\\docs\\b.md") &&
+               destined("%zz.md", base, document, "C:\\docs\\%zz.md"),
+           "a relative path is resolved from the folder of the document like an image");
+    expect(destined("file:///C:/x/y.md", base, document, "C:\\x\\y.md") &&
+               refused_link("file://server/s/x.md", base),
+           "a file URL is resolved like an image and a host is refused");
+    expect(refused_link("b.md", untitled), "a relative path in an untitled document is refused");
+    expect(refused_link("\\\\server\\share\\x.md", base) && refused_link("//host/x.md", base),
+           "a network path is refused");
+    expect(refused_link("%FF.md", base) && refused_link("%00a.md", base),
+           "a percent sign that decodes to invalid UTF-8 or NUL is refused");
+    expect(refused_link("", base) && refused_link("a\tb.md", base) &&
+               refused_link("https://x\x7f", base),
+           "an empty destination and control characters are refused");
+    expect(refused_link("p.png", base) && refused_link("P.PNG", base) &&
+               refused_link("file:///C:/x/y.EXE", base),
+           "a destination with an extension that is not text is refused");
+}
+
+// OS に渡す web と mail の綴りは ASCII の URI だけ（#1873 のレビュー M1）。
+// 非 ASCII の字は path・query・fragment で `%XX` に符号化する。
+// host の非 ASCII・URI に無い ASCII・不完全な `%` は断る。
+void verify_link_destination_uris()
+{
+    using enum core::LinkKind;
+    const std::optional<core::FilePath> base = core::FilePath::parse("C:\\docs\\a.md").value();
+    expect(destined("https://ja.wikipedia.org/wiki/日本?q=語#節", base, web,
+                    "https://ja.wikipedia.org/wiki/%E6%97%A5%E6%9C%AC?q=%E8%AA%9E#%E7%AF%80") &&
+               destined("https://a/\xE2\x80\xAE"
+                        "gpj.exe",
+                        base, web, "https://a/%E2%80%AEgpj.exe"),
+           "non-ASCII characters after the host are percent-encoded");
+    expect(refused_link("https://例え.jp/", base) && refused_link("https://u@例え.jp/", base),
+           "a non-ASCII host is refused");
+    expect(refused_link("https://a.example/\" --flag", base) && refused_link("https://a b", base) &&
+               refused_link("https://a/{x}", base) && refused_link("https://a/x|y", base) &&
+               refused_link("https://a/x\\y", base) && refused_link("mailto:a <b@c.d>", base),
+           "ASCII characters outside RFC 3986 are refused, not encoded");
+    expect(refused_link("https://a/%zz", base) && refused_link("https://a/%4", base) &&
+               destined("https://a/%41%e3", base, web, "https://a/%41%e3"),
+           "an incomplete percent sign is refused and a complete one is kept");
+    expect(refused_link("http:", base) && refused_link("https:x", base) &&
+               refused_link("http://", base) && refused_link("http://u@:80/", base) &&
+               destined("http://[::1]:80/", base, web, "http://[::1]:80/"),
+           "http and https need // and a host");
+    expect(refused_link("http://%65vil.com/", base) &&
+               refused_link("https://good.example@evil.example/", base),
+           "a percent sign or an at sign in the authority is refused");
+    expect(destined("mailto:a@b.c?subject=hi&body=x&CC=d@e.f&bcc=g@h.i", base, mail,
+                    "mailto:a@b.c?subject=hi&body=x&CC=d@e.f&bcc=g@h.i") &&
+               refused_link("mailto:a@b.c?attach=x", base) &&
+               refused_link("mailto:a@b.c?%61ttach=x", base) &&
+               refused_link("mailto:a@b.c?subject=x&attachment=y", base) &&
+               refused_link("mailto:a@b.c?subject=x?attach=y", base),
+           "mailto takes only subject, body, cc and bcc");
+    expect(refused_link(" https://x.y", base) && refused_link(" b.md", base) &&
+               refused_link("b.md ", base),
+           "a destination with a leading or trailing space is refused");
+}
+
+// 文書へのリンクの経路（#1873 のレビュー M2・M3）。見えない字・不正な UTF-8・
+// 装置の予約名・`.` か空白で終わる名前・`\\?\` と `\\.\` は断る。
+void verify_link_destination_paths()
+{
+    using enum core::LinkKind;
+    const std::optional<core::FilePath> base = core::FilePath::parse("C:\\docs\\a.md").value();
+    expect(refused_link("a\xE2\x80\xAE"
+                        "b.md",
+                        base) &&
+               refused_link("a\xE2\x81\xA6.md", base) && refused_link("a\xE2\x80\x8E.md", base) &&
+               refused_link("a\xC2\x85.md", base) && refused_link("a\xE2\x80\x8B.md", base) &&
+               refused_link("a\xE2\x81\xA0.md", base) &&
+               refused_link("\xEF\xBB\xBF"
+                            "a.md",
+                            base) &&
+               refused_link("a%E2%80%AE.md", base),
+           "bidirectional controls, C1 controls and zero-width characters are refused");
+    expect(refused_link("a\xD8\x9C.md", base) && refused_link("a\xE1\xA0\x8E.md", base) &&
+               refused_link("a\xE1\x85\x9F.md", base) && refused_link("a\xE3\x85\xA4.md", base) &&
+               refused_link("a\xEF\xBE\xA0.md", base) && refused_link("a\xF3\xA0\x81\x81.md", base),
+           "the Arabic letter mark, Hangul fillers and tag characters are refused");
+    expect(refused_link("a\xFF.md", base) && refused_link("a%FF.md", base),
+           "invalid UTF-8 is refused");
+    expect(refused_link("COM1", base) && refused_link("con.md", base) &&
+               refused_link("C:\\x\\AUX", base) && refused_link("NUL.tar.md", base) &&
+               refused_link("lpt\xC2\xB9.txt", base) && refused_link("prn", base) &&
+               refused_link("CONOUT$", base) && refused_link("file:///C:/x/com0.md", base) &&
+               refused_link("./COM1:", base) && refused_link("sub/con:", base) &&
+               refused_link("NUL :", base) && refused_link("./NUL:x", base),
+           "reserved device names are refused");
+    expect(destined("console.md", base, document, "C:\\docs\\console.md") &&
+               destined("com10.md", base, document, "C:\\docs\\com10.md") &&
+               destined("a.con", base, document, "C:\\docs\\a.con"),
+           "names that only look like device names are documents");
+    expect(refused_link("x.exe.", base) && refused_link("x.md%20", base) &&
+               refused_link("x.md.#sec", base),
+           "a name that ends with a dot or a space is refused");
+    expect(refused_link("\\\\?\\C:\\x.md", base) && refused_link("\\\\.\\COM1", base) &&
+               refused_link("//?/C:/x.md", base),
+           "verbatim and device paths are refused");
+    expect(destined("file://localhost/C:/x/y.md", base, document, "C:\\x\\y.md") &&
+               destined("FILE:/C:/x/y.md", base, document, "C:\\x\\y.md"),
+           "a file URL on localhost is a document");
 }
 
 void verify_html_and_line_endings()
@@ -952,6 +1178,10 @@ void verify_markdown_scope()
     verify_front_matter();
     verify_tables();
     verify_alerts();
+    verify_link_targets();
+    verify_link_destinations();
+    verify_link_destination_uris();
+    verify_link_destination_paths();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();

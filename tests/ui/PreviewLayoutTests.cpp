@@ -91,7 +91,8 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
                               std::nullopt,
                               std::nullopt,
                               std::nullopt,
-                              std::nullopt};
+                              std::nullopt,
+                              {}};
 }
 
 void check_reuse()
