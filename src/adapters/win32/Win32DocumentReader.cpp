@@ -86,7 +86,10 @@ Win32DocumentReader::request(application::DocumentReadRequest request)
     auto file = std::make_unique<FileHandle>(CreateFileW(native_path(wide).c_str(), GENERIC_READ,
                                                          FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                                          FILE_ATTRIBUTE_NORMAL, nullptr));
-    const auto size = opened_size(*file);
+    // ディスクのファイルでなければ裏で読まない（同期の道の Win32FileAdapter::read が unreadable で
+    // 断る・#1869 の段 L1 の再レビュー N2）。
+    const bool disk = file->valid() && GetFileType(file->get()) == FILE_TYPE_DISK;
+    const auto size = disk ? opened_size(*file) : std::nullopt;
     if (!size.has_value() || size.value() <= synchronous_bytes_ ||
         size.value() > request.maximum_bytes)
     {

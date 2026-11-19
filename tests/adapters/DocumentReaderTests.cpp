@@ -303,6 +303,41 @@ void verify_utf16_past_decoded_limit()
     expect(refused, "a UTF-16 file over 64 MiB is too_large_to_decode");
     expect(DeleteFileW(utf16_name) != 0, "the UTF-16 sample is removed");
 }
+// ディスクのファイルでない名前（装置の NUL と名前付きパイプ）は、読まずに unreadable になる
+// （#1869 の段 L1 の再レビュー N2）。同期の上限を 0 にした読みでも worker に回さない。
+void verify_devices_refused()
+{
+    adapters::Win32Worker worker;
+    adapters::Win32FileAdapter files;
+    adapters::Win32CodePageAdapter code_pages;
+    adapters::Win32DocumentReader reads(worker, files, code_pages, 0, std::size_t{1} << 20U);
+    const auto refused = [&](std::string_view name, std::uint64_t ticket)
+    {
+        const auto asked = reads.request(
+            app::DocumentReadRequest{path_of(name), ticket, core::maximum_document_bytes});
+        const auto *finished =
+            asked.has_value() ? std::get_if<app::DocumentReadFinished>(&asked.value()) : nullptr;
+        return finished != nullptr && !finished->document.has_value() &&
+               finished->document.error() == app::FileFailure::unreadable;
+    };
+    expect(files.read(path_of("\\\\.\\NUL"), 16).error() == app::FileFailure::unreadable,
+           "the NUL device is not read as a file");
+    expect(refused("\\\\.\\NUL", 7), "opening the NUL device fails as unreadable");
+    // 名前はプロセスごと（同じ機械のほかの試験と重ならない）。
+    const std::string pipe_path =
+        "\\\\.\\pipe\\nib-document-reader-" + std::to_string(GetCurrentProcessId());
+    const std::wstring pipe_name(pipe_path.begin(), pipe_path.end());
+    const HANDLE pipe = CreateNamedPipeW(pipe_name.c_str(), PIPE_ACCESS_DUPLEX,
+                                         PIPE_TYPE_BYTE | PIPE_WAIT, 1, 64, 64, 0, nullptr);
+    expect(pipe != INVALID_HANDLE_VALUE, "the named pipe is made");
+    expect(refused(pipe_path, 8), "opening a named pipe fails as unreadable");
+    if (pipe != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(pipe);
+    }
+    expect(!worker.started(), "a device never reaches the worker");
+}
+
 int run_tests()
 {
     DeleteFileW(large_name);
@@ -316,6 +351,7 @@ int run_tests()
     verify_cancelled_on_worker();
     verify_past_open_limit();
     verify_utf16_past_decoded_limit();
+    verify_devices_refused();
     expect(DeleteFileW(large_name) != 0 && DeleteFileW(small_name) != 0,
            "the sample files are removed");
     std::printf("Document reader adapter: %zu checks, %zu failures\n", checks(), failures());

@@ -261,6 +261,13 @@ std::expected<core::SealedBytes, Failure> Win32FileAdapter::read(const core::Fil
     {
         return std::unexpected(failure_of(GetLastError(), Failure::unreadable));
     }
+    // ディスクのファイルだけを読む（装置・名前付きパイプ・コンソールは読まずに unreadable・画像の
+    // 読み ImageFileRead と同じ確かめ・#1869 の段 L1 の再レビュー N2）。Ctrl+O・起動引数・一覧・
+    // リンクの開く道の全部に効く。
+    if (GetFileType(file.get()) != FILE_TYPE_DISK)
+    {
+        return std::unexpected(Failure::unreadable);
+    }
     return read_all(file, maximum_bytes);
 }
 
