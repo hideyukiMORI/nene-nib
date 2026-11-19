@@ -123,6 +123,7 @@ constexpr auto superscript_digits =
 }
 
 // http / https の `:` の後ろ rest が `//` と空でない ASCII の host で始まるか。
+// authority に `%` か `@` があれば断る（見せる綴りと開く先のずれ・userinfo の偽装）。
 [[nodiscard]] bool has_web_host(std::string_view rest) noexcept
 {
     if (!rest.starts_with("//"))
@@ -131,12 +132,12 @@ constexpr auto superscript_digits =
     }
     std::string_view authority = rest.substr(2U);
     authority = authority.substr(0U, first_of(authority, "/?#"));
-    if (std::ranges::any_of(authority, non_ascii))
+    if (std::ranges::any_of(authority, non_ascii) ||
+        first_of(authority, "%@") != std::string_view::npos)
     {
         return false;
     }
-    const std::size_t at = last_of(authority, '@');
-    std::string_view host = at == std::string_view::npos ? authority : authority.substr(at + 1U);
+    std::string_view host = authority;
     if (!host.starts_with('['))
     {
         host = host.substr(0U, last_of(host, ':'));
@@ -145,12 +146,16 @@ constexpr auto superscript_digits =
 }
 
 // mailto の `?` の後ろの引数が subject / body / cc / bcc だけか。
-// 名前は `%` を解いてから比べる。
+// 名前は `%` を解いてから比べる。2 つ目の生の `?` があれば断る（値で割るメールソフトがある）。
 [[nodiscard]] bool known_mail_fields(std::string_view target)
 {
     const std::size_t question = first_of(target, "?");
     std::string_view rest =
         question == std::string_view::npos ? std::string_view{} : target.substr(question + 1U);
+    if (first_of(rest, "?") != std::string_view::npos)
+    {
+        return false;
+    }
     while (!rest.empty())
     {
         const std::size_t end = first_of(rest, "&");
@@ -177,12 +182,15 @@ constexpr auto superscript_digits =
     return LinkDestination{.kind = kind, .text = uri.value()};
 }
 
-// 確かめで見せる綴りを偽れる字（C1 制御・幅 0 の字・双方向の制御・行と段落の区切り）。
+// 確かめで見せる綴りを偽れる字（C1 制御・幅 0 の字・双方向の制御・行と段落の区切り・
+// ハングルの埋め字・タグ文字）。
 [[nodiscard]] bool deceptive_code_point(char32_t value) noexcept
 {
-    return (value >= 0x80U && value <= 0x9FU) || (value >= 0x200BU && value <= 0x200FU) ||
+    return (value >= 0x80U && value <= 0x9FU) || value == 0x061CU || value == 0x115FU ||
+           value == 0x1160U || value == 0x180EU || (value >= 0x200BU && value <= 0x200FU) ||
            (value >= 0x2028U && value <= 0x202EU) || (value >= 0x2060U && value <= 0x2069U) ||
-           value == 0xFEFFU;
+           value == 0x3164U || value == 0xFEFFU || value == 0xFFA0U ||
+           (value >= 0xE0000U && value <= 0xE007FU);
 }
 
 // 検証済みの text が deceptive_code_point の字を含むか。
@@ -198,10 +206,22 @@ constexpr auto superscript_digits =
     return false;
 }
 
-// 経路の最後の段 name の、最初の `.` より前が装置の予約名か。
+// 経路の最後の段 name の、最初の `.` か `:` より前（末尾の空白を落とす）。
+// Windows は最後の段の末尾の `:` と空白を落として装置に写す（NativePath.cpp）。
+[[nodiscard]] std::string_view device_stem(std::string_view name) noexcept
+{
+    std::string_view stem = name.substr(0U, first_of(name, ".:"));
+    while (!stem.empty() && stem.back() == ' ')
+    {
+        stem.remove_suffix(1U);
+    }
+    return stem;
+}
+
+// 経路の最後の段 name が装置の予約名か（比べるのは device_stem）。
 [[nodiscard]] bool device_name(std::string_view name) noexcept
 {
-    const std::string_view stem = name.substr(0U, first_of(name, "."));
+    const std::string_view stem = device_stem(name);
     const auto named = [&stem](std::string_view listed)
     { return ascii_equal_ignoring_case(stem, listed); };
     if (std::ranges::any_of(device_names, named))
