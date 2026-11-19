@@ -2,8 +2,11 @@
 
 #include "MarkdownTask.hpp"
 #include "Offset.hpp"
+#include "PreviewAlert.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColor.hpp"
 #include "PreviewSpan.hpp"
+#include "PreviewTableRow.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -12,12 +15,16 @@
 
 namespace nenenib::core
 {
-// プレビューの 1 要素（ADR 0151 の決定 7・8）。enter / leave の積みを平らにした値で、深さは数で
-// 持つ（255 で飽和）。level は見出しの段（1〜6・ほかは 0）。marker は項目の最初の要素だけが持つ
-// 記号（番号つきは "1."・箇条書きは "•"・ほかは空）。source_begin は要素の最初の文字の本文の
-// バイト位置。text は実体参照を解いた表示の文字で、ハードブレークは "\n"、
-// 段落の中の改行は空白 1 つ。task はタスクリストの項目の最初の要素だけが持つチェックボックス
-// （ADR 0155 の追補 22・ほかは nullopt）。
+// プレビューの 1 要素（ADR 0151 の決定 7・8）。enter / leave の積みを平らにした値で、
+// 深さは数で持つ（255 で飽和）。level は見出しの段（1〜6・ほかは 0）。marker は項目の
+// 最初の要素だけが持つ記号（番号つきは "1." か "1)"・箇条書きは "•"・ほかは空）。
+// source_begin は要素の最初の文字の本文のバイト位置。text は実体参照を解いた表示の
+// 文字で、ハードブレークは "\n"、段落の中の改行は空白 1 つ。task はタスクリストの項目の
+// 最初の要素だけが持つチェックボックス（ADR 0155 の追補 22・ほかは nullopt）。table は
+// 表の行（table_row）だけが持つ升と揃え、alert は GitHub の alert の引用の中の要素が持つ
+// 種類（#1848・ほかは nullopt）。code_colors は言語の分かった囲みのコードだけが持つ構文の色の
+// 区間（#1858・text のバイト位置）で、nullopt の要素は 1 色で描く（空の列は色の区間の無い
+// 囲み・文字は本文の色）。
 struct PreviewBlock
 {
     PreviewBlockKind kind;
@@ -29,6 +36,9 @@ struct PreviewBlock
     std::string text;
     std::vector<PreviewSpan> spans;
     std::optional<MarkdownTask> task;
+    std::optional<PreviewTableRow> table;
+    std::optional<PreviewAlert> alert;
+    std::optional<std::vector<PreviewCodeColor>> code_colors;
 };
 
 [[nodiscard]] inline bool operator==(const PreviewBlock &left, const PreviewBlock &right)
@@ -36,6 +46,8 @@ struct PreviewBlock
     return left.kind == right.kind && left.level == right.level &&
            left.quote_depth == right.quote_depth && left.list_depth == right.list_depth &&
            left.marker == right.marker && left.source_begin == right.source_begin &&
-           left.text == right.text && left.spans == right.spans && left.task == right.task;
+           left.text == right.text && left.spans == right.spans && left.task == right.task &&
+           left.table == right.table && left.alert == right.alert &&
+           left.code_colors == right.code_colors;
 }
 } // namespace nenenib::core

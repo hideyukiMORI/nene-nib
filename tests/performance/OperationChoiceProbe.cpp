@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 46> expected_2{
+constexpr std::array<OperationChoiceExpected, 50> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -133,8 +133,20 @@ constexpr std::array<OperationChoiceExpected, 46> expected_2{
       "Ctrl+A", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::cycle_finder_preview, 45U, "プレビューの置き方を切り替える", 15U,
       "Ctrl+P の面のプレビューを右・下・なしの順に変えます（面を開いている間は Ctrl+Shift+P）", 53U,
-      "", "", core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 44> expected_3{
+      "", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::complete, 46U, "補完", 2U,
+      "打っている語の候補を出します（上下で選び、Enter か Tab で確定）", 37U, "Ctrl+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::go_to_definition, 47U, "定義へ移動", 5U,
+      "キャレットの名前の定義へ移動します（言語サーバー）", 25U, "F12", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::show_information, 48U, "情報を表示", 5U,
+      "キャレットの名前の情報を札で表示します（言語サーバー）", 27U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::open_settings, 49U, "設定", 2U,
+      "設定の面を開きます（閉じると保存します）", 20U, "Ctrl+,", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 47> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -247,8 +259,17 @@ constexpr std::array<OperationChoiceExpected, 44> expected_3{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::cycle_finder_preview, 45U, "プレビューの置き方を切り替える", 15U,
       "Ctrl+P の面のプレビューを右・下・なしの順に変えます（面を開いている間は Ctrl+Shift+P）", 53U,
-      "", "", core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 46> expected_4{
+      "", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::go_to_definition, 47U, "定義へ移動", 5U,
+      "キャレットの名前の定義へ移動します（言語サーバー）", 25U, "F12", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::show_information, 48U, "情報を表示", 5U,
+      "キャレットの名前の情報を札で表示します（言語サーバー）", 27U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::open_settings, 49U, "設定", 2U,
+      "設定の面を開きます（閉じると保存します）", 20U, "Ctrl+,", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 50> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -277,6 +298,9 @@ constexpr std::array<OperationChoiceExpected, 46> expected_4{
      {core::EditorOperation::cycle_finder_preview, 45U, "プレビューの置き方を切り替える", 15U,
       "Ctrl+P の面のプレビューを右・下・なしの順に変えます（面を開いている間は Ctrl+Shift+P）", 53U,
       "", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::show_information, 48U, "情報を表示", 5U,
+      "キャレットの名前の情報を札で表示します（言語サーバー）", 27U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
@@ -287,6 +311,9 @@ constexpr std::array<OperationChoiceExpected, 46> expected_4{
      {core::EditorOperation::find_next, 29U, "次を検索", 4U,
       "最後に探した文字列の次の当たりへ移ります", 20U, "F3", "", core::CommandChoiceKind::operate,
       std::nullopt},
+     {core::EditorOperation::go_to_definition, 47U, "定義へ移動", 5U,
+      "キャレットの名前の定義へ移動します（言語サーバー）", 25U, "F12", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -333,6 +360,12 @@ constexpr std::array<OperationChoiceExpected, 46> expected_4{
       "Delete", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::select_all, 44U, "すべて選択", 5U, "文書の全体を選びます", 10U,
       "Ctrl+A", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::complete, 46U, "補完", 2U,
+      "打っている語の候補を出します（上下で選び、Enter か Tab で確定）", 37U, "Ctrl+Space", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::open_settings, 49U, "設定", 2U,
+      "設定の面を開きます（閉じると保存します）", 20U, "Ctrl+,", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
       14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::find_previous, 30U, "前を検索", 4U,
@@ -436,14 +469,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 1634560U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 1810432U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 1576704U, expected_3,
+     {"", core::EditMode::vim, 256U, 1703424U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 1634560U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 1810432U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,

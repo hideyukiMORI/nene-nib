@@ -265,7 +265,7 @@ void EditorController::open_project_hit(std::size_t index)
     const ProjectSearchHit hit = project_search_.hits.at(index);
     close_command_input();
     project_landing_ =
-        ProjectHitLanding{hit.file, core::TextPosition{hit.hit.line, hit.hit.column}};
+        ProjectHitLanding{hit.file, LandingPlace{core::TextPosition{hit.hit.line, hit.hit.column}}};
     open_listed(hit.file, core::PaletteOrigin::project_hit, OpenedAs::pinned);
     land_project_hit();
 }
@@ -289,7 +289,7 @@ void EditorController::land_project_hit()
         {
             state_ = state_.with_vim_marks(std::move(marks).value());
         }
-        accept(PlaceCaret{landing.at, core::SelectionAnchoring::collapse});
+        accept(PlaceCaret{landed_position(landing.at), core::SelectionAnchoring::collapse});
         return;
     }
     // 開く要求が残っていなければ開けなかった（知らせは開く道が出した）。
@@ -298,6 +298,27 @@ void EditorController::land_project_hit()
     {
         project_landing_.reset();
     }
+}
+
+// 着地の位置 → アクティブな本文の行と桁（ADR 0190 の決定 7）。選択肢ごとの写し先を std::visit で
+// 引くので、LandingPlace に選択肢を足すと写し先が足りずにコンパイルが落ちる（CPP-002）。
+core::TextPosition EditorController::landed_position(const LandingPlace &place) const
+{
+    return std::visit([this](const auto &value) { return this->landed_position(value); }, place);
+}
+
+// 全文検索の当たりは行と桁のまま。
+core::TextPosition EditorController::landed_position(const core::TextPosition &position) const
+{
+    return position;
+}
+
+// 言語サーバーの Position は開いた後の本文で lsp_offset_of の 1 本が写し、行が本文の外なら末尾。
+core::TextPosition EditorController::landed_position(const core::LspPosition &position) const
+{
+    const core::TextBuffer &text = state_.text();
+    const auto at = core::lsp_offset_of(text, position, language_server_.encoding);
+    return text.position_of(at.value_or(core::Offset{text.size_bytes()}));
 }
 
 std::optional<ProjectSearchView> EditorController::project_search_view() const

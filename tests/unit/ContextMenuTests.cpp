@@ -497,23 +497,25 @@ listed_key_of(const std::vector<core::CommandChoice> &choices, core::EditorOpera
 
 void verify_vim_operation_list()
 {
-    const auto normal =
-        core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_normal},
-                                core::DisplayLanguage::japanese);
-    expect(normal.size() == 47 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
+    const auto normal = core::operation_choices(
+        "",
+        core::PaletteMode{core::EditMode::vim, Mode::vim_normal, core::Distribution::unpackaged},
+        core::DisplayLanguage::japanese);
+    expect(normal.size() == 50 && !listed_key_of(normal, core::EditorOperation::cut).has_value() &&
                !listed_key_of(normal, core::EditorOperation::copy).has_value() &&
                listed_key_of(normal, core::EditorOperation::paste) == "\"+p" &&
                listed_key_of(normal, core::EditorOperation::select_all) == "ggVG" &&
                listed_key_of(normal, core::EditorOperation::find) == "",
            "the vim normal list shows the vim keys and leaves out the rows without them");
-    const auto visual =
-        core::operation_choices("", core::PaletteMode{core::EditMode::vim, Mode::vim_visual},
-                                core::DisplayLanguage::japanese);
-    expect(visual.size() == 49 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
+    const auto visual = core::operation_choices(
+        "",
+        core::PaletteMode{core::EditMode::vim, Mode::vim_visual, core::Distribution::unpackaged},
+        core::DisplayLanguage::japanese);
+    expect(visual.size() == 52 && listed_key_of(visual, core::EditorOperation::copy) == "\"+y",
            "the vim visual list shows every row with the visual keys");
     expect(
         core::operation_choices("", core::EditMode::vim, core::DisplayLanguage::japanese).size() ==
-            49,
+            52,
         "a list that knows only the edit mode keeps the vim rows without vim keys");
 }
 

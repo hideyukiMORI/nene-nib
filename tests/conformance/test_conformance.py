@@ -21,6 +21,7 @@ spec = importlib.util.spec_from_file_location("vim_oracle", ROOT / "eng/vim-orac
 vim_oracle = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(vim_oracle)
 CASE_MAPPING = cnf.case_mapping.case_mapping_header().encode("utf-8")
+MARKDOWN_ENTITIES = cnf.markdown_entities.markdown_entities_header().encode("utf-8")
 RULES = json.loads((ROOT / "eng/conformance-rules.json").read_text(encoding="utf-8"))
 TODAY = datetime.date(2026, 9, 15)
 
@@ -587,6 +588,41 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_case_mapping_missing_negative(self):
         self.assertTrue(any("CNF-010" in detail and "missing" in detail for detail in self.case_mapping_details()))
 
+    # CNF-010 — 生成物 MarkdownEntityTable.hpp は eng/markdown-entities.py の markdown_entities_header()
+    # が作る全文とバイト一致する（#1840）。正例は同じ関数の出力と保存されているファイルをそのまま読ませる。
+    def markdown_entities_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.markdown_entities_checks(self.root)]
+
+    def seed_markdown_entities(self, content):
+        path = self.root / "src/core/MarkdownEntityTable.hpp"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def test_cnf010_markdown_entities_positive(self):
+        self.seed_markdown_entities(MARKDOWN_ENTITIES)
+        self.assertEqual([], self.markdown_entities_details())
+        self.seed_markdown_entities((ROOT / "src/core/MarkdownEntityTable.hpp").read_bytes())
+        self.assertEqual([], self.markdown_entities_details())
+
+    def test_cnf010_markdown_entities_edited_negative(self):
+        cases = {
+            "wrong value": MARKDOWN_ENTITIES.replace(b'{"amp", U"\U00000026"},', b'{"amp", U"\U00000027"},', 1),
+            "dropped row": MARKDOWN_ENTITIES.replace(b'    {"hellip", U"\U00002026"},\n', b"", 1),
+            "out of order": MARKDOWN_ENTITIES.replace(b'{"AElig",', b'{"ZElig",', 1),
+            "CRLF": MARKDOWN_ENTITIES.replace(b"\n", b"\r\n"),
+        }
+        for name, content in cases.items():
+            with self.subTest(case=name):
+                self.assertNotEqual(MARKDOWN_ENTITIES, content)
+                self.seed_markdown_entities(content)
+                details = self.markdown_entities_details()
+                self.assertTrue(details)
+                self.assertTrue(all(detail.startswith("CNF-010") and "--write" in detail for detail in details))
+
+    def test_cnf010_markdown_entities_missing_negative(self):
+        self.assertTrue(any("CNF-010" in detail and "missing" in detail
+                            for detail in self.markdown_entities_details()))
+
     # CNF-011 — fixtures.json は生成器が書く 1 つの形（1 行 1 件）だけを許す（Issue #98）。
     # 正例は oracle の canonical_fixtures_json が書いたバイト列そのままを読ませる。
     def vim_fixtures(self):
@@ -873,6 +909,51 @@ class TranslationUnitSizeChecks(unittest.TestCase):
         self.assertEqual([], [str(f) for f in cnf.translation_unit_size_checks(ROOT, cnf.inventory(ROOT))])
 
 
+class FeatureCostChecks(unittest.TestCase):
+    """CNF-015 — 機能の表の測った行と docs/quality/feature-costs.md の一致・ベンチの実在（ADR 0170）。"""
+
+    TABLE = ('inline constexpr std::array<FeatureCost, 2> feature_costs{{\n'
+             '    {EditorFeature::wrap, "wrap", true, FeatureStorage::own_key, 0, "", false,\n'
+             '     UiMessage::a, UiMessage::b},\n'
+             '    {EditorFeature::lsp, "lsp", false, FeatureStorage::own_key, 200, "lsp-single-key", true,\n'
+             '     UiMessage::c, UiMessage::d},\n}};\n')
+    DOCUMENT = "| 機能 | ベンチ | 1 打鍵の増分 µs |\n|---|---|---|\n| lsp | lsp-single-key | 200 |\n"
+    SPEED = 'LSP_SINGLE_BENCH = "lsp-single-key"\nLSP_BENCHES = (LSP_SINGLE_BENCH,)\nOPTIONAL_BENCHES = (*LSP_BENCHES,)\n'
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def details(self, table=TABLE, document=DOCUMENT, speed=SPEED):
+        for path, text in ((cnf.FEATURE_COSTS_TABLE, table), (cnf.FEATURE_COSTS_DOCUMENT, document),
+                           (cnf.MEASURE_SPEED, speed)):
+            (self.root / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / path).write_text(text, encoding="utf-8")
+        return [str(f) for f in cnf.feature_cost_checks(self.root)]
+
+    def test_cnf015_positive(self):
+        self.assertEqual([], self.details())
+
+    def test_cnf015_negative_number_differs(self):
+        self.assertEqual(["CNF-015: docs/quality/feature-costs.md: no row for lsp lsp-single-key 200",
+                          "CNF-015: src/core/FeatureCosts.hpp: no measured row for lsp lsp-single-key 150"],
+                         self.details(document=self.DOCUMENT.replace("200", "150")))
+
+    def test_cnf015_negative_bench_not_optional(self):
+        self.assertEqual(["CNF-015: src/core/FeatureCosts.hpp: bench lsp-single-key of lsp is not in "
+                          "OPTIONAL_BENCHES"],
+                         self.details(speed=self.SPEED.replace("OPTIONAL_BENCHES = (*LSP_BENCHES,)",
+                                                               "OPTIONAL_BENCHES = ()")))
+
+    def test_cnf015_negative_unread_row(self):
+        self.assertEqual(["CNF-015: src/core/FeatureCosts.hpp: read 1 rows of feature_costs, not the declared size"],
+                         self.details(table=self.TABLE.replace('"wrap", true', 'wrap_name, true')))
+
+    def test_cnf015_repository_passes(self):
+        self.assertEqual([], [str(f) for f in cnf.feature_cost_checks(ROOT)])
+
+
 class UiTextChecks(unittest.TestCase):
     """CNF-016 — 画面の文は UiMessage の表から（ADR 0123 の追補 2026-11-13 の決定 12・#1019）。"""
 
@@ -939,7 +1020,35 @@ class UiTextChecks(unittest.TestCase):
         literal = [str(f) for path in cnf.inventory(ROOT) if path.suffix in {".cpp", ".hpp"}
                    for f in cnf.ui_text_literal_checks(path.as_posix(),
                                                        (ROOT / path).read_text(encoding="utf-8"), RULES)]
-        self.assertEqual([], literal + [str(f) for f in cnf.ui_message_table_checks(ROOT, RULES)])
+        self.assertEqual([], literal + [str(f) for f in cnf.enum_table_checks(ROOT, RULES)])
+
+    OPERATION_ENUM = "enum class EditorOperation : std::uint8_t\n{\n    open_file,\n    save\n};\n"
+    OPERATION_COUNT = ("[[nodiscard]] consteval std::size_t operation_count() noexcept\n{\n"
+                       "    return std::to_underlying(EditorOperation::save) + 1U;\n}\n")
+    OPERATION_ROWS = ("inline constexpr std::array<OperationText, 2> operation_texts{{\n"
+                      "    {EditorOperation::open_file, UiMessage::alpha},\n"
+                      "    {EditorOperation::save, UiMessage::beta},\n}};\n")
+
+    def operation_problems(self, enum, count=None):
+        return cnf.enum_table_problems("EditorOperation", "operation_count", enum,
+                                       self.OPERATION_COUNT if count is None else count,
+                                       {"texts": self.OPERATION_ROWS})
+
+    def test_cnf016_operation_count_positive(self):
+        self.assertEqual([], self.operation_problems(self.OPERATION_ENUM))
+
+    def test_cnf016_operation_added_after_the_last_without_moving_the_count_fails(self):
+        grown = self.OPERATION_ENUM.replace("    save\n};", "    save,\n    print\n};")
+        problems = self.operation_problems(grown)
+        self.assertIn(("", "operation_count names save, but the last enumerator is print"), problems)
+        self.assertIn(("texts", "2 rows for 3 EditorOperation values"), problems)
+
+    def test_cnf016_operation_count_not_named_fails(self):
+        self.assertEqual([("", "operation_count is not std::to_underlying(EditorOperation::<last>) + 1U")],
+                         self.operation_problems(self.OPERATION_ENUM, "constexpr std::size_t operation_count = 2;\n"))
+
+    def test_cnf016_rules_cover_both_tables(self):
+        self.assertEqual(["UiMessage", "EditorOperation"], [table["enum"] for table in RULES["enumTables"]])
 
 
 class GitChecks(unittest.TestCase):

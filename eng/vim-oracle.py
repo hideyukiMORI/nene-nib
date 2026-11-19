@@ -116,7 +116,8 @@ KEY_TABLE = (("<Esc>", "\\<Esc>", "escape"), ("<CR>", "\\<CR>", "enter"),
              ("<C-a>", "\\<C-a>", "control_a"), ("<C-x>", "\\<C-x>", "control_x"),
              ("<C-o>", "\\<C-o>", "control_o"), ("<C-e>", "\\<C-e>", "control_e"),
              ("<C-y>", "\\<C-y>", "control_y"), ("<Del>", "\\<Del>", "delete_key"),
-             ("<Tab>", "\\<Tab>", 0x09))
+             ("<Tab>", "\\<Tab>", 0x09), ("<C-n>", "\\<C-n>", "control_n"),
+             ("<C-p>", "\\<C-p>", "control_p"))
 
 
 def key_names_of(table: tuple) -> dict[str, str]:

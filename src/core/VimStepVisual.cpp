@@ -622,6 +622,7 @@ namespace
     case VimActionGroup::ex_line:
     case VimActionGroup::substitute:
     case VimActionGroup::display:
+    case VimActionGroup::language:
         return false;
     }
     std::unreachable();
@@ -693,6 +694,9 @@ namespace
         return detail::finds_illegal_byte(state, action)
                    ? failed(visual_unchanged(state), VimRepeatFailure::refused)
                    : visual_unchanged(state);
+    // `gd` `K` は VISUAL では表に無い鍵と同じ（選択のまま・ADR 0190 の決定 8）。
+    case VimActionGroup::language:
+        return visual_unchanged(state);
     }
     std::unreachable();
 }
@@ -774,7 +778,8 @@ namespace detail
         return counted(state, key.code);
     }
     const auto action = vim_action_for(key.code);
-    if (!action.has_value())
+    // `K` は VISUAL では表に無い鍵と同じ（ADR 0190 の決定 8）。
+    if (!action.has_value() || vim_language_query_for(action.value()).has_value())
     {
         return visual_unchanged(state);
     }
@@ -782,7 +787,8 @@ namespace detail
 }
 
 // VISUAL の特別な鍵。Esc で出て、矢印と Home / End は NORMAL と同じ動作を引く。
-// Ctrl-r はこの縦切りに無い（決定 7）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。
+// Ctrl-r はこの縦切りに無い（決定 7）。Backspace は行をまたぐ h（ADR 0049 の決定 1）。`Ctrl-n`
+// `Ctrl-p` は `j` `k`（Vim の nv_down / nv_up・#1845）。
 [[nodiscard]] VimStep visual_special(const VimState &state, const VimEditorView &view,
                                      VimSpecialKey key)
 {
@@ -801,8 +807,10 @@ namespace detail
     case VimSpecialKey::arrow_right:
         return visual_acted(state, view, VimAction::move_right);
     case VimSpecialKey::arrow_up:
+    case VimSpecialKey::control_p:
         return visual_acted(state, view, VimAction::move_up);
     case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_n:
         return visual_acted(state, view, VimAction::move_down);
     case VimSpecialKey::home:
         return visual_acted(home_uncounted(state), view, VimAction::move_to_column);

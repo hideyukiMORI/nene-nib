@@ -1380,6 +1380,8 @@ void EditorController::report_unreached(const core::FilePath &path)
 // 窓は閉じていく途中なので、状態を変えず何も出さない。
 void EditorController::accept(const EndSession &intent)
 {
+    // 設定の面で変えて書けなかった設定をもう 1 回だけ書く（ADR 0170 の追補 2・#1835 の R1）。
+    retry_unsaved_settings();
     // 読み込み中の要求は取消で、ファイルは開かれない（ADR 0159 の決定 5・11・追補 1）。
     cancel_readings(false);
     restore_untitled_.reset();

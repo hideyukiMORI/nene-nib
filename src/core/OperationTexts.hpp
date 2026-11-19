@@ -14,7 +14,7 @@ namespace nenenib::core
 // 文は文の表の名前で持ち、画面の言語の文は ui_text が引く。EditorOperation の順に全値を 1 回ずつ
 // 持つ（OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で
 // 作る。読み（ひらがな）は画面に出ない検索の鍵なので operation_readings（OperationReadings.hpp）。
-inline constexpr std::array<OperationText, 51> operation_texts{{
+inline constexpr std::array<OperationText, 55> operation_texts{{
     {EditorOperation::open_file, UiMessage::operation_open_file_name,
      UiMessage::operation_open_file_description},
     // 保存・名前を付けて保存・タブを閉じるはタブのメニューにも載る（列 tab_menu・追補 #1790）。
@@ -116,6 +116,14 @@ inline constexpr std::array<OperationText, 51> operation_texts{{
      ContextMenuSlot{1, 0, ContextMenuNeed::editable}, "ggVG", "<Esc>ggVG"},
     {EditorOperation::cycle_finder_preview, UiMessage::operation_cycle_finder_preview_name,
      UiMessage::operation_cycle_finder_preview_description},
+    {EditorOperation::complete, UiMessage::operation_complete_name,
+     UiMessage::operation_complete_description},
+    {EditorOperation::go_to_definition, UiMessage::operation_go_to_definition_name,
+     UiMessage::operation_go_to_definition_description},
+    {EditorOperation::show_information, UiMessage::operation_show_information_name,
+     UiMessage::operation_show_information_description},
+    {EditorOperation::open_settings, UiMessage::operation_open_settings_name,
+     UiMessage::operation_open_settings_description},
     // タブの右クリックのメニューの 5 つ（ADR 0078 の追補 #1790・施主決定 D98 の順: エクスプローラー
     // で場所を開く・パスをコピー・ファイル名をコピー｜保存・名前を付けて保存｜閉じる・ほかのタブを
     // 閉じる・右のタブを閉じる）。本文のメニューには載らない。

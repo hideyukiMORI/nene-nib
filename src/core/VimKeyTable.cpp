@@ -1,6 +1,7 @@
 #include "VimKeyTable.hpp"
 
 #include "EasyMotionKind.hpp"
+#include "LanguageQueryKind.hpp"
 #include "VimAction.hpp"
 #include "VimActionBinding.hpp"
 #include "VimActionGroup.hpp"
@@ -52,7 +53,7 @@ constexpr char32_t tab_character = 0x09;
 // NORMAL の鍵 → 動作の表（ADR 0012 の決定 5 / ADR 0015 の決定 6 / CPP-012）。分岐で書くと
 // 関数長で落ちる（T8）。数字は表に無い。回数として積むほうが先で、'0' だけは回数が空のときに
 // 行頭として引かれる。
-constexpr std::array<VimBinding, 84> normal_bindings{
+constexpr std::array<VimBinding, 85> normal_bindings{
     {{U'h', VimAction::move_left},
      {U'j', VimAction::move_down},
      {line_feed, VimAction::move_down},
@@ -136,7 +137,8 @@ constexpr std::array<VimBinding, 84> normal_bindings{
      {U'R', VimAction::replace_mode},
      {U'&', VimAction::repeat_substitute},
      {U'S', VimAction::substitute_line},
-     {backslash_character, VimAction::prefix_leader}}};
+     {backslash_character, VimAction::prefix_leader},
+     {U'K', VimAction::language_hover}}};
 
 // 動作 → 大分類の表（CPP-012 / ADR 0006）。NORMAL と VISUAL の写し先はこの分類で分かれる。
 // 行の欠落と重複は下の static_assert で落ちる（動作を足したら、この表に行を足すまで通らない）。
@@ -278,7 +280,9 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_sentence_forward, VimActionGroup::motion},
      {VimAction::prefix_bracket, VimActionGroup::input_wait},
      {VimAction::substitute_line, VimActionGroup::edit_line},
-     {VimAction::prefix_leader, VimActionGroup::input_wait}}};
+     {VimAction::prefix_leader, VimActionGroup::input_wait},
+     {VimAction::language_definition, VimActionGroup::language},
+     {VimAction::language_hover, VimActionGroup::language}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 42> motion_bindings{
@@ -327,10 +331,11 @@ constexpr std::array<VimMotionBinding, 42> motion_bindings{
 
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
-// ADR 0028 の追補 #1032 の gI / #1617 の gn gN と表示だけの ga g8 g<C-g> g< gV gs）。
+// ADR 0028 の追補 #1032 の gI / #1617 の gn gN と表示だけの ga g8 g<C-g> g< gV gs /
+// ADR 0190 の決定 8 の gd）。
 // ここに無い鍵は g を打ち消して失敗する（Vim の nv_g_cmd の clearopbeep と、Nib に無い命令で本文か
 // キャレットを変える鍵・一覧は #1617 の out/1617-fix/g-keys.md）。
-constexpr std::array<VimBinding, 33> g_bindings{
+constexpr std::array<VimBinding, 34> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -363,7 +368,8 @@ constexpr std::array<VimBinding, 33> g_bindings{
      {U'<', VimAction::show_information},
      {U'V', VimAction::show_information},
      {U's', VimAction::show_information},
-     {U'8', VimAction::show_character_bytes}}};
+     {U'8', VimAction::show_character_bytes},
+     {U'd', VimAction::language_definition}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。
@@ -667,6 +673,8 @@ static_assert(
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return std::nullopt;
     }
     std::unreachable();
@@ -702,6 +710,8 @@ static_assert(
     case VimSpecialKey::control_e:
     case VimSpecialKey::control_y:
     case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
         return std::nullopt;
     }
     std::unreachable();
@@ -735,6 +745,16 @@ static_assert(
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::optional<LanguageQueryKind> vim_language_query_for(VimAction action) noexcept
+{
+    if (action == VimAction::language_definition)
+    {
+        return LanguageQueryKind::definition;
+    }
+    return action == VimAction::language_hover ? std::optional{LanguageQueryKind::hover}
+                                               : std::nullopt;
 }
 
 [[nodiscard]] std::optional<VimScreenAlignment> vim_screen_alignment_for(VimAction action) noexcept

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CompletionChoice.hpp"
 #include "ExGlobalRequest.hpp"
 #include "ExLineRequest.hpp"
 #include "ExLinesRequest.hpp"
@@ -19,11 +20,12 @@ namespace nenenib::application
 // なら vim_restarted_insert（ADR 0182）・オペレータ待ちの `:` の確定なら vim_command_operated
 // （#1549）・`:s` の族なら vim_substituted（ADR 0168）・`:s///c` の問いの答えなら
 // vim_substitute_answered（ADR 0168 の決定 6）・`:d` `:y` なら vim_lines_edited・`:g` なら
-// vim_global（ADR 0168 の段 3a）で、engine を呼ぶ 1 か所が std::visit
-// で写す。閉じた和型なので、出どころが増えたら コンパイルが落ちる（CPP-002）。std::function
-// は空の呼び出しの _Xbad_function_call を application の外へ出す（ARC-003）。
+// vim_global（ADR 0168 の段 3a）・補完の面の行のクリックなら vim_completion_chosen（#1845）。
+// engine を呼ぶ 1 か所が std::visit で写す。閉じた和型なので、出どころが増えたらコンパイルが
+// 落ちる（CPP-002）。
+// std::function は空の呼び出しの _Xbad_function_call を application の外へ出す（ARC-003）。
 using VimStepSource =
     std::variant<core::VimKey, core::ExLineRequest, PointerSelection, InsertRestartRequest,
                  core::VimCommandMotion, core::ExSubstituteRequest, core::SubstituteAnswer,
-                 core::ExLinesRequest, core::ExGlobalRequest>;
+                 core::ExLinesRequest, core::ExGlobalRequest, CompletionChoice>;
 } // namespace nenenib::application

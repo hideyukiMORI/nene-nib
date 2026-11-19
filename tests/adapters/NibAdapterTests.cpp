@@ -31,6 +31,7 @@
 #include "VimModeSet.hpp"
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32CodePageAdapter.hpp"
+#include "Win32Distribution.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32SettingsAdapter.hpp"
@@ -634,6 +635,30 @@ void verify_ui_language_mapping()
            "English and the languages without a column map to English");
     nenenib::adapters::win32::Win32UiLanguage observer;
     expect(observer.observe().has_value(), "observing the OS gives one of the three languages");
+}
+
+// 製品の形の問い（ADR 0178 の追補 #1809）。置き場が足りない・成功だけが package identity が在る
+// 形で、「パッケージが無い」と想定外の値は ZIP 版。試験の exe は ZIP 版の形で動く。
+void verify_distribution()
+{
+    using nenenib::adapters::win32::distribution_of;
+    using nenenib::core::Distribution;
+    expect(distribution_of(APPMODEL_ERROR_NO_PACKAGE) == Distribution::unpackaged,
+           "no package identity is the zip build");
+    expect(distribution_of(ERROR_INVALID_PARAMETER) == Distribution::unpackaged,
+           "an unexpected result falls back to the zip build");
+    expect(distribution_of(ERROR_INSUFFICIENT_BUFFER) == Distribution::packaged &&
+               distribution_of(ERROR_SUCCESS) == Distribution::packaged,
+           "a package name (asked without room, or given) is the packaged build");
+    expect(nenenib::adapters::win32::current_distribution() == Distribution::unpackaged,
+           "the test exe runs without a package identity");
+}
+
+// 起動時に 1 回だけ OS に問う値の写し（表示言語と製品の形）。
+void verify_os_observations()
+{
+    verify_ui_language_mapping();
+    verify_distribution();
 }
 
 void verify_settings_codec()
@@ -2725,7 +2750,7 @@ int run_memory_tests(std::string_view scope)
         return test_result();
     }
     verify_settings_codec();
-    verify_ui_language_mapping();
+    verify_os_observations();
     verify_bad_settings_fields();
     verify_bad_settings_values();
     verify_settings_versions();
@@ -2799,7 +2824,7 @@ int run_tests(int argc, char **argv)
     }
     verify_timing_marks(files);
     verify_settings_codec();
-    verify_ui_language_mapping();
+    verify_os_observations();
     verify_bad_settings_fields();
     verify_bad_settings_values();
     verify_settings_versions();

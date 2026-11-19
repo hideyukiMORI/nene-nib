@@ -1,8 +1,10 @@
 #pragma once
 
+#include "CompletionDirection.hpp"
 #include "EasyMotionKind.hpp"
 #include "ExRange.hpp"
 #include "ExSubstituteRequest.hpp"
+#include "LanguageQueryKind.hpp"
 #include "SubstituteConfirmation.hpp"
 #include "SubstituteMatch.hpp"
 #include "SubstituteResult.hpp"
@@ -10,6 +12,7 @@
 #include "VimBlockInsert.hpp"
 #include "VimBlockRange.hpp"
 #include "VimCharacterSearchInvocation.hpp"
+#include "VimInsertCompletion.hpp"
 #include "VimKeyTable.hpp"
 #include "VimLastVisual.hpp"
 #include "VimLayoutNeed.hpp"
@@ -115,6 +118,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
                                          VimMotion motion);
 [[nodiscard]] VimStep cancelled(const VimState &state);
 [[nodiscard]] VimStep failed(VimStep step, VimRepeatFailure failure);
+[[nodiscard]] VimStep language_queried(const VimState &state, LanguageQueryKind kind,
+                                       VimStep unbound);
 [[nodiscard]] VimStep moved_or_failed(VimStep step, VimMotion motion, Offset from,
                                       const VimMotionLanding &landing);
 [[nodiscard]] VimStep context_marked(VimStep step, const VimEditorView &view);
@@ -366,6 +371,29 @@ repeated(std::string_view body, std::size_t count, const TextBuffer &text, std::
                                                         const VimEditorView &view, VimStep step);
 [[nodiscard]] VimStep insert_register_step(const VimState &state, const VimEditorView &view,
                                            const VimKey &key);
+// INSERT の補完（VimStepCompletion.cpp・#1845・ADR 0169 の決定 3）。completion_ends は開いている
+// 補完を確定する鍵（補完の鍵 Ctrl-n Ctrl-p Ctrl-e Ctrl-y でない鍵）か。completion_settled は補完を
+// 閉じ、選んでいた語を打った鍵（completion_typed_keys・元の接頭辞と違う分の Backspace と語の残りの
+// 文字）として `.` の記録と回数の鍵の列に足した状態（Vim の ins_compl_fixRedoBufForLeader）。
+// vim_step が鍵を流す前に通す 1 か所。completion_stepped は Ctrl-n / Ctrl-p（閉じていれば候補の
+// 写しから始める）、completion_cancelled は Ctrl-e、completion_accepted は Ctrl-y（どちらも閉じて
+// いれば何もしない）。completion_recording は補完の鍵の後の `.` の記録（補完の鍵は記録に残さない・
+// 補完の鍵でなければ空）。
+[[nodiscard]] bool completion_ends(const VimState &state, const VimKey &key) noexcept;
+[[nodiscard]] std::vector<VimKey> completion_typed_keys(const VimInsertCompletion &completion);
+[[nodiscard]] VimState completion_settled(const VimState &state);
+[[nodiscard]] VimStep completion_stepped(const VimState &state, const VimEditorView &view,
+                                         CompletionDirection direction);
+[[nodiscard]] VimStep completion_cancelled(const VimState &state, const VimEditorView &view);
+[[nodiscard]] VimStep completion_accepted(const VimState &state);
+// INSERT の補完の鍵の入口（insert_special が Ctrl-n Ctrl-p Ctrl-e Ctrl-y を渡す）。
+[[nodiscard]] VimStep completion_keyed(const VimState &state, const VimEditorView &view,
+                                       VimSpecialKey key);
+[[nodiscard]] std::optional<VimRepeatRecord>
+completion_recording(const VimState &before, const VimRepeatRecord &record, const VimKey &key);
+// 変更の印を立てる 1 か所（VimStepChange.cpp・ADR 0181 の決定 2）。本文を置き換える効果を返す step
+// に changed の印を立て、位置が無ければ効果の既定の位置を書く。
+[[nodiscard]] VimStep change_marked(const VimEditorView &view, VimStep step);
 [[nodiscard]] bool restarts_insert(VimKey key) noexcept;
 [[nodiscard]] bool erased_nothing(const VimKey &key, const VimEffect &effect) noexcept;
 [[nodiscard]] bool moved_nothing(const VimKey &key, const VimEffect &effect) noexcept;

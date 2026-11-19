@@ -44,6 +44,8 @@ void verify_delivery_contracts();
 // TabsTests.cpp
 void verify_tabs_contracts();
 void verify_tabs_scope();
+// タブの札（#1789・ADR 0056 の #1789 の追補）。
+void verify_tab_tip_contracts();
 // TransientTabTests.cpp / TransientTabPropertyTests.cpp（#1397・ADR 0179 のプレビューのタブ）
 void verify_transient_tab_contracts();
 void verify_transient_tab_scope();
@@ -59,6 +61,13 @@ void verify_session_scope();
 // BookmarkTests.cpp
 void verify_bookmarks_contracts();
 void verify_bookmarks_scope();
+void verify_insert_completion_contracts();
+void verify_insert_completion_scope();
+// CompletionFaceTests.cpp（#1833・ADR 0190 の決定 5・補完の面の表と通常モードの道）
+void verify_completion_face_contracts();
+void verify_completion_face_scope();
+// 契約 --completion-face の Vim の INSERT の側（#1845・VimInsertCompletionTests.cpp）。
+void verify_vim_insert_completion();
 
 // HistoryTests.cpp
 void verify_history_contracts();
@@ -105,6 +114,9 @@ void verify_ex_lines_scope();
 void verify_matchparen_scope();
 // MinimapTests.cpp（ADR 0171・ミニマップの段 1）
 void verify_minimap_scope();
+void verify_feature_costs_scope();
+void verify_settings_modal_scope();
+void verify_settings_panel_scope();
 // MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
 void verify_minimap_property_scope();
 // MinimapPointerTests.cpp（#1371・ミニマップのクリックとドラッグ）
@@ -149,6 +161,8 @@ void verify_lsp_messages_scope();
 void verify_lsp_frames_property_scope();
 // LspDiagnosticsTests.cpp（#995・ADR 0161 の決定 2・3・4・8・診断の写しとずらしと行の区間）
 void verify_lsp_diagnostics_scope();
+// LspAnswersTests.cpp（#1825・ADR 0190 の決定 4・答えの読み 3 本と URI → パス）
+void verify_lsp_answers_scope();
 // LanguageServerTests.cpp（#994・controller の配線と寿命・`:set lsp`・替え玉のサーバー）
 void verify_language_server_contracts();
 void verify_language_server_scope();

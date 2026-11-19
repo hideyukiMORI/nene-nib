@@ -19,6 +19,7 @@
 #include "GridLineRows.hpp"
 #include "GridLineSource.hpp"
 #include "ImeStance.hpp"
+#include "InsertCompletion.hpp"
 #include "LastResortPlan.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "MatchParen.hpp"
@@ -48,6 +49,7 @@
 #include "VimStep.hpp"
 #include "VimVisualRange.hpp"
 #include "VimWantedColumn.hpp"
+#include "WordTable.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -228,7 +230,10 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // ことは無い。題名のダブルクリックの PinTab も使う人の操作なので、ここにも begin_intent にも
 // 書かない（ADR 0179 の決定 4-4）。ミニマップの押しとドラッグ（PointMinimap）はホイールの
 // ScrollLines と同じく使う人の操作の側で、ここにも begin_intent にも keeps_wanted_x にも書かない
-// （ADR 0171 の決定 5 の追補）。
+// （ADR 0171 の決定 5 の追補）。設定の面の意図（OpenSettings・CloseSettings・RevertSettings・
+// StepSettings・ChangeSetting・ChooseSettingsPreset・FilterSettings・JumpSettingsSection・ADR 0170
+// の 2026-11-18 の追補 2 と、画面の工程の FocusSettingsRow・ScrollSettings・#1836）も使う人の操作
+// なので、ここにも begin_intent にも書かない。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return not_user_operation(intent) || std::holds_alternative<WalkRecentTab>(intent) ||
@@ -269,13 +274,25 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
            std::holds_alternative<CloseContextMenu>(intent);
 }
 
+// 補完の面の開く・上下・ホイール・閉じるもキャレットを動かさない（ADR 0190 の決定 5）。確定の
+// ChooseCompletion は編集なので捨てる側。
+[[nodiscard]] bool keeps_wanted_x_for_completion(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenCompletion>(intent) ||
+           std::holds_alternative<StepCompletion>(intent) ||
+           std::holds_alternative<CloseCompletion>(intent) ||
+           std::holds_alternative<ScrollCompletion>(intent);
+}
+
 [[nodiscard]] bool keeps_wanted_x(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<TitleBarWidth>(intent) || keeps_wanted_x_for_menu(intent);
+           std::holds_alternative<TitleBarWidth>(intent) ||
+           std::holds_alternative<WindowDeactivated>(intent) || keeps_wanted_x_for_menu(intent) ||
+           keeps_wanted_x_for_completion(intent);
 }
 
 // エクスプローラーのダブルクリックの 2 打目と組む印（explorer_clicked_）を保つ意図（#1388・
@@ -384,8 +401,9 @@ shown_matches(const core::TextBuffer &text, const LineView &shown, const core::V
 }
 } // namespace
 
-EditorController::EditorController(EditorPorts ports, const std::vector<OpenDocument> &initial)
-    : ports_(ports),
+EditorController::EditorController(EditorPorts ports, core::Distribution distribution,
+                                   const std::vector<OpenDocument> &initial)
+    : ports_(ports), distribution_(distribution),
       state_(EditorState::create(appearance_or_dark(ports.appearance), core::EditMode::ordinary))
 {
     const auto inventory = ports_.themes.read();
@@ -441,6 +459,13 @@ void EditorController::accept(const AdjustFontSize &intent)
     auto settings = state_.settings();
     settings.font_size =
         core::adjusted_font_size(settings.font_size, intent.adjustment, intent.steps);
+    // 設定の面が開いている間は面の切り替えと同じくその場で効かせるだけで、書くのは閉じるときの
+    // 1 回（ADR 0170 の決定 6・#1836 の差し戻し）。
+    if (settings_open())
+    {
+        preview_settings(std::move(settings));
+        return;
+    }
     (void)persist_settings(std::move(settings));
 }
 
@@ -464,21 +489,37 @@ bool EditorController::persist_settings(core::EditorSettings settings)
     {
         return true;
     }
+    if (!write_settings(settings))
+    {
+        return false;
+    }
+    settings_unsaved_ = false;
+    adopt_settings(std::move(settings));
+    return true;
+}
+
+bool EditorController::write_settings(const core::EditorSettings &settings)
+{
     const auto saved = ports_.settings.write(settings);
     if (!saved)
     {
         state_ = state_.with_settings_failure(saved.error());
         return false;
     }
+    state_ = state_.with_settings_failure(std::nullopt);
+    return true;
+}
+
+void EditorController::adopt_settings(core::EditorSettings settings)
+{
     const bool reshaped = core::affects_line_height(state_.settings(), settings);
-    state_ = state_.with_settings(std::move(settings)).with_settings_failure(std::nullopt);
-    // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図のどれから書いても同じ 1
-    // 本。
+    state_ = state_.with_settings(std::move(settings));
+    // 面の表示とルートは設定の値（ADR 0162 の決定 3）。Ex・面の `:`・意図・設定の面のどれから
+    // 変えても同じ 1 本。
     sync_explorer();
     sync_minimap();
     refresh_key_map();
     follow_after_settings(reshaped);
-    return true;
 }
 
 // 設定が変わった後の画面の後始末（追従と clamp の頼み）はここの 1 か所（#1432 のレビュー L1）。
@@ -548,10 +589,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
                  std::holds_alternative<ScrollTabs>(intent) ||
                  std::holds_alternative<SettleRecentTab>(intent) ||
                  std::holds_alternative<EndSession>(intent) || keeps_explorer_notice(intent));
-    settle_pending_keys(intent);
-    // `:s///c` の問いは答えでない意図の前に `q` と同じに終える（ADR 0168 の決定 6・入口の 1
-    // か所）。
-    end_question_before(intent);
+    settle_before(intent);
     // 写し先が足りなければここでコンパイルが落ちる＝意図が増えたことに機械が気づく（CPP-002）。
     // SelectDisplay は使う人の操作の側（歩きを終え、告知を消す）なので上の 2 つの表に載せない。
     // SelectLanguage も同じ（ADR 0154 の決定 4）。SelectSyntax も同じ（ADR 0156 の追補）。
@@ -570,6 +608,8 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     settle_transient();
     settle_easymotion(intent);
     settle_start_screen();
+    // 開いている補完の面の絞り直しと、届いた答えの取り込み（ADR 0190 の決定 5）。
+    settle_completion();
     keep_vim_character(intent);
     if (is_signal(intent) && caret_anchor_of(state_) != anchor)
     {
@@ -578,9 +618,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     fit_command_rows();
     ask_display();
     reconcile_language_server();
-    auto delivered = delivery();
-    delivered.repaint = repaint_;
-    delivered.map_timer = map_timer_;
+    auto delivered = timed(delivery());
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の
     // 消去に頼らない。layout を作れない失敗は作り直しの apply で消えるまで frame に載る。
     layout_failure_ = drawing_failure(layout_failure_);
@@ -588,11 +626,24 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     return delivered;
 }
 
+// 写す前の片付け（begin_intent の後）。設定の面は面を開いたまま受ける意図でなければ閉じて保存する
+// （保存の失敗の知らせを begin_intent が消さない順）。`:s///c` の問いは答えでない意図の前に `q` と
+// 同じに終える（ADR 0168 の決定 6・入口の 1 か所）。apply の長さの上限のため分けた。
+void EditorController::settle_before(const EditorIntent &intent)
+{
+    close_settings_before(intent);
+    settle_pending_keys(intent);
+    end_question_before(intent);
+}
+
 // 写す前に、意図をまたいで覚えた印のうち、この意図が保たないものを捨てる。上下の移動の狙いの
 // 横位置（keeps_wanted_x）と、エクスプローラーのダブルクリックの 2 打目と組む節
-// （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）。
+// （keeps_explorer_click・#1388）と、開いている右クリックのメニュー（#1051）と、タブの札
+// （settle_tab_tip・#1789）と、hover の札（settle_hover・ADR 0190 の決定 6）。
 void EditorController::forget_unkept_marks(const EditorIntent &intent)
 {
+    settle_tab_tip(intent);
+    settle_hover(intent);
     if (!keeps_wanted_x(intent))
     {
         wanted_x_.reset();
@@ -603,6 +654,9 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
     }
     // 右クリックのメニューも、メニューの意図と使う人の操作でない意図のほかで閉じる（#1051）。
     close_context_menu_before(intent);
+    // 補完の面も、面の意図・文字の入力・手前への削除・使う人の操作でない意図のほかで閉じる
+    // （ADR 0190 の決定 5）。
+    close_completion_before(intent);
 }
 
 // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
@@ -623,6 +677,15 @@ void EditorController::settle_pending_keys(const EditorIntent &intent)
         flush_key_map_pending();
         vim_top_kept_ = false;
     }
+}
+
+// この意図だけの描き直しの要否とタイマーの頼み（`map` の待ち・タブの札の待ち）を配達に載せる。
+EditorDelivery EditorController::timed(EditorDelivery delivered) const
+{
+    delivered.repaint = repaint_;
+    delivered.map_timer = map_timer_;
+    delivered.tab_tip_timer = tab_tip_timer_;
+    return delivered;
 }
 
 EditorFrame EditorController::apply_frame(const EditorIntent &intent)
@@ -751,6 +814,21 @@ PaneSource EditorController::framed_source(const core::VimPattern *pattern) cons
 {
     return drawn_source(PaneSource{state_, highlighted_range(), block_selection(), pattern,
                                    state_.autosave_ids().at(state_.active_tab())});
+}
+
+const std::optional<core::WordTable> &EditorController::word_table() const noexcept
+{
+    return state_.word_table();
+}
+
+core::CompletionList EditorController::insert_completion(core::CompletionDirection direction)
+{
+    if (!state_.word_table().has_value() &&
+        state_.text().size_bytes() <= core::word_table_byte_limit)
+    {
+        state_ = state_.with_word_table();
+    }
+    return insert_completion_list(state_, direction);
 }
 
 const core::VimState &EditorController::vim_state() const noexcept
@@ -1191,29 +1269,36 @@ core::EditorSettings EditorController::shown_settings() const
     return shown;
 }
 
+// IME の構え。設定の面が開いている間は探す欄のために閉じ直さない（#1836）。
+ImeStance EditorController::shown_ime_stance() const
+{
+    const auto decided =
+        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused());
+    return settings_open() ? ime_stance_in_settings(decided) : decided;
+}
+
 EditorDelivery EditorController::delivery() const
 {
     auto settings = shown_settings();
     const auto &theme = core::selected_theme(settings, state_.appearance());
-    EditorDelivery delivered{
-        theme.appearance,
-        state_.mode(),
-        state_.vim().mode,
-        ime_stance_of(state_.mode(), state_.vim().mode, state_.command_input(), explorer_focused()),
-        state_.command_input().transform(input_line_prompt_of),
-        composed(),
-        command_composed(),
-        active_document_view(),
-        std::move(settings),
-        state_.settings_failure(),
-        command_message(),
-        state_.closing(),
-        state_.close_request(),
-        state_.operation_request(),
-        state_.display_question(),
-        layout_failure_,
-        true,
-        std::nullopt};
+    EditorDelivery delivered{theme.appearance,
+                             state_.mode(),
+                             state_.vim().mode,
+                             shown_ime_stance(),
+                             state_.command_input().transform(input_line_prompt_of),
+                             composed(),
+                             command_composed(),
+                             active_document_view(),
+                             std::move(settings),
+                             state_.settings_failure(),
+                             command_message(),
+                             state_.closing(),
+                             state_.close_request(),
+                             state_.operation_request(),
+                             state_.display_question(),
+                             layout_failure_,
+                             true,
+                             std::nullopt};
     delivered.tab_sweep = state_.tab_sweep_request();
     return delivered;
 }
@@ -1300,6 +1385,10 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.mode_label =
         core::mode_label(result.mode, result.vim_mode, insert_paused(state_), result.language);
     result.guide = core::operation_guide(guide_context(), result.mode, result.language);
+    // タブの札（#1789）。札が無いときの分岐はこの 1 つ（shown_tab_tip の入口）。
+    result.tab_tip = shown_tab_tip();
+    // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
+    result.hover = shown_hover();
     if (gridded)
     {
         GridTally tally{0, 0, lexed};
@@ -1321,6 +1410,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     add_diagnostics(result);
     result.start_screen = start_screen_view();
     result.context_menu = context_menu_view();
+    result.completion = completion_view();
+    result.settings_panel = settings_view();
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

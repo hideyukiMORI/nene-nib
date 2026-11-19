@@ -1,9 +1,12 @@
 // Windows のエクスプローラーへの登録の 2 つの操作（ADR 0178 の決定 3・4）。ShellRegistrationPort を
 // 呼ぶのはこの翻訳単位だけで、起動・開く・切り替え・保存・打鍵・自動退避・F1 の一覧の道は呼ばない。
+// Store 版（パッケージ）では port を呼ばずに 1 行で知らせる（追補 #1809）。
 #include "EditorController.hpp"
 
 #include "AppIdentity.hpp"
 #include "DisplayText.hpp"
+#include "EditorOperation.hpp"
+#include "OperationDistribution.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationFailure.hpp"
 #include "ShellRegistrationInput.hpp"
@@ -85,6 +88,10 @@ using PlanOutcome = std::expected<core::ShellRegistrationPlan, std::string>;
 
 void EditorController::accept(const RegisterShell &)
 {
+    if (!shell_operation_distributed(core::EditorOperation::register_shell))
+    {
+        return;
+    }
     auto &port = ports_.shell_registration;
     const auto language = state_.display_language();
     const auto plan = planned(port, core::UiMessage::notice_shell_register_failed, language);
@@ -111,6 +118,10 @@ void EditorController::accept(const RegisterShell &)
 
 void EditorController::accept(const UnregisterShell &)
 {
+    if (!shell_operation_distributed(core::EditorOperation::unregister_shell))
+    {
+        return;
+    }
     auto &port = ports_.shell_registration;
     const auto language = state_.display_language();
     const auto plan = planned(port, core::UiMessage::notice_shell_unregister_failed, language);
@@ -138,6 +149,18 @@ void EditorController::accept(const ShowVersion &)
 {
     // 名乗りの文は固定の ASCII と「©」「·」だけなので parse は必ず成功する（不変条件・ARC-010）。
     state_ = state_.with_command_message(core::DisplayText::parse(core::app_about_line()).value());
+}
+
+// 一覧から外した操作が鍵・Ex・古い一覧の位置から届いたときは書かずに知らせる（追補 #1809）。
+bool EditorController::shell_operation_distributed(core::EditorOperation operation)
+{
+    if (core::operation_distributed(operation, distribution_))
+    {
+        return true;
+    }
+    show_shell_notice(std::string(
+        core::ui_text(core::UiMessage::notice_shell_packaged, state_.display_language())));
+    return false;
 }
 
 void EditorController::show_shell_notice(const std::string &text)

@@ -1,6 +1,8 @@
 #include "Direct2DRenderer.hpp"
+#include "Direct2DRendererDetail.hpp"
 #include "TextLayoutPoint.hpp"
 
+#include "BlockCaretOutline.hpp"
 #include "BodyColors.hpp"
 #include "ColoredRun.hpp"
 #include "ComposedLine.hpp"
@@ -73,8 +75,6 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-// 印の字の layout の大きさ（物理画素・地に切り抜くので印の 2 文字が収まれば足りる）。
-constexpr std::int32_t label_room = 4096;
 // 採用案の寸法（docs/design/2026-09-15-look.md 第 2 節）。色は Palette 以外に持たない（ADR 0008）。
 // 画面の文字の大きさは UiTextSizes.hpp（幅の試験と共用）。
 // text の表示の巨大な行の印 `»`（ADR 0139 の決定 2）。
@@ -103,7 +103,6 @@ constexpr float palette_key_radius_dips = 5.0F;
 // の guide_key_padding_dips。箱の幅を測る guide_key_width と描く draw_body_guide
 // が同じ値を使う（#1122）。
 constexpr DWORD latency_timeout_milliseconds = 1000;
-constexpr float full_channel = 255.0F;
 
 // 「塗らない」を表す唯一の値。ui/win32 はこれ以外の色を Palette の外から持たない（ADR 0008）。
 [[nodiscard]] constexpr D2D1_COLOR_F unpainted() noexcept
@@ -114,40 +113,6 @@ constexpr float full_channel = 255.0F;
 [[nodiscard]] RenderFailure classify(HRESULT result) noexcept
 {
     return render_failure_of(result);
-}
-
-[[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
-{
-    return D2D1::ColorF(static_cast<float>(color.red) / full_channel,
-                        static_cast<float>(color.green) / full_channel,
-                        static_cast<float>(color.blue) / full_channel, 1.0F);
-}
-
-[[nodiscard]] D2D1_COLOR_F to_color(core::RgbaColor color) noexcept
-{
-    D2D1_COLOR_F opaque = to_color(color.color);
-    opaque.a = static_cast<float>(color.alpha) / full_channel;
-    return opaque;
-}
-
-[[nodiscard]] D2D1_RECT_F to_rect(const core::LayoutRect &area) noexcept
-{
-    return D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
-                       static_cast<float>(area.right), static_cast<float>(area.bottom));
-}
-
-// 本文のキャレットを描かないとき。入力行が開いているか、エクスプローラーの面に焦点があるとき
-// （採用案の表「焦点」・Ctrl+P の面と同じ）。
-[[nodiscard]] bool body_caret_hidden(const application::EditorFrame &frame) noexcept
-{
-    return frame.command_line.has_value() ||
-           (frame.explorer.has_value() && frame.explorer.value().focused);
-}
-
-[[nodiscard]] D2D1_POINT_2F centre_of(const core::LayoutRect &area) noexcept
-{
-    return D2D1::Point2F(static_cast<float>(area.left + area.right) / 2.0F,
-                         static_cast<float>(area.top + area.bottom) / 2.0F);
 }
 
 // UTF-8 の表示値を DirectWrite の UTF-16 へ。変換そのものは core::to_utf16 ただ 1 本
@@ -226,15 +191,6 @@ constexpr float full_channel = 255.0F;
                                displayed(line, span.end)};
 }
 
-[[nodiscard]] std::int32_t row_pixel(const core::BodyLayout &body, std::int64_t row)
-{
-    const auto value =
-        static_cast<double>(body.content.top) + static_cast<double>(row) * body.line_height;
-    return static_cast<std::int32_t>(
-        std::clamp(value, static_cast<double>(std::numeric_limits<std::int32_t>::min()) / 2.0,
-                   static_cast<double>(std::numeric_limits<std::int32_t>::max()) / 2.0));
-}
-
 // 入力行のプロンプトの文字（ADR 0032 の決定 1）。選択肢が増えたらここで落ちる（CPP-002）。
 // 長い入力行（上限 4096 バイト・#1568）は、キャレットと変換の周りの窓だけを組む。shown を窓に
 // 切り、at（入力のキャレット）と caret（変換の中のキャレット）を窓の中の位置へ移す。横の送りは
@@ -261,6 +217,12 @@ gutter_number_area(core::LayoutRect cell, core::GutterAlignment alignment, std::
     return cell;
 }
 } // namespace
+
+using detail::body_caret_hidden;
+using detail::line_area;
+using detail::row_pixel;
+using detail::to_color;
+using detail::to_rect;
 
 Direct2DRenderer::Direct2DRenderer(BodyTextLayouts &text_layouts) : body_text_(text_layouts) {}
 
@@ -524,10 +486,15 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     palette_layouts_.clear();
     preview_layouts_.clear();
     tab_layouts_.clear();
+    tab_tip_layout_.clear();
+    hover_tip_layout_.clear();
     explorer_layouts_.clear();
     explorer_shapes_.clear();
     start_layouts_.clear();
     context_menu_layouts_.clear();
+    completion_layouts_.clear();
+    settings_layouts_.clear();
+    settings_formats_.reset();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -563,7 +530,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     }
     if (FAILED(trim_by_character(tab_format_.Get())) ||
         FAILED(trim_by_character(tab_transient_format_.Get())) ||
-        !create_explorer_formats(interface_face))
+        !create_explorer_formats(interface_face) || !create_tab_tip_format(interface_face))
     {
         return std::unexpected(RenderFailure::directwrite);
     }
@@ -654,11 +621,13 @@ Direct2DRenderer::create_body_formats(const core::EditorSettings &settings)
 {
     // 書式の寿命をキーに含める。生成が失敗しても古い行番号資源は持ち越さない。
     gutter_layouts_.clear();
+    label_format_.Reset();
     palette_layouts_.clear();
     preview_layouts_.clear();
     tab_layouts_.clear();
     start_layouts_.clear();
     context_menu_layouts_.clear();
+    completion_layouts_.clear();
     const std::wstring requested = core::to_utf16(settings.font_family.text()).value();
     const wchar_t *face = family(requested.c_str(), L"Consolas");
     const float ratio = core::font_size_ratio(settings.font_size);
@@ -834,167 +803,6 @@ void Direct2DRenderer::write_gutter(std::string_view text, core::GutterAlignment
         brush_.Get());
 }
 
-void Direct2DRenderer::draw_cross(const core::LayoutRect &box, float half, float stroke)
-{
-    const auto centre = centre_of(box);
-    context_->DrawLine(D2D1::Point2F(centre.x - half, centre.y - half),
-                       D2D1::Point2F(centre.x + half, centre.y + half), brush_.Get(), stroke);
-    context_->DrawLine(D2D1::Point2F(centre.x + half, centre.y - half),
-                       D2D1::Point2F(centre.x - half, centre.y + half), brush_.Get(), stroke);
-}
-
-void Direct2DRenderer::draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color)
-{
-    brush_->SetColor(to_color(color));
-    const float stroke = scaled(1.0F);
-    const float half = static_cast<float>(layout.glyph) / 2.0F;
-    const auto minimize = centre_of(layout.minimize);
-    context_->DrawLine(D2D1::Point2F(minimize.x - half, minimize.y),
-                       D2D1::Point2F(minimize.x + half, minimize.y), brush_.Get(), stroke);
-    const auto maximize = centre_of(layout.maximize);
-    context_->DrawRectangle(
-        D2D1::RectF(maximize.x - half, maximize.y - half, maximize.x + half, maximize.y + half),
-        brush_.Get(), stroke);
-    draw_cross(layout.close, half, stroke);
-}
-
-void Direct2DRenderer::draw_tab_face(const core::TitleBarLayout &layout,
-                                     const core::LayoutRect &tab, core::RgbColor color)
-{
-    // 上の角だけ丸め、下は帯の下端と面一にする（docs/design/2026-09-15-look.md 第 2 節）。
-    fill_rounded(tab, color, static_cast<float>(layout.corner_radius));
-    fill(core::LayoutRect{tab.left, tab.bottom - layout.corner_radius, tab.right, tab.bottom},
-         color);
-}
-
-void Direct2DRenderer::draw_button_face(const application::EditorFrame &frame,
-                                        const core::TitleBarLayout &layout,
-                                        const core::LayoutRect &box, core::TitleBarTarget target)
-{
-    // ×・「∨」・「＋」にマウスを載せているときだけ toggle の面（ADR 0056 の決定 12）。
-    if (layout.hovered == target)
-    {
-        fill_rounded(box, frame.palette.toggle, static_cast<float>(layout.button_radius));
-    }
-}
-
-void Direct2DRenderer::draw_tab(const application::EditorFrame &frame,
-                                const core::TitleBarLayout &layout, std::size_t index)
-{
-    const auto tab = core::tab_rect(layout, index);
-    const bool active = index == layout.active;
-    const bool lit = active || core::tab_hovered(layout, index);
-    if (active)
-    {
-        draw_tab_face(layout, tab, frame.palette.tab_active);
-        fill(core::LayoutRect{tab.left, tab.bottom - layout.underline, tab.right, tab.bottom},
-             frame.palette.accent);
-    }
-    if (!active && lit)
-    {
-        draw_tab_face(layout, tab, frame.palette.tab_hover);
-    }
-    // × はアクティブなタブとマウスを載せたタブにだけある（D21）。題名はその左端まで。
-    const auto close = core::tab_close_rect(layout, index);
-    const auto right = close.has_value() ? close.value().left : tab.right - layout.tab_padding;
-    const core::LayoutRect title{tab.left + layout.tab_padding, tab.top, right, tab.bottom};
-    // プレビューのタブの題名は斜体（ADR 0179 の決定 10）。色は普通のタブと同じ。
-    const auto &view = frame.tabs.at(index);
-    write_tab_title(view.title.text(),
-                    view.transient ? tab_transient_format_.Get() : tab_format_.Get(), title,
-                    lit ? frame.palette.text : frame.palette.muted);
-    if (!close.has_value())
-    {
-        return;
-    }
-    draw_button_face(frame, layout, close.value(),
-                     core::TitleBarTarget{core::TitleBarHit::tab_close, index});
-    brush_->SetColor(to_color(frame.palette.muted));
-    draw_cross(close.value(), static_cast<float>(layout.glyph) / 2.0F, scaled(1.0F));
-}
-
-void Direct2DRenderer::write_tab_title(std::string_view text, IDWriteTextFormat *format,
-                                       const core::LayoutRect &title, core::RgbColor color)
-{
-    // 題名の文字組みは帯の保持から引く（#924）。書式に焼いた文字単位の省略記号ごと保持し、
-    // DrawTextW と同じ画素（tests/ui の GutterLayoutTests）。
-    const auto shown =
-        tab_layouts_.obtain(PaletteRowKey{format, PaletteTextRole::plain, text, title, dpi_},
-                            [&] { return text_layout(text, format, title); });
-    if (!shown)
-    {
-        return;
-    }
-    brush_->SetColor(to_color(color));
-    context_->PushAxisAlignedClip(to_rect(title), D2D1_ANTIALIAS_MODE_ALIASED);
-    context_->DrawTextLayout(
-        D2D1::Point2F(static_cast<float>(title.left), static_cast<float>(title.top)), shown.Get(),
-        brush_.Get());
-    context_->PopAxisAlignedClip();
-}
-
-void Direct2DRenderer::draw_tabs(const application::EditorFrame &frame,
-                                 const core::TitleBarLayout &layout)
-{
-    // タブの領域の外（左へ送られた分と「∨」の下）は描かない（D20）。
-    context_->PushAxisAlignedClip(to_rect(layout.viewport), D2D1_ANTIALIAS_MODE_ALIASED);
-    const std::size_t count = std::min(frame.tabs.size(), layout.tab_count);
-    for (std::size_t index = 0; index < count; ++index)
-    {
-        if (core::tab_visible(layout, index))
-        {
-            draw_tab(frame, layout, index);
-        }
-    }
-    context_->PopAxisAlignedClip();
-}
-
-void Direct2DRenderer::draw_add_tab(const application::EditorFrame &frame,
-                                    const core::TitleBarLayout &layout)
-{
-    draw_button_face(frame, layout, layout.add_tab,
-                     core::TitleBarTarget{core::TitleBarHit::add_tab, 0});
-    brush_->SetColor(to_color(frame.palette.muted));
-    const auto plus = centre_of(layout.add_tab);
-    const float half = static_cast<float>(layout.glyph) / 2.0F;
-    const float stroke = scaled(1.0F);
-    context_->DrawLine(D2D1::Point2F(plus.x - half, plus.y), D2D1::Point2F(plus.x + half, plus.y),
-                       brush_.Get(), stroke);
-    context_->DrawLine(D2D1::Point2F(plus.x, plus.y - half), D2D1::Point2F(plus.x, plus.y + half),
-                       brush_.Get(), stroke);
-}
-
-void Direct2DRenderer::draw_tab_list(const application::EditorFrame &frame,
-                                     const core::TitleBarLayout &layout)
-{
-    // 「∨」はあふれているときだけある（D20）。押したときの一覧は #240。
-    draw_button_face(frame, layout, layout.tab_list,
-                     core::TitleBarTarget{core::TitleBarHit::tab_list, 0});
-    brush_->SetColor(to_color(frame.palette.muted));
-    const auto centre = centre_of(layout.tab_list);
-    const float half = static_cast<float>(layout.glyph) / 2.0F;
-    const float quarter = half / 2.0F;
-    const float stroke = scaled(1.0F);
-    context_->DrawLine(D2D1::Point2F(centre.x - half, centre.y - quarter),
-                       D2D1::Point2F(centre.x, centre.y + quarter), brush_.Get(), stroke);
-    context_->DrawLine(D2D1::Point2F(centre.x, centre.y + quarter),
-                       D2D1::Point2F(centre.x + half, centre.y - quarter), brush_.Get(), stroke);
-}
-
-void Direct2DRenderer::draw_title_bar(const application::EditorFrame &frame,
-                                      const core::TitleBarLayout &layout)
-{
-    // 帯は D16 で不透明。DWM の Mica は掛けない（#1488）ので、帯の見た目はこの面だけで決まる。
-    fill(layout.band, frame.palette.title_bar);
-    draw_tabs(frame, layout);
-    if (layout.overflowing)
-    {
-        draw_tab_list(frame, layout);
-    }
-    draw_add_tab(frame, layout);
-    draw_caption_glyphs(layout, frame.palette.muted);
-}
-
 Direct2DRenderer::TextLayout Direct2DRenderer::layout_of(std::string_view text,
                                                          const core::BodyLayout &body,
                                                          const core::EditorSettings &settings,
@@ -1153,67 +961,6 @@ void Direct2DRenderer::draw_current_match(const application::EditorFrame &frame,
     }
 }
 
-void Direct2DRenderer::draw_line_labels(const application::EditorFrame &frame,
-                                        IDWriteTextLayout *text, const core::LayoutRect &area,
-                                        const application::LineView &line)
-{
-    if (line.labels.empty())
-    {
-        return;
-    }
-    LineUtf16Evaluation positions(line.display.text);
-    for (const auto &label : line.labels)
-    {
-        const core::SelectionSpan target{core::SelectionPresence::present, label.column,
-                                         core::Column{label.column.value + 1}};
-        const DWRITE_TEXT_RANGE range = range_of(line, target, positions);
-        const auto runs = runs_of(text, area, range);
-        if (!runs.empty())
-        {
-            draw_label(frame, text, runs.front(), label);
-            continue;
-        }
-        // 行の終わり（空の行を含む）の跳び先は字が無いので、その位置の点から幅 0 の当たりを作る
-        // （地の升は印の字の幅から・motion_label_box）。
-        const auto point =
-            text_layout_point(text, range.startPosition, core::CaretAffinity::leading);
-        if (!point)
-        {
-            text_failure_ = RenderFailure::directwrite;
-            continue;
-        }
-        DWRITE_HIT_TEST_METRICS end{};
-        end.left = static_cast<float>(area.left) + point.value().x;
-        end.top = static_cast<float>(area.top) + point.value().y;
-        end.height = static_cast<float>(body_line_height_);
-        draw_label(frame, text, end, label);
-    }
-}
-
-// 地は motion_label_box（升 × max(跳び先の升の数,
-// 印の字の数)・字の無い跳び先の升は印の字の幅から）、 字は行の layout の書式から作った別の layout
-// で、地に切り抜いて左に寄せる（paint_motion_label・ tests/ui と同じ 1 本）。
-void Direct2DRenderer::draw_label(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                                  const DWRITE_HIT_TEST_METRICS &target,
-                                  const core::MotionLabel &label)
-{
-    const auto written =
-        text_layout(label.label, text, core::LayoutRect{0, 0, label_room, label_room});
-    DWRITE_TEXT_METRICS measured{};
-    if (!written || FAILED(written->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)) ||
-        FAILED(written->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING)) ||
-        FAILED(written->GetMetrics(&measured)))
-    {
-        text_failure_ = RenderFailure::directwrite;
-        return;
-    }
-    const D2D1_RECT_F box =
-        motion_label_box(target, label, measured.widthIncludingTrailingWhitespace);
-    paint_motion_label(*context_.Get(), brush_.Get(),
-                       MotionLabelPaint{box, written.Get(), to_color(frame.palette.accent),
-                                        to_color(frame.palette.on_accent)});
-}
-
 void Direct2DRenderer::draw_line_selection(const application::EditorFrame &frame,
                                            IDWriteTextLayout *text, const core::LayoutRect &area,
                                            const application::LineView &line)
@@ -1319,6 +1066,13 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
     caret_rectangle_ = RECT{static_cast<LONG>(first.left), static_cast<LONG>(first.top),
                             static_cast<LONG>(first.left + first.width),
                             static_cast<LONG>(first.top + first.height)};
+    // 印が出ている間は枠だけ（中は塗らず、下の字は本文の色のまま・ADR 0163 の追補 #1800）。
+    if (motion_labels_shown(frame.lines))
+    {
+        brush_->SetColor(to_color(frame.palette.accent));
+        outline_block(made);
+        return;
+    }
     const auto radius = static_cast<float>(core::to_pixels(block_radius_dips, dpi_));
     for (const auto &run : runs)
     {
@@ -1506,13 +1260,11 @@ void Direct2DRenderer::outline_block(
     const std::optional<std::vector<DWRITE_HIT_TEST_METRICS>> &runs)
 {
     const float stroke = scaled(1.0F);
-    const float inset = stroke / 2.0F;
     for (const auto &run : runs.value_or(std::vector<DWRITE_HIT_TEST_METRICS>{}))
     {
-        context_->DrawRectangle(D2D1::RectF(run.left + inset, run.top + inset,
-                                            run.left + run.width - inset,
-                                            run.top + run.height - inset),
-                                brush_.Get(), stroke);
+        outline_caret_block(
+            *context_.Get(), brush_.Get(),
+            D2D1::RectF(run.left, run.top, run.left + run.width, run.top + run.height), stroke);
     }
 }
 
@@ -1623,8 +1375,6 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_line_diagnostics(frame, text.Get(), area, line);
     draw_current_match(frame, text.Get(), area, line);
-    // 印は本文と枠の後・キャレットの前（印が出ている間もキャレットは上に描く・ADR 0163 の決定 6）。
-    draw_line_labels(frame, text.Get(), area, line);
     if (line.number != pane.caret.position.line)
     {
         return;
@@ -1632,7 +1382,8 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     switch (pane.role)
     {
     case PaneRole::active:
-        if (!body_caret_hidden(frame))
+        // 印が出ている間のキャレットは印の 1 パス（draw_label_pass）が札の後に描く。
+        if (!body_caret_hidden(frame) && !motion_labels_shown(pane.lines))
         {
             draw_caret(frame, text.Get(), area, line);
         }
@@ -1676,11 +1427,7 @@ void Direct2DRenderer::draw_line(const application::EditorFrame &frame, const Bo
                                       top + body.line_height},
                      frame.palette.giant_mark);
     }
-    // 原点のずれ（横の送りと巨大な行の窓の x）は application が行ごとに決める（ADR 0139 の決定
-    // 5）。
-    constexpr auto reach = static_cast<float>(std::numeric_limits<std::int32_t>::max() / 2);
-    const auto left = static_cast<std::int32_t>(std::clamp(line.left, -reach, reach));
-    const core::LayoutRect area{body.content.left + left, top, body.content.right, bottom};
+    const core::LayoutRect area = line_area(body, line);
     context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
     if (line.composed.has_value())
     {
@@ -1897,6 +1644,7 @@ void Direct2DRenderer::draw_pane(const application::EditorFrame &frame, const Bo
         draw_line(frame, pane, line);
     }
     draw_grid_rows(frame, pane);
+    draw_label_pass(frame, pane);
     context_->PopAxisAlignedClip();
     body_top_ = std::numeric_limits<std::int32_t>::min();
     body_bottom_ = std::numeric_limits<std::int32_t>::max();
@@ -2775,6 +2523,13 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     draw_status_guide(
         frame, core::status_guide_fitted(guide, status, dpi_, draw_status_bar(frame, status)));
     draw_open_palette(frame, width, height);
+    // 補完の面は本文とステータスバーの上・札とメニューの下（面が開いている間は入力行も Ctrl+P の
+    // 面も無い・ADR 0190 の決定 5）。
+    draw_completion(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
+    draw_settings(frame, core::LayoutRect{0, title.band.bottom, width, status.band.top});
+    // 札は面の上・右クリックのメニューの下（メニューが開いている間は出ない・#1789）。
+    draw_tab_tip(frame, title);
+    draw_hover_tip(frame, minimap.body);
     draw_context_menu(frame, width, height);
     gutter_layouts_.end();
     D2D1_TAG failed_first = 0;

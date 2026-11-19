@@ -222,8 +222,9 @@ bool untouched_untitled(const EditorState &state) noexcept
 }
 
 // 合図（ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の決定 8・ADR 0160 の決定 6・ADR 0176 の
-// 決定 4）。「合図か」を決めるのはここの 1 か所（ADR 0062 の追補・#1296）。題名のダブルクリックの
-// PinTab は使う人の操作なので合図ではない（ADR 0179 の決定 4-4）。
+// 決定 4・#1789 のタブの札の待ち TabTipTick）。「合図か」を決めるのはここの 1 か所（ADR 0062
+// の追補・#1296）。題名のダブルクリックの PinTab は使う人の操作なので合図ではない（ADR 0179 の決定
+// 4-4）。
 bool is_signal(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WorkCompleted>(intent) ||
@@ -231,19 +232,35 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<PreviewTick>(intent) ||
            std::holds_alternative<LanguageServerTick>(intent) ||
            std::holds_alternative<MapTimeout>(intent) ||
+           std::holds_alternative<TabTipTick>(intent) ||
            std::holds_alternative<FirstFramePresented>(intent);
 }
 
 // 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの
-// hover。keeps_tab_walk と begin_intent と `map`
-// の待ちを保つ側と全面プレビューの振り分けが共用する。
+// hover・窓が非アクティブになった知らせ（WindowDeactivated・ADR 0190 の決定 6）。keeps_tab_walk と
+// begin_intent と `map` の待ちを保つ側と全面プレビューの振り分けが共用する。
 bool not_user_operation(const EditorIntent &intent) noexcept
 {
     return is_signal(intent) || std::holds_alternative<VisibleLines>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
            std::holds_alternative<RefreshAppearance>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
-           std::holds_alternative<HoverExplorer>(intent);
+           std::holds_alternative<HoverExplorer>(intent) ||
+           std::holds_alternative<WindowDeactivated>(intent);
+}
+
+bool is_settings_intent(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenSettings>(intent) ||
+           std::holds_alternative<CloseSettings>(intent) ||
+           std::holds_alternative<RevertSettings>(intent) ||
+           std::holds_alternative<StepSettings>(intent) ||
+           std::holds_alternative<ChangeSetting>(intent) ||
+           std::holds_alternative<ChooseSettingsPreset>(intent) ||
+           std::holds_alternative<FilterSettings>(intent) ||
+           std::holds_alternative<JumpSettingsSection>(intent) ||
+           std::holds_alternative<FocusSettingsRow>(intent) ||
+           std::holds_alternative<ScrollSettings>(intent);
 }
 
 } // namespace nenenib::application::detail

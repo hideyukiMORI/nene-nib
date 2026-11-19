@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import hashlib
 import importlib.util
@@ -24,6 +25,10 @@ _CASE_MAPPING = importlib.util.spec_from_file_location("case_mapping",
                                                        Path(__file__).resolve().parent / "case-mapping.py")
 case_mapping = importlib.util.module_from_spec(_CASE_MAPPING)
 _CASE_MAPPING.loader.exec_module(case_mapping)
+_MARKDOWN_ENTITIES = importlib.util.spec_from_file_location(
+    "markdown_entities", Path(__file__).resolve().parent / "markdown-entities.py")
+markdown_entities = importlib.util.module_from_spec(_MARKDOWN_ENTITIES)
+_MARKDOWN_ENTITIES.loader.exec_module(markdown_entities)
 
 
 @dataclass(frozen=True)
@@ -520,6 +525,31 @@ def case_mapping_checks(root: Path) -> list[Finding]:
     return [Finding("CNF-010", name, "differs from the generated case mapping; run eng/case-mapping.py --write")]
 
 
+def markdown_entities_checks(root: Path) -> list[Finding]:
+    """CNF-010: src/core/MarkdownEntityTable.hpp is exactly what eng/markdown-entities.py writes (#1840).
+
+    The Markdown preview resolves named character references with one table, generated from the
+    html.entities of the pinned Python (eng/tool-versions.json); like CaseMappingTable.hpp the whole
+    file is compared. Missing and different are both findings; `eng/markdown-entities.py --write`
+    writes it.
+    """
+    name = markdown_entities.TARGET
+    path = root / name
+    command = "run eng/markdown-entities.py --write"
+    if not path.is_file():
+        return [Finding("CNF-010", name, f"the generated entity table is missing; {command}")]
+    content = path.read_bytes()
+    expected = markdown_entities.markdown_entities_header().encode("utf-8")
+    if content == expected:
+        return []
+    for number, (stored, wanted) in enumerate(
+            itertools.zip_longest(content.split(b"\n"), expected.split(b"\n")), 1):
+        if stored != wanted:
+            return [Finding("CNF-010", name, f"line {number}: {excerpt(stored)} is not the generated "
+                            f"{excerpt(wanted)}; {command}")]
+    return [Finding("CNF-010", name, f"differs from the generated entity table; {command}")]
+
+
 def excerpt(line: bytes | None, limit: int = 60) -> str:
     if line is None:
         return "(nothing)"
@@ -635,37 +665,40 @@ def ui_text_literal_checks(path: str, text: str, rules: dict) -> list[Finding]:
             for number in japanese_literal_lines(text)]
 
 
-def ui_message_names(enum_text: str) -> list[str]:
-    """The enumerators of `enum class UiMessage`, in order (comments are skipped)."""
+def enum_names(enum_text: str, enum: str) -> list[str]:
+    """The enumerators of `enum class <enum>`, in order (comments are skipped)."""
     code = cpp_code(enum_text)
-    body = re.search(r"\benum\s+class\s+UiMessage\b[^{;]*\{(?P<body>[^}]*)\}", code)
+    body = re.search(r"\benum\s+class\s+" + re.escape(enum) + r"\b[^{;]*\{(?P<body>[^}]*)\}", code)
     if body is None:
         return []
     return [part.strip() for part in body["body"].split(",") if part.strip()]
 
 
-def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[tuple[str, str]]:
-    """CNF-016: what is wrong with the UiMessage enum and its columns, as (path or "", detail).
+def enum_table_problems(enum: str, count: str, enum_text: str, count_text: str,
+                        columns: dict[str, str]) -> list[tuple[str, str]]:
+    """CNF-016: what is wrong with a closed enum, its count and its tables, as (path or "", detail).
 
-    The C++ static_asserts check that each column holds every value once in enum order, but an
-    enumerator added after the last one with no row and no change to `ui_message_count` passes them
-    and makes `ui_text` read past the end of the column (review A-M1). C++23 cannot count
-    enumerators, so the count is checked here.
+    The C++ static_asserts check that each table holds every value once in enum order, but an
+    enumerator added after the last one with no row and no change to the count passes them and
+    makes the lookup read past the end of the table (review A-M1). C++23 cannot count enumerators,
+    so the count names the last value (`<count> = std::to_underlying(<enum>::<last>) + 1U`, or a
+    function that returns it) and the name is checked here. Used for UiMessage and for
+    EditorOperation (#1790: the exhaustive switch outgrew the function size limit at 55 values).
     """
-    names = ui_message_names(enum_text)
+    names = enum_names(enum_text, enum)
     if not names:
-        return [("", "enum class UiMessage is missing")]
+        return [("", f"enum class {enum} is missing")]
     problems = []
-    counted = re.search(r"\bui_message_count\s*=\s*std::to_underlying\(\s*UiMessage::(\w+)\s*\)\s*\+\s*1U?\s*;",
-                        cpp_code(enum_text))
+    counted = re.search(r"\b" + re.escape(count) + r"\b[^;{=]*(?:=|\{\s*return)\s*std::to_underlying\(\s*"
+                        + re.escape(enum) + r"::(\w+)\s*\)\s*\+\s*1U?\s*;", cpp_code(count_text))
     if counted is None:
-        problems.append(("", "ui_message_count is not std::to_underlying(UiMessage::<last>) + 1U"))
+        problems.append(("", f"{count} is not std::to_underlying({enum}::<last>) + 1U"))
     elif counted[1] != names[-1]:
-        problems.append(("", f"ui_message_count names {counted[1]}, but the last enumerator is {names[-1]}"))
+        problems.append(("", f"{count} names {counted[1]}, but the last enumerator is {names[-1]}"))
     for path, text in columns.items():
-        rows = re.findall(r"\{\s*UiMessage::(\w+)\s*,", cpp_code(text))
+        rows = re.findall(r"\{\s*" + re.escape(enum) + r"::(\w+)\s*,", cpp_code(text))
         if len(rows) != len(names):
-            problems.append((path, f"{len(rows)} rows for {len(names)} UiMessage values"))
+            problems.append((path, f"{len(rows)} rows for {len(names)} {enum} values"))
             continue
         mismatch = next((index for index, (row, name) in enumerate(zip(rows, names)) if row != name), None)
         if mismatch is not None:
@@ -673,16 +706,33 @@ def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[t
     return problems
 
 
-def ui_message_table_checks(root: Path, rules: dict) -> list[Finding]:
-    table = rules["uiMessageTable"]
-    enum_path = table["enum"]
-    paths = [enum_path] + table["columns"]
-    missing = [name for name in paths if not (root / name).is_file()]
-    if missing:
-        return [Finding("CNF-016", name, "the UiMessage table file is missing") for name in missing]
-    columns = {name: (root / name).read_text(encoding="utf-8") for name in table["columns"]}
-    return [Finding("CNF-016", path or enum_path, detail)
-            for path, detail in ui_message_table_problems((root / enum_path).read_text(encoding="utf-8"), columns)]
+def ui_message_names(enum_text: str) -> list[str]:
+    """The enumerators of `enum class UiMessage`, in order (comments are skipped)."""
+    return enum_names(enum_text, "UiMessage")
+
+
+def ui_message_table_problems(enum_text: str, columns: dict[str, str]) -> list[tuple[str, str]]:
+    """CNF-016 for UiMessage: the count sits beside the enum (ui_message_count)."""
+    return enum_table_problems("UiMessage", "ui_message_count", enum_text, enum_text, columns)
+
+
+def enum_table_checks(root: Path, rules: dict) -> list[Finding]:
+    """CNF-016 for every table in `enumTables` (UiMessage and EditorOperation)."""
+    findings = []
+    for table in rules["enumTables"]:
+        enum_path = table["enumFile"]
+        count_path = table.get("countFile", enum_path)
+        paths = list(dict.fromkeys([enum_path, count_path] + table["columns"]))
+        missing = [name for name in paths if not (root / name).is_file()]
+        if missing:
+            findings.extend(Finding("CNF-016", name, f"the {table['enum']} table file is missing") for name in missing)
+            continue
+        columns = {name: (root / name).read_text(encoding="utf-8") for name in table["columns"]}
+        problems = enum_table_problems(table["enum"], table["count"], (root / enum_path).read_text(encoding="utf-8"),
+                                       (root / count_path).read_text(encoding="utf-8"), columns)
+        findings.extend(Finding("CNF-016", path or (count_path if detail.startswith(table["count"]) else enum_path), detail)
+                        for path, detail in problems)
+    return findings
 
 
 # 1 つの翻訳単位の行数の上限（ADR 0158 の決定 6）。超えたファイルは ADR の群の表に群を足して分ける。
@@ -703,6 +753,73 @@ def translation_unit_size_checks(root: Path, paths: list[Path]) -> list[Finding]
         count = len((root / path).read_text(encoding="utf-8").splitlines())
         if count > MAXIMUM_TRANSLATION_UNIT_LINES:
             findings.append(Finding("CNF-014", name, f"{count} lines > {MAXIMUM_TRANSLATION_UNIT_LINES}"))
+    return findings
+
+
+FEATURE_COSTS_TABLE = "src/core/FeatureCosts.hpp"
+FEATURE_COSTS_DOCUMENT = "docs/quality/feature-costs.md"
+MEASURE_SPEED = "eng/measure-speed.py"
+# feature_costs の 1 行の先頭 7 欄（feature・name・default_on・storage・delta・bench・background）。
+FEATURE_COST_ROW = re.compile(r'\{EditorFeature::\w+,\s*"(?P<name>\w+)",\s*(?:true|false),\s*'
+                              r'FeatureStorage::\w+,\s*(?P<delta>\d+),\s*"(?P<bench>[^"]*)",')
+# 文書の表の行（機能・ベンチ・増分 µs の 3 列から始まる）。
+FEATURE_COST_DOCUMENT_ROW = re.compile(r"^\|\s*(?P<name>[a-z_]+)\s*\|\s*(?P<bench>[a-z0-9-]+)\s*\|"
+                                       r"\s*(?P<delta>\d+)\s*\|", re.MULTILINE)
+
+
+def optional_benches(source: str) -> set[str]:
+    """The names in measure-speed.py's OPTIONAL_BENCHES, resolved from its module-level assignments.
+
+    Only string constants, tuples, starred names and names bound to those are followed, so the script
+    is read, not run (it needs Windows modules and a window to import).
+    """
+    bindings = {}
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            bindings[node.targets[0].id] = node.value
+
+    def names(node, seen) -> set[str]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return {node.value}
+        if isinstance(node, (ast.Tuple, ast.List)):
+            return set().union(*(names(item, seen) for item in node.elts)) if node.elts else set()
+        if isinstance(node, ast.Starred):
+            return names(node.value, seen)
+        if isinstance(node, ast.Name) and node.id in bindings and node.id not in seen:
+            return names(bindings[node.id], seen | {node.id})
+        return set()
+
+    return names(bindings["OPTIONAL_BENCHES"], set()) if "OPTIONAL_BENCHES" in bindings else set()
+
+
+def feature_cost_checks(root: Path) -> list[Finding]:
+    """CNF-015: the measured rows of feature_costs match docs/quality/feature-costs.md (ADR 0170).
+
+    A row is measured when its bench is not empty. Each measured row's bench must be one of
+    measure-speed.py's OPTIONAL_BENCHES, and the document's table must hold exactly the measured rows
+    with the same bench and the same single-key delta (µs).
+    """
+    table_path, document_path = root / FEATURE_COSTS_TABLE, root / FEATURE_COSTS_DOCUMENT
+    missing = [name for name, path in ((FEATURE_COSTS_TABLE, table_path), (FEATURE_COSTS_DOCUMENT, document_path),
+                                       (MEASURE_SPEED, root / MEASURE_SPEED)) if not path.exists()]
+    if missing:
+        return [Finding("CNF-015", name, "the file is missing") for name in missing]
+    table_text = table_path.read_text(encoding="utf-8")
+    rows = list(FEATURE_COST_ROW.finditer(table_text))
+    declared = re.search(r"std::array<FeatureCost, (\d+)> feature_costs", table_text)
+    if declared is None or int(declared[1]) != len(rows):
+        return [Finding("CNF-015", FEATURE_COSTS_TABLE,
+                        f"read {len(rows)} rows of feature_costs, not the declared size")]
+    table = {(m["name"], m["bench"], int(m["delta"])) for m in rows if m["bench"]}
+    document = {(m["name"], m["bench"], int(m["delta"]))
+                for m in FEATURE_COST_DOCUMENT_ROW.finditer(document_path.read_text(encoding="utf-8"))}
+    benches = optional_benches((root / MEASURE_SPEED).read_text(encoding="utf-8"))
+    findings = [Finding("CNF-015", FEATURE_COSTS_TABLE, f"bench {bench} of {name} is not in OPTIONAL_BENCHES")
+                for name, bench, _ in sorted(table) if bench not in benches]
+    findings += [Finding("CNF-015", FEATURE_COSTS_DOCUMENT, f"no row for {name} {bench} {delta}")
+                 for name, bench, delta in sorted(table - document)]
+    findings += [Finding("CNF-015", FEATURE_COSTS_TABLE, f"no measured row for {name} {bench} {delta}")
+                 for name, bench, delta in sorted(document - table)]
     return findings
 
 
@@ -801,10 +918,12 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(wrap_fixture_provenance_checks(root, rules))
     findings.extend(key_names_checks(root))
     findings.extend(case_mapping_checks(root))
+    findings.extend(markdown_entities_checks(root))
     findings.extend(fixture_format_checks(root))
     findings.extend(third_party_digest_checks(root, paths, rules))
     findings.extend(translation_unit_size_checks(root, paths))
-    findings.extend(ui_message_table_checks(root, rules))
+    findings.extend(feature_cost_checks(root))
+    findings.extend(enum_table_checks(root, rules))
     findings.extend(architecture_checks(root, paths, build_dir))
     signatures = sdk_abi_signatures(root)
     for path in paths:

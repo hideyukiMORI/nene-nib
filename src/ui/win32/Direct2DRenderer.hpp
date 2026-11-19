@@ -9,6 +9,8 @@
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
 #include "CommandLayout.hpp"
+#include "CompletionFaceLayout.hpp"
+#include "CompletionPainter.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuPainter.hpp"
 #include "DeviceWarmup.hpp"
@@ -21,6 +23,7 @@
 #include "GridRowView.hpp"
 #include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
+#include "HoverTipLayout.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
@@ -41,10 +44,18 @@
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
+#include "SettingsControl.hpp"
+#include "SettingsLayout.hpp"
+#include "SettingsPanelFormats.hpp"
+#include "SettingsPanelPainter.hpp"
+#include "SettingsSection.hpp"
+#include "SettingsTarget.hpp"
+#include "SettingsView.hpp"
 #include "StartScreenPainter.hpp"
 #include "StatusBarLayout.hpp"
 #include "StatusLayoutDemand.hpp"
 #include "StatusTextLayout.hpp"
+#include "TabTipLayout.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
@@ -113,6 +124,29 @@ class Direct2DRenderer final
     [[nodiscard]] std::optional<std::size_t> context_menu_row_at(std::int32_t x,
                                                                  std::int32_t y) const;
     [[nodiscard]] bool context_menu_covers(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた補完の面の点（クライアントの物理画素）の下の候補（今の接頭辞に当たる候補の中の
+    // 位置）と、面の中か（ADR 0190 の決定 5・#1844 の R1）。面を描いていなければ無し・偽。
+    [[nodiscard]] std::optional<std::size_t> completion_row_at(std::int32_t x,
+                                                               std::int32_t y) const;
+    [[nodiscard]] bool completion_covers(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた設定の面（施主決定 D102・#1836）。描いた配置（core::settings_layout の 1 本）を
+    // そのまま引く。面を描いていなければ outside・値なし。
+    // - settings_target_at: 点（クライアントの物理画素）の下の部品。
+    // - settings_layout: 最後に描いた配置（PageUp / PageDown の行き先を引く）。
+    // - settings_scrolled: 送り from からホイールで lines 行送った送り（変わらなければ値なし）。
+    //   from は application の状態の送り（描画の前に 2 通来ても 1 通目が消えない）。
+    // - settings_revealed: view の焦点の行（section があればその節の見出しから終わりまで）が見える
+    //   送り（今の送りのままでよければ値なし）。配置は最後に描いた帯で作り直す（描く前の view でも
+    //   引ける）。
+    // - settings_search_rectangle: 探す欄（IME の変換の窓を置く所）。
+    [[nodiscard]] core::SettingsTarget settings_target_at(std::int32_t x, std::int32_t y) const;
+    [[nodiscard]] const std::optional<core::SettingsLayout> &settings_layout() const noexcept;
+    [[nodiscard]] std::optional<std::int32_t> settings_scrolled(std::int32_t from,
+                                                                std::int32_t lines) const;
+    [[nodiscard]] std::optional<std::int32_t>
+    settings_revealed(const application::SettingsView &view, core::DisplayLanguage language,
+                      std::optional<core::SettingsSection> section);
+    [[nodiscard]] std::optional<core::LayoutRect> settings_search_rectangle() const;
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
@@ -143,6 +177,8 @@ class Direct2DRenderer final
     [[nodiscard]] std::expected<void, RenderFailure> set_language(core::DisplayLanguage language);
     [[nodiscard]] std::expected<void, RenderFailure> create_guide_formats(const wchar_t *face);
     [[nodiscard]] bool create_explorer_formats(const wchar_t *face);
+    // タブの札の文（#1789）。UI の字体・12 DIP・折り返さない・左寄せ。作れなければ偽。
+    [[nodiscard]] bool create_tab_tip_format(const wchar_t *face);
     // 全文検索の当たりの行の 2 段と入力欄の右の進み具合（ADR 0167 の決定
     // 5・採用案の寸法）。上の段は 本文の字体 body_face、下の段と進み具合は UI
     // の字体。作れなければ偽。
@@ -193,6 +229,12 @@ class Direct2DRenderer final
     void draw_tabs(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_add_tab(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
     void draw_tab_list(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    // タブの札（#1789）。frame に札のタブがあるときだけ描く。いちばん最後に描く（本文・面の上）。
+    void draw_tab_tip(const application::EditorFrame &frame, const core::TitleBarLayout &layout);
+    // hover の札（ADR 0190 の決定 6）。この frame
+    // で描いたキャレットの矩形の上（入らなければ下）に、 本文の領域 area
+    // の中で描く。文が無ければ何もしない。
+    void draw_hover_tip(const application::EditorFrame &frame, const core::LayoutRect &area);
     void draw_caption_glyphs(const core::TitleBarLayout &layout, core::RgbColor color);
     // 本文の layout を描く経路（保持した字形・範囲の描き直し・置き換え）は BodyTextPainter の
     // 1 本（ADR 0073・#531）。本文を描いている間の縦の範囲を渡した 1 回分を作る。
@@ -231,13 +273,20 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_line_selection(const application::EditorFrame &frame, IDWriteTextLayout *text,
                              const core::LayoutRect &area, const application::LineView &line);
-    // イージーモーションの印（ADR 0163 の決定 6）。跳び先の文字の升に accent の地を敷き、印の字を
-    // on_accent で描く。印の字の layout は行の layout の書式（字体と大きさ）から別に作り、共有の
-    // 本文の layout の書式は変えない（ADR 0114）。印の無い行は 1 回の判定で抜ける。
+    // イージーモーションの印（ADR 0163 の決定 6 と追補 #1800・案 D）。跳び先の升の左上の肩に text
+    // の札を置き、印の字を background で札の中央に描く。行の札は左から右の順（重なれば右が上）。
+    // 印の字の layout は印の専用の書式（label_format_）から作り、共有の本文の layout の書式は
+    // 変えない（ADR 0114）。いちばん上の画面行の札は本文の欄の上端（body_top_）より上へ出さない。
     void draw_line_labels(const application::EditorFrame &frame, IDWriteTextLayout *text,
                           const core::LayoutRect &area, const application::LineView &line);
-    void draw_label(const application::EditorFrame &frame, IDWriteTextLayout *text,
-                    const DWRITE_HIT_TEST_METRICS &target, const core::MotionLabel &label);
+    void draw_label(const application::EditorFrame &frame, const DWRITE_HIT_TEST_METRICS &target,
+                    const core::MotionLabel &label);
+    // 印の字の書式（本文の字体の太字・motion_label_text_dips・中央寄せ）。印が出たときに初めて
+    // 作り、本文の書式を作り直す所（DPI・字体・大きさの変更）で捨てる。作れなければ偽。
+    [[nodiscard]] bool ensure_label_format();
+    // 全部の行を描いた後の印の 1 パスと、その後のキャレット。印の無い frame は入口で抜ける。
+    void draw_label_pass(const application::EditorFrame &frame, const BodyPane &pane);
+    void draw_pass_caret(const application::EditorFrame &frame, const BodyPane &pane);
     // 本文の桁の区間（begin と end を持つ Span の列）を描く layout の UTF-16 の範囲へ写す 1 本
     // （色の区間と診断の下線の共用・IME の差し込み行は #839）。返す列は spans と同じ並びと長さ。
     template <typename Span>
@@ -416,6 +465,13 @@ class Direct2DRenderer final
     // 右クリックのメニュー（#1051）。ほかの全部の上に描き、描いた配置を当たりのために覚える。
     void draw_context_menu(const application::EditorFrame &frame, std::int32_t width,
                            std::int32_t height);
+    // 補完の面（ADR 0169 の決定 4・ADR 0190 の決定 5）。本文と面とステータスバーの上・タブの札と
+    // 右クリックのメニューの下に描く。bounds は面を収める矩形。
+    void draw_completion(const application::EditorFrame &frame, const core::LayoutRect &bounds);
+    // 設定の面（#1836）。area はタイトルバーの下からステータスバーの上まで。面が無い frame は最初の
+    // 1 行で返る（書式も配置も作らない）。
+    void draw_settings(const application::EditorFrame &frame, const core::LayoutRect &area);
+    [[nodiscard]] bool settings_formats_made();
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
     // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
@@ -444,6 +500,8 @@ class Direct2DRenderer final
     TextFormat mode_format_;
     TextFormat command_format_;
     TextFormat gutter_format_;
+    // イージーモーションの印の字（ensure_label_format・#1800）。
+    TextFormat label_format_;
     // 面の行の右端の鍵。本文の字体・UI の大きさ・左寄せ（幅を測るので右寄せにしない）。
     TextFormat key_format_;
     // エクスプローラーの面の名前。UI
@@ -488,6 +546,10 @@ class Direct2DRenderer final
     PaletteRowLayouts preview_layouts_{PreviewPanePainter::layout_limit};
     // タブの題名の文字組み。同じ型で、書式・DPI の作り直しでだけ捨てる（#924）。
     PaletteRowLayouts tab_layouts_;
+    // タブの札の文の書式と文字組みの保持（#1789・上限 1）。保持は書式の作り直しで捨てる。
+    TextFormat tab_tip_format_;
+    TabTipLayout tab_tip_layout_;
+    HoverTipLayout hover_tip_layout_;
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
     // ときに捨てる（ADR 0162 の決定 8）。
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};
@@ -501,6 +563,18 @@ class Direct2DRenderer final
     // （メニューを閉じたときも）。
     PaletteRowLayouts context_menu_layouts_{ContextMenuPainter::retained};
     std::optional<core::ContextMenuLayout> context_menu_layout_;
+    // 補完の面の文字組みと、面の左端の覚え（面の通し番号と、開いたときのキャレットの左・ADR 0190 の
+    // 決定 5）。捨てる時は context_menu_layouts_ と同じ（面を閉じたときも）。
+    PaletteRowLayouts completion_layouts_{CompletionPainter::retained};
+    std::optional<std::pair<std::uint64_t, std::int32_t>> completion_anchor_;
+    // 最後に描いた補完の面の配置と、その表示値の first（当たりが描画と同じ値を読む）。
+    std::optional<std::pair<core::CompletionFaceLayout, std::size_t>> completion_layout_;
+    // 設定の面の書式（最初に描くときに作る）・文字組み・最後に描いた配置と帯（#1836）。書式の
+    // 作り直しで書式と文字組みを捨て、面を閉じたら文字組みと配置を捨てる。
+    SettingsPanelFormats settings_formats_;
+    PaletteRowLayouts settings_layouts_{SettingsPanelPainter::retained};
+    std::optional<core::SettingsLayout> settings_layout_;
+    core::LayoutRect settings_area_{};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;
     MinimapPicture minimap_;

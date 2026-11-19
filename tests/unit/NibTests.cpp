@@ -20,7 +20,7 @@ namespace
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 126> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 133> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -52,10 +52,13 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 126> contracts{{
     {"--vim-case", verify_vim_case_contracts},
     {"--vim-visual-block", verify_vim_block_contracts},
     {"--tabs", verify_tabs_contracts},
+    {"--tab-tip", verify_tab_tip_contracts},
     {"--split", verify_split_contracts},
     {"--session", verify_session_contracts},
     {"--history", verify_history_contracts},
     {"--bookmarks", verify_bookmarks_contracts},
+    {"--insert-completion", verify_insert_completion_contracts},
+    {"--completion-face", verify_completion_face_contracts},
     {"--background-work", verify_background_work_contracts},
     {"--open-async", verify_open_async_contracts},
     {"--language-server", verify_language_server_contracts},
@@ -128,6 +131,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 126> contracts{{
     {"--lsp-messages", verify_lsp_messages_scope},
     {"--lsp-frames-property", verify_lsp_frames_property_scope},
     {"--lsp-diagnostics", verify_lsp_diagnostics_scope},
+    {"--lsp-answers", verify_lsp_answers_scope},
     {"--key-map", verify_key_map_scope},
     {"--vim-del", verify_vim_delete_key_scope},
     {"--find-replace", verify_find_replace_scope},
@@ -137,6 +141,9 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 126> contracts{{
     {"--ex-lines", verify_ex_lines_scope},
     {"--matchparen", verify_matchparen_scope},
     {"--minimap", verify_minimap_scope},
+    {"--feature-costs", verify_feature_costs_scope},
+    {"--settings-modal", verify_settings_modal_scope},
+    {"--settings-panel", verify_settings_panel_scope},
     {"--minimap-pointer", verify_minimap_pointer_scope},
     {"--utf-property", verify_utf_property_contracts},
     {"--print-pages-property", verify_print_pages_property_scope},
@@ -164,7 +171,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 152> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 159> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -232,10 +239,13 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 152> scopes{{
     {"--version-info", verify_version_info_contracts},
     {"--vim-visual-block", verify_vim_block_scope},
     {"--tabs", verify_tabs_scope},
+    {"--tab-tip", verify_tab_tip_contracts},
     {"--split", verify_split_scope},
     {"--session", verify_session_scope},
     {"--history", verify_history_scope},
     {"--bookmarks", verify_bookmarks_scope},
+    {"--insert-completion", verify_insert_completion_scope},
+    {"--completion-face", verify_completion_face_scope},
     {"--background-work", verify_background_work_scope},
     {"--open-async", verify_open_async_scope},
     {"--language-server", verify_language_server_scope},
@@ -296,6 +306,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 152> scopes{{
     {"--lsp-messages", verify_lsp_messages_scope},
     {"--lsp-frames-property", verify_lsp_frames_property_scope},
     {"--lsp-diagnostics", verify_lsp_diagnostics_scope},
+    {"--lsp-answers", verify_lsp_answers_scope},
     {"--key-map", verify_key_map_scope},
     {"--vim-del", verify_vim_delete_key_scope},
     {"--find-replace", verify_find_replace_scope},
@@ -305,6 +316,9 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 152> scopes{{
     {"--ex-lines", verify_ex_lines_scope},
     {"--matchparen", verify_matchparen_scope},
     {"--minimap", verify_minimap_scope},
+    {"--feature-costs", verify_feature_costs_scope},
+    {"--settings-modal", verify_settings_modal_scope},
+    {"--settings-panel", verify_settings_panel_scope},
     {"--minimap-property", verify_minimap_property_scope},
     {"--minimap-pointer", verify_minimap_pointer_scope},
     {"--utf-property", verify_utf_property_scope},
@@ -403,6 +417,11 @@ using nenenib::tests::verify_vim_scope_contracts;
 
 int main(int argc, char **argv)
 {
+    if (argc > 2)
+    {
+        std::fputs("usage: nib_tests [scope]  (scopes run one at a time)\n", stderr);
+        return 2;
+    }
     const std::string_view command = argc == 2 ? std::string_view{argv[1]} : std::string_view{};
     if (verify_selected_scope(command))
     {

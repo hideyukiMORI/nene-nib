@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodeColor.hpp"
 #include "PreviewInlineBox.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewTextStyle.hpp"
@@ -23,7 +24,8 @@ namespace nenenib::ui::win32
 // 色（drawing effect）は最初に描くときに 1 回だけ置く。inked はその色を置いた brush の
 // PreviewBrushes::generation（0 は未だ置いていない・#1477・ADR 0155 の追補）。
 // ranges は spans と同じ順の layout の UTF-16 の範囲で、作るときに 1 回だけ写して
-// 装飾・面の矩形・色が読む（#1485）。
+// 装飾・面の矩形・色が読む（#1485）。colors は囲みのコードの構文の色の区間（要素の
+// code_colors・鍵に入る）で、color_ranges は同じ順の UTF-16 の範囲（#1858）。
 struct PreviewTextLayout
 {
     std::string text;
@@ -39,5 +41,9 @@ struct PreviewTextLayout
     std::vector<std::optional<D2D1_POINT_2F>> image_origins;
     std::uint64_t inked = 0;
     std::vector<DWRITE_TEXT_RANGE> ranges;
+    // 最後に引いた回（PreviewTextLayouts の通し番号・あふれたら最も小さい entry を捨てる）。
+    std::uint64_t used = 0;
+    std::optional<std::vector<core::PreviewCodeColor>> colors;
+    std::vector<DWRITE_TEXT_RANGE> color_ranges;
 };
 } // namespace nenenib::ui::win32

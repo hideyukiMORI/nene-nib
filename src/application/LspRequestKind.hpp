@@ -4,11 +4,15 @@
 
 namespace nenenib::application
 {
-// controller が送って答えを待つ要求の種類（ADR 0160 の決定 5・6）。段 L0 は寿命の 2 つだけで、
-// 答えの写し先はこの種類で決める。増えたら写し先の switch がコンパイルで落ちる（CPP-002）。
+// controller が送って答えを待つ要求の種類（ADR 0160 の決定 5・6・ADR 0190 の決定 1）。寿命の 2 つ
+// と、文脈つきの 3 つ（補完・hover・定義へ）。答えの写し先はこの種類で決める。増えたら写し先の
+// switch がコンパイルで落ちる（CPP-002）。
 enum class LspRequestKind : std::uint8_t
 {
     initialize,
-    shutdown
+    shutdown,
+    completion,
+    hover,
+    definition
 };
 } // namespace nenenib::application

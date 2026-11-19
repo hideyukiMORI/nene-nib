@@ -31,7 +31,7 @@ def archive_name(version: str) -> str:
     """The ZIP name follows from the bare product version alone; a pre-release tag is not a version (#1596)."""
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError(f"The release version must be a bare x.y.z, not {version!r}; "
-                         "Beta is the GitHub Release title and pre-release flag")
+                         "a pre-release mark belongs to the GitHub Release, not to the version")
     return f"NeNeNib-{version}-windows-x64.zip"
 
 

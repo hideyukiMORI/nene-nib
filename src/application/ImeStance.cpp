@@ -71,4 +71,17 @@ ImeStance ime_stance_of(core::EditMode mode, core::VimMode vim_mode,
     }
     return std::visit([](const auto &value) { return stance_of(value); }, input.value());
 }
+
+ImeStance ime_stance_in_settings(ImeStance decided) noexcept
+{
+    switch (decided)
+    {
+    case ImeStance::closed:
+        return ImeStance::closed_once;
+    case ImeStance::as_left:
+    case ImeStance::closed_once:
+        return decided;
+    }
+    std::unreachable();
+}
 } // namespace nenenib::application

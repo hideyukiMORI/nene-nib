@@ -97,9 +97,10 @@ void remember(std::vector<MarkerKind> &kinds, const core::PreviewBlock &block)
 // 要素の layout の幅（物理画素）と、その中で読めた画像の箱（ADR 0155 の追補 62）。
 using SizedText = std::pair<float, std::span<const PreviewInlineImage>>;
 
-// 要素の layout の高さ（水平線は文字を持たないので 0）と、1 行目の baseline の下がり（箱のある
-// layout だけ・チェックボックスを 1 行目の文字に揃える・ADR 0155 の追補 68）。読めた画像は箱の
-// 大きさで測る（描く所と同じ箱で同じ layout を引く）。
+// 要素の layout の高さ（水平線は文字を持たないので 0・表の行は行高）と、
+// 1 行目の baseline の下がり（箱のある layout だけ・チェックボックスを
+// 1 行目の文字に揃える・ADR 0155 の追補 68）。読めた画像は箱の大きさで
+// 測る（描く所と同じ箱で同じ layout を引く）。
 [[nodiscard]] std::expected<std::pair<float, float>, RenderFailure>
 text_height_of(const core::PreviewBlock &block, PreviewTextLayouts &layouts,
                const PreviewTextStyle &style, SizedText sized)
@@ -107,6 +108,11 @@ text_height_of(const core::PreviewBlock &block, PreviewTextLayouts &layouts,
     if (block.kind == core::PreviewBlockKind::rule)
     {
         return std::pair{0.0F, 0.0F};
+    }
+    // 表の行は升の中で折り返さず、高さは行高で決まる（layout を作らない・#1848）。
+    if (block.kind == core::PreviewBlockKind::table_row)
+    {
+        return std::pair{preview_line_pixels(style), 0.0F};
     }
     const auto height = layouts.measure(block, sized.first, style, sized.second);
     const auto shift = height ? layouts.first_line_shift(block, sized.first, style, sized.second)

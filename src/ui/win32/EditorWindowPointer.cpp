@@ -1,6 +1,8 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "CompletionPointer.hpp"
+
 #include "BodyLayout.hpp"
 #include "CaptionPress.hpp"
 #include "ChooseStartEntry.hpp"
@@ -31,6 +33,7 @@
 #include "StatusBarLayout.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
+#include "TabTip.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
@@ -82,17 +85,8 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     switch (message)
     {
     case WM_LBUTTONDOWN:
-        press_left(data, counted_clicks(application::PointerClicks::single, data));
-        return 0;
     case WM_LBUTTONDBLCLK:
-        // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
-        // 回目の押しで、本文なら語を選ぶ（#1250）。
-        if (reset_explorer_width(data) || point_explorer(WM_LBUTTONDBLCLK, data))
-        {
-            last_clicks_ = application::PointerClicks::single;
-            return 0;
-        }
-        press_left(data, counted_clicks(application::PointerClicks::double_, data));
+        press_left_button(message, data);
         return 0;
     case WM_LBUTTONUP:
         release_left(data);
@@ -109,6 +103,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     case WM_MOUSELEAVE:
         // 窓の外で離した押しは残さない（捕まえを取らないので離しが届かない・追補 24）。
         start_pressed_ = std::nullopt;
+        lose_completion_press(message);
         over_explorer_divider_ = false;
         hover_explorer_line(std::nullopt);
         hover(std::nullopt);
@@ -121,6 +116,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
             caption_step(message, core::TitleBarTarget{core::TitleBarHit::none, 0}, left_pressed_)
                 .first;
         start_pressed_ = std::nullopt;
+        lose_completion_press(message);
         end_minimap_drag(message);
         lose_explorer_divider();
         end_selection_drag();
@@ -133,10 +129,38 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
     return DefWindowProcW(window_, message, word, data);
 }
 
+// 左の押し（1 回目と、OS が数えた 2 回目）。
+void EditorWindow::press_left_button(UINT message, LPARAM data)
+{
+    // 設定の面の外を押して閉じた直後の 2 回目の押しは 1 回目の押し（閉じるだけだった押しを
+    // ダブルクリックに数えない＝本文の語を選ばない・面の行を開かない・#1836 の差し戻し）。
+    const bool dismissed = take_settings_dismissal();
+    if (message == WM_LBUTTONDOWN || dismissed)
+    {
+        press_left(data, counted_clicks(application::PointerClicks::single, data));
+        return;
+    }
+    // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
+    // 回目の押しで、本文なら語を選ぶ（#1250）。
+    // 設定の面が開いている間は面の押しの道だけ（全幅の面の下のエクスプローラーへ渡さない）。
+    if (!controller_.settings_open() &&
+        (reset_explorer_width(data) || point_explorer(WM_LBUTTONDBLCLK, data)))
+    {
+        last_clicks_ = application::PointerClicks::single;
+        return;
+    }
+    press_left(data, counted_clicks(application::PointerClicks::double_, data));
+}
+
 void EditorWindow::move_pointer(LPARAM data)
 {
     // 右クリックのメニューが開いている間の動きは、載せた行だけ（#1051）。
     if (point_context_menu(data))
+    {
+        return;
+    }
+    // 設定の面の上の動きは面の下の本文・エクスプローラー・境へ渡さない（#1836）。
+    if (over_settings(data))
     {
         return;
     }
@@ -156,6 +180,16 @@ void EditorWindow::release_left(LPARAM data)
 {
     // 右クリックのメニューの上で押した左の離しは、その行の実行だけ（#1051）。
     if (release_context_menu(data))
+    {
+        return;
+    }
+    // 設定の面の上で押した左の離しは、その部品だけ（#1836）。
+    if (release_settings(data))
+    {
+        return;
+    }
+    // 補完の面の上で押した左の離しは、その候補の確定だけ（#1844 の R1）。
+    if (release_completion(data))
     {
         return;
     }
@@ -324,8 +358,10 @@ bool EditorWindow::click_title_bar(LPARAM data, application::PointerClicks click
         }
         send(application::SwitchTab{target.tab});
         return true;
-    // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。
+    // ×・「＋」・「∨」は離したときに動かす（窓の操作と同じ）。タブの札は押した時点で消す（#1789）。
     case core::TitleBarHit::tab_close:
+        send(application::PointTitleBar{target, true});
+        return true;
     case core::TitleBarHit::add_tab:
     case core::TitleBarHit::tab_list:
         return true;
@@ -371,11 +407,18 @@ void EditorWindow::release_title_bar(LPARAM data)
 void EditorWindow::press_middle(LPARAM data)
 {
     middle_pressed_ = std::nullopt;
-    if (controller_.command_palette_active())
+    // 補完の面の上の中ボタンは面を閉じるだけ（#1844 の L3b）。
+    if (controller_.command_palette_active() || close_completion_under(data))
     {
         return;
     }
     middle_pressed_ = title_bar_target_at(data);
+    // タブの上の中ボタンは押した時点でタブの札を消す（#1789）。
+    const auto hovered = core::title_bar_hover(middle_pressed_.value());
+    if (core::tab_tip_tab(hovered).has_value())
+    {
+        send(application::PointTitleBar{hovered, true});
+    }
 }
 
 void EditorWindow::middle_click(LPARAM data)
@@ -517,13 +560,27 @@ void EditorWindow::press_left(LPARAM data, application::PointerClicks clicks)
 {
     // 起動画面の行で始まった押しの列（ダブル・トリプルクリック）は本文へ渡さない。1 回目の離しで
     // 開いた文書の語を 2 回目の押しが選ばない（ADR 0172 の追補 24）。
-    if (clicks != application::PointerClicks::single && start_click_began_)
+    // 補完の面の行で始まった押しの列も同じ（1 回目の離しで確定して面が閉じた後の 2 回目の押しが、
+    // 面の下の語を選ばない・#1844 の R1b）。
+    if ((clicks != application::PointerClicks::single && start_click_began_) ||
+        completion_swallows_press(clicks, completion_click_began_))
     {
         return;
     }
     start_click_began_ = false;
+    completion_click_began_ = false;
     // 右クリックのメニューが開いている間の押しはメニューへ（外なら閉じるだけ・#1051）。
     if (press_context_menu(data))
+    {
+        return;
+    }
+    // 設定の面が開いている間の押しは面へ（外なら閉じて保存するだけ・#1836）。
+    if (press_settings(data))
+    {
+        return;
+    }
+    // 補完の面の上の押しは面へ（本文へ渡さない・面の外は今までどおり本文へ）。
+    if (press_completion(data))
     {
         return;
     }
@@ -761,6 +818,12 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
         return;
     }
     zoom_wheel_remainder_ = 0;
+    // 設定の面の上のホイールは面の行だけを送る（面の外は下の今の道・#1836）。
+    if (wheel_settings(delta, data))
+    {
+        return;
+    }
+    settings_wheel_remainder_ = 0;
     // 面の上のホイールは一覧だけを送り、選択は動かさない（ADR 0150 の決定 2）。
     if (controller_.command_palette_active())
     {
@@ -769,6 +832,11 @@ void EditorWindow::turn_wheel(WPARAM word, LPARAM data)
     }
     // 面を閉じた後のホイールは面の余りを持ち越さない（#737）。
     palette_wheel_remainder_ = 0;
+    // 補完の面の上のホイールは面の行だけを送る（#1844 の R1）。
+    if (scroll_completion(delta, data))
+    {
+        return;
+    }
     if (over_title_bar(data))
     {
         scroll_tabs(delta);
@@ -849,6 +917,19 @@ void EditorWindow::read_wheel_setting()
         palette_wheel_remainder_ = 0;
     }
     wheel_setting_ = lines;
+}
+
+void EditorWindow::read_hover_setting()
+{
+    // 読めないか 0 なら Windows の既定の 400 ms（#1789）。時刻は読まず、待ちは OS
+    // のタイマーが数える。
+    UINT milliseconds = 0;
+    if (SystemParametersInfoW(SPI_GETMOUSEHOVERTIME, 0, &milliseconds, 0) == FALSE ||
+        milliseconds == 0)
+    {
+        milliseconds = default_tab_tip_milliseconds;
+    }
+    hover_setting_ = milliseconds;
 }
 
 bool EditorWindow::over_other_pane(LPARAM data) const

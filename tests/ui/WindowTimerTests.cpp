@@ -35,7 +35,14 @@ void verify_window_timers()
            "WM_TIMER with the key map number is the map timeout");
     expect(nenenib::ui::win32::key_map_timeout_milliseconds == 1'000,
            "the map wait is one second (ADR 0176 decision 4)");
-    expect(!window_timer_of(0).has_value() && !window_timer_of(6).has_value(),
+    constexpr WPARAM tab_tip = std::to_underlying(WindowTimer::tab_tip);
+    expect(tab_tip != key_map && tab_tip != preview && tab_tip != autosave &&
+               tab_tip != selection && tab_tip != language_server &&
+               window_timer_of(tab_tip) == WindowTimer::tab_tip,
+           "WM_TIMER with the tab tip number is the tab tip tick (#1789)");
+    expect(nenenib::ui::win32::default_tab_tip_milliseconds == 400,
+           "the tab tip waits the Windows default of 400 ms when the setting is unreadable");
+    expect(!window_timer_of(0).has_value() && !window_timer_of(7).has_value(),
            "a number the window never set is ignored");
     expect(nenenib::ui::win32::language_server_interval_milliseconds == 30'000,
            "the language server tick comes every 30 seconds (ADR 0160)");

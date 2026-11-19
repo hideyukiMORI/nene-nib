@@ -4,12 +4,18 @@
 // （決定 3・4）。
 #include "AutosaveTick.hpp"
 #include "CancelCommand.hpp"
+#include "CommandChoice.hpp"
+#include "CommandPaletteView.hpp"
+#include "Distribution.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorOperation.hpp"
 #include "InsertText.hpp"
 #include "LanguageTable.hpp"
 #include "OpenOperationList.hpp"
 #include "RegisterShell.hpp"
 #include "Scopes.hpp"
+#include "SelectEditMode.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationEntry.hpp"
 #include "ShellRegistrationFailure.hpp"
@@ -281,6 +287,41 @@ void verify_vim_and_quiet()
                notice(controller.frame()) == with_note("Windows の右クリックに登録しました"),
            "registering in Vim mode writes once and leaves the text alone");
 }
+// 追補 #1809: Store 版（パッケージ）では F1 の一覧に登録の 2 つを出さず、別の道で届いても port に
+// 触れずに 1 行で知らせる。パッケージの状態は値を渡すだけで作る（OS を偽装しない）。
+void verify_packaged()
+{
+    Editing editing(core::Distribution::packaged);
+    auto &controller = editing.controller();
+    auto &port = editing.shell_registration();
+    applied(controller, app::VisibleLines{3});
+    const auto listed = [&]
+    {
+        const auto frame = controller.apply_frame(app::OpenOperationList{});
+        const auto palette = frame.command_palette.value_or(app::CommandPaletteView{});
+        const bool shell_row =
+            std::ranges::any_of(palette.rows,
+                                [](const core::CommandChoice &row)
+                                {
+                                    return row.operation == core::EditorOperation::register_shell ||
+                                           row.operation == core::EditorOperation::unregister_shell;
+                                });
+        applied(controller, app::CancelCommand{});
+        return shell_row ? std::size_t{0} : palette.total;
+    };
+    expect(listed() == 53, "the packaged ordinary list has no registration rows");
+    applied(controller, app::InsertText{"ab"});
+    expect(applied(controller, app::RegisterShell{}) == "ab" &&
+               notice(controller.frame()) == "Store 版では右クリックへの登録は使えません" &&
+               editing.bell().rings() == 0,
+           "registering in the packaged build says it is not available without ringing");
+    applied(controller, app::UnregisterShell{});
+    expect(notice(controller.frame()) == "Store 版では右クリックへの登録は使えません" &&
+               port.touches() == 0,
+           "neither operation touches the shell registration in the packaged build");
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    expect(listed() == 48, "the packaged vim normal list has no registration rows");
+}
 } // namespace
 
 void verify_shell_registration_contracts()
@@ -289,6 +330,7 @@ void verify_shell_registration_contracts()
     verify_register_failures();
     verify_unregister();
     verify_vim_and_quiet();
+    verify_packaged();
     verify_plan_entries();
     verify_plan_extensions();
     verify_plan_removals();

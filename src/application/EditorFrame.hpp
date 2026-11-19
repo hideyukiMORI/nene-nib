@@ -4,6 +4,7 @@
 #include "CaretView.hpp"
 #include "CommandLine.hpp"
 #include "CommandPaletteView.hpp"
+#include "CompletionView.hpp"
 #include "CompositionView.hpp"
 #include "ContextMenuView.hpp"
 #include "DiagnosticCounts.hpp"
@@ -27,6 +28,7 @@
 #include "PaneSide.hpp"
 #include "PreviewFrame.hpp"
 #include "SettingsIssue.hpp"
+#include "SettingsView.hpp"
 #include "SplitLayout.hpp"
 #include "StartScreenView.hpp"
 #include "StatusItems.hpp"
@@ -159,6 +161,20 @@ struct EditorFrame
     // 本文の右クリックのメニュー（ADR 0078 の追補 #1051）。開いている間だけ値を持ち、renderer は
     // ほかの全部の上に描く。
     std::optional<ContextMenuView> context_menu{};
+    // 札を出しているタブの帯の位置（#1789・ADR 0056 の #1789 の追補）。札の段が shown で、載せた
+    // 要素がタブ（本体か ×）のときだけ値を持つ。renderer は帯の配置とこの位置のタブの経路から札を
+    // 描く（文は core::tab_tip_text）。
+    std::optional<std::size_t> tab_tip{};
+    // 補完の面（ADR 0169 の決定 4・ADR 0190 の決定 5）。面が見えている間だけ値を持ち、renderer は
+    // キャレットの下（入らなければ上）に描く（置き場は core::completion_face_layout）。
+    std::optional<CompletionView> completion{};
+    // hover の札の文（ADR 0190 の決定 6）。言語サーバーの答えの平文を core::hover_tip_text が
+    // 12 行に切った値で、答えの文脈（文書・revision・キャレット）が今と同じ間だけ値を持つ。
+    // renderer はキャレットの上（入らなければ下）に札を描く。
+    std::optional<std::string> hover{};
+    // 設定の面（ADR 0170 の決定 5・2026-11-18 の追補 2・施主決定 D102）。開いている間だけ値を持つ。
+    // renderer は値があれば右の引き出しに描く（配置は ui の工程）。
+    std::optional<SettingsView> settings_panel{};
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

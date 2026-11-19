@@ -33,13 +33,17 @@
 namespace nenenib::application::detail
 {
 // 合図（裏の仕事の完了と時計の合図: WorkCompleted・AutosaveTick・PreviewTick・
-// LanguageServerTick・MapTimeout）。「この意図は合図か」を決める 1 本で、not_user_operation と
-// 上下の移動の狙いの横位置を保つ側（keeps_wanted_x）がこれを呼ぶ（ADR 0062 の追補・#1296）。
-// 合図を足すときはここに 1 行足す。
+// LanguageServerTick・MapTimeout・TabTipTick）。「この意図は合図か」を決める 1
+// 本で、not_user_operation と 上下の移動の狙いの横位置を保つ側（keeps_wanted_x）がこれを呼ぶ（ADR
+// 0062 の追補・#1296）。 合図を足すときはここに 1 行足す。
 [[nodiscard]] bool is_signal(const EditorIntent &intent) noexcept;
 // 使う人の操作ではない意図（合図・窓の寸法・外観・帯の hover）。keeps_tab_walk と
 // begin_intent と `map` の待ちと、全面プレビューの振り分け（ADR 0155 の改訂 17）が共用する 1 本。
 [[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept;
+// 設定の面の意図（ADR 0170 の追補 2 の 8 つと、画面の工程の FocusSettingsRow・ScrollSettings・
+// #1836）。面を開いたまま受ける側と、全面プレビューの間も通す側
+// （passes_full_preview・#1835 の M1）が共用する 1 本。
+[[nodiscard]] bool is_settings_intent(const EditorIntent &intent) noexcept;
 // アクティブな文書が何も書いていない無題か（パス無し・本文 0 バイト・履歴 0）。F1 の本文の案内
 // （guide_context の untouched_untitled・ADR 0078）と起動画面（start_screen_shown・ADR 0172 の
 // 決定 1）が同じこの 1 本を読む。隠す外側の条件はそれぞれが持つ。

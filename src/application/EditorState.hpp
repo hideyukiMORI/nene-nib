@@ -20,6 +20,7 @@
 #include "FindState.hpp"
 #include "InputHistory.hpp"
 #include "Language.hpp"
+#include "LanguageAnswers.hpp"
 #include "LineEnding.hpp"
 #include "ParkedTab.hpp"
 #include "PreviewPlacement.hpp"
@@ -32,6 +33,7 @@
 #include "SplitState.hpp"
 #include "TabRecency.hpp"
 #include "TabSweep.hpp"
+#include "TabTipPhase.hpp"
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
 #include "UnloadedDocument.hpp"
@@ -40,6 +42,7 @@
 #include "VimKey.hpp"
 #include "VimMarks.hpp"
 #include "VimState.hpp"
+#include "WordTable.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -138,6 +141,20 @@ class EditorState final
                                         core::EditHistory history, Document document) const &;
     [[nodiscard]] EditorState with_edit(core::TextBuffer text, core::Selection selection,
                                         core::EditHistory history, Document document) &&;
+    // 語の表（ADR 0169 の決定 1）を、今の本文に edit を当てた後の表にする。本文はまだ変えない
+    // （続けて with_edit を呼ぶ）。本文を編集で変える 3 か所（controller の replace・undo・redo）が
+    // with_edit の直前に呼ぶ。表を作っていない文書は何も変えない（費用 0）。消える＋入るが
+    // core::word_table_edit_limit を超える編集と、上限を超える本文では表を捨てる。
+    [[nodiscard]] EditorState with_words_edited(const core::Edit &edit) const &;
+    [[nodiscard]] EditorState with_words_edited(const core::Edit &edit) &&;
+    // 語の表が無ければ今の本文から作る（1 MiB 超は作らない）。作るのは最初に補完を使ったときの
+    // 1 か所（controller の insert_completion）だけで、開く・切り替える・戻す道は作らない。
+    [[nodiscard]] EditorState with_word_table() const;
+    // アクティブな文書の語の表（作っていなければ空）。
+    [[nodiscard]] const std::optional<core::WordTable> &word_table() const noexcept;
+    // 読み込み済みの他のタブの語の表（帯の順・ADR 0169 の決定 1）。まだ読んでいない文書と表を
+    // 作っていない文書は含めない。指す先は次に状態を写すまで。
+    [[nodiscard]] std::vector<const core::WordTable *> parked_word_tables() const;
     [[nodiscard]] EditorState with_history(core::EditHistory history) const &;
     [[nodiscard]] EditorState with_history(core::EditHistory history) &&;
     [[nodiscard]] EditorState with_document(Document document) const &;
@@ -308,6 +325,13 @@ class EditorState final
     [[nodiscard]] EditorState with_title_bar_width(std::int32_t dip) const;
     [[nodiscard]] EditorState with_tab_scroll(std::int32_t dip) const;
     [[nodiscard]] EditorState with_hovered(std::optional<core::TitleBarTarget> hovered) const;
+    // タブの札の段（#1789・ADR 0056 の #1789 の追補）。どのタブかは hovered が持つ。
+    [[nodiscard]] TabTipPhase tab_tip() const noexcept;
+    [[nodiscard]] EditorState with_tab_tip(TabTipPhase phase) const;
+    // 言語サーバーの答え（ADR 0190 の決定 1）。置くのは controller の答えの振り分けの 1 か所で、
+    // 面・札・跳ぶ道（段 B / C）が読んで消す。
+    [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
+    [[nodiscard]] EditorState with_language_answers(LanguageAnswers answers) const;
 
     // 枠（ADR 0148 の決定 2・3・5・9）。操作中の枠は上の欄そのもので、もう 1 つの枠は受け身の
     // 表示 PaneView として脇に 1 つだけ置く。layout == none ⇔ other が値なしで、1 枠の active_side
@@ -418,6 +442,8 @@ class EditorState final
     std::uint64_t vim_entries_ = 0;
     // 最後の改行を除いた本文（vim_text の正本・除かない間は空）。
     std::shared_ptr<const core::TextBuffer> vim_text_;
+    // INSERT の補完の語の表（ADR 0169 の決定 1）。写しは共有の参照だけ（WordTable の約束）。
+    std::optional<core::WordTable> words_;
     std::vector<core::Diagnostic> diagnostics_;
     std::uint64_t diagnostics_version_ = 0;
     core::DiagnosticsCount diagnostics_count_ = core::DiagnosticsCount::complete;
@@ -454,6 +480,8 @@ class EditorState final
     std::int32_t title_bar_width_ = 0;
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;
+    TabTipPhase tab_tip_ = TabTipPhase::hidden;
+    LanguageAnswers language_answers_;
     SplitState split_;
     // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
     std::optional<PreviewView> full_preview_;

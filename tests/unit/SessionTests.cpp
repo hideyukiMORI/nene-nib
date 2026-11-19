@@ -560,7 +560,7 @@ void verify_recency_ranked()
                     reads,        language_server, wall_clock,  printer,        shell_registration,
                     images,       start_lists,     ui_language, project_search, previews,
                     reveal},
-        initial);
+        nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }
 

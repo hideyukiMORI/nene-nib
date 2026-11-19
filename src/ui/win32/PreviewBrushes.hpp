@@ -1,7 +1,9 @@
 #pragma once
 
+#include "PreviewAlert.hpp"
 #include "PreviewInk.hpp"
 #include "PreviewStyle.hpp"
+#include "SyntaxRole.hpp"
 #include "Theme.hpp"
 
 #include <array>
@@ -29,7 +31,7 @@ class PreviewBrushes final
     [[nodiscard]] std::uint64_t generation() const noexcept;
 
   private:
-    static constexpr std::size_t ink_count = 11;
+    static constexpr std::size_t ink_count = 17;
     // 作った brush の色をテーマの色に置き直す（作り直さない）。
     void recolour(const core::Theme &theme);
     ID2D1RenderTarget *target_ = nullptr;
@@ -40,5 +42,11 @@ class PreviewBrushes final
 
 // 行の中の装飾の文字の色（行内コードは string・リンクは function・画像の代わりの文字は comment・
 // 強調と太字は周りの色のまま＝nullopt）。
+// alert の種類の名前は block の alert の色（preview_alert_ink）なのでここでは nullopt。
 [[nodiscard]] std::optional<PreviewInk> preview_span_ink(core::PreviewStyle style) noexcept;
+// alert の左の線と種類の名前の色（NOTE は function・TIP は string・IMPORTANT は number・WARNING は
+// warning・CAUTION は error・採用案 D103・#1848）。
+[[nodiscard]] PreviewInk preview_alert_ink(core::PreviewAlert alert) noexcept;
+// 囲みのコードの構文の色の役割（#1858）。本文の syntax_color と同じ SyntaxPalette の欄を引く。
+[[nodiscard]] PreviewInk preview_syntax_ink(core::SyntaxRole role) noexcept;
 } // namespace nenenib::ui::win32

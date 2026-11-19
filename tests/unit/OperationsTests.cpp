@@ -2,7 +2,9 @@
 // 使わない。
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "ContextMenuMode.hpp"
 #include "DisplayLanguage.hpp"
+#include "Distribution.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "KeyChord.hpp"
@@ -11,6 +13,7 @@
 #include "OperationModes.hpp"
 #include "OperationReadings.hpp"
 #include "OperationTexts.hpp"
+#include "PaletteMode.hpp"
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 #include "UiTexts.hpp"
@@ -47,7 +50,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 62> chord_rows{{
+constexpr std::array<ChordRow, 67> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -69,8 +72,13 @@ constexpr std::array<ChordRow, 62> chord_rows{{
     {ctrl(OperationKey::minus), EditorOperation::font_smaller, EditorOperation::font_smaller},
     {ctrl(OperationKey::zero), EditorOperation::font_reset, EditorOperation::font_reset},
     {ctrl_shift(OperationKey::space), EditorOperation::toggle_mode, EditorOperation::toggle_mode},
-    // Ctrl+Space（Shift なし）は Vim INSERT の Ctrl-@ に残すので割り当てない（D61）。
-    {ctrl(OperationKey::space), std::nullopt, std::nullopt},
+    // Ctrl+Space（Shift なし）は通常モードだけ補完の面（ADR 0190 の決定 5）。Vim では INSERT の
+    // Ctrl-@ に残すので割り当てない（D61）。
+    {ctrl(OperationKey::space), EditorOperation::complete, std::nullopt},
+    // 補完の 2 つ目の鍵 Ctrl+I（施主決定 D104）。通常モードだけで、Vim と Ctrl+Shift+I は
+    // 値なし。
+    {ctrl(OperationKey::i), EditorOperation::complete, std::nullopt},
+    {ctrl_shift(OperationKey::i), std::nullopt, std::nullopt},
     // Shift を見ていなかった今の振る舞いを保つ行（Vim の Ctrl+Shift+Z / Y は値なし）。
     {ctrl_shift(OperationKey::o), EditorOperation::open_file, EditorOperation::open_file},
     {ctrl_shift(OperationKey::p), EditorOperation::list_files, EditorOperation::list_files},
@@ -123,6 +131,11 @@ constexpr std::array<ChordRow, 62> chord_rows{{
     {ctrl_shift(OperationKey::f), EditorOperation::search_project, EditorOperation::search_project},
     {ctrl_shift(OperationKey::g), std::nullopt, std::nullopt},
     {ctrl(OperationKey::f3), std::nullopt, std::nullopt},
+    // 定義へ移動の F12 は両モード（ADR 0190 の決定 8）。修飾つきは値なし。
+    {KeyChord{false, false, OperationKey::f12}, EditorOperation::go_to_definition,
+     EditorOperation::go_to_definition},
+    {KeyChord{false, true, OperationKey::f12}, std::nullopt, std::nullopt},
+    {ctrl(OperationKey::f12), std::nullopt, std::nullopt},
     // メモ帳の新しいタブ Ctrl+N（D82・#1395）。通常モードだけで、Vim と Ctrl+Shift+N は値なし。
     {ctrl(OperationKey::n), EditorOperation::new_tab, std::nullopt},
     {ctrl_shift(OperationKey::n), std::nullopt, std::nullopt},
@@ -142,7 +155,7 @@ constexpr std::array<ChordRow, 62> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 51> shown_rows{{
+constexpr std::array<ShownRow, 55> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -202,6 +215,13 @@ constexpr std::array<ShownRow, 51> shown_rows{{
     {EditorOperation::select_all, "Ctrl+A", "", true, true},
     // 鍵なしの行。面が開いている間の Ctrl+Shift+P は ui の入力行の鍵（ADR 0189 の決定 3）。
     {EditorOperation::cycle_finder_preview, "", "", true, true},
+    // 通常モードだけ（ADR 0190 の決定 5）。Vim の INSERT の Ctrl-@ に譲るので Vim には載らない。
+    {EditorOperation::complete, "Ctrl+Space", "", true, false},
+    // 両モードの F12 と、鍵なしの「情報を表示」（ADR 0190 の決定 8）。
+    {EditorOperation::go_to_definition, "F12", "F12", true, true},
+    {EditorOperation::show_information, "", "", true, true},
+    // 設定の面は Ctrl+, で両モード（施主決定 D102・#1836）。
+    {EditorOperation::open_settings, "Ctrl+,", "Ctrl+,", true, true},
     // 鍵なし。両方のモードの F1 の一覧から（アクティブなタブ）とタブの右クリックのメニュー
     // （ADR 0078 の追補 #1790）。
     {EditorOperation::reveal_in_explorer, "", "", true, true},
@@ -213,7 +233,7 @@ constexpr std::array<ShownRow, 51> shown_rows{{
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 38> label_rows{{
+constexpr std::array<LabelRow, 40> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -252,6 +272,8 @@ constexpr std::array<LabelRow, 38> label_rows{{
     {ctrl(OperationKey::c), "Ctrl+C"},
     {ctrl(OperationKey::a), "Ctrl+A"},
     {KeyChord{false, false, OperationKey::delete_key}, "Delete"},
+    {KeyChord{false, false, OperationKey::f12}, "F12"},
+    {ctrl(OperationKey::i), "Ctrl+I"},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
@@ -395,7 +417,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 51 && vim.size() == 49,
+    expect(ordinary.size() == 55 && vim.size() == 52,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -427,12 +449,15 @@ void verify_operation_choices()
                std::vector<Operation>{EditorOperation::save, EditorOperation::save_as},
            "the reading finds save and save as, the closer one first");
     const auto keyed = japanese_choices("ctrl+s", EditMode::ordinary);
-    expect(keyed.size() >= 2 && keyed.at(0).operation == EditorOperation::save &&
-               keyed.at(1).operation == EditorOperation::save_as,
+    // Ctrl+Space（補完・ADR 0190 の決定 5）も ctrl+s に当たり、短い鍵なので間に入る。
+    expect(keyed.size() >= 3 && keyed.at(0).operation == EditorOperation::save &&
+               keyed.at(1).operation == EditorOperation::complete &&
+               keyed.at(2).operation == EditorOperation::save_as,
            "the key label finds Ctrl+S before Ctrl+Shift+S");
     expect(operations_of(japanese_choices("f1", EditMode::vim)) ==
-               std::vector<Operation>{EditorOperation::list_operations},
-           "F1 finds the operation list");
+               std::vector<Operation>{EditorOperation::list_operations,
+                                      EditorOperation::go_to_definition},
+           "F1 finds the operation list first, then F12 that starts with it");
     expect(japanese_choices("qqq", EditMode::ordinary).empty(),
            "a query that hits nothing lists nothing");
     expect(japanese_choices("上書き", EditMode::ordinary).empty(),
@@ -445,6 +470,55 @@ void verify_operation_choices()
            "the mode toggle shows Ctrl+Shift+Space in both modes");
     expect(key_for(EditorOperation::font_larger, EditMode::ordinary) == "Ctrl++",
            "a key kept with Shift is not the shown key");
+}
+
+// Store 版（パッケージ）の一覧は登録の 2 つを外し、ほかは ZIP 版と同じ順（ADR 0178 の追補 #1809）。
+// 件数はパッケージの有無で 2 通り（通常・Vim の INSERT・NORMAL・VISUAL の各モード）。
+void verify_packaged_operation_choices()
+{
+    using nenenib::core::ContextMenuMode;
+    using nenenib::core::Distribution;
+    using nenenib::core::PaletteMode;
+    const auto sizes = [](Distribution distribution)
+    {
+        std::vector<std::size_t> counted;
+        for (const PaletteMode mode :
+             {PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, distribution},
+              PaletteMode{EditMode::vim, ContextMenuMode::vim_insert, distribution},
+              PaletteMode{EditMode::vim, ContextMenuMode::vim_normal, distribution},
+              PaletteMode{EditMode::vim, ContextMenuMode::vim_visual, distribution}})
+        {
+            counted.push_back(
+                nenenib::core::operation_choices("", mode, nenenib::core::DisplayLanguage::japanese)
+                    .size());
+        }
+        return counted;
+    };
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{55, 52, 50, 52} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{53, 50, 48, 50},
+           "the packaged list has two rows fewer than the zip list in every mode");
+    const auto packaged = nenenib::core::operation_choices(
+        "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},
+        nenenib::core::DisplayLanguage::japanese);
+    std::vector<Operation> expected;
+    for (const auto &text : nenenib::core::operation_texts)
+    {
+        if (text.operation != EditorOperation::register_shell &&
+            text.operation != EditorOperation::unregister_shell)
+        {
+            expected.emplace_back(text.operation);
+        }
+    }
+    expect(operations_of(packaged) == expected,
+           "the packaged list leaves out only the two registration rows and keeps the order");
+    const auto searched = operations_of(nenenib::core::operation_choices(
+        "とうろく", PaletteMode{EditMode::vim, ContextMenuMode::vim_insert, Distribution::packaged},
+        nenenib::core::DisplayLanguage::japanese));
+    expect(std::ranges::find(searched, Operation{EditorOperation::register_shell}) ==
+                   searched.end() &&
+               std::ranges::find(searched, Operation{EditorOperation::unregister_shell}) ==
+                   searched.end(),
+           "the reading of the registration does not find it in the packaged list");
 }
 
 // F5 の日時の挿入は F1 の一覧に表の行から載る（ADR 0175 の決定 3・ADR 0078）。
@@ -486,6 +560,7 @@ void verify_operations_scope()
     verify_no_shared_key();
     verify_texts();
     verify_operation_choices();
+    verify_packaged_operation_choices();
     verify_date_time_choice();
     verify_print_choice();
 }

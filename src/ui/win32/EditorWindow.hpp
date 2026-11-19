@@ -29,6 +29,7 @@
 #include "LayoutRect.hpp"
 #include "Milestone.hpp"
 #include "MinimapGrab.hpp"
+#include "OperationTexts.hpp"
 #include "PaneLayouts.hpp"
 #include "PointText.hpp"
 #include "PointerClicks.hpp"
@@ -38,6 +39,8 @@
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
+#include "SettingsLayout.hpp"
+#include "SettingsTarget.hpp"
 #include "SplitLayout.hpp"
 #include "StartPress.hpp"
 #include "StartScreenView.hpp"
@@ -56,6 +59,7 @@
 
 #include <windows.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -64,6 +68,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -196,8 +201,54 @@ class EditorWindow final
     // メニューが開いている間の鍵（上下・Enter・Esc。ほかの鍵と文字は捨てる）と、焦点を失ったときに
     // 閉じる。受けて捨てたら true（焦点を失ったときは閉じて false・今の道も通す）。
     [[nodiscard]] bool take_context_menu_key(UINT message, WPARAM word);
+    // 開いている面（メニュー・設定の面・補完の面）が先に受ける鍵と文字。
+    [[nodiscard]] bool take_face_key(UINT message, WPARAM word, LPARAM data);
     void press_context_menu_key(WPARAM word);
+    // 補完の面（ADR 0190 の決定 5・EditorWindowCompletion.cpp）。面が見えている間の上下・PageUp /
+    // PageDown・Enter・Tab・Esc を面が受けたら真。窓が非アクティブになったら閉じる。
+    [[nodiscard]] bool take_completion_key(UINT message, WPARAM word);
+    // Enter と Tab。確定が本文を変えなければ面を閉じて偽（鍵は本文へ通す）。
+    [[nodiscard]] bool commit_completion();
+    void close_completion_outside();
+    // 窓が焦点を失ったときの片付け（選択のドラッグ・Ctrl+Tab の歩き・帯の hover・補完の面・hover の
+    // 札・字の大きさのホイールの残り）。
+    void lose_focus();
+    // 面の行のクリック（押した行と離した行が同じときだけ確定）と面の上のホイール（#1844 の R1）。
+    // 面が受けたら真で、本文へ渡さない。
+    [[nodiscard]] bool press_completion(LPARAM data);
+    [[nodiscard]] bool release_completion(LPARAM data);
+    void lose_completion_press(UINT message);
+    [[nodiscard]] bool close_completion_under(LPARAM data);
+    [[nodiscard]] bool scroll_completion(std::int32_t delta, LPARAM data);
     [[nodiscard]] bool in_text_body(POINT point) const;
+
+    // ----------------------------------------------------------------
+    // 設定の面（施主決定 D102・#1836） EditorWindowSettings.cpp の群。開いている間の鍵・文字・
+    // マウス・ホイール・IME を面の意図にする。開いていなければどれも false / 値なし（今の道へ）。
+    // 鍵・文字・マウスを意図の列に写すのは SettingsInput の純関数（窓を作らずに試す）。
+    [[nodiscard]] bool take_settings_key(UINT message, WPARAM word, LPARAM data);
+    // 面の外の Ctrl+, の長押しの反復か（捨てる＝開閉を繰り返さない）。
+    [[nodiscard]] bool swallow_repeated_settings_key(WPARAM word, LPARAM data) const;
+    // 面の意図を送ってから、焦点の行が見える所へ行の領域の送りを寄せる。
+    void send_settings(const application::EditorIntent &intent);
+    void send_settings_all(const std::vector<application::EditorIntent> &intents);
+    [[nodiscard]] const std::optional<core::SettingsLayout> &settings_layout_drawn() const;
+    // 面が閉じた所で IME の変換を 1 回取り消す（deliver の 1 か所が呼ぶ・レビュー M1）。
+    void follow_settings_closing();
+    void follow_command_composition(const application::EditorIntent &intent,
+                                    const application::EditorDelivery &delivery);
+    // 面の外を押して閉じた直後の 2 回目の押しか（読んだら消す）。
+    [[nodiscard]] bool take_settings_dismissal() noexcept;
+    void press_left_button(UINT message, LPARAM data);
+    [[nodiscard]] bool press_settings(LPARAM data);
+    [[nodiscard]] bool release_settings(LPARAM data);
+    [[nodiscard]] bool press_settings_right(LPARAM data);
+    // 点（クライアントの座標）が開いている面の上か。配置を読むだけで frame を作らない。
+    [[nodiscard]] bool over_settings(LPARAM data) const;
+    [[nodiscard]] bool wheel_settings(std::int32_t delta, LPARAM data);
+    [[nodiscard]] core::SettingsTarget settings_target_under(std::int32_t x, std::int32_t y) const;
+    [[nodiscard]] std::optional<LRESULT> compose_settings(UINT message, WPARAM word, LPARAM data);
+    void place_settings_composition(const core::LayoutRect &search);
     // 左の押しを続けた回数に数える（#1250）。OS のダブルクリックは 2 回目、その後に OS の
     // ダブルクリックの時間と升の中で押せば 3 回目（4 回目以降も 3
     // 回目）。時刻は押しの窓メッセージの 時刻（GetMessageTime）だけを読む。
@@ -267,6 +318,8 @@ class EditorWindow final
     void toggle_mode();
     // タブの鍵（ADR 0056 の決定 10）。扱ったら true。
     [[nodiscard]] bool press_tab_key(WPARAM word);
+    // Vim の INSERT の補完の鍵（#1845）。扱ったら true。
+    [[nodiscard]] bool press_vim_completion_key(WPARAM word);
     void run_tab_command(core::TabCommand command);
     void press_command_key(WPARAM word);
     void press_command_control_key(WPARAM word);
@@ -390,6 +443,11 @@ class EditorWindow final
     // 関数は引数なしで、本体は前の run_operation の case のまま。
     using OperationFunction = void (EditorWindow::*)();
     [[nodiscard]] static OperationFunction runner_of(core::EditorOperation operation) noexcept;
+    // 表の本体（定義は EditorWindowOperations.cpp）。操作が 55 になり、表を runner_of の中に置くと
+    // 関数の長さの上限を超えたので、private の関数を指せる static メンバの変数にした（#1790）。
+    static const std::array<std::pair<core::EditorOperation, OperationFunction>,
+                            core::operation_texts.size()>
+        operation_runners;
     void run_new_tab();
     void run_close_tab();
     void run_recent_tab();
@@ -427,6 +485,10 @@ class EditorWindow final
     void run_delete_selection();
     void run_select_all();
     void run_cycle_finder_preview();
+    void run_complete();
+    void run_go_to_definition();
+    void run_show_information();
+    void run_open_settings();
     // タブの 5 つ（ADR 0078 の追補 #1790）。F1 の一覧からはアクティブなタブに効く。
     void run_reveal_in_explorer();
     void run_copy_path();
@@ -443,6 +505,8 @@ class EditorWindow final
     void scroll_palette(std::int32_t delta);
     void scroll_body(std::int32_t delta, LPARAM data);
     void read_wheel_setting();
+    // タブの札の待ち（#1789）に OS の載せの待ち時間を読む。起動と WM_SETTINGCHANGE の 2 か所。
+    void read_hover_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
     [[nodiscard]] core::ExplorerLayout explorer_frame() const;
@@ -497,6 +561,7 @@ class EditorWindow final
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
+    UINT hover_setting_ = default_tab_tip_milliseconds;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;
@@ -512,6 +577,19 @@ class EditorWindow final
     // 右の押しを受けた帯のタブ（#1790・離したタブと比べる）。
     std::optional<core::TitleBarTarget> tab_right_pressed_;
     bool context_menu_pressed_ = false;
+    // 補完の面の上で押した行（離すまで・面の余白の押しは値なし）と、面のホイールの余り。
+    std::optional<std::size_t> completion_pressed_;
+    // 補完の面の上で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・#1844 の R1b）。
+    bool completion_click_began_ = false;
+    std::int32_t completion_wheel_remainder_ = 0;
+    // 設定の面の上で押した部品（離したときに同じ部品なら動かす）・ホイールの余り・探す欄へ打つ
+    // 文字の上位サロゲート（#1836）。
+    std::optional<core::SettingsTarget> settings_pressed_;
+    std::int32_t settings_wheel_remainder_ = 0;
+    wchar_t settings_high_surrogate_ = 0;
+    // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。
+    bool settings_shown_ = false;
+    bool settings_dismissed_ = false;
     // FirstFramePresented を送ったか（窓で 1 回だけ・ADR 0172 の決定 3）。
     bool first_frame_signaled_ = false;
     // プレビューの枠で押したチェックボックス（離したとき・次に押したときに消す）。

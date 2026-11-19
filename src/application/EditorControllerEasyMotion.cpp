@@ -18,6 +18,7 @@
 #include "VimKeyPress.hpp"
 #include "VimState.hpp"
 #include "VimStep.hpp"
+#include "WindowDeactivated.hpp"
 
 #include <optional>
 #include <string_view>
@@ -44,14 +45,16 @@ namespace
 }
 
 // 印を保つ意図。印の鍵そのもの（Vim の鍵）と、本文も画面も動かさない合図・帯とエクスプローラーの
-// hover・外観の写し。ほかの意図（スクロール・クリック・窓の大きさ・タブ・モード・開く…）は印を
-// 捨てる。
+// hover・外観の写し・窓が非アクティブになった知らせ（WindowDeactivated・窓を離れて戻っても印と
+// 保留のオペレータは残る・#1843 のレビュー M1）。ほかの意図（スクロール・クリック・窓の大きさ・
+// タブ・モード・開く…）は印を捨てる。
 [[nodiscard]] bool keeps_labels(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<VimKeyPress>(intent) || detail::is_signal(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
-           std::holds_alternative<RefreshAppearance>(intent);
+           std::holds_alternative<RefreshAppearance>(intent) ||
+           std::holds_alternative<WindowDeactivated>(intent);
 }
 } // namespace
 

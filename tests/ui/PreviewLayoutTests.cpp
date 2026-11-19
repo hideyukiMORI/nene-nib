@@ -20,6 +20,8 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewCodeColor.hpp"
+#include "PreviewCodeColors.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewInk.hpp"
 #include "PreviewMetrics.hpp"
@@ -78,8 +80,18 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
                                           std::vector<core::PreviewSpan> spans = {})
 {
     const std::uint8_t level = kind == core::PreviewBlockKind::heading ? 1 : 0;
-    return core::PreviewBlock{
-        kind, level, 0, 0, {}, core::Offset{0}, std::move(text), std::move(spans), std::nullopt};
+    return core::PreviewBlock{kind,
+                              level,
+                              0,
+                              0,
+                              {},
+                              core::Offset{0},
+                              std::move(text),
+                              std::move(spans),
+                              std::nullopt,
+                              std::nullopt,
+                              std::nullopt,
+                              std::nullopt};
 }
 
 void check_reuse()
@@ -1196,6 +1208,447 @@ void check_task_press()
     press.forget();
     expect(!press.release(1U).has_value(), "the next press forgets a press left over");
 }
+
+// 画素の行のうち、地の色（枠の左上の画素）と違う画素が横に続くいちばん長い数。
+[[nodiscard]] std::int32_t longest_inked_run(const std::vector<std::uint8_t> &pixels)
+{
+    const auto ground = [&pixels](std::size_t at)
+    {
+        return std::equal(pixels.begin() + static_cast<std::ptrdiff_t>(at),
+                          pixels.begin() + static_cast<std::ptrdiff_t>(at) + 3, pixels.begin());
+    };
+    std::int32_t longest = 0;
+    for (std::size_t row = 0; row < 200U; ++row)
+    {
+        std::int32_t run = 0;
+        for (std::size_t column = 0; column < 400U; ++column)
+        {
+            run = ground((row * 400U + column) * 4U) ? 0 : run + 1;
+            longest = std::max(longest, run);
+        }
+    }
+    return longest;
+}
+
+// 打ち消し線（#1840）: 間の空いた字の列に打ち消しを掛けると、字の間の空白をまたいで横に続く線が
+// 描かれる（線の太さと位置は DirectWrite に任せる）。掛けない同じ文字には無い。保持の鍵は装飾を
+// 含むので、同じ文字の打ち消しの有無は別の layout。
+void check_strikethrough_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (!theme)
+    {
+        expect(false, "the theme for the strike through check is found");
+        return;
+    }
+    const std::string text = "i      i      i      i";
+    core::MarkdownDocument plain;
+    plain.blocks.push_back(block_of(core::PreviewBlockKind::paragraph, text));
+    core::MarkdownDocument struck;
+    struck.blocks.push_back(block_of(
+        core::PreviewBlockKind::paragraph, text,
+        {{core::Offset{0}, core::Offset{text.size()}, core::PreviewStyle::strikethrough}}));
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto plain_pixels = directly_painted(plain, theme.value().view(), area, 0);
+    const auto struck_pixels = directly_painted(struck, theme.value().view(), area, 0);
+    if (plain_pixels.empty() || struck_pixels.empty())
+    {
+        expect(false, "both strike through samples paint");
+        return;
+    }
+    // 字 i の幅は数画素。線は字の間の空白（6 文字ぶん）をまたいで 60 画素を超えて続く。
+    expect(longest_inked_run(plain_pixels) < 20 && longest_inked_run(struck_pixels) > 60,
+           "a strike through draws one line across the spaces between the letters");
+    PreviewTextLayouts layouts;
+    const auto bare = layouts.get(plain.blocks.front(), width, style_of());
+    const auto lined = layouts.get(struck.blocks.front(), width, style_of());
+    BOOL has_line = FALSE;
+    expect(bare.has_value() && lined.has_value() && layouts.created() == 2 &&
+               SUCCEEDED(lined.value()->GetStrikethrough(3, &has_line)) && has_line != FALSE,
+           "the strike through is a separate held layout with the DirectWrite strike through");
+}
+
+// front matter（#1840）: 囲みのコードと同じ panel の面（内側の余白・等幅・
+// 折らない）に comment の色で描く。同じ文字のコードブロックとは文字の色だけが違う。
+void check_front_matter_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (!theme)
+    {
+        expect(false, "the theme for the front matter check is found");
+        return;
+    }
+    core::MarkdownDocument fronted;
+    fronted.blocks.push_back(block_of(core::PreviewBlockKind::front_matter, "title: a\n"));
+    core::MarkdownDocument coded;
+    coded.blocks.push_back(block_of(core::PreviewBlockKind::code, "title: a\n"));
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto front_pixels = directly_painted(fronted, theme.value().view(), area, 0);
+    const auto code_pixels = directly_painted(coded, theme.value().view(), area, 0);
+    if (front_pixels.empty() || code_pixels.empty())
+    {
+        expect(false, "both front matter samples paint");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    // 面の右寄り（文字の無い所・角丸の外れ）の画素は panel。面の下の地は background。
+    expect(distance_of(front_pixels, 360, 22, palette.ui.panel) <= 6 &&
+               distance_of(front_pixels, 360, 190, palette.body.background) <= 6,
+           "the front matter is painted on the panel like a code block");
+    expect(distance_of(code_pixels, 360, 22, palette.ui.panel) <= 6 && front_pixels != code_pixels,
+           "the front matter differs from the same code block only in its text ink");
+    PreviewTextLayouts layouts;
+    const auto layout = layouts.get(fronted.blocks.front(), width, style_of());
+    std::array<wchar_t, 64> family{};
+    expect(layout.has_value() &&
+               layout.value()->GetWordWrapping() == DWRITE_WORD_WRAPPING_NO_WRAP &&
+               SUCCEEDED(layout.value()->GetFontFamilyName(0, family.data(),
+                                                           static_cast<UINT32>(family.size()))) &&
+               std::wstring_view(family.data()) != L"Segoe UI",
+           "the front matter is monospaced and does not wrap");
+}
+
+// 枠の左上を原点にした画素の region の中で、地の色と違う画素のいちばん右の x（無ければ -1）。
+[[nodiscard]] bool inked_at(const std::vector<std::uint8_t> &pixels, std::int32_t x, std::int32_t y)
+{
+    const auto at = (static_cast<std::size_t>(y) * 400U + static_cast<std::size_t>(x)) * 4U;
+    return !std::equal(pixels.begin() + static_cast<std::ptrdiff_t>(at),
+                       pixels.begin() + static_cast<std::ptrdiff_t>(at) + 3, pixels.begin());
+}
+
+[[nodiscard]] std::int32_t rightmost_ink(const std::vector<std::uint8_t> &pixels,
+                                         const core::LayoutRect &region)
+{
+    std::int32_t right = -1;
+    for (std::int32_t at = 0; at < core::width_of(region) * core::height_of(region); ++at)
+    {
+        const auto x = region.left + (at % core::width_of(region));
+        if (inked_at(pixels, x, region.top + (at / core::width_of(region))))
+        {
+            right = std::max(right, x);
+        }
+    }
+    return right;
+}
+
+// 表（#1848・採用案 D103 の案 B）: 見出しの行の下に panel_border の 2 DIP の罫、続く行の間に 1 DIP
+// の罫（外枠と縦の罫は無い）。右揃えの列は升の文字の右端が揃う。行の高さは行高 ＋ 上下 7 DIP。
+void check_table_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto parsed = core::parse_markdown("| head | n |\n|---|--:|\n| a | 1 |\n| b | 22222 |\n",
+                                             core::MarkdownStop::never());
+    if (!theme || !parsed || parsed.value().blocks.size() != 3U)
+    {
+        expect(false, "the table sample parses into three rows");
+        return;
+    }
+    const auto &document = parsed.value();
+    const auto style = style_of();
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto pixels = directly_painted(document, theme.value().view(), area, 0);
+    PreviewTextLayouts layouts;
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    const auto columns = layouts.table_columns(document, 0, style);
+    if (pixels.empty() || !tops || !columns)
+    {
+        expect(false, "the table paints and is measured");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    const auto &at = tops.value();
+    const auto line = win32::preview_line_pixels(style);
+    expect(at.bottom(0) - at.top(0) == line + 14.0F && at.top(1) == at.bottom(0) &&
+               at.top(2) == at.bottom(1),
+           "a table row is the line height and 7 DIP above and below, with no gap between rows");
+    const auto left = static_cast<std::int32_t>(at.indent(0)) + 2;
+    const auto header_bottom = static_cast<std::int32_t>(at.bottom(0));
+    const auto row_top = static_cast<std::int32_t>(at.top(2));
+    expect(distance_of(pixels, left, header_bottom - 1, palette.ui.panel_border) <= 6 &&
+               distance_of(pixels, left, header_bottom - 2, palette.ui.panel_border) <= 6 &&
+               distance_of(pixels, left, header_bottom - 3, palette.body.background) <= 6,
+           "the header row has a 2 DIP rule in panel_border under it");
+    expect(distance_of(pixels, left, row_top, palette.ui.panel_border) <= 6 &&
+               distance_of(pixels, left, row_top + 1, palette.body.background) <= 6,
+           "a body row after a body row has a 1 DIP rule above it");
+    const auto table_right =
+        static_cast<std::int32_t>(at.indent(0) + win32::preview_table_width(*columns.value(), 96));
+    expect(distance_of(pixels, table_right + 3, header_bottom - 1, palette.body.background) <= 6 &&
+               distance_of(pixels, left, static_cast<std::int32_t>(at.top(0)) + 1,
+                           palette.body.background) <= 6,
+           "the rules end at the table width and there is no outer frame");
+    const auto second = static_cast<std::int32_t>(
+        at.indent(0) + win32::preview_table_cell_left(*columns.value(), 1, 96));
+    const auto band = [&at, second](std::size_t row)
+    {
+        return core::LayoutRect{second, static_cast<std::int32_t>(at.top(row)) + 2, 399,
+                                static_cast<std::int32_t>(at.bottom(row)) - 2};
+    };
+    const auto first_right = rightmost_ink(pixels, band(1));
+    const auto second_right = rightmost_ink(pixels, band(2));
+    expect(first_right > second && second_right > second && first_right - second_right <= 2 &&
+               second_right - first_right <= 2,
+           "the cells of a right aligned column end at the same right edge");
+}
+
+// alert（#1848・D103）: 左の線は 3 DIP で種類の色（WARNING は warning）、ふつうの引用は 2 DIP の
+// comment。種類の名前は太字。
+void check_alert_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto alert = core::parse_markdown("> [!WARNING]\n> body\n", core::MarkdownStop::never());
+    const auto plain = core::parse_markdown("> body\n", core::MarkdownStop::never());
+    if (!theme || !alert || !plain)
+    {
+        expect(false, "the alert samples parse");
+        return;
+    }
+    const auto &palette = theme.value().view();
+    const core::LayoutRect area{0, 0, 400, 200};
+    const auto alert_pixels = directly_painted(alert.value(), palette, area, 0);
+    const auto plain_pixels = directly_painted(plain.value(), palette, area, 0);
+    if (alert_pixels.empty() || plain_pixels.empty())
+    {
+        expect(false, "both alert samples paint");
+        return;
+    }
+    const auto x = static_cast<std::int32_t>(win32::preview_quote_left(0, 96));
+    constexpr std::int32_t y = 20;
+    expect(distance_of(alert_pixels, x, y, palette.body.warning) <= 6 &&
+               distance_of(alert_pixels, x + 2, y, palette.body.warning) <= 6 &&
+               distance_of(alert_pixels, x + 3, y, palette.body.background) <= 6,
+           "the alert rule is 3 DIP in the warning ink");
+    expect(distance_of(plain_pixels, x, y, palette.body.comment) <= 6 &&
+               distance_of(plain_pixels, x + 2, y, palette.body.background) <= 6,
+           "an ordinary quote keeps the 2 DIP comment rule");
+    PreviewTextLayouts layouts;
+    const auto layout = layouts.get(alert.value().blocks.front(), width, style_of());
+    DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_NORMAL;
+    DWRITE_FONT_WEIGHT body = DWRITE_FONT_WEIGHT_BOLD;
+    expect(layout.has_value() && SUCCEEDED(layout.value()->GetFontWeight(1, &weight)) &&
+               SUCCEEDED(layout.value()->GetFontWeight(9, &body)) &&
+               weight == DWRITE_FONT_WEIGHT_BOLD && body == DWRITE_FONT_WEIGHT_NORMAL,
+           "the kind name is bold and the body is not");
+}
+
+// 大きな表（1,000 行 × 8 列）の費用（#1848）: 列の幅は表ごとに列の数だけの一時の文字組みで 1 回
+// 測り、升の文字組みは見えている行の分だけ作る。表の前の段落を打ち替えた文書を描き直すと、表は
+// 測り直さず、作るのは打ち替えた段落の 1 つだけ。
+[[nodiscard]] std::string large_table_text()
+{
+    std::string text = "lead\n\n| h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7 |\n"
+                       "|---|---|---|---|---|---|---|---|\n";
+    for (int cell = 0; cell < 8000; ++cell)
+    {
+        text +=
+            (cell % 8 == 0 ? "| " : " ") + std::to_string(cell) + (cell % 8 == 7 ? " |\n" : " |");
+    }
+    return text;
+}
+
+void check_large_table_cost()
+{
+    const auto text = large_table_text();
+    const auto before = core::parse_markdown(text, core::MarkdownStop::never());
+    const auto after = core::parse_markdown("lead!" + text.substr(4), core::MarkdownStop::never());
+    if (!before || !after || before.value().blocks.size() != 1002U)
+    {
+        expect(false, "the large table parses into a paragraph and 1,001 rows");
+        return;
+    }
+    const auto style = style_of();
+    PreviewTextLayouts layouts;
+    const auto paint = [&](const core::MarkdownDocument &document)
+    {
+        const auto tops = win32::PreviewBlockTops::measure(
+            document, layouts, style, win32::PreviewViewport{0, width, 200.0F});
+        if (!tops)
+        {
+            return false;
+        }
+        CountingTarget target;
+        const win32::PreviewBrushes brushes;
+        std::optional<win32::RenderFailure> failure;
+        win32::PreviewPainter<CountingTarget> painter(target, layouts, brushes, failure);
+        painter.paint(win32::PreviewScene{
+            document, tops.value(), style,
+            core::LayoutRect{0, 0, static_cast<std::int32_t>(width), 200}, 0.0F, std::nullopt});
+        return !failure.has_value() && target.balanced();
+    };
+    const bool first = paint(before.value());
+    const auto made = layouts.created();
+    const auto measured = layouts.measured_tables();
+    const bool second = paint(after.value());
+    expect(
+        first && second && measured == 1U && layouts.measured_tables() == 1U,
+        "the column widths of a large table are measured once and kept across an edit before it");
+    expect(made <= 1U + 8U + 8U * 6U && layouts.created() - made == 1U,
+           "only the visible cells are made and an edit before the table makes one layout");
+}
+// 小さな表が 6 つ見えている文書（#1852 のレビュー）: 2 回目の描画では列の幅を測り直さず、文字組み
+// も作らない（覚えの上限が見えている表の数より多い）。
+void check_many_tables_kept()
+{
+    std::string text;
+    for (int table = 0; table < 6; ++table)
+    {
+        text += "| t" + std::to_string(table) + " |\n|---|\n\n";
+    }
+    const auto parsed = core::parse_markdown(text, core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.size() != 6U)
+    {
+        expect(false, "six one row tables parse into six rows");
+        return;
+    }
+    const auto style = style_of();
+    PreviewTextLayouts layouts;
+    const auto paint = [&]
+    {
+        const auto tops = win32::PreviewBlockTops::measure(
+            parsed.value(), layouts, style, win32::PreviewViewport{0, width, 400.0F});
+        CountingTarget target;
+        const win32::PreviewBrushes brushes;
+        std::optional<win32::RenderFailure> failure;
+        win32::PreviewPainter<CountingTarget> painter(target, layouts, brushes, failure);
+        if (tops)
+        {
+            painter.paint(win32::PreviewScene{
+                parsed.value(), tops.value(), style,
+                core::LayoutRect{0, 0, static_cast<std::int32_t>(width), 400}, 0.0F, std::nullopt});
+        }
+        return tops.has_value() && !failure.has_value() && target.balanced();
+    };
+    const bool first = paint();
+    const auto measured = layouts.measured_tables();
+    const auto made = layouts.created();
+    const bool second = paint();
+    expect(first && second && measured == 6U && layouts.measured_tables() == measured &&
+               layouts.created() == made,
+           "six visible tables are measured once and a second paint measures and makes nothing");
+}
+
+// 要素 index の layout の先頭の文字に brush の色が置いてあるか。
+[[nodiscard]] bool block_inked(PreviewTextLayouts &layouts, const win32::PreviewScene &scene,
+                               std::size_t index, ID2D1Brush *brush)
+{
+    const auto &block = scene.document.blocks.at(index);
+    const auto layout = layouts.get(
+        block, win32::preview_text_width(block, 400.0F, scene.tops.indent(index), scene.style.dpi),
+        scene.style);
+    return layout.has_value() && effect_is(*layout.value().Get(), 0U, brush);
+}
+
+// 文書（大きな囲み 1 つ）を 400 × 200 に描き、最初の描画で置いた色の数が inks で、描き直しと
+// 送りで layout の生成も色の置き直しも 0。
+void check_fence_paint(const core::MarkdownDocument &document, std::size_t inks)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the large fence check prepares a target and brushes");
+        return;
+    }
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const auto scene_at = [&](float scroll)
+    {
+        return win32::PreviewScene{document, tops.value(), style, core::LayoutRect{0, 0, 400, 200},
+                                   scroll,   std::nullopt};
+    };
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
+    const auto painted = layout_counts(layouts);
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(0.0F)));
+    static_cast<void>(painted_frame(*target.Get(), *bitmap.Get(), painter, scene_at(4000.0F)));
+    expect(!failure.has_value() && std::get<0>(painted) == 1U && std::get<1>(painted) == inks &&
+               layout_counts(layouts) == painted,
+           "a large fence is laid out and coloured once, and repaints and scrolls redo nothing");
+}
+
+// lines 行の row の囲み（language）を 400 × 200 に描き、2 回目の描画と送りで layout の生成と色の
+// 置き直しが 0 で、最初の描画で置いた色の数が inks であることを確かめる。
+void check_fence_cost(std::size_t lines, std::string_view language, std::string_view row,
+                      std::size_t inks)
+{
+    std::string text = "```" + std::string(language) + "\n";
+    for (std::size_t line = 0; line < lines; ++line)
+    {
+        text += row;
+        text += "\n";
+    }
+    const auto parsed = core::parse_markdown(text + "```\n", core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.front().code_colors.has_value() != (inks != 0U))
+    {
+        expect(false, "a large fence parses with colours only under the colour limit");
+        return;
+    }
+    check_fence_paint(parsed.value(), inks);
+}
+
+// 囲みのコードの構文の色（#1858）: 言語の分かった囲みは本文の字句器の役割の色を 1 回だけ置き、
+// 描き直しは layout を作らず色も置き直さない。知らない言語の囲みは色を置かない（1 色）。
+void check_code_colors()
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    const auto parsed = core::parse_markdown("```cpp\n// c\nint x = 1;\n```\n\n```zig\n// c\n```\n",
+                                             core::MarkdownStop::never());
+    if (!parsed || parsed.value().blocks.size() != 2U)
+    {
+        expect(false, "the code colour document parses into two fences");
+        return;
+    }
+    win32::PreviewBrushes brushes;
+    PreviewTextLayouts layouts;
+    const auto style = style_of();
+    const auto tops = win32::PreviewBlockTops::measure(parsed.value(), layouts, style,
+                                                       win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !theme || !tops ||
+        FAILED(brushes.prepare(*target.Get(), theme.value().view())))
+    {
+        expect(false, "the code colour checks prepare a target, brushes and a document");
+        return;
+    }
+    const win32::PreviewScene scene{
+        parsed.value(), tops.value(), style, core::LayoutRect{0, 0, 400, 200}, 0.0F, std::nullopt};
+    std::optional<win32::RenderFailure> failure;
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    const auto first = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    const auto painted = layout_counts(layouts);
+    const auto second = painted_frame(*target.Get(), *bitmap.Get(), painter, scene);
+    expect(!first.empty() && !failure.has_value() &&
+               block_inked(layouts, scene, 0U, brushes.of(win32::PreviewInk::comment)),
+           "a cpp fence draws its comment in the comment ink");
+    expect(!block_inked(layouts, scene, 1U, brushes.of(win32::PreviewInk::comment)),
+           "an unknown language keeps one colour");
+    expect(layout_counts(layouts) == painted && second == first,
+           "a repaint of a coloured fence makes no layout and sets no colour");
+}
+
+// 区間の数が上限いっぱいの囲み（1 行に数 1 つ）の色は最初に描くときに区間の数だけ 1 回置き、
+// 描き直しも画面の送りも色を置き直さない（色の区間は要素が持つ）。上限を超える密な JSON の囲みは
+// 1 色で、layout に置く effect は 0（#1860 のレビュー M1）。
+void check_large_fence_cost()
+{
+    check_fence_cost(core::preview_code_color_count_limit, "py", "1",
+                     core::preview_code_color_count_limit);
+    check_fence_cost(1000U, "json", "[1,2,3,4,5,6,7,8,9]", 0U);
+}
 } // namespace
 
 void verify_preview_layouts()
@@ -1215,6 +1668,8 @@ void verify_preview_layouts()
     check_repaint_keeps_layouts_clean();
     check_target_change_drops_inked();
     check_recolour_every_ink();
+    check_code_colors();
+    check_large_fence_cost();
     check_unit_ranges_match_units();
     check_html_and_style();
     check_markers();
@@ -1228,5 +1683,11 @@ void verify_preview_layouts()
     check_task_pixels();
     check_task_press();
     check_selection_pixels();
+    check_strikethrough_pixels();
+    check_front_matter_pixels();
+    check_table_pixels();
+    check_alert_pixels();
+    check_large_table_cost();
+    check_many_tables_kept();
 }
 } // namespace nenenib::tests::ui

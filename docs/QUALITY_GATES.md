@@ -235,6 +235,7 @@ fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-o
 Vim を要らずに全文を作り直せるので、SHA の 1 行ではなく全文の一致を見る。直すのは `python eng/vim-oracle.py --key-names` だけ。
 表の検査（名前の重複・`<` で始まり `>` で終わる形・ある名前が別の名前の接頭辞にならない）は oracle が読み込むときに例外で止め、表に無い列挙子の名前は生成物のコンパイルが落とす。
 Vim の大小の写像の表 `src/core/CaseMappingTable.hpp` も同じ形の生成物で、`eng/case-mapping.py` の `case_mapping_header()`（固定の Python の `unicodedata`）の出力との全文の一致を CNF-010 で見る（Issue #781・ADR 0015 決定 10 の追記）。直すのは `python eng/case-mapping.py --write` だけ。
+Markdown プレビューの名前つきの実体参照の表 `src/core/MarkdownEntityTable.hpp` も同じ形の生成物で、`eng/markdown-entities.py` の `markdown_entities_header()`（固定の Python の `html.entities.html5` の末尾が `;` の名前・名前のバイト順）の出力との全文の一致を CNF-010 で見る（#1840）。直すのは `python eng/markdown-entities.py --write` だけ。
 折り返す窓の fixture の生成物 `tests/vim/VimWrapFixtures.hpp` は、`eng/vim-wrap-oracle.py --regenerate` が先頭に書いた入力 3 つ（`wrap-fixtures.json`・測定のコード `eng/vim-wrap-oracle.py`・共有の oracle `eng/vim-oracle.py`）の SHA-256 の行を、木のファイルのバイト列の SHA-256 と突き合わせる。入力の表は `eng/conformance-rules.json` の `wrapFixtureProvenance` の 1 つで、生成器が自分で照合する口（`python eng/vim-wrap-oracle.py`）と同じ 3 つ。生成物が無い・行が無い・SHA が違う・入力が無い、のいずれも CNF-010（Issue #1431）。
 Vim を起動しないので CI でも回る。共有の oracle も入力に数えるので、`eng/vim-oracle.py` を変える PR は折り返す窓の fixture も Vim のある機械で測り直す。
 fixture の `settings` は生成物の行の最後の欄に載り、再生が窓の後・鍵の前に `:` の行として流し、Nib が受けない行は再生の試験が落ちる: **active**（CTest `nib_unit` / `nib_unit_scopes` の fixture の再生・載せない行は oracle の `NIB_FIXED_SETTINGS` の表だけ・ADR 0012 の追記・#1626）。
@@ -296,15 +297,15 @@ C++ のソースの `// SDK-ABI:` を含む行ごとに次を確かめ、1 つ�
 
 - 機械強制: **active**（正例・反例は `tests/conformance` の `TranslationUnitSizeChecks` がゲートで回る。2026-10-28・Issue #992・PR #1053。分けた直後の最大は `EditorWindow.cpp` の 2,906 行）
 
-### CNF-015 — 機能の表のベンチの実在（planned・ADR 0170）
+### CNF-015 — 機能の表のベンチの実在と測った数字の一致（ADR 0170）
 
-機械強制: **planned**（設定モーダルの S2 の PR で active にする）。
+core の `feature_costs` の表（`src/core/FeatureCosts.hpp`）の測った行（`bench` が空でない行）について、`eng/conformance.py` の `feature_cost_checks` が次を確かめる（[ADR 0170](adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md) の決定 2・7・2026-11-18 の追補 3・Issue #1016 / #1828）。(1) `bench` が `eng/measure-speed.py` の `OPTIONAL_BENCHES` に在る（script は実行せず、module の代入を `ast` で辿る）。(2) `docs/quality/feature-costs.md` の表の「機能・ベンチ・1 打鍵の増分 µs」の 3 列の行の集合が、表の測った行の `name` `bench` `single_key_delta_us` の集合と同じ。(3) 読めた表の行の数が `std::array<FeatureCost, N>` の N と同じ（行の形が変わって読めない行を見落とさない）。外れたら `CNF-015: <path>: …`。
 
-core の `feature_costs` の表の各行が名指す任意のベンチ（`bench`）が `eng/measure-speed.py` の `OPTIONAL_BENCHES` に在り、`docs/quality/feature-costs.md` の行と表の数字が一致する（[ADR 0170](adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)・Issue #1016）。検査は設定モーダルの S2 の PR で足し、そのとき状態を active にする。
+- 機械強制: **active**（正例・反例は `tests/conformance` の `FeatureCostChecks`。2026-11-18・Issue #1828）。守れていない部分: 数字が品質の記録（出典の文書）の値と同じかは見ない（写すときのレビュー事項）・表の行の機能が段の印を持つべきか（測ったのに `bench` を空にした行）は見ない
 
 ### CNF-016 — 画面の文のリテラルは文の表の外に書かない（ADR 0123）
 
-画面の文は `core::UiMessage` の文の表から `ui_text` で引く（[ADR 0123](adr/0123-ui-language-is-a-versioned-setting.md) の 2026-11-13 の追補の決定 4・12・Issue #1019）。`eng/conformance.py` が 2 つを確かめる。(1) `ui_text_literal_checks`: `src/**/*.cpp` `*.hpp` の文字列リテラルと文字リテラル（`"…"` `u8"…"` `L"…"` `R"(…)"`・コメントは数えない）の中のひらがな・カタカナ・CJK 統合漢字・半角カタカナを数え、`eng/conformance-rules.json` の `uiTextLiteralAllowedPaths`（日本語と中国語の列・読みの表 `OperationReadings.hpp`・言語の自称 `DisplayLanguageNames.cpp`）の外にあれば `CNF-016: <path>: line N: Japanese or Chinese text in a string literal; …`。`tests/` は数えない。英語の列は許した場所に入れない。(2) `ui_message_table_checks`: `uiMessageTable` の enum（`src/core/UiMessage.hpp`）の列挙子の列と、`ui_message_count` が名指しする値（最後の列挙子であること）と、3 列の行の数と順を比べる（C++ の `static_assert` は、最後の値の後ろに値だけを足して行を書かない形を通すため・V-1598 の A-M1）。画面に出る英語の直書きは機械では見分けられないので、棚卸しの表と独立レビューで守る。
+画面の文は `core::UiMessage` の文の表から `ui_text` で引く（[ADR 0123](adr/0123-ui-language-is-a-versioned-setting.md) の 2026-11-13 の追補の決定 4・12・Issue #1019）。`eng/conformance.py` が 2 つを確かめる。(1) `ui_text_literal_checks`: `src/**/*.cpp` `*.hpp` の文字列リテラルと文字リテラル（`"…"` `u8"…"` `L"…"` `R"(…)"`・コメントは数えない）の中のひらがな・カタカナ・CJK 統合漢字・半角カタカナを数え、`eng/conformance-rules.json` の `uiTextLiteralAllowedPaths`（日本語と中国語の列・読みの表 `OperationReadings.hpp`・言語の自称 `DisplayLanguageNames.cpp`）の外にあれば `CNF-016: <path>: line N: Japanese or Chinese text in a string literal; …`。`tests/` は数えない。英語の列は許した場所に入れない。(2) `enum_table_checks`: `enumTables` の各表について、enum の列挙子の列と、数の名指し（`<数> = std::to_underlying(<enum>::<最後>) + 1U` か、それを返す関数）が最後の列挙子であることと、表の行の数と順を比べる（C++ の `static_assert` は、最後の値の後ろに値だけを足して行を書かない形を通すため・V-1598 の A-M1）。表は `UiMessage`（`src/core/UiMessage.hpp`・`ui_message_count`・3 列）と `EditorOperation`（`src/core/EditorOperation.hpp`・`OperationTexts.cpp` の `operation_count`・`operation_texts` と `operation_readings`・#1790 で網羅の switch が関数の長さの上限を超えたため・ADR 0078 の追補の 8）。画面に出る英語の直書きは機械では見分けられないので、棚卸しの表と独立レビューで守る。
 
 - 機械強制: **active**（正例・反例は `tests/conformance` の `UiTextChecks` がゲートで回る。2026-11-13・Issue #1602）
 
@@ -375,12 +376,12 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | CNF-007 | active | eng/conformance.py / tests/conformance |
 | CNF-008 | active | eng/conformance.py / tests/conformance |
 | CNF-009 | active | eng/conformance.py / tests/conformance |
-| CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `src/core/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054。折り返す窓の生成物 `tests/vim/VimWrapFixtures.hpp` は入力 3 つの SHA-256 の行と一致・#1431） |
+| CNF-010 | active | eng/conformance.py / tests/conformance（鍵の記法の生成物 `src/core/VimKeyNames.hpp` は eng/vim-oracle.py の `key_names_header` と全文一致・ADR 0054。折り返す窓の生成物 `tests/vim/VimWrapFixtures.hpp` は入力 3 つの SHA-256 の行と一致・#1431。実体参照の表 `src/core/MarkdownEntityTable.hpp` は eng/markdown-entities.py の `markdown_entities_header` と全文一致・#1840） |
 | CNF-011 | active | eng/conformance.py / tests/conformance（整形の正本は eng/vim-oracle.py の `canonical_fixtures_json` 1 か所） |
 | CNF-012 | active | eng/conformance.py / tests/conformance（表は eng/sdk-abi-signatures.json の 1 つ・引数の数は照合しない） |
 | CNF-013 | active | eng/conformance.py / tests/conformance（表は eng/conformance-rules.json の `thirdPartyDigests` の 1 つ・照合は git の index の blob） |
 | CNF-014 | active | eng/conformance.py / tests/conformance（ADR 0158・3,000 行・PR #1053） |
-| CNF-015 | planned | eng/conformance.py（ADR 0170・設定モーダルの S2 の PR で active） |
+| CNF-015 | active | eng/conformance.py の `feature_cost_checks`（ADR 0170・`tests/conformance` の反例・#1828） |
 | CNF-016 | active | eng/conformance.py / tests/conformance（ADR 0123 の 2026-11-13 の追補・許した場所と表の在りかは eng/conformance-rules.json・#1602） |
 
 ---

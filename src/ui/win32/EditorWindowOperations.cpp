@@ -23,6 +23,7 @@
 #include "FileFailureText.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "InsertDateTime.hpp"
+#include "LanguageQueryKind.hpp"
 #include "Milestone.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDisplayLanguageList.hpp"
@@ -33,6 +34,7 @@
 #include "OperationTexts.hpp"
 #include "PrintDialog.hpp"
 #include "PrintDocument.hpp"
+#include "QueryLanguage.hpp"
 #include "RegisterShell.hpp"
 #include "RevealTab.hpp"
 #include "SaveDocument.hpp"
@@ -427,11 +429,10 @@ runners_in_order(const std::array<OperationRunner, Size> &rows) noexcept
 } // namespace
 
 // 操作 → メンバ関数の表（ADR 0078 の追補 #1188）。行は EditorOperation の順。private の関数を指す
-// ので、表は EditorWindow の static メンバ関数の中に置く。操作を足すときは行を 1 つと小さな
-// メンバ関数を 1 つ足す。
-EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
-{
-    static constexpr std::array<OperationRunner, core::operation_texts.size()> runners{{
+// ので、表は EditorWindow の static メンバの変数にする（関数の中に置くと 55 行で関数の長さの上限を
+// 超えた・#1790）。操作を足すときは行を 1 つと小さなメンバ関数を 1 つ足す。
+constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow::operation_runners{
+    {
         {core::EditorOperation::open_file, &EditorWindow::open_document},
         {core::EditorOperation::save, &EditorWindow::save_document},
         {core::EditorOperation::save_as, &EditorWindow::save_document_as},
@@ -478,15 +479,22 @@ EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation op
         {core::EditorOperation::delete_selection, &EditorWindow::run_delete_selection},
         {core::EditorOperation::select_all, &EditorWindow::run_select_all},
         {core::EditorOperation::cycle_finder_preview, &EditorWindow::run_cycle_finder_preview},
+        {core::EditorOperation::complete, &EditorWindow::run_complete},
+        {core::EditorOperation::go_to_definition, &EditorWindow::run_go_to_definition},
+        {core::EditorOperation::show_information, &EditorWindow::run_show_information},
+        {core::EditorOperation::open_settings, &EditorWindow::run_open_settings},
         {core::EditorOperation::reveal_in_explorer, &EditorWindow::run_reveal_in_explorer},
         {core::EditorOperation::copy_path, &EditorWindow::run_copy_path},
         {core::EditorOperation::copy_file_name, &EditorWindow::run_copy_file_name},
         {core::EditorOperation::close_other_tabs, &EditorWindow::run_close_other_tabs},
         {core::EditorOperation::close_right_tabs, &EditorWindow::run_close_right_tabs},
     }};
-    static_assert(runners_in_order(runners),
+
+EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
+{
+    static_assert(runners_in_order(operation_runners),
                   "operation runners follow the order of EditorOperation and point to a function");
-    return runners[std::to_underlying(operation)].second;
+    return operation_runners[std::to_underlying(operation)].second;
 }
 
 // 鍵と一覧が実行する唯一の口（ADR 0078 の決定 7）。中身は今ある ui の関数と意図をそのまま使い、
@@ -708,6 +716,17 @@ void EditorWindow::run_search_project()
 void EditorWindow::run_cycle_finder_preview()
 {
     send(application::CycleFinderPreview{});
+}
+
+// 言語サーバーへの問い（ADR 0190 の決定 8）。出せるか・答えをどう使うかは controller が決める。
+void EditorWindow::run_go_to_definition()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::definition});
+}
+
+void EditorWindow::run_show_information()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::hover});
 }
 
 // タブの 5 つ（ADR 0078 の追補 #1790）。F1 の一覧からはアクティブなタブに効く。写すのと

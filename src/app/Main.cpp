@@ -22,6 +22,7 @@
 #include "Win32ClipboardAdapter.hpp"
 #include "Win32Clock.hpp"
 #include "Win32CodePageAdapter.hpp"
+#include "Win32Distribution.hpp"
 #include "Win32DocumentReader.hpp"
 #include "Win32FileAdapter.hpp"
 #include "Win32FolderAdapter.hpp"
@@ -354,7 +355,7 @@ int run(HINSTANCE instance)
             reads,        language_server, wall_clock,  printer,        shell_registration,
             images,       start_lists,     ui_language, project_search, previews,
             reveal},
-        initial_documents(given));
+        nib_adapters::current_distribution(), initial_documents(given));
     const auto last_resort = last_resort_for(controller);
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(

@@ -257,7 +257,7 @@ void verify_startup_question()
                          language_server, wall_clock,  printer,      shell_registration,
                          images,          start_lists, ui_language,  project_search,
                          previews,        reveal},
-        {open_of(giant_path), open_of(small_path)});
+        nenenib::core::Distribution::unpackaged, {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
     expect(!controller.apply(app::WalkRecentTab{core::TabStep::next}).display_question,
@@ -671,14 +671,16 @@ void verify_startup_before_layout()
                                  language_server, wall_clock,  printer,      shell_registration,
                                  images,          start_lists, ui_language,  project_search,
                                  previews,        reveal};
-    app::EditorController started(ports, {open_of(giant_path)});
+    app::EditorController started(ports, nenenib::core::Distribution::unpackaged,
+                                  {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
     const auto first = started.apply(app::VisibleLines{10, grid_geometry});
     const EditorFrame shown = started.frame();
     expect(!first.display_question && shown.display_pending && shown.lines.empty() &&
                text_layouts.requests() == 0,
            "starting with a giant line draws the first frame without laying out the body");
-    app::EditorController plain(ports, {open_of(small_path)});
+    app::EditorController plain(ports, nenenib::core::Distribution::unpackaged,
+                                {open_of(small_path)});
     expect(!plain.delivery().display_question && !plain.frame().display_pending,
            "starting with a small file neither asks nor waits");
 }

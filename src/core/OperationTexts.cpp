@@ -10,77 +10,13 @@ namespace nenenib::core
 {
 namespace
 {
-// EditorOperation の値か。値を足すとこの switch がコンパイルで落ち（CPP-002）、足した後は下の
-// 数え上げが 1 つ増えて、文字の表に行が無ければ static_assert が落ちる。
-[[nodiscard]] consteval bool is_operation(EditorOperation operation) noexcept
-{
-    switch (operation)
-    {
-    case EditorOperation::open_file:
-    case EditorOperation::save:
-    case EditorOperation::save_as:
-    case EditorOperation::new_tab:
-    case EditorOperation::close_tab:
-    case EditorOperation::recent_tab:
-    case EditorOperation::recent_tab_back:
-    case EditorOperation::list_files:
-    case EditorOperation::list_operations:
-    case EditorOperation::toggle_bookmark:
-    case EditorOperation::undo:
-    case EditorOperation::redo:
-    case EditorOperation::font_larger:
-    case EditorOperation::font_smaller:
-    case EditorOperation::font_reset:
-    case EditorOperation::toggle_mode:
-    case EditorOperation::split_vertical:
-    case EditorOperation::split_horizontal:
-    case EditorOperation::next_pane:
-    case EditorOperation::close_pane:
-    case EditorOperation::toggle_preview:
-    case EditorOperation::paste_plain:
-    case EditorOperation::paste_html:
-    case EditorOperation::toggle_explorer:
-    case EditorOperation::choose_explorer_root:
-    case EditorOperation::insert_date_time:
-    case EditorOperation::choose_encoding:
-    case EditorOperation::choose_line_ending:
-    case EditorOperation::find:
-    case EditorOperation::find_next:
-    case EditorOperation::find_previous:
-    case EditorOperation::replace:
-    case EditorOperation::go_to_line:
-    case EditorOperation::preview_full:
-    case EditorOperation::print:
-    case EditorOperation::register_shell:
-    case EditorOperation::unregister_shell:
-    case EditorOperation::choose_language:
-    case EditorOperation::show_version:
-    case EditorOperation::search_project:
-    case EditorOperation::cut:
-    case EditorOperation::copy:
-    case EditorOperation::paste:
-    case EditorOperation::delete_selection:
-    case EditorOperation::select_all:
-    case EditorOperation::cycle_finder_preview:
-    case EditorOperation::reveal_in_explorer:
-    case EditorOperation::copy_path:
-    case EditorOperation::copy_file_name:
-    case EditorOperation::close_other_tabs:
-    case EditorOperation::close_right_tabs:
-        return true;
-    }
-    return false;
-}
-
-// 値は 0 から連続して並ぶので、最初に値でなくなる所までが値の数。
+// 値の数（最後の値から数える・UiMessage の ui_message_count と同じ形）。値を最後に足したら名指しも
+// 移す。名指しが最後の値か・2 つの表の行の数と順は eng/conformance.py の CNF-016 が照合する（網羅の
+// switch は 55 値で関数の長さの上限を超えた・#1790）。足した値に行が無ければ下の static_assert
+// が落ちる。
 [[nodiscard]] consteval std::size_t operation_count() noexcept
 {
-    std::size_t count = 0;
-    while (is_operation(static_cast<EditorOperation>(count)))
-    {
-        ++count;
-    }
-    return count;
+    return std::to_underlying(EditorOperation::close_right_tabs) + 1U;
 }
 
 // 表の i 行目が i 番目の値を持つ（EditorOperation の順に 1 回ずつ）。

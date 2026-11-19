@@ -71,13 +71,18 @@ using Outcome = std::tuple<std::string, std::size_t, std::size_t, std::string, s
 // 窓が送る意図。値なしは窓が何も送らない鍵。失敗は飛ばす理由の番号（skip_reasons の位置）。
 using WindowSend = std::expected<std::optional<app::EditorIntent>, std::size_t>;
 // 再生した件数・そのうち失敗で残りを捨てる件数・理由ごとの飛ばした件数・食い違った件数。
-using Tally = std::tuple<std::size_t, std::size_t, std::array<std::size_t, 2>, std::size_t>;
+using Tally = std::tuple<std::size_t, std::size_t, std::array<std::size_t, 3>, std::size_t>;
 
 constexpr std::size_t untypable_control = 0;
 constexpr std::size_t insert_ordinary_control = 1;
-constexpr std::array<std::string_view, 2> skip_reasons{
+// 補完の鍵のうち窓が Vim の鍵として送らない形（#1845）。`Ctrl+N` は INSERT の外では送らず、
+// `Ctrl+P` は補完の面が開いていなければファイルの一覧を開く（engine は Vim どおりに扱えるので、
+// fixture は engine の道で全部の形を持つ）。この理由の飛ばしだけは 0 件でなくてよい。
+constexpr std::size_t completion_unsent = 2;
+constexpr std::array<std::string_view, 3> skip_reasons{
     "a control character other than Tab (WM_CHAR drops it and no key sends it)",
-    "INSERT Ctrl+V / A / X / E / Y (the window sends the OS paste, select all, cut or nothing)"};
+    "INSERT Ctrl+V / A / X / E / Y (the window sends the OS paste, select all, cut or nothing)",
+    "Ctrl+N outside INSERT or Ctrl+P with the completion closed (the window sends no Vim key)"};
 
 [[nodiscard]] bool control_character(char32_t code) noexcept
 {
@@ -141,6 +146,8 @@ constexpr std::array<std::string_view, 2> skip_reasons{
     case core::VimSpecialKey::control_o:
     case core::VimSpecialKey::control_e:
     case core::VimSpecialKey::control_y:
+    case core::VimSpecialKey::control_n:
+    case core::VimSpecialKey::control_p:
         return std::optional<app::EditorIntent>{};
     }
     std::unreachable();
@@ -150,7 +157,22 @@ constexpr std::array<std::string_view, 2> skip_reasons{
 // type_text）。Ctrl+V / A / X / E / Y は INSERT でだけ通常モードの表へ落ちる（vim_block_key）。
 // Delete は全部のモードで `<Del>`（vim_special_for・#1325）。Shift+Delete は窓が送らないが、
 // fixture の記法に `<S-Del>` は無い。`{ } ( ) [ ]` は WM_CHAR の文字で、上の文字の道を通る。
-[[nodiscard]] WindowSend vim_send(const core::VimKey &key, core::VimMode mode)
+// 補完の鍵（#1845・ui の vim_completion_key の写し。unit の試験は core と application にだけ
+// 依存するので ui の関数は呼べない・eng/architecture.json。面の読みは窓と同じ
+// completion_active）。`Ctrl+N` は INSERT でだけ、`Ctrl+P` は INSERT で補完の面が見えている間
+// だけ Vim の鍵になる。ほかは窓が Vim の鍵を送らない。
+[[nodiscard]] WindowSend completion_send(const core::VimKey &key, core::VimMode mode,
+                                         bool face_shown)
+{
+    const bool next = std::get<core::VimSpecialKey>(key) == core::VimSpecialKey::control_n;
+    if (mode == core::VimMode::insert && (next || face_shown))
+    {
+        return app::EditorIntent{app::VimKeyPress{key}};
+    }
+    return std::unexpected(completion_unsent);
+}
+
+[[nodiscard]] WindowSend vim_send(const core::VimKey &key, core::VimMode mode, bool face_shown)
 {
     const app::EditorIntent press{app::VimKeyPress{key}};
     if (const auto *const character = std::get_if<core::VimCharacter>(&key))
@@ -163,11 +185,20 @@ constexpr std::array<std::string_view, 2> skip_reasons{
     }
     switch (std::get<core::VimSpecialKey>(key))
     {
+    case core::VimSpecialKey::control_n:
+    case core::VimSpecialKey::control_p:
+        return completion_send(key, mode, face_shown);
+    // INSERT の Ctrl+E / Ctrl+Y は補完の面が開いている間だけ Vim の鍵（#1845）。
+    case core::VimSpecialKey::control_e:
+    case core::VimSpecialKey::control_y:
+        if (mode == core::VimMode::insert && !face_shown)
+        {
+            return std::unexpected(insert_ordinary_control);
+        }
+        return press;
     case core::VimSpecialKey::control_v:
     case core::VimSpecialKey::control_a:
     case core::VimSpecialKey::control_x:
-    case core::VimSpecialKey::control_e:
-    case core::VimSpecialKey::control_y:
         if (mode == core::VimMode::insert)
         {
             return std::unexpected(insert_ordinary_control);
@@ -278,9 +309,10 @@ void prepare(Editing &editing, const VimFixture &fixture)
     EditorController &controller = editing.controller();
     for (const core::VimKey &key : vim_keys_of(fixture.keys))
     {
-        const WindowSend send = controller.command_line_active()
-                                    ? command_line_send(key)
-                                    : vim_send(key, controller.vim_state().mode);
+        const WindowSend send =
+            controller.command_line_active()
+                ? command_line_send(key)
+                : vim_send(key, controller.vim_state().mode, controller.completion_active());
         if (!send.has_value())
         {
             return std::unexpected(send.error());
@@ -384,27 +416,41 @@ void verify_tally(const Tally &tally, std::size_t chosen, const char *label)
     }
     expect(differing == 0U, "every replayed fixture reaches the engine path's text, caret, "
                             "register, viewport and mode on the window path (#1326)");
-    expect(replayed == chosen && skipped_total == 0U,
-           "the window path replays every chosen fixture and skips none (#1326)");
+    // 補完の鍵を窓が送らない形（#1845）だけは飛ばしてよい。ほかの理由は 0 件。
+    expect(replayed + skipped.at(completion_unsent) == chosen &&
+               skipped_total == skipped.at(completion_unsent),
+           "the window path replays every chosen fixture and skips only the completion keys "
+           "the window does not send (#1326, #1845)");
 }
 
 // 飛ばす道を 1 件ずつ踏む小さな反例（#1356 のレビュー L3）。`<NL>` は WM_CHAR が捨てる制御文字、
-// INSERT の `<C-a>` は窓が通常モードの表へ落とす鍵。どちらも窓の道では再生しない。
+// INSERT の `<C-a>` は窓が通常モードの表へ落とす鍵。どちらも窓の道では再生しない。補完の鍵
+// （#1845）は、面が閉じている INSERT の `<C-e>` が通常モードの表へ落ち、面が閉じている `<C-p>` と
+// NORMAL の `<C-n>` は窓が Vim の鍵を送らない。面が開いている間の `<C-p>` `<C-e>` は再生する。
 void verify_skip_reasons()
 {
-    constexpr std::array<VimFixture, 2> skipping{
+    constexpr std::array<VimFixture, 6> skipping{
         {{"window-path-skip-control", "ab", "<NL>", "ab", 1, 1, "", "", std::nullopt},
-         {"window-path-skip-insert-control", "ab", "i<C-a><Esc>", "ab", 1, 1, "", "",
-          std::nullopt}}};
+         {"window-path-skip-insert-control", "ab", "i<C-a><Esc>", "ab", 1, 1, "", "", std::nullopt},
+         {"window-path-skip-closed-ctrl-e", "ab", "i<C-e><Esc>", "ab", 1, 1, "", "", std::nullopt},
+         {"window-path-skip-closed-ctrl-p", "ab a", "A<C-p><Esc>", "ab ab", 1, 5, "", "",
+          std::nullopt},
+         {"window-path-skip-normal-ctrl-n", "ab\ncd", "<C-n>", "ab\ncd", 2, 1, "", "",
+          std::nullopt},
+         {"window-path-open-ctrl-p", "ab ac a", "A<C-n><C-p><C-n><C-e><Esc>", "ab ac a", 1, 7, "",
+          "", std::nullopt}}};
     Tally tally{};
     for (const VimFixture &fixture : skipping)
     {
         replay_on_window(fixture, tally);
     }
-    expect(std::get<0>(tally) == 0U && std::get<2>(tally).at(untypable_control) == 1U &&
-               std::get<2>(tally).at(insert_ordinary_control) == 1U,
-           "the window path skips a control character and an INSERT Ctrl key, each for its "
-           "own reason (#1326)");
+    expect(std::get<0>(tally) == 1U && std::get<3>(tally) == 0U &&
+               std::get<2>(tally).at(untypable_control) == 1U &&
+               std::get<2>(tally).at(insert_ordinary_control) == 2U &&
+               std::get<2>(tally).at(completion_unsent) == 2U,
+           "the window path skips a control character, an INSERT Ctrl key and a completion key "
+           "the window does not send, each for its own reason, and replays the completion keys "
+           "while the face is open (#1326, #1845)");
 }
 
 void verify_fixture_window_path(std::size_t stride)

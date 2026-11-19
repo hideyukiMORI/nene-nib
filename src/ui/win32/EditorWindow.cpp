@@ -13,6 +13,7 @@
 #include "PaneLayouts.hpp"
 #include "PreviewTick.hpp"
 #include "SplitLayout.hpp"
+#include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
 #include "UiMessage.hpp"
 #include "WideUiText.hpp"
@@ -39,6 +40,7 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
         return 0;
     case WM_SETTINGCHANGE:
         read_wheel_setting();
+        read_hover_setting();
         refresh_appearance();
         return 0;
     case WM_SIZE:
@@ -182,6 +184,10 @@ void EditorWindow::receive_timer(WPARAM word)
         KillTimer(window_, word);
         send(application::MapTimeout{});
         return;
+    case WindowTimer::tab_tip:
+        KillTimer(window_, word);
+        send(application::TabTipTick{GetActiveWindow() == window_});
+        return;
     }
 }
 
@@ -228,17 +234,13 @@ application::EditorDelivery EditorWindow::follow_look(application::EditorDeliver
     return controller_.apply(body_view());
 }
 
-void EditorWindow::deliver(const application::EditorIntent &intent)
+// 入力行が閉じて変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
+// の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
+// 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。deliver の 1 か所が
+// 呼ぶ（関数の長さの上限のため deliver から出した・#1790）。
+void EditorWindow::follow_command_composition(const application::EditorIntent &intent,
+                                              const application::EditorDelivery &delivery)
 {
-    const auto previous_layout = controller_.split().layout;
-    auto delivery = controller_.apply(intent);
-    if (!survives_layout(delivery))
-    {
-        return;
-    }
-    // 入力行が閉じて変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
-    // の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
-    // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
     const bool command_composed = command_composing_;
     command_composing_ = delivery.command_composition.has_value();
     if (command_composed && !command_composing_ &&
@@ -247,6 +249,19 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         cancel_ime_composition();
     }
+}
+
+void EditorWindow::deliver(const application::EditorIntent &intent)
+{
+    const auto previous_layout = controller_.split().layout;
+    auto delivery = controller_.apply(intent);
+    if (!survives_layout(delivery))
+    {
+        return;
+    }
+    follow_command_composition(intent, delivery);
+    // 設定の面が閉じたら、探す欄の変換を IME の側に残さない（#1836 のレビュー M1）。
+    follow_settings_closing();
     // 閉じたいタブは意図を送った結果の delivery にだけ載る（ADR 0057 の決定 6）。下で delivery を
     // 作り直す前に読んでおく。
     const auto close_request = delivery.close_request;
@@ -258,6 +273,7 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     // 格子表示の問いも同じ（ADR 0140 の決定 2）。
     const bool display_asked = delivery.display_question;
     follow_key_map_timer(window_, delivery.map_timer);
+    follow_tab_tip_timer(window_, delivery.tab_tip_timer, hover_setting_);
     if (std::holds_alternative<application::AdjustFontSize>(intent))
     {
         announce_settings(delivery);

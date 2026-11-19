@@ -277,6 +277,7 @@ void with_startup(ScriptedSettings &settings, ScriptedThemes &themes,
                          language_server, wall_clock,  printer,      shell_registration,
                          images,          start_lists, ui_language,  project_search,
                          previews,        reveal},
+        nenenib::core::Distribution::unpackaged,
         {app::OpenDocument{FilePath::parse("initial.txt").value()}}};
     check(controller);
 }

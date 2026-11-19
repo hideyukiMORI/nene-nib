@@ -416,7 +416,7 @@ void verify_quiet_start_with_files()
                     reads,        language_server, wall_clock,  printer,        shell_registration,
                     images,       start_lists,     ui_language, project_search, previews,
                     reveal},
-        {work_open('a'), work_open('b')});
+        nenenib::core::Distribution::unpackaged, {work_open('a'), work_open('b')});
     // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
     // 3）。
     applied(controller, nenenib::application::FirstFramePresented{});

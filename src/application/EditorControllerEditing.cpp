@@ -11,6 +11,7 @@
 #include "Edit.hpp"
 #include "HtmlToMarkdown.hpp"
 #include "Language.hpp"
+#include "LanguageServerPhase.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
 #include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
@@ -326,8 +327,8 @@ void EditorController::replace(
     note_minimap_edit(next, edit);
     language_server_edit(edit);
     adjust_other(edit, next);
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), std::move(history),
-                              std::move(document));
+    state_ = state_.with_words_edited(edit).with_edit(std::move(next), core::collapsed_at(caret),
+                                                      std::move(history), std::move(document));
     follow_caret();
 }
 
@@ -400,6 +401,11 @@ void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchorin
 void EditorController::accept(const InsertText &intent)
 {
     replace(core::selection_range(state_.selection()), intent.utf8, core::EditBoundary::coalesce);
+    // `triggerCharacters` の照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
+    if (language_server_.phase == LanguageServerPhase::running)
+    {
+        open_triggered_completion(intent.utf8);
+    }
 }
 
 void EditorController::accept(const MoveCaret &intent)
@@ -734,8 +740,8 @@ void EditorController::undo_edit()
     language_server_edit(undone);
     adjust_other(undone, next);
     undone_marks(undone);
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().undone(),
-                              state_.document());
+    state_ = state_.with_words_edited(undone).with_edit(
+        std::move(next), core::collapsed_at(caret), state_.history().undone(), state_.document());
     follow_caret();
 }
 
@@ -763,8 +769,9 @@ void EditorController::redo_edit()
     language_server_edit(edit.value());
     adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
     undone_marks(edit.value());
-    state_ = state_.with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
-                              state_.document());
+    state_ = state_.with_words_edited(edit.value())
+                 .with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
+                            state_.document());
     follow_caret();
 }
 
