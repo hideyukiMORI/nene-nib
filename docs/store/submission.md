@@ -66,11 +66,13 @@
 | 位置情報の共有 | いいえ | 位置の API を使わない | 実装に該当の呼び出しが無い |
 | 個人情報を第三者と共有 | いいえ | 集めない・送らない | PRIVACY.md |
 | アプリ内の購入・デジタル商品・広告 | いいえ | 無い | 実装 |
-| Web の内容を制限なく表示する（ブラウザ） | いいえ | Web のページを開くコードが無い。Markdown プレビューは `http` / `https` の画像を取りに行かない | `src/core/LocalReference.cpp` |
+| Web の内容を制限なく表示する（ブラウザ） | いいえ（案・申請のときに施主が欄の言い回しを見て確かめる） | Nib の中に Web のページを表示しない（Web の内容を描く部品を持たない）。1.1.0 の Markdown プレビューのリンクは、クリックで出る札で本当の宛先を見せ、使う人が「開く」を選んだときだけ `http` / `https` を既定のブラウザに、`mailto:` を既定のメールに渡す（OS の `ShellExecuteExW`・それ以外の scheme は開かない）。ページを表示するのはそのブラウザで、Nib ではない。プレビューは `http` / `https` の画像を取りに行かない | `src/core/LinkDestination.cpp`・`src/adapters/win32/LinkOpenCall.cpp`（許す scheme は `http:` `https:` `mailto:` の 3 つ）・`src/core/LocalReference.cpp`・施主決定 D106 |
 
 **答え直す条件**: 更新で通信・利用者同士のやり取り・購入や広告・Web の内容の表示のどれかを足すときは、アンケートを答え直す
 （Loupe の記録の IARC の通知の条項）。1.1.0 はどれも足さない（全文検索とプレビュー欄は端末の中のファイルを読むだけで、
-アプリは通信しない・PRIVACY.md）ので答え直さない。
+アプリは通信しない・PRIVACY.md。Markdown のリンクは確かめた後に宛先を既定のブラウザ・メールに渡すだけで、
+Nib は Web の内容を表示しない）ので答え直さない見込み。リンクを OS に渡すことが「Web の内容」の欄に当たるかは、
+申請のときに施主が欄の言い回しを見て確かめる（`D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md` の 10 節）。
 
 ### プライバシーの設問
 

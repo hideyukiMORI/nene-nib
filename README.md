@@ -26,9 +26,12 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > Version 1.0.0 was built from main `80fd7a53` ([release record](docs/quality/release-1.0.0-2026-11-14.md)).
 > Version 1.1.0 is built from the main commit named in its
 > [release record](docs/quality/release-1.1.0-2026-11-17.md); what it adds to 1.0.0 is marked *new in 1.1.0*
-> below: project-wide search (Ctrl+Shift+F, `:grep`) with a preview pane in Ctrl+P, easymotion jumps with
-> small labels, a right-click menu in the text, the full path of a tab shown on hover, `:set autoindent`,
-> more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`) and fixes.
+> below: project-wide search (Ctrl+Shift+F, `:grep`) with a preview pane in Ctrl+P, a settings drawer
+> (Ctrl+,), completion (Ctrl+Space, Vim INSERT Ctrl-n) and language-server hover and go-to-definition,
+> Markdown tables, alerts, colored code blocks and links that are confirmed before they open, right-click menus
+> in the text and on tabs, easymotion jumps with small labels, the full path of a tab shown on hover,
+> `:set autoindent`, more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`)
+> and fixes.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -72,7 +75,7 @@ records in `docs/quality/`.
   Ctrl+Backspace / Ctrl+Delete remove a word (or the selection). With a selection, an arrow without Shift moves
   from the selection's edge: ← collapses to its start and → to its end. The `:`, search and Ctrl+P lines do not
   yet move or delete by word.
-- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 6781
+- **FR-003 Vim editing** — NORMAL / INSERT / VISUAL from scratch, replayed against real Vim 9.1: 6892
   oracle-generated fixtures in `tests/vim/fixtures.json` and 402 wrapped-viewport fixtures in
   `tests/vim/wrap-fixtures.json` are checked by CTest, and a differential fuzzer (`eng/vim-fuzz.py`, fixed seeds)
   compares generated key sequences with Vim. Implemented:
@@ -149,8 +152,14 @@ records in `docs/quality/`.
   add, a list behind `∨` when they overflow. Ctrl+T, Ctrl+Tab (most recently used order), Ctrl+F4; Vim `gt` `gT`
   and `:tabnext` `:tabprevious` `:tabnew` `:tabclose` `:tabs`. *New in 1.1.0*: resting the pointer on a tab
   shows its full path in a small tip under it after the Windows hover time (a long path is cut in the middle
-  with …, and no tip while the window is inactive; decision D98). Done; reordering by drag and a right-click
-  menu on tabs are planned.
+  with …, and no tip while the window is inactive; decision D98). *New in 1.1.0*: a right-click on a tab
+  (also on its ×) opens a menu with Reveal in File Explorer, Copy Path, Copy File Name, Save, Save As, Close Tab,
+  Close Other Tabs and Close Tabs to the Right (D98; the same look as the text menu, in either mode; the path
+  items are dimmed on an untitled tab). Closing several tabs asks about each unsaved one and stops on Cancel.
+  Reveal in File Explorer, Copy Path, Copy File Name, Close Other Tabs and Close Tabs to the Right are also in
+  the F1 list for the active tab, without a key
+  ([ADR 0078](docs/adr/0078-operations-are-one-table-for-keys-and-the-f1-list.md)). The menu does not open
+  from the keyboard (Shift+F10 and the menu key open the text menu). Done; reordering by drag is planned.
   Split panes (decision D64, [ADR 0148](docs/adr/0148-split-keeps-the-active-pane-path-and-parks-the-other.md)):
   Ctrl+\ splits side by side and Ctrl+Shift+\ one above the other, F6 moves to the other pane and Ctrl+Shift+F4
   closes it; Vim uses `Ctrl-w {s v w W p h j k l c q o}` and `:only`. Two equal panes at most; the border cannot
@@ -180,13 +189,20 @@ records in `docs/quality/`.
   cycles closed → side pane → full view → closed (D77). Parsing uses md4c 0.5.2 (CommonMark) and the drawing is
   the editor's own ([look](docs/design/2026-10-21-markdown-preview-look.md),
   [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
-  Tables (horizontal rules only, column alignment), GitHub alerts (`> [!NOTE]` and the other four kinds, a colored
-  bar and title; D103), `~~strikethrough~~`, bare URLs, every HTML5 named entity and a front matter block are drawn
-  ([look](docs/design/2026-11-18-markdown-table-and-alert-look.md)); a table wider than the pane is cut at the right.
+  *New in 1.1.0*: tables (horizontal rules only, column alignment), GitHub alerts (`> [!NOTE]` and the other four
+  kinds, a colored bar and title; D103), `~~strikethrough~~`, bare URLs, every HTML5 named entity and a front
+  matter block are drawn ([look](docs/design/2026-11-18-markdown-table-and-alert-look.md)). A table wider than
+  the pane gets a thin bar under it and scrolls sideways by dragging the bar, clicking its track, Shift+wheel or
+  the horizontal wheel over the table (D107, [look](docs/design/2026-11-19-markdown-wide-table-scroll.md)).
   Fenced code blocks are drawn in the editor's syntax colors, chosen by the first word of the info string
-  (a language name, a file extension such as `py` or `ts`, or an alias such as `c++`); unknown languages,
-  blocks without an info string and very long blocks (more than 2,500 colored spans, roughly 300 to 500
-  lines of ordinary code) stay in one color.
+  (a language name, a file extension such as `py` or `ts`, or an alias such as `c++`); long blocks are colored in
+  pieces of 128 lines, and unknown languages and blocks without an info string stay in one color (`:syntax off`
+  does not apply to the preview, D105). A click on a link opens a small card under it with the real destination
+  (host in bold): Enter opens `http` / `https` in the default browser, `mailto:` in the default mail app and a
+  text file in a new tab, Esc cancels and Ctrl+C copies the destination; programs and unknown kinds are not
+  opened (D106, [look](docs/design/2026-11-19-markdown-link-confirm-look.md)). A `#heading` link jumps to that
+  heading with GitHub's anchor names, and `''` jumps back
+  ([ADR 0151](docs/adr/0151-md4c-vendored-as-third-party-target-with-digest-check.md)).
   Local images (PNG, JPEG, the first frame of a GIF, BMP; D79) are drawn in the text flow,
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
   `[画像: alt]` (`[Image: alt]` in English, `[图片：alt]` in Simplified Chinese). A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
@@ -266,9 +282,10 @@ records in `docs/quality/`.
   switches it, and untitled documents are not sent
   ([ADR 0160](docs/adr/0160-language-server-io-is-one-port-with-overlapped-pipes-and-a-core-json-rpc-framer.md),
   [ADR 0161](docs/adr/0161-language-server-diagnostics-are-document-values-drawn-as-underlines.md)).
-  With the server running, completion opens as you type a trigger character or on Ctrl+Space (Ctrl+I also works in
-  ordinary mode, D104), `K` or the F1 operation shows hover information, and `gd` / F12 go to the
-  definition ([ADR 0190](docs/adr/0190-language-server-completion-hover-and-definition-share-one-request-table.md)).
+  *New in 1.1.0*: completion opens on Ctrl+Space (Ctrl+I also works in ordinary mode, D104) with the words of
+  the open documents, and with the server running also as you type one of its trigger characters, with the
+  server's candidates first; `K` or the F1 operation "Show information" shows hover information in a tip, and
+  `gd` / F12 go to the definition ([ADR 0190](docs/adr/0190-language-server-completion-hover-and-definition-share-one-request-table.md)).
   In Vim INSERT mode Ctrl-n / Ctrl-p complete from the words of the open documents and the server, with Ctrl-e to
   cancel and Ctrl-y to accept; Ctrl+P is the completion key only while the list is shown
   ([ADR 0169](docs/adr/0169-insert-completion-is-a-per-document-word-table-shown-in-the-palette-face.md)).
@@ -304,7 +321,7 @@ records in `docs/quality/`.
   Japanese or Chinese text outside those tables fail the conformance check CNF-016
   ([ADR 0123](docs/adr/0123-ui-language-is-a-versioned-setting.md)). The Chinese text is a machine
   translation; corrections are welcome ([docs/i18n/REVIEW.md](docs/i18n/REVIEW.md)).
-- **FR-028 / FR-030** — Ctrl+, opens the settings drawer at the right (D102): a search box, six sections, switches
+- **FR-028 / FR-030** — *New in 1.1.0*: Ctrl+, opens the settings drawer at the right (D102): a search box, six sections, switches
   and choices that apply at once, the estimated cost of one keystroke for the features that are on, and three
   presets; closing it saves ([look](docs/design/2026-11-18-settings-modal-look.md),
   [ADR 0170](docs/adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)). A first
