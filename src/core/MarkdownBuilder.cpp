@@ -341,13 +341,18 @@ void MarkdownBuilder::leave_table()
             row.table.value().digest = digest;
         }
     }
+    ++tables_;
 }
 
 void MarkdownBuilder::enter_row()
 {
     auto &row = opened(PreviewBlockKind::table_row, 0U);
-    row.table = PreviewTableRow{
-        .row = table_row_, .header = false, .cells = {}, .aligns = {}, .digest = 0U};
+    row.table = PreviewTableRow{.row = table_row_,
+                                .header = false,
+                                .cells = {},
+                                .aligns = {},
+                                .digest = 0U,
+                                .table = tables_};
     ++table_row_;
 }
 
@@ -757,8 +762,8 @@ MarkdownDocument MarkdownBuilder::finished() &&
     close_implicit();
     flush_marker();
     close_leaf();
-    return MarkdownDocument{std::move(blocks_), std::move(images_),
-                            heading_slugs(heading_sources_)};
+    return MarkdownDocument{std::move(blocks_), std::move(images_), heading_slugs(heading_sources_),
+                            tables_};
 }
 
 std::optional<std::size_t> MarkdownBuilder::located(std::string_view source) const

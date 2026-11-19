@@ -42,6 +42,7 @@
 #include "PreviewPanePainter.hpp"
 #include "PreviewPaneText.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewTableHit.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectHitText.hpp"
 #include "RenderFailure.hpp"
@@ -157,8 +158,16 @@ class Direct2DRenderer final
     // 最後に描いたプレビューの枠の点の真下の文字（文字の上のときだけ・リンクの札・#1869 の段 L2）。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_character_at(std::int32_t x,
                                                                          std::int32_t y);
+    // 最後に描いたプレビューの枠の点の下の枠より広い表と、つかんだ表の棒の溝の上の横の位置
+    // （#1883・PreviewPane::table_at / table_bar）。
+    [[nodiscard]] std::optional<PreviewTableHit> preview_table_at(std::int32_t x, std::int32_t y);
+    [[nodiscard]] std::optional<PreviewTableHit> preview_table_bar(std::size_t table,
+                                                                   std::int32_t x);
     // 最後に描いたリンクの札の点の下の部品（札を描いていなければ outside・#1869 の段 L2）。
     [[nodiscard]] LinkCardTarget link_card_target_at(std::int32_t x, std::int32_t y) const;
+    // 最後に描いた hover の札が点（クライアントの物理画素）を覆うか（描いていなければ偽・#1884 の
+    // レビュー R1）。
+    [[nodiscard]] bool hover_tip_covers(std::int32_t x, std::int32_t y) const;
 
   private:
     // 待機可能オブジェクトは HANDLE なので所有を型で閉じる（CPP-016）。
@@ -562,6 +571,8 @@ class Direct2DRenderer final
     TextFormat tab_tip_format_;
     TabTipLayout tab_tip_layout_;
     HoverTipLayout hover_tip_layout_;
+    // 最後に描いた hover の札の箱（描いていなければ値なし）。
+    std::optional<D2D1_RECT_F> hover_tip_box_;
     // エクスプローラーの面の行の文字組み。同じ型で上限だけ大きい。書式の作り直しと面を消した
     // ときに捨てる（ADR 0162 の決定 8）。
     PaletteRowLayouts explorer_layouts_{ExplorerPainter::retained};

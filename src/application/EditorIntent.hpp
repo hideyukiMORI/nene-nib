@@ -38,6 +38,7 @@
 #include "FocusSettingsRow.hpp"
 #include "HistoryAction.hpp"
 #include "HoverExplorer.hpp"
+#include "HoverPreviewTable.hpp"
 #include "InsertDateTime.hpp"
 #include "InsertText.hpp"
 #include "JumpSettingsSection.hpp"
@@ -81,6 +82,7 @@
 #include "ScrollLines.hpp"
 #include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollPreviewTable.hpp"
 #include "ScrollSettings.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
@@ -141,5 +143,5 @@ using EditorIntent = std::variant<
     CloseCompletion, ScrollCompletion, QueryLanguage, WindowDeactivated, OpenSettings,
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
-    RevealTab, ClickPreviewLink, ActOnLinkCard>;
+    RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable>;
 } // namespace nenenib::application

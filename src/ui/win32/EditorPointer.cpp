@@ -47,6 +47,11 @@ void EditorWindow::press_preview_task(LPARAM data)
 // L2）。全面ではリンクの文字の上でも 選択を始める。
 void EditorWindow::press_side_preview(LPARAM data)
 {
+    // 広い表の横の送りの棒の上の押しは棒だけ（#1883）。
+    if (press_table_bar(data))
+    {
+        return;
+    }
     press_preview_task(data);
     if (!preview_task_press_.pressed())
     {
@@ -56,6 +61,10 @@ void EditorWindow::press_side_preview(LPARAM data)
 
 void EditorWindow::press_full_preview(LPARAM data)
 {
+    if (press_table_bar(data))
+    {
+        return;
+    }
     press_preview_task(data);
     if (!preview_task_press_.pressed())
     {

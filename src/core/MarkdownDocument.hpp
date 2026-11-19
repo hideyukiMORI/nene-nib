@@ -4,6 +4,7 @@
 #include "MarkdownImage.hpp"
 #include "PreviewBlock.hpp"
 
+#include <cstddef>
 #include <vector>
 
 namespace nenenib::core
@@ -17,5 +18,7 @@ struct MarkdownDocument
     std::vector<PreviewBlock> blocks;
     std::vector<MarkdownImage> images = {};
     std::vector<MarkdownHeading> headings = {};
+    // 表の数（表の行の PreviewTableRow::table は 0 から tables 未満・#1883・D107）。
+    std::size_t tables = 0;
 };
 } // namespace nenenib::core
