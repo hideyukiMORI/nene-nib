@@ -44,6 +44,15 @@ namespace nenenib::ui::win32
 [[nodiscard]] float preview_marker_gap(std::uint32_t dpi) noexcept;
 // コードブロックの面の内側の余白。
 [[nodiscard]] float preview_code_padding(std::uint32_t dpi) noexcept;
+// 面に描く要素の文字の上の余白（上の余白を持たない切れ（middle・last・#1863）は 0・面に描かない
+// 要素も 0）と下の余白（下の余白を持たない切れ（first・middle）は 0）。
+[[nodiscard]] float preview_panel_top_inset(const core::PreviewBlock &block,
+                                            std::uint32_t dpi) noexcept;
+[[nodiscard]] float preview_panel_bottom_inset(const core::PreviewBlock &block,
+                                               std::uint32_t dpi) noexcept;
+// next が previous と同じ囲みのコードの続く切れか（#1863・間の空きは 0 で面が 1 枚に見える）。
+[[nodiscard]] bool preview_code_continues(const core::PreviewBlock &previous,
+                                          const core::PreviewBlock &next) noexcept;
 // 枠の上の余白。
 [[nodiscard]] float preview_top_margin(std::uint32_t dpi) noexcept;
 // 表（採用案 D103・#1848）: 升の左右の余白 14 DIP・上下の余白 7 DIP・見出しの下の罫 2 DIP・行の間の
@@ -62,12 +71,14 @@ namespace nenenib::ui::win32
                                           core::PreviewTableAlign align) noexcept;
 // alert の左の線の太さ（3 DIP・ふつうの引用は 2 DIP）。
 [[nodiscard]] float preview_quote_rule(bool alert, std::uint32_t dpi) noexcept;
-// 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高）。
-// same_list は同じリストの続く項目（間は 0）で、種類の違うリストの境は段落と同じ半行。
+// 前の要素と次の要素の間（段落の後は行高の半分・見出しの上は行高・水平線の上下は行高・囲みのコードの
+// 続く切れの間は 0）。same_list は同じリストの続く項目（間は
+// 0）で、種類の違うリストの境は段落と同じ半行。
 [[nodiscard]] float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,
                                 const PreviewTextStyle &style, bool same_list) noexcept;
-// 要素の縦の大きさ。text_height は layout の GetMetrics().height（水平線は使わない）。
-[[nodiscard]] float preview_extent(core::PreviewBlockKind kind, float text_height,
+// 要素の縦の大きさ。text_height は layout の GetMetrics().height（水平線は使わない）。面に描く
+// 要素は文字の上下の余白（preview_panel_top_inset・preview_panel_bottom_inset）を足す。
+[[nodiscard]] float preview_extent(const core::PreviewBlock &block, float text_height,
                                    std::uint32_t dpi) noexcept;
 // 要素の文字の中のバイト位置 → layout の UTF-16 の位置（core の変換 utf16_length の 1 本で数える・
 // 装飾の範囲の写しは PreviewTextLayouts と PreviewPainter がこれを読む）。

@@ -5,6 +5,7 @@
 #include "PreviewAlert.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewCodeColor.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewLink.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewTableRow.hpp"
@@ -26,7 +27,9 @@ namespace nenenib::core
 // 種類（#1848・ほかは nullopt）。code_colors は言語の分かった囲みのコードだけが持つ構文の色の
 // 区間（#1858・text のバイト位置）で、nullopt の要素は 1 色で描く（空の列は色の区間の無い
 // 囲み・文字は本文の色）。links は要素の中のリンクの宛先の列で、開いた順に並ぶ
-// （ADR 0151 の追補 2026-11-19・#1869・画像の宛先は載せない）。
+// （ADR 0151 の追補 2026-11-19・#1869・画像の宛先は載せない）。piece は囲みのコードの切れの
+// 位置（#1863・preview_code_piece_lines 行を超える囲みは続く要素の列・ほかの要素は only）で、
+// 2 つ目からの切れは記号とチェックボックスを持たず、source_begin はその切れの最初の行の位置。
 struct PreviewBlock
 {
     PreviewBlockKind kind;
@@ -42,6 +45,7 @@ struct PreviewBlock
     std::optional<PreviewAlert> alert;
     std::optional<std::vector<PreviewCodeColor>> code_colors;
     std::vector<PreviewLink> links;
+    PreviewCodePiece piece;
 };
 
 [[nodiscard]] inline bool operator==(const PreviewBlock &left, const PreviewBlock &right)
@@ -51,6 +55,7 @@ struct PreviewBlock
            left.marker == right.marker && left.source_begin == right.source_begin &&
            left.text == right.text && left.spans == right.spans && left.task == right.task &&
            left.table == right.table && left.alert == right.alert &&
-           left.code_colors == right.code_colors && left.links == right.links;
+           left.code_colors == right.code_colors && left.links == right.links &&
+           left.piece == right.piece;
 }
 } // namespace nenenib::core

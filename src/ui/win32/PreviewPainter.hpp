@@ -3,6 +3,7 @@
 #include "LayoutRect.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBrushes.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewInk.hpp"
 #include "PreviewInlineImage.hpp"
 #include "PreviewInlineImages.hpp"
@@ -316,21 +317,43 @@ template <typename Target> class PreviewPainter final
     }
 
     // コードブロックと front matter: panel の面（角丸 5）の内側の
-    // 余白 12 に折らずに描き、面の外は切る。
+    // 余白 12 に折らずに描き、面の外は切る。囲みの切れ（#1863）は面を続けて 1 枚に見せる。
     void draw_code(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
         const auto dpi = scene.style.dpi;
+        const auto &block = scene.document.blocks.at(index);
         const auto extent = scene.tops.bottom(index) - scene.tops.top(index);
-        const auto radius = preview_pixels(code_radius_dips, dpi);
         const auto panel = D2D1::RectF(
             origin.x, origin.y, static_cast<float>(scene.frame.right) - preview_side_margin(dpi),
             origin.y + extent);
-        target_.FillRoundedRectangle(D2D1::RoundedRect(panel, radius, radius),
-                                     brushes_.of(PreviewInk::panel));
+        fill_panel(panel, block.piece, preview_pixels(code_radius_dips, dpi));
         target_.PushAxisAlignedClip(panel, D2D1_ANTIALIAS_MODE_ALIASED);
-        const auto padding = preview_code_padding(dpi);
-        draw_text(scene, index, D2D1::Point2F(origin.x + padding, origin.y + padding));
+        draw_text(scene, index,
+                  D2D1::Point2F(origin.x + preview_code_padding(dpi),
+                                origin.y + preview_panel_top_inset(block, dpi)));
         target_.PopAxisAlignedClip();
+    }
+
+    // 面を塗る。角を丸めるのは囲みの最初の切れの上と最後の切れの下だけで、続く切れの側は角の
+    // 無い矩形を重ねて塗る（middle は矩形だけ）。
+    void fill_panel(const D2D1_RECT_F &panel, core::PreviewCodePiece piece, float radius)
+    {
+        auto *const ink = brushes_.of(PreviewInk::panel);
+        const bool opens = core::preview_code_piece_opens(piece);
+        const bool closes = core::preview_code_piece_closes(piece);
+        if (!opens && !closes)
+        {
+            target_.FillRectangle(panel, ink);
+            return;
+        }
+        target_.FillRoundedRectangle(D2D1::RoundedRect(panel, radius, radius), ink);
+        if (!opens || !closes)
+        {
+            const auto middle = (panel.top + panel.bottom) / 2.0F;
+            target_.FillRectangle(D2D1::RectF(panel.left, opens ? middle : panel.top, panel.right,
+                                              opens ? panel.bottom : middle),
+                                  ink);
+        }
     }
 
     // 項目の記号と番号（operators）。文字の左端から 8 DIP 空けて右に揃える。記号の layout は

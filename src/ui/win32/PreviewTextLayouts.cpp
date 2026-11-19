@@ -49,7 +49,8 @@ constexpr float unbounded_height = 1.0e7F;
                               .table = std::nullopt,
                               .alert = std::nullopt,
                               .code_colors = std::nullopt,
-                              .links = {}};
+                              .links = {},
+                              .piece = core::PreviewCodePiece::only};
     for (const auto &row : rows)
     {
         if (!joined.text.empty())

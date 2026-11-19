@@ -6,6 +6,7 @@
 #include "Utf8.hpp"
 
 #include <string>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -23,10 +24,12 @@ void place(std::vector<PreviewCodeColor> &colors, PreviewCodeColor color)
     colors.push_back(color);
 }
 
-// 1 行（line・行頭が text の begin）の色の区間を、桁（code point の序数・1 始まり）から text の
-// バイト位置に写して足す。区間は桁の昇順なので、行を前から 1 回だけ歩く。
-void append_line(std::vector<PreviewCodeColor> &colors, std::string_view line, std::size_t begin,
-                 const std::vector<ColorSpan> &spans)
+// 1 行（line・行頭が切れの text の begin）の色の区間を、桁（code point の序数・1 始まり）から切れの
+// text のバイト位置に写して足す。区間は桁の昇順なので、行を前から 1 回だけ歩く。畳んだ後の区間が
+// 上限を超えた時点で止めて false（その切れは 1 色・1 行だけの巨大な囲みでも区間を溜めない・
+// review-1860b の L1）。
+[[nodiscard]] bool append_line(std::vector<PreviewCodeColor> &colors, std::string_view line,
+                               std::size_t begin, const std::vector<ColorSpan> &spans)
 {
     std::size_t column = 1;
     Offset at{0};
@@ -47,7 +50,49 @@ void append_line(std::vector<PreviewCodeColor> &colors, std::string_view line, s
         {
             place(colors, PreviewCodeColor{Offset{begin + from}, Offset{begin + to}, span.role});
         }
+        if (colors.size() > preview_code_color_count_limit)
+        {
+            return false;
+        }
     }
+    return true;
+}
+
+// 行の終わり（'\n' の位置か text の終わり）。1 バイトずつ歩く（STL の検索は Debug で memchr を
+// core の外へ出す・ARC-003・#784）。
+[[nodiscard]] std::size_t line_end_of(std::string_view text, std::size_t begin) noexcept
+{
+    while (begin < text.size() && text[begin] != '\n')
+    {
+        ++begin;
+    }
+    return begin;
+}
+
+// 1 つの切れ（piece）の色の区間。state は切れの前の行が渡した状態で、切れの最後の行の後の状態に
+// 進める。上限を超えた後の行は状態だけを進める（区間の vector を確保しない lex_state）。
+[[nodiscard]] std::optional<std::vector<PreviewCodeColor>>
+piece_colors(Language language, LexState &state, std::string_view piece)
+{
+    std::optional<std::vector<PreviewCodeColor>> colors{std::in_place};
+    for (std::size_t begin = 0; begin < piece.size();)
+    {
+        const auto end = line_end_of(piece, begin);
+        const auto line = piece.substr(begin, end - begin);
+        begin = end + 1U;
+        if (!colors.has_value())
+        {
+            state = lex_state(language, state, line);
+            continue;
+        }
+        auto lexed = lex_line(language, state, line);
+        state = lexed.out;
+        if (!append_line(colors.value(), line, end - line.size(), lexed.spans))
+        {
+            colors.reset();
+        }
+    }
+    return colors;
 }
 
 // 囲みのコードの要素の text は行ごとに '\n' で終わるので、改行の数が行の数。
@@ -84,36 +129,44 @@ std::optional<Language> preview_code_language(std::string_view word)
     return language;
 }
 
-std::optional<std::vector<PreviewCodeColor>> preview_code_colors(Language language,
-                                                                 std::string_view text)
+std::vector<std::size_t> preview_code_piece_starts(std::string_view text)
 {
+    std::vector<std::size_t> starts{0U};
+    std::size_t lines = 0;
+    for (std::size_t at = 0; at < text.size(); ++at)
+    {
+        if (text[at] != '\n')
+        {
+            continue;
+        }
+        ++lines;
+        if (lines % preview_code_piece_lines == 0U && at + 1U < text.size())
+        {
+            starts.push_back(at + 1U);
+        }
+    }
+    return starts;
+}
+
+std::vector<std::optional<std::vector<PreviewCodeColor>>>
+preview_code_piece_colors(Language language, std::string_view text)
+{
+    const auto starts = preview_code_piece_starts(text);
+    std::vector<std::optional<std::vector<PreviewCodeColor>>> pieces(starts.size());
     if (text.size() > preview_code_color_byte_limit ||
         newline_count(text) > preview_code_color_line_limit)
     {
-        return std::nullopt;
+        return pieces;
     }
-    std::vector<PreviewCodeColor> colors;
     // 囲みは文書の断片なので、遡りの途中から読むときの始まりの状態で読む（PHP は `<?php` が
     // 無くても PHP の中から・ほかの言語は LexState{} で同じ・#1860 のレビュー R3）。
     auto state = lex_start_state(language, false);
-    std::size_t begin = 0;
-    while (begin < text.size())
+    for (std::size_t piece = 0; piece < starts.size(); ++piece)
     {
-        std::size_t end = begin;
-        while (end < text.size() && text[end] != '\n')
-        {
-            ++end;
-        }
-        const auto line = text.substr(begin, end - begin);
-        auto lexed = lex_line(language, state, line);
-        append_line(colors, line, begin, lexed.spans);
-        state = lexed.out;
-        begin = end + 1U;
-        if (colors.size() > preview_code_color_count_limit)
-        {
-            return std::nullopt;
-        }
+        const auto end = piece + 1U < starts.size() ? starts.at(piece + 1U) : text.size();
+        pieces.at(piece) =
+            piece_colors(language, state, text.substr(starts.at(piece), end - starts.at(piece)));
     }
-    return colors;
+    return pieces;
 }
 } // namespace nenenib::core

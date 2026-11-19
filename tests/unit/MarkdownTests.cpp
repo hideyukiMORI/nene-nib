@@ -18,7 +18,10 @@
 #include "PreviewBlockKind.hpp"
 #include "PreviewCodeColor.hpp"
 #include "PreviewCodeColors.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewLink.hpp"
+#include "PreviewSelection.hpp"
+#include "PreviewSelectionText.hpp"
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
@@ -85,7 +88,8 @@ static_assert(!LendsStop<decltype(never_stop)>);
                         .table = std::nullopt,
                         .alert = std::nullopt,
                         .code_colors = std::nullopt,
-                        .links = {}};
+                        .links = {},
+                        .piece = core::PreviewCodePiece::only};
 }
 
 [[nodiscard]] PreviewBlock titled(std::uint8_t level, std::string text, std::size_t begin)
@@ -483,19 +487,33 @@ void verify_code_blocks()
     return input + "```\n";
 }
 
-// 区間の数の上限（#1860 のレビュー M1）と、隣り合う同じ役の区間を畳むこと。
+// 1 行に count 個の数（py の数の区間が count 個・間の空白で畳まない）の囲みの本文。
+[[nodiscard]] std::string numbers_line(std::size_t count)
+{
+    std::string line;
+    for (std::size_t at = 0; at < count; ++at)
+    {
+        line += at == 0U ? "1" : " 1";
+    }
+    return line;
+}
+
+// 区間の数の上限（#1860 のレビュー M1・切れごと・#1863）と、隣り合う同じ役の区間を畳むこと。
 void verify_code_color_count()
 {
-    const auto full = first_block(fenced_lines("py", core::preview_code_color_count_limit, "1"));
+    const auto limit = core::preview_code_color_count_limit;
+    const auto full = first_block("```py\n" + numbers_line(limit) + "\n```\n");
     expect(full.code_colors.has_value() &&
-               full.code_colors.value_or(std::vector<core::PreviewCodeColor>{}).size() ==
-                   core::preview_code_color_count_limit,
-           "a fence with as many colours as the limit is coloured");
-    expect(!first_block(fenced_lines("py", core::preview_code_color_count_limit + 1U, "1"))
-                .code_colors.has_value(),
-           "a fence with more colours than the limit keeps one colour");
-    expect(!first_block(fenced_lines("json", 1000U, "[1,2,3,4,5,6,7,8,9]")).code_colors.has_value(),
-           "a dense JSON fence over the colour limit keeps one colour");
+               full.code_colors.value_or(std::vector<core::PreviewCodeColor>{}).size() == limit,
+           "a piece with as many colours as the limit is coloured");
+    expect(!first_block("```py\n" + numbers_line(limit + 1U) + "\n```\n").code_colors.has_value(),
+           "a piece with more colours than the limit keeps one colour");
+    const auto parsed = core::parse_markdown(fenced_lines("json", 1000U, "[1,2,3,4,5,6,7,8,9]"),
+                                             MarkdownStop::never());
+    expect(parsed.has_value() && parsed.value().blocks.size() == 8U &&
+               std::ranges::all_of(parsed.value().blocks, [](const PreviewBlock &block)
+                                   { return block.code_colors.has_value(); }),
+           "a dense JSON fence over the colour limit keeps its colours piece by piece");
     const auto joined = first_block("```py\n\"a\"\"b\" \"c\"\n```");
     expect(joined.code_colors == std::optional{std::vector<core::PreviewCodeColor>{
                                      {Offset{0U}, Offset{6U}, core::SyntaxRole::string},
@@ -546,7 +564,8 @@ void verify_code_colors()
     expect(cpp.kind == code && cpp.text == "int x; // c\n" && cpp.source_begin == Offset{7U} &&
                colored(cpp, 7U, 11U, core::SyntaxRole::comment),
            "a cpp fence colours the comment with the body lexer");
-    expect(cpp.code_colors == core::preview_code_colors(core::Language::cpp, cpp.text),
+    expect(cpp.code_colors ==
+               core::preview_code_piece_colors(core::Language::cpp, cpp.text).front(),
            "the colours are the lexer's answer for the code text");
     const auto python = first_block("```Python\n\"\xE3\x81\x82\" # x\n```");
     expect(colored(python, 0U, 5U, core::SyntaxRole::string) &&
@@ -574,6 +593,145 @@ void verify_code_colors()
         "```py\n" + std::string(core::preview_code_color_byte_limit, 'a') + "\n```\n";
     expect(!first_block(wide).code_colors.has_value(),
            "a fence over the byte limit keeps one colour");
+}
+
+// 文書の要素（読めなければ空の列）。
+[[nodiscard]] std::vector<PreviewBlock> blocks_of(std::string_view input)
+{
+    auto parsed = core::parse_markdown(input, MarkdownStop::never());
+    return parsed.has_value() ? std::move(parsed).value().blocks : std::vector<PreviewBlock>{};
+}
+
+[[nodiscard]] std::string repeated(std::string_view row, std::size_t count)
+{
+    std::string text;
+    for (std::size_t at = 0; at < count; ++at)
+    {
+        text += row;
+    }
+    return text;
+}
+
+[[nodiscard]] bool pieces_are(const std::vector<PreviewBlock> &blocks,
+                              const std::vector<core::PreviewCodePiece> &pieces)
+{
+    return blocks.size() == pieces.size() &&
+           std::ranges::equal(blocks, pieces, {}, &PreviewBlock::piece) &&
+           std::ranges::all_of(blocks,
+                               [](const PreviewBlock &block) { return block.kind == code; });
+}
+
+// 長い囲みは preview_code_piece_lines 行ごとの切れの列（ADR 0151 の追補 2026-11-19・#1863）。
+void verify_code_pieces()
+{
+    using enum core::PreviewCodePiece;
+    const auto lines = core::preview_code_piece_lines;
+    const auto exact = blocks_of(fenced_lines("py", lines));
+    expect(pieces_are(exact, {only}) && exact.front().text == repeated("x = 1\n", lines),
+           "a fence of exactly the piece lines is one element");
+    const auto over = blocks_of(fenced_lines("py", lines + 1U));
+    expect(pieces_are(over, {first, last}) && over.front().text == repeated("x = 1\n", lines) &&
+               over.back().text == "x = 1\n" && over.front().source_begin == Offset{6U} &&
+               over.back().source_begin == Offset{6U + (lines * 6U)},
+           "a fence one line over is two pieces and the second begins on its first line");
+    const auto three = blocks_of(fenced_lines("py", 300U));
+    expect(pieces_are(three, {first, middle, last}) &&
+               three.at(2).text == repeated("x = 1\n", 300U - (2U * lines)),
+           "a 300 line fence is a first, a middle and a last piece");
+    const auto starts = [](const std::string &text)
+    { return core::preview_code_piece_starts(text); };
+    const std::vector<std::size_t> one{0U};
+    const std::vector<std::size_t> two{0U, 2U * lines};
+    expect(starts("") == one && starts(repeated("a\n", lines)) == one &&
+               starts(repeated("a\n", lines) + "a") == two &&
+               starts(repeated("a\n", lines + 1U)) == two,
+           "pieces start every piece lines and no empty piece follows the last newline");
+    const auto front_matter = blocks_of("---\n" + repeated("a: 1\n", 200U) + "---\n");
+    expect(front_matter.size() == 1U && front_matter.front().kind == PreviewBlockKind::front_matter,
+           "a long front matter is not split");
+    const auto indented = blocks_of(repeated("    x\n", lines + 1U));
+    expect(pieces_are(indented, {first, last}) &&
+               indented.back().source_begin == Offset{(lines * 6U) + 4U},
+           "an indented code block is split the same way");
+}
+
+// 切れの位置は元の行の位置（引用・リスト・CRLF・空の行）。
+void verify_code_piece_places()
+{
+    const auto lines = core::preview_code_piece_lines;
+    const auto quoted = blocks_of("> ```py\n" + repeated("> x\n", lines + 1U) + "> ```\n");
+    expect(quoted.size() == 2U && quoted.back().quote_depth == 1U &&
+               quoted.back().source_begin == Offset{8U + (lines * 4U) + 2U},
+           "a piece in a quote begins after the quote mark of its first line");
+    const auto item = blocks_of("- ```py\n" + repeated("  x\n", lines + 1U) + "  ```\n");
+    expect(item.size() == 2U && item.front().marker == bullet && item.back().marker.empty() &&
+               item.back().list_depth == 1U &&
+               item.back().source_begin == Offset{8U + (lines * 4U) + 2U},
+           "only the first piece of a fence in an item carries the marker");
+    const auto crlf = blocks_of("```py\r\n" + repeated("x\r\n", lines + 1U) + "```\r\n");
+    expect(crlf.size() == 2U && crlf.back().source_begin == Offset{7U + (lines * 3U)},
+           "a CRLF fence counts CRLF as one line end");
+    const auto blank = blocks_of("```\n" + repeated("x\n", lines) + "\nx\n```\n");
+    expect(blank.size() == 2U && blank.back().text == "\nx\n" &&
+               blank.back().source_begin == Offset{4U + (lines * 2U)},
+           "a piece that starts on a blank line begins at that line");
+    const auto empty = blocks_of("```\n" + repeated("\n", lines + 1U) + "```\n");
+    expect(empty.size() == 2U && empty.back().source_begin == empty.front().source_begin,
+           "a fence of blank lines keeps the pieces in order");
+}
+
+// 切れの列の写しは元の囲みと同じ文字列で、本文の位置は行を持つ切れへ写る。
+void verify_code_piece_copy()
+{
+    auto parsed = core::parse_markdown(fenced_lines("py", 300U), MarkdownStop::never());
+    if (!parsed.has_value())
+    {
+        expect(false, "the 300 line fence parses");
+        return;
+    }
+    const auto &document = parsed.value();
+    const auto all = core::preview_selection_all(document);
+    auto whole = repeated("x = 1\n", 300U);
+    whole.pop_back();
+    expect(all.has_value() && core::preview_selection_text(document, all.value()) == whole,
+           "copying every piece gives the fence text with one newline between pieces");
+    expect(core::preview_anchor_block(document, Offset{6U + (200U * 6U)}) == 1U &&
+               core::preview_anchor_block(document, Offset{6U + (127U * 6U)}) == 0U,
+           "a body position maps to the piece that holds its line");
+}
+
+// 色は囲み全体で 1 回読み、切れの text の位置に切り分ける。行をまたぐ状態は境を越え、区間の上限は
+// 切れごと（超えた切れだけ 1 色）。
+void verify_code_piece_colors()
+{
+    const auto lines = core::preview_code_piece_lines;
+    const auto three = blocks_of(fenced_lines("py", 300U, "x = 1  # c"));
+    const auto expected =
+        core::preview_code_piece_colors(core::Language::python, repeated("x = 1  # c\n", 300U));
+    expect(three.size() == 3U && expected.size() == 3U &&
+               std::ranges::equal(three, expected, {}, &PreviewBlock::code_colors) &&
+               three.at(1).code_colors == three.at(0).code_colors &&
+               colored(three.at(1), 7U, 10U, core::SyntaxRole::comment),
+           "each piece holds the colours at the positions of its own text");
+    const auto comment =
+        blocks_of("```cpp\n" + repeated("int x;\n", lines - 1U) + "/* a\nb */ 1\n```\n");
+    expect(comment.size() == 2U && colored(comment.back(), 0U, 4U, core::SyntaxRole::comment),
+           "a block comment carries over the piece boundary");
+    const auto crowded = blocks_of("```cpp\n" + repeated("int x;\n", lines) +
+                                   numbers_line(core::preview_code_color_count_limit + 1U) +
+                                   "\n/* a\n" + repeated("int x;\n", lines - 2U) + "b */ 1\n```\n");
+    expect(crowded.size() == 3U && crowded.at(0).code_colors.has_value() &&
+               !crowded.at(1).code_colors.has_value() &&
+               colored(crowded.at(2), 0U, 4U, core::SyntaxRole::comment),
+           "only the piece over the colour limit keeps one colour and the state still carries");
+    const auto unknown = blocks_of(fenced_lines("zig", lines + 1U));
+    expect(unknown.size() == 2U && !unknown.front().code_colors.has_value() &&
+               !unknown.back().code_colors.has_value(),
+           "pieces of an unknown language keep one colour");
+    const auto wide = blocks_of(fenced_lines("py", core::preview_code_color_line_limit + 1U));
+    expect(!wide.empty() && std::ranges::none_of(wide, [](const PreviewBlock &block)
+                                                 { return block.code_colors.has_value(); }),
+           "a fence over the line limit keeps one colour in every piece");
 }
 
 void verify_rules()
@@ -1170,6 +1328,10 @@ void verify_markdown_scope()
     verify_code_colors();
     verify_code_color_count();
     verify_code_color_places();
+    verify_code_pieces();
+    verify_code_piece_places();
+    verify_code_piece_copy();
+    verify_code_piece_colors();
     verify_rules();
     verify_entities();
     verify_html5_entities();

@@ -197,7 +197,7 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
                                   ? std::optional(preview_task_box(indent, y + shift, style))
                                   : std::nullopt);
         tops_.push_back(y);
-        y += preview_extent(block.kind, extent, style.dpi);
+        y += preview_extent(block, extent, style.dpi);
         bottoms_.push_back(y);
     }
     return true;

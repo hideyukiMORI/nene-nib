@@ -45,6 +45,16 @@ constexpr std::size_t depth_limit = 255U;
     return static_cast<std::uint8_t>(depth < depth_limit ? depth : depth_limit);
 }
 
+// 切れの列の index 番目（最後は last）の位置。
+[[nodiscard]] PreviewCodePiece code_piece_of(std::size_t index, std::size_t last) noexcept
+{
+    if (index == 0U)
+    {
+        return PreviewCodePiece::first;
+    }
+    return index < last ? PreviewCodePiece::middle : PreviewCodePiece::last;
+}
+
 // md4c と同じく CR と LF のどちらも改行（ISNEWLINE_・#887）。
 [[nodiscard]] bool newline(char value) noexcept
 {
@@ -415,6 +425,106 @@ void MarkdownBuilder::open_code(std::optional<Language> language)
 {
     open_leaf(PreviewBlockKind::code, 0U);
     code_language_ = language;
+    code_line_ = 0U;
+    code_line_located_ = false;
+    code_located_line_.reset();
+    code_piece_begins_.clear();
+}
+
+void MarkdownBuilder::note_code_text(std::string_view shown, std::optional<std::size_t> at)
+{
+    if (at.has_value())
+    {
+        // 切れの最初の行が位置を持てば、行頭の見込みをその文字の位置で置き換える（引用の中の行は
+        // `>` の後ろ・字下げのコードは字下げの後ろ）。
+        if (!code_line_located_ && !code_piece_begins_.empty() &&
+            code_line_ % preview_code_piece_lines == 0U)
+        {
+            code_piece_begins_.back() = at;
+        }
+        code_line_located_ = true;
+        code_located_line_ = code_line_;
+    }
+    // md4c の行末は位置を持たない "\n"（本文の外の固定の文字列）。
+    for (const char byte : shown)
+    {
+        if (byte == '\n')
+        {
+            next_code_line();
+        }
+    }
+}
+
+void MarkdownBuilder::next_code_line()
+{
+    ++code_line_;
+    code_line_located_ = false;
+    if (code_line_ % preview_code_piece_lines == 0U)
+    {
+        code_piece_begins_.push_back(code_line_start());
+    }
+}
+
+std::optional<std::size_t> MarkdownBuilder::code_line_start() const noexcept
+{
+    if (!code_located_line_.has_value() || !last_end_.has_value())
+    {
+        return std::nullopt;
+    }
+    auto at = last_end_.value();
+    for (auto line = code_located_line_.value(); line < code_line_; ++line)
+    {
+        const auto end = line_end(input_, at);
+        if (end == input_.size())
+        {
+            return std::nullopt;
+        }
+        at = next_line(input_, end);
+    }
+    return at;
+}
+
+void MarkdownBuilder::place_code(PreviewBlock block)
+{
+    const auto starts = preview_code_piece_starts(block.text);
+    auto colors = code_language_.has_value()
+                      ? preview_code_piece_colors(code_language_.value(), block.text)
+                      : std::vector<std::optional<std::vector<PreviewCodeColor>>>(starts.size());
+    if (starts.size() == 1U)
+    {
+        block.code_colors = std::move(colors.front());
+        blocks_.push_back(std::move(block));
+        return;
+    }
+    // 切れの text は元の text の行の束（各行は '\n' で終わる）なので、写しは切れの間に改行 1 つを
+    // 挟んで元と同じ文字列になる。記号とチェックボックスは最初の切れだけが持つ。
+    const auto whole = std::move(block.text);
+    block.text.clear();
+    const auto last = starts.size() - 1U;
+    for (std::size_t piece = 0; piece <= last; ++piece)
+    {
+        auto element = block;
+        const auto end = piece < last ? starts.at(piece + 1U) : whole.size();
+        element.text = whole.substr(starts.at(piece), end - starts.at(piece));
+        element.code_colors = std::move(colors.at(piece));
+        element.piece = code_piece_of(piece, last);
+        if (piece > 0U)
+        {
+            element.marker.clear();
+            element.task.reset();
+            element.source_begin = piece_begin(piece);
+        }
+        blocks_.push_back(std::move(element));
+    }
+}
+
+// 2 つ目からの切れ piece の最初の行の本文の位置。位置の見込みが無ければ（囲みの頭からそこまで
+// 空の行だけ）前の切れの位置で、前の切れより前にはしない（要素の位置は昇順）。
+Offset MarkdownBuilder::piece_begin(std::size_t piece) const
+{
+    const auto previous = blocks_.back().source_begin.value;
+    const auto &begin = code_piece_begins_.at(piece - 1U);
+    return Offset{std::max(previous, begin.value_or(previous))};
 }
 
 void MarkdownBuilder::close_leaf()
@@ -449,11 +559,6 @@ void MarkdownBuilder::close_leaf()
     }
     link_targets_.clear();
     mark_alert(block);
-    if (block.kind == PreviewBlockKind::code && code_language_.has_value())
-    {
-        block.code_colors = preview_code_colors(code_language_.value(), block.text);
-    }
-    code_language_.reset();
     // `~` 1 つの打ち消しは装飾を外す（番号の大きい方から）。
     std::ranges::sort(single_strikes_, std::greater{});
     for (const auto span : single_strikes_)
@@ -462,7 +567,16 @@ void MarkdownBuilder::close_leaf()
     }
     single_strikes_.clear();
     pending_strikes_.clear();
-    blocks_.push_back(std::move(block));
+    // 囲みのコードは切れの列にして色の区間を置く（#1863）。
+    if (block.kind == PreviewBlockKind::code)
+    {
+        place_code(std::move(block));
+    }
+    else
+    {
+        blocks_.push_back(std::move(block));
+    }
+    code_language_.reset();
     leaf_begin_.reset();
     implicit_leaf_ = false;
     spans_.clear();
@@ -597,6 +711,10 @@ void MarkdownBuilder::text(std::string_view shown, std::string_view source)
             [](char value) { return value == '\t' || value == '\n' || value == '\r'; }, ' ');
     }
     const auto at = located(source);
+    if (leaf.kind == PreviewBlockKind::code)
+    {
+        note_code_text(shown, at);
+    }
     if (!pending_strikes_.empty())
     {
         settle_strikes(at);
@@ -665,6 +783,7 @@ PreviewBlock MarkdownBuilder::started(PreviewBlockKind kind, std::uint8_t level)
         .alert = std::nullopt,
         .code_colors = std::nullopt,
         .links = {},
+        .piece = PreviewCodePiece::only,
     };
 }
 

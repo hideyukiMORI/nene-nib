@@ -60,7 +60,8 @@ PreviewBlock preview_table_cell(const PreviewBlock &row, std::size_t column)
                         .table = std::nullopt,
                         .alert = std::nullopt,
                         .code_colors = std::nullopt,
-                        .links = {}};
+                        .links = {},
+                        .piece = PreviewCodePiece::only};
 }
 
 namespace
