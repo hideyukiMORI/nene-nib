@@ -31,6 +31,7 @@
 #include "TextPosition.hpp"
 #include "UiMessage.hpp"
 #include "VimMarkEdits.hpp"
+#include "VimStep.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -210,7 +211,8 @@ void EditorController::open_link_document(std::string_view path)
 // 名札の列（解析の 1 回で作った MarkdownDocument.headings）で見出しを引き、その要素の元の行
 // （source_begin・見せている結果が古い本文のものなら本文の長さに寄せる）の頭へキャレットを置く。
 // 前の位置は全文検索の着地と同じ `m'` の 1 本で `''` とジャンプの列に置く（Vim の `:tag` と同じく
-// 跳ぶ命令と数える）。側のプレビューは今の追従のまま、全面はプレビューの送りをその見出しの行へ。
+// 跳ぶ命令と数える）。プレビューは側も全面も、錨をその見出しの行へ置いて追従をやめる（プレビューの
+// 送りと同じ形・scroll_preview）。本文が次に送られると側のプレビューは追従に戻る。
 void EditorController::jump_to_heading(std::string_view fragment)
 {
     const PreviewView *preview = state_.shown_preview();
@@ -235,14 +237,17 @@ void EditorController::jump_to_heading(std::string_view fragment)
     {
         state_ = state_.with_vim_marks(std::move(marks).value());
     }
+    // 待っているオペレータと回数は捨てる（見出しの行がオペレータの動きにならない・メニューの
+    // 実行と同じ vim_operator_cleared の 1 本・VISUAL は保つ）。
+    state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
     accept(
         PlaceCaret{core::TextPosition{line, core::Column{1}}, core::SelectionAnchoring::collapse});
-    const PreviewView *full = state_.full_preview();
-    if (full == nullptr)
+    const PreviewView *shown = state_.shown_preview();
+    if (shown == nullptr)
     {
         return;
     }
-    PreviewView view = *full;
+    PreviewView view = *shown;
     view.anchor = state_.text().line_start(line);
     view.follows = false;
     state_ = state_.with_shown_preview(std::move(view));

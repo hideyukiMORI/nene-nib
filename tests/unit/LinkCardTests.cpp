@@ -30,6 +30,7 @@
 #include "ScriptedFiles.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
+#include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SetPreviewPlacement.hpp"
 #include "TestSupport.hpp"
@@ -37,6 +38,7 @@
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimMode.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
@@ -354,6 +356,60 @@ void verify_heading_jump_side()
     expect(editing.links().touches() == 0, "a heading never reaches the port");
 }
 
+// 側のプレビューの錨（見せている枠が側のプレビューでなければ nullopt）。
+[[nodiscard]] std::optional<core::Offset> side_anchor(const EditorFrame &frame)
+{
+    const auto *preview =
+        frame.other.has_value() ? std::get_if<app::PreviewFrame>(&frame.other.value()) : nullptr;
+    if (preview == nullptr)
+    {
+        return std::nullopt;
+    }
+    return preview->anchor;
+}
+
+// 11b. 横のプレビューも錨を見出しに置く（レビュー R2）。見出しが本文の窓に見えていて本文が
+//      送られなくても、プレビューはその見出しへ動く。
+void verify_heading_jump_side_anchor()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    const EditorFrame jumped = clicked(editing, 0);
+    const auto heading = headings_text.find("## Second Part");
+    expect(jumped.first_visible == core::LineNumber{1} &&
+               side_anchor(jumped) == std::optional<core::Offset>{core::Offset{heading}},
+           "a visible heading moves the side preview without scrolling the body");
+    expect(side_anchor(editing.controller().frame()) ==
+               std::optional<core::Offset>{core::Offset{heading}},
+           "the next frame keeps the side preview at the heading");
+}
+
+// 11c. 下へ遠く跳ぶと本文が送られても、プレビューの上端は見出し（本文の先頭行ではない）。本文を
+//      次に送るとプレビューは追従に戻る。
+void verify_heading_jump_side_far()
+{
+    std::string text = "[far](#far-away)\n";
+    for (int line = 0; line < 40; ++line)
+    {
+        text += "x\n";
+    }
+    const auto heading = text.size();
+    text += "# Far Away\n";
+    for (int line = 0; line < 40; ++line)
+    {
+        text += "y\n";
+    }
+    Editing editing;
+    open_previewed(editing, text);
+    const EditorFrame jumped = clicked(editing, 0);
+    expect(caret_at(jumped, 42) && jumped.first_visible != core::LineNumber{1} &&
+               side_anchor(jumped) == std::optional<core::Offset>{core::Offset{heading}},
+           "a far heading is at the top of the side preview after the body scrolls");
+    const EditorFrame scrolled = editing.controller().apply_frame(app::ScrollLines{1});
+    expect(side_anchor(scrolled) != std::optional<core::Offset>{core::Offset{heading}},
+           "scrolling the body makes the side preview follow again");
+}
+
 // 12. Vim のモードでも同じ着地で、前の位置は `''` で戻れる（Vim の `:tag` と同じく跳ぶ命令）。
 void verify_heading_jump_vim()
 {
@@ -366,6 +422,32 @@ void verify_heading_jump_vim()
     const EditorFrame back =
         controller.apply_frame(app::VimKeyPress{core::VimKey{core::VimCharacter{U'\''}}});
     expect(caret_at(back, 1), "'' goes back to the line before the jump");
+}
+
+// 12b. Vim の VISUAL と operator-pending の途中で跳ぶ（レビュー L4）。道は本文のクリックと同じ
+//      PlaceCaret なので、VISUAL は本文のクリックと同じく VISUAL のまま見出しの行頭で選択を畳み、
+//      待っているオペレータは捨てる（PlaceCaret だけでは残るので jump_to_heading が
+//      vim_operator_cleared で捨てる・後の `k` は動くだけで消さない）。
+void verify_heading_jump_vim_pending()
+{
+    Editing editing;
+    open_previewed(editing, std::string(headings_text));
+    auto &controller = editing.controller();
+    applied(controller, app::SelectEditMode{core::EditMode::vim});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'v'}}});
+    const EditorFrame visual = clicked(editing, 0);
+    expect(caret_at(visual, 7) && visual.vim_mode == core::VimMode::visual,
+           "a heading link in VISUAL lands like a click in the body and keeps VISUAL");
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'v'}}});
+    applied(controller, app::VimKeyPress{core::VimKey{core::VimCharacter{U'd'}}});
+    const EditorFrame pending = clicked(editing, 2);
+    expect(caret_at(pending, 11) && pending.vim_mode == core::VimMode::normal,
+           "a heading link drops a pending operator");
+    const EditorFrame moved =
+        controller.apply_frame(app::VimKeyPress{core::VimKey{core::VimCharacter{U'k'}}});
+    expect(moved.caret.position.line == core::LineNumber{10} &&
+               moved.total_lines == visual.total_lines,
+           "the next motion only moves the caret");
 }
 
 // 13. 全面のプレビュー: プレビューの送りをその見出しの行へ置き、本文のキャレットも同じく動かす。
@@ -410,7 +492,10 @@ void verify_link_card_scope()
     verify_background_tab_switch();
     verify_shown_text();
     verify_heading_jump_side();
+    verify_heading_jump_side_anchor();
+    verify_heading_jump_side_far();
     verify_heading_jump_vim();
+    verify_heading_jump_vim_pending();
     verify_heading_jump_full();
     verify_heading_jump_table_cell();
 }

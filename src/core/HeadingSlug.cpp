@@ -1,14 +1,15 @@
 #include "HeadingSlug.hpp"
 
 #include "AsciiCase.hpp"
+#include "HeadingSlugTable.hpp"
+#include "HeadingSource.hpp"
 #include "Offset.hpp"
 #include "PercentDecoding.hpp"
-#include "PreviewBlockKind.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -27,78 +28,67 @@ using Occurrences = std::vector<Occurrence>;
 
 constexpr std::size_t decimal_radix = 10U;
 
-[[nodiscard]] constexpr bool ascii_space(char value) noexcept
-{
-    return value == ' ';
-}
-
-// 名札に残す ASCII の字か（英数字と `-` `_`）。
-[[nodiscard]] constexpr bool kept_ascii(unsigned char value) noexcept
-{
-    return (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') || value == '-' ||
-           value == '_';
-}
-
-// 名札から消す非 ASCII の字の範囲（閉区間・設計席の決め 2026-11-19・表はこの 1 つ）。日本語の
-// 文書で効く CJK と全角の句読点・記号と、絵文字だけを消す（GitHub の github-slugger は Unicode の
-// 句読点と記号の全部を消すが、その一般カテゴリの表は持たない）。全角の英数字（U+FF10〜U+FF19・
-// U+FF21〜U+FF3A・U+FF41〜U+FF5A）はこの表の隙間なので残る。
 using CodePointRange = std::pair<char32_t, char32_t>;
-constexpr std::array<CodePointRange, 10> removed_code_points{{
-    {U'‐', U'‧'},                   // ダッシュ・引用符・…（一般句読点）
-    {U'　', U'〿'},                  // CJK の記号と句読点（全角の空白・、。「」など）
-    {U'！', U'／'},                 // 全角の ！〜／（（）を含む）
-    {U'：', U'＠'},                 // 全角の ：〜＠
-    {U'［', U'｀'},                 // 全角の ［〜｀
-    {U'｛', U'･'},                  // 全角の ｛〜・と半角の句読点
-    {U'‍', U'‍'},               // ZERO WIDTH JOINER（絵文字の結合）
-    {U'☀', U'➿'},                  // その他の記号と装飾記号（絵文字）
-    {U'️', U'️'},                     // VARIATION SELECTOR-16（絵文字の見せ方）
-    {U'\U0001F000', U'\U0001FAFF'}, // 絵文字の面
-}};
 
+// 生成物の表が昇順で重ならず隣り合わないこと（二分探索の前提・eng/heading-slug-table.py
+// が併せる）。
+[[nodiscard]] consteval bool ascending_apart() noexcept
+{
+    char32_t previous_end = 0;
+    bool first = true;
+    for (const CodePointRange &range : heading_slug_removed_ranges)
+    {
+        if (range.second < range.first || (!first && range.first <= previous_end + 1U))
+        {
+            return false;
+        }
+        previous_end = range.second;
+        first = false;
+    }
+    return true;
+}
+static_assert(ascending_apart(), "the removed ranges ascend, do not overlap and do not touch");
+
+// github-slugger の regex.js が消す code point か（表は生成物の 1 つ）。
 [[nodiscard]] bool removed_code_point(char32_t value) noexcept
 {
-    return std::ranges::any_of(removed_code_points, [value](const CodePointRange &range)
-                               { return value >= range.first && value <= range.second; });
+    const auto after =
+        std::ranges::upper_bound(heading_slug_removed_ranges, value, {}, &CodePointRange::first);
+    return after != heading_slug_removed_ranges.begin() && value <= std::prev(after)->second;
 }
 
-// 1 つの code point text[at, next) を名札に写す。
+// 1 つの code point text[at, next) を名札に写す（github-slugger の slug() の 3 つ: ASCII の大文字を
+// 畳む・表の字を消す・空白を `-` に）。
 void append_slugged(std::string &slug, std::string_view text, Offset at, Offset next)
 {
     const char first = text.at(at.value);
-    if (static_cast<unsigned char>(first) >= 0x80U)
+    if (static_cast<unsigned char>(first) < 0x80U)
     {
-        if (!removed_code_point(code_point_at(text, at)))
+        const unsigned char folded = ascii_folded(first);
+        if (folded == ' ')
         {
-            slug.append(text.substr(at.value, next.value - at.value));
+            slug.push_back('-');
+        }
+        else if (!removed_code_point(folded))
+        {
+            slug.push_back(static_cast<char>(folded));
         }
         return;
     }
-    const unsigned char folded = ascii_folded(first);
-    if (kept_ascii(folded))
+    if (!removed_code_point(code_point_at(text, at)))
     {
-        slug.push_back(static_cast<char>(folded));
-    }
-    else if (ascii_space(first))
-    {
-        slug.push_back('-');
+        slug.append(text.substr(at.value, next.value - at.value));
     }
 }
 
-// 重複を数える前の名札。text は解析の結果の表示の文字（正しい UTF-8）。
+// 重複を数える前の名札。text は名札に数える見出しの文字（正しい UTF-8）。
 [[nodiscard]] std::string base_slug(std::string_view text)
 {
-    const auto first =
-        static_cast<std::size_t>(std::ranges::find_if_not(text, ascii_space) - text.begin());
-    const auto last = static_cast<std::size_t>(
-        std::ranges::find_if_not(text.rbegin(), text.rend(), ascii_space).base() - text.begin());
-    const std::string_view kept = text.substr(first, last > first ? last - first : 0U);
     std::string slug;
-    for (Offset at{0}; at.value < kept.size();)
+    for (Offset at{0}; at.value < text.size();)
     {
-        const Offset next = next_code_point(kept, at);
-        append_slugged(slug, kept, at, next);
+        const Offset next = next_code_point(text, at);
+        append_slugged(slug, text, at, next);
         at = next;
     }
     return slug;
@@ -147,19 +137,15 @@ void append_slugged(std::string &slug, std::string_view text, Offset at, Offset 
 }
 } // namespace
 
-std::vector<MarkdownHeading> heading_slugs(std::span<const PreviewBlock> blocks)
+std::vector<MarkdownHeading> heading_slugs(std::span<const HeadingSource> sources)
 {
     std::vector<MarkdownHeading> headings;
+    headings.reserve(sources.size());
     Occurrences occurrences;
-    std::size_t block = 0;
-    for (const PreviewBlock &each : blocks)
+    for (const HeadingSource &source : sources)
     {
-        if (each.kind == PreviewBlockKind::heading)
-        {
-            headings.push_back(
-                MarkdownHeading{block, unique_slug(occurrences, base_slug(each.text))});
-        }
-        ++block;
+        headings.push_back(
+            MarkdownHeading{source.block, unique_slug(occurrences, base_slug(source.text))});
     }
     return headings;
 }
