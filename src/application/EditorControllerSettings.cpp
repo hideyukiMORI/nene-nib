@@ -27,6 +27,7 @@
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollPreviewTable.hpp"
 #include "ScrollSettings.hpp"
 #include "ScrollTabs.hpp"
 #include "SettingsOpen.hpp"
@@ -59,7 +60,7 @@ namespace
 // 本文や面を送るだけで、文書もキャレットの置き場も選びも変えない意図（#1835 のレビュー R8・施主決定
 // D102 の引き出しは本文を隠さないので、効き目を見るために本文を送っても面を閉じない）。本文の
 // ホイール・もう 1 つの枠のホイール・ミニマップの押しとドラッグ・エクスプローラーのホイール・帯の
-// ホイール。Ctrl+ホイールの字の大きさも同じ（面の「文字の大きさ」の行がその場で変わる・効き目を
+// ホイール・プレビューの表の横の送り（#1883）。Ctrl+ホイールの字の大きさも同じ（面の「文字の大きさ」の行がその場で変わる・効き目を
 // 見ながら変える・#1836 の差し戻し）。本文のクリック・打鍵・編集・タブの切り替えはここに書かない
 // （閉じて保存する）。
 [[nodiscard]] bool only_scrolls(const EditorIntent &intent) noexcept
@@ -67,6 +68,7 @@ namespace
     return std::holds_alternative<ScrollLines>(intent) ||
            std::holds_alternative<AdjustFontSize>(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
+           std::holds_alternative<ScrollPreviewTable>(intent) ||
            std::holds_alternative<PointMinimap>(intent) ||
            std::holds_alternative<ScrollExplorer>(intent) ||
            std::holds_alternative<ScrollTabs>(intent);

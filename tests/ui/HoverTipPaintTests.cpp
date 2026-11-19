@@ -6,6 +6,7 @@
 // は作らない）。字体に結果が依るので環境依存（QLT-013）。
 #include "DirectWriteFactory.hpp"
 #include "HoverTipLayout.hpp"
+#include "RectCovers.hpp"
 #include "SoftwareTarget.hpp"
 #include "TabTipBox.hpp"
 #include "TabTipPaint.hpp"
@@ -178,6 +179,16 @@ void check_paint(SoftwareTarget &target, win32::HoverTipLayout &held, const core
         return;
     }
     const D2D1_RECT_F box = paint.value().box;
+    // 描いた箱は面の当たり（Direct2DRenderer::hover_tip_covers・窓の faces_cover）が読む箱で、
+    // 札の下の点ではプレビューの表がホイールと載せたマウスを受けない（#1884 の再確認 M-a）。
+    const auto middle_x = static_cast<std::int32_t>((box.left + box.right) / 2.0F);
+    const auto middle_y = static_cast<std::int32_t>((box.top + box.bottom) / 2.0F);
+    expect(win32::rect_covers(box, middle_x, middle_y) &&
+               !win32::rect_covers(box, static_cast<std::int32_t>(box.right) + 1, middle_y) &&
+               !win32::rect_covers(box, middle_x, static_cast<std::int32_t>(box.bottom) + 1),
+           ("the drawn hover tip box covers the points under it only" + std::string(" (") + theme +
+            ")")
+               .c_str());
     const Pixels pixels =
         target.painted([&](ID2D1RenderTarget &context, ID2D1SolidColorBrush *brush)
                        { win32::paint_tab_tip(context, brush, paint.value()); });

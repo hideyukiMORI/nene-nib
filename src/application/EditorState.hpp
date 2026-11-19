@@ -25,6 +25,8 @@
 #include "LinkCardView.hpp"
 #include "ParkedTab.hpp"
 #include "PreviewPlacement.hpp"
+#include "PreviewTableGrip.hpp"
+#include "PreviewTableScrolls.hpp"
 #include "PreviewView.hpp"
 #include "ScrollState.hpp"
 #include "SearchPreview.hpp"
@@ -338,6 +340,15 @@ class EditorState final
     // 見せている結果の同じ要素に同じリンクがある間だけ（EditorController::shown_link_card）。
     [[nodiscard]] const std::optional<LinkCardView> &link_card() const noexcept;
     [[nodiscard]] EditorState with_link_card(std::optional<LinkCardView> card) const;
+    // アクティブな文書のプレビューの表の横の送り（#1883・文書の値・脇に置いた束に乗る）と、窓の
+    // 値のつかんだつまみ・マウスを載せた棒の表の通し番号。置くのは controller の
+    // ScrollPreviewTable・HoverPreviewTable と結果の差し替え（表の数が変われば送りを捨てる）。
+    [[nodiscard]] const PreviewTableScrolls &table_scrolls() const noexcept;
+    [[nodiscard]] EditorState with_table_scrolls(PreviewTableScrolls scrolls) const;
+    [[nodiscard]] const std::optional<PreviewTableGrip> &table_grip() const noexcept;
+    [[nodiscard]] EditorState with_table_grip(std::optional<PreviewTableGrip> grip) const;
+    [[nodiscard]] std::optional<std::size_t> table_hovered() const noexcept;
+    [[nodiscard]] EditorState with_table_hovered(std::optional<std::size_t> table) const;
 
     // 枠（ADR 0148 の決定 2・3・5・9）。操作中の枠は上の欄そのもので、もう 1 つの枠は受け身の
     // 表示 PaneView として脇に 1 つだけ置く。layout == none ⇔ other が値なしで、1 枠の active_side
@@ -489,6 +500,9 @@ class EditorState final
     TabTipPhase tab_tip_ = TabTipPhase::hidden;
     LanguageAnswers language_answers_;
     std::optional<LinkCardView> link_card_;
+    PreviewTableScrolls table_scrolls_;
+    std::optional<PreviewTableGrip> table_grip_;
+    std::optional<std::size_t> table_hovered_;
     SplitState split_;
     // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
     std::optional<PreviewView> full_preview_;

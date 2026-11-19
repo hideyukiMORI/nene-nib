@@ -64,9 +64,9 @@ constexpr UINT autosave_question_message = WM_APP + 2;
 // #1051）。
 constexpr std::array<UINT, 5> context_menu_messages{WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU,
                                                     WM_SYSCOMMAND, WM_NCRBUTTONDOWN};
-constexpr std::array<UINT, 10> pointer_messages{
-    WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,  WM_MBUTTONDOWN,    WM_MBUTTONUP,
-    WM_MOUSEMOVE,   WM_MOUSELEAVE,    WM_MOUSEWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};
+constexpr std::array<UINT, 11> pointer_messages{
+    WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,   WM_MBUTTONDOWN,    WM_MBUTTONUP, WM_MOUSEMOVE,
+    WM_MOUSELEAVE,  WM_MOUSEWHEEL,    WM_MOUSEHWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};
 
 // 窓の class を登録する（#1580・ADR 0185）。
 // アイコンは exe の resource を共有で引くだけ（LR_SHARED）。ファイルを読まず、解放もしない。

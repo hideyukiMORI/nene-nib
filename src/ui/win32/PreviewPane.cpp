@@ -10,6 +10,7 @@
 #include "PreviewScene.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewTableCell.hpp"
+#include "PreviewTableMetrics.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -105,7 +106,8 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
     std::optional<RenderFailure> failure;
     PreviewPainter<ID2D1RenderTarget> painter(target, layouts_, brushes_, failure);
     painter.paint(PreviewScene{*key.document, *measured.value(), key.style, frame, 0.0F,
-                               key.selection, images.get(), &bitmaps_});
+                               key.selection, images.get(), &bitmaps_, key.table_scrolls,
+                               key.table_lit});
     if (failure.has_value())
     {
         return std::unexpected(failure.value());
@@ -150,6 +152,7 @@ void PreviewPane::release() noexcept
     measured_images_.reset();
     area_.reset();
     pictured_.reset();
+    table_scrolls_.clear();
 }
 
 const PreviewBitmaps &PreviewPane::bitmaps() const noexcept
@@ -221,10 +224,18 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     area_ = area;
     const auto width = core::width_of(area);
     const auto height = core::height_of(area);
-    PreviewPictureKey key{
-        &target, document,        core::preview_anchor_block(*document, frame.anchor),
-        width,   height,          style,
-        theme_,  frame.selection, frame.images};
+    table_scrolls_ = frame.table_scrolls;
+    PreviewPictureKey key{&target,
+                          document,
+                          core::preview_anchor_block(*document, frame.anchor),
+                          width,
+                          height,
+                          style,
+                          theme_,
+                          frame.selection,
+                          frame.images,
+                          frame.table_scrolls,
+                          frame.table_lit};
     // 座標は物理画素の整数なので、拡大縮小せず最近傍で写せば滲まない。
     const auto destination =
         D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
@@ -446,10 +457,12 @@ std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_
     const auto &widths = *columns.value();
     const auto count = std::min(table.cells.size(), widths.size());
     const auto padding = preview_table_padding_x(style.dpi);
+    const auto shift = table_shift(index, widths, style);
     // 点が掛かる列（右の余白までを含める・最後の列より右は最後の列）。
     std::size_t column = 0;
-    while (column + 1U < count && point.x >= preview_table_cell_left(widths, column, style.dpi) +
-                                                 widths.at(column) + padding)
+    while (column + 1U < count &&
+           point.x >= preview_table_cell_left(widths, column, shift, style.dpi) +
+                          widths.at(column) + padding)
     {
         ++column;
     }
@@ -461,7 +474,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_
         return std::nullopt;
     }
     const auto left =
-        preview_table_cell_left(widths, column, style.dpi) +
+        preview_table_cell_left(widths, column, shift, style.dpi) +
         preview_table_aligned(widths.at(column), metrics.width, table.aligns.at(column));
     const auto units = hit_units(
         *layout.value().Get(),
@@ -501,12 +514,105 @@ std::optional<D2D1_RECT_F> PreviewPane::cell_range_box(std::size_t index, std::s
         return std::nullopt;
     }
     const auto left =
-        preview_table_cell_left(widths, column, style.dpi) +
+        preview_table_cell_left(widths, column, table_shift(index, widths, style), style.dpi) +
         preview_table_aligned(widths.at(column), metrics.width, table.aligns.at(column));
     const auto from = preview_units(cell.text, std::clamp(begin, first, second) - first);
     const auto to = preview_units(cell.text, std::clamp(end, first, second) - first);
     return preview_text_range_box(*layout.value().Get(), from, to - from,
                                   D2D1::Point2F(left, preview_table_padding_y(style.dpi)));
+}
+
+float PreviewPane::table_shift(std::size_t index, std::span<const float> columns,
+                               const PreviewTextStyle &style) const
+{
+    const auto &block = measured_->blocks.at(index);
+    if (!block.table.has_value() || !area_.has_value() || !tops_.has_value())
+    {
+        return 0.0F;
+    }
+    return preview_table_shift(table_band(index, columns, style.dpi),
+                               preview_table_offset(table_scrolls_, block.table.value().table),
+                               style.dpi);
+}
+
+PreviewTableBand PreviewPane::table_band(std::size_t index, std::span<const float> columns,
+                                         std::uint32_t dpi) const
+{
+    if (!area_.has_value() || !tops_.has_value())
+    {
+        return PreviewTableBand{0.0F, 0.0F};
+    }
+    return preview_table_band(columns, static_cast<float>(core::width_of(area_.value())),
+                              tops_.value().indent(index), dpi);
+}
+
+std::optional<PreviewTableHit> PreviewPane::table_hit(std::size_t index, std::int32_t x,
+                                                      float local)
+{
+    const auto &block = measured_->blocks.at(index);
+    if (!block.table.has_value() || !measured_style_.has_value() || !area_.has_value() ||
+        !tops_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &style = measured_style_.value();
+    const auto columns = layouts_.table_columns(*measured_, index, style);
+    if (!columns)
+    {
+        return std::nullopt;
+    }
+    const auto band = table_band(index, *columns.value(), style.dpi);
+    if (!preview_table_overflows(band, style.dpi))
+    {
+        return std::nullopt;
+    }
+    const auto &tops = tops_.value();
+    const auto track = static_cast<float>(x - area_.value().left) - tops.indent(index);
+    const bool bar = preview_table_closes(*measured_, index) &&
+                     local >= tops.bottom(index) - preview_table_bar_extent(style.dpi);
+    return PreviewTableHit{block.table.value().table, preview_table_span(band, style.dpi),
+                           preview_table_track_dips(band, track, style.dpi), bar};
+}
+
+std::optional<PreviewTableHit> PreviewPane::table_at(std::int32_t x, std::int32_t y)
+{
+    if (!area_.has_value() || !tops_.has_value() || measured_ == nullptr ||
+        !core::contains(area_.value(), x, y))
+    {
+        return std::nullopt;
+    }
+    const auto &tops = tops_.value();
+    const auto local = static_cast<float>(y - area_.value().top);
+    for (auto index = tops.first(); index < tops.size(); ++index)
+    {
+        if (tops.top(index) <= local && local < tops.bottom(index))
+        {
+            const auto hit = table_hit(index, x, local);
+            // 表の上は行の原点から枠の右の余白まで（棒の溝と同じ幅）。
+            const bool inside =
+                hit.has_value() && hit.value().at >= 0 && hit.value().at < hit.value().span.view;
+            return inside ? hit : std::nullopt;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<PreviewTableHit> PreviewPane::table_bar(std::size_t table, std::int32_t x)
+{
+    if (!area_.has_value() || !tops_.has_value() || measured_ == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto &tops = tops_.value();
+    for (auto index = tops.first(); index < tops.size(); ++index)
+    {
+        const auto &row = measured_->blocks.at(index).table;
+        if (row.has_value() && row.value().table == table)
+        {
+            return table_hit(index, x, tops.top(index));
+        }
+    }
+    return std::nullopt;
 }
 
 std::size_t PreviewPane::created() const noexcept

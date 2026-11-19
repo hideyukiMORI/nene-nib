@@ -233,7 +233,9 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // （ADR 0171 の決定 5 の追補）。設定の面の意図（OpenSettings・CloseSettings・RevertSettings・
 // StepSettings・ChangeSetting・ChooseSettingsPreset・FilterSettings・JumpSettingsSection・ADR 0170
 // の 2026-11-18 の追補 2 と、画面の工程の FocusSettingsRow・ScrollSettings・#1836）も使う人の操作
-// なので、ここにも begin_intent にも書かない。
+// なので、ここにも begin_intent にも書かない。プレビューの表の横の送り（ScrollPreviewTable・#1883）
+// ももう 1 つの枠の縦の送り ScrollPane と同じく使う人の操作なので、どちらにも書かない（歩きを
+// 確定し、告知を消す）。棒に載せたマウス（HoverPreviewTable）は not_user_operation の 1 本を経る。
 [[nodiscard]] bool keeps_tab_walk(const EditorIntent &intent) noexcept
 {
     return not_user_operation(intent) || std::holds_alternative<WalkRecentTab>(intent) ||
@@ -257,7 +259,9 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // 合図が文書かキャレットを動かしたとき（読み終えた文書の採用・待ちの鍵を流す）は、写した後に
 // apply が捨てる。
 // 枠の意図（SplitPane / SwitchPane / ClosePane / ScrollPane）は使う人の操作なので、
-// keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。
+// keeps_tab_walk と begin_intent の表には載せない（歩きを終え、告知を消す）。プレビューの表の横の
+// 送り（ScrollPreviewTable・#1883）も ScrollPane と同じ側で、キャレットに触れないので狙いを保つ。
+// 棒に載せたマウス（HoverPreviewTable）は面の行の hover と同じく保つ。
 // マウスを動かすだけの意図（帯の載せた要素 PointTitleBar・面の載せた行 HoverExplorer）と帯の幅の
 // 知らせ（TitleBarWidth）も本文とキャレットに触れないので保つ（メモ帳はマウスを動かしても狙いの桁を
 // 変えない・D82・レビュー V-1428 の M-1 と F-3）。本文の寸法と DPI を運ぶ VisibleLines と外観の
@@ -288,6 +292,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 {
     return std::holds_alternative<MoveCaret>(intent) || is_signal(intent) ||
            std::holds_alternative<ScrollPane>(intent) ||
+           std::holds_alternative<ScrollPreviewTable>(intent) ||
+           std::holds_alternative<HoverPreviewTable>(intent) ||
            std::holds_alternative<PointTitleBar>(intent) ||
            std::holds_alternative<HoverExplorer>(intent) ||
            std::holds_alternative<TitleBarWidth>(intent) ||
@@ -1459,7 +1465,9 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
         const core::Offset anchor =
             full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
         result.full_preview =
-            PreviewFrame{full->document, anchor, full->notice, full->selection, full->images};
+            PreviewFrame{full->document,     anchor,       full->notice,
+                         full->selection,    full->images, state_.table_scrolls().offsets,
+                         preview_table_lit()};
         return;
     }
     const auto &other = state_.split().other;
@@ -1478,7 +1486,9 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 {
     const core::Offset anchor =
         view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
-    result.other = PreviewFrame{view.document, anchor, view.notice, std::nullopt, view.images};
+    result.other = PreviewFrame{view.document,      anchor,      view.notice,
+                                std::nullopt,       view.images, state_.table_scrolls().offsets,
+                                preview_table_lit()};
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,

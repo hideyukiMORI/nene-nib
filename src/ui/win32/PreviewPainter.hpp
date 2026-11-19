@@ -11,7 +11,10 @@
 #include "PreviewScene.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewStyle.hpp"
+#include "PreviewTableBand.hpp"
 #include "PreviewTableCell.hpp"
+#include "PreviewTableMetrics.hpp"
+#include "PreviewTableScroll.hpp"
 #include "PreviewTaskBox.hpp"
 #include "PreviewTextLayout.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -176,7 +179,9 @@ template <typename Target> class PreviewPainter final
 
     // 表の 1 行（#1848・採用案 D103 の案 B）。升ごとに折り返さない文字組みを列の揃えで置き、
     // 見出しの行の下に panel_border の 2 DIP、続く行の上に 1 DIP の罫を引く（外枠と縦の罫は
-    // 引かない）。枠より広い表は右を枠の余白で切る。列の幅は表ごとに 1 回だけ測った値を読む。
+    // 引かない）。列の幅は表ごとに 1 回だけ測った値を読む。枠より広い表（#1883・D107）は升と罫を
+    // 横の送りの量だけ左へずらして行の枠（字下げの位置から右の余白まで）で左右とも切り、最後の
+    // 行の下に横の送りの棒を描く。
     void draw_table_row(const PreviewScene &scene, std::size_t index, D2D1_POINT_2F origin)
     {
         const auto &block = scene.document.blocks.at(index);
@@ -187,27 +192,82 @@ template <typename Target> class PreviewPainter final
             return;
         }
         const auto dpi = scene.style.dpi;
-        const auto bottom = origin.y + scene.tops.bottom(index) - scene.tops.top(index);
-        const auto right = static_cast<float>(scene.frame.right) - preview_side_margin(dpi);
-        const auto band = D2D1::RectF(origin.x, origin.y, std::max(right, origin.x), bottom);
+        const auto table = block.table.value().table;
+        const auto shape =
+            preview_table_band(*columns.value(), static_cast<float>(core::width_of(scene.frame)),
+                               scene.tops.indent(index), dpi);
+        const auto offset = preview_table_offset(scene.table_scrolls, table);
+        const auto shift = preview_table_shift(shape, offset, dpi);
+        const bool barred =
+            preview_table_closes(scene.document, index) && preview_table_overflows(shape, dpi);
+        const auto bottom = origin.y + scene.tops.bottom(index) - scene.tops.top(index) -
+                            (barred ? preview_table_bar_extent(dpi) : 0.0F);
+        const auto right = origin.x + shape.view;
+        const auto band = D2D1::RectF(origin.x, origin.y, right, bottom);
         target_.PushAxisAlignedClip(band, D2D1_ANTIALIAS_MODE_ALIASED);
-        draw_table_rules(scene, index, band, *columns.value());
-        for (std::size_t column = 0; column < block.table.value().cells.size() &&
-                                     column < columns.value()->size() && !failure_.has_value();
-             ++column)
-        {
-            const auto left = origin.x + preview_table_cell_left(*columns.value(), column, dpi);
-            if (left >= right)
-            {
-                break;
-            }
-            draw_cell(scene, index, column,
-                      D2D1::RectF(left, origin.y, left + columns.value()->at(column), bottom));
-        }
+        draw_table_rules(scene, index, D2D1::RectF(origin.x - shift, origin.y, right, bottom),
+                         *columns.value());
+        draw_table_cells(scene, index, *columns.value(), PlacedRow{band, shift});
         target_.PopAxisAlignedClip();
+        if (barred)
+        {
+            draw_table_bar(scene, table, shape, D2D1::Point2F(origin.x, bottom));
+        }
     }
 
-    // 見出しの行は下に 2 DIP、見出しでない行の前の行が見出しでなければ上に 1 DIP。
+    // 行の枠 band（左右で切る）と横の送り shift（物理画素）。
+    using PlacedRow = std::pair<D2D1_RECT_F, float>;
+
+    // 表の行の升（枠の左の外へ出きった升は描かず、右の外の升で止める）。
+    void draw_table_cells(const PreviewScene &scene, std::size_t index,
+                          const std::vector<float> &columns, PlacedRow placed)
+    {
+        const auto &block = scene.document.blocks.at(index);
+        const auto [band, shift] = placed;
+        const auto count = block.table.has_value() ? block.table.value().cells.size() : 0U;
+        for (std::size_t column = 0;
+             column < count && column < columns.size() && !failure_.has_value(); ++column)
+        {
+            const auto left =
+                band.left + preview_table_cell_left(columns, column, shift, scene.style.dpi);
+            if (left >= band.right)
+            {
+                return;
+            }
+            if (left + columns.at(column) >= band.left)
+            {
+                draw_cell(scene, index, column,
+                          D2D1::RectF(left, band.top, left + columns.at(column), band.bottom));
+            }
+        }
+    }
+
+    // 横の送りの棒（#1883・D107 の案 A）。最後の行の下に 4 DIP 空けた高さ 6 DIP
+    // の溝（panel_border）と つまみ（muted・つかんだ / マウスを載せた表は
+    // text）。つまみの長さと位置は core の preview_table_thumb の 1 本。at は溝の左上の 4 DIP
+    // 上（最後の行の下端）。
+    void draw_table_bar(const PreviewScene &scene, std::size_t table, PreviewTableBand shape,
+                        D2D1_POINT_2F at)
+    {
+        const auto dpi = scene.style.dpi;
+        const auto top = at.y + preview_table_bar_gap(dpi);
+        const auto height = preview_table_bar_height(dpi);
+        const auto radius = height / 2.0F;
+        const auto track = D2D1::RectF(at.x, top, at.x + shape.view, top + height);
+        target_.FillRoundedRectangle(D2D1::RoundedRect(track, radius, radius),
+                                     brushes_.of(PreviewInk::panel_border));
+        const auto thumb = core::preview_table_thumb(
+            preview_table_offset(scene.table_scrolls, table), preview_table_span(shape, dpi));
+        const auto left = at.x + preview_table_track_pixels(shape, thumb.left, dpi);
+        const auto grip = D2D1::RectF(
+            left, top, left + preview_table_track_pixels(shape, thumb.length, dpi), top + height);
+        const bool lit = scene.table_lit.has_value() && scene.table_lit.value() == table;
+        target_.FillRoundedRectangle(D2D1::RoundedRect(grip, radius, radius),
+                                     brushes_.of(lit ? PreviewInk::text : PreviewInk::muted));
+    }
+
+    // 見出しの行は下に 2 DIP、見出しでない行の前の行が見出しでなければ上に 1 DIP。band の左は
+    // 横の送りを引いた表の左端、右は行の枠の右端（罫は表の幅と枠の小さいほうまで）。
     void draw_table_rules(const PreviewScene &scene, std::size_t index, D2D1_RECT_F band,
                           const std::vector<float> &columns)
     {

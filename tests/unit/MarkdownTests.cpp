@@ -157,6 +157,16 @@ static_assert(!LendsStop<decltype(never_stop)>);
     return block;
 }
 
+// 文書の中の table 番目の表の行（#1883・表の通し番号）。
+[[nodiscard]] PreviewBlock numbered(PreviewBlock block, std::uint32_t table)
+{
+    if (block.table.has_value())
+    {
+        block.table.value().table = table;
+    }
+    return block;
+}
+
 [[nodiscard]] PreviewBlock alerted(PreviewBlock block, core::PreviewAlert alert)
 {
     block.alert = alert;
@@ -990,9 +1000,10 @@ void verify_tables()
                   {leaf(paragraph, "x", 0U), rowed("a", 5U, 0U, {{0U, left}}),
                    rowed("1", 17U, 1U, {{0U, left}}), leaf(paragraph, "y", 22U)},
                   "paragraphs before and after a table stay paragraphs");
-    expect_blocks("| a |\n|---|\n\n| b |\n|---|",
-                  {rowed("a", 2U, 0U, {{0U, left}}), rowed("b", 15U, 0U, {{0U, left}})},
-                  "a second table counts its rows from 0 again");
+    expect_blocks(
+        "| a |\n|---|\n\n| b |\n|---|",
+        {rowed("a", 2U, 0U, {{0U, left}}), numbered(rowed("b", 15U, 0U, {{0U, left}}), 1U)},
+        "a second table counts its rows from 0 again and has the next ordinal");
     expect_blocks("| a&NewLine;b |\n|---|", {rowed("a b", 2U, 0U, {{0U, left}})},
                   "a newline from an entity in a cell becomes a space");
     expect_blocks("| a |\n| b |", {leaf(paragraph, "| a | | b |", 0U)},

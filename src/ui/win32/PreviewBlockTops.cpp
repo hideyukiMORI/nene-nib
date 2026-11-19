@@ -3,6 +3,7 @@
 #include "PreviewBlockKind.hpp"
 #include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
+#include "PreviewTableMetrics.hpp"
 #include "PreviewTaskBox.hpp"
 #include "RenderFailure.hpp"
 
@@ -15,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::ui::win32
@@ -124,6 +126,29 @@ text_height_of(const core::PreviewBlock &block, PreviewTextLayouts &layouts,
     return std::pair{height.value(), shift.value()};
 }
 
+// 表の行の要素の番号と、置く枠の幅と行の字下げ（物理画素）。
+using PreviewTableRowAt = std::tuple<std::size_t, float, float>;
+
+// 枠より広い表の最後の行の下の棒の分の高さ（#1883・ほかの要素と収まる表は 0）。列の幅は表ごとの
+// 覚え（table_columns）を読むので、表の最後の行で 1 回引くだけ。
+[[nodiscard]] std::expected<float, RenderFailure>
+table_bar_extent(const core::MarkdownDocument &document, PreviewTableRowAt row,
+                 PreviewTextLayouts &layouts, const PreviewTextStyle &style)
+{
+    const auto [index, frame_width, indent] = row;
+    if (!preview_table_closes(document, index))
+    {
+        return 0.0F;
+    }
+    const auto columns = layouts.table_columns(document, index, style);
+    if (!columns)
+    {
+        return std::unexpected(columns.error());
+    }
+    const auto band = preview_table_band(*columns.value(), frame_width, indent, style.dpi);
+    return preview_table_overflows(band, style.dpi) ? preview_table_bar_extent(style.dpi) : 0.0F;
+}
+
 // タスクの項目（記号を描く項目のうちチェックボックスを持つもの）か。
 [[nodiscard]] bool task_item(const core::PreviewBlock &block) noexcept
 {
@@ -197,7 +222,12 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
                                   ? std::optional(preview_task_box(indent, y + shift, style))
                                   : std::nullopt);
         tops_.push_back(y);
-        y += preview_extent(block, extent, style.dpi);
+        // 列の幅を測れない失敗は描く所（draw_table_row）が同じ覚えを引いて frame の失敗にする。
+        const auto bar =
+            table_bar_extent(document, PreviewTableRowAt{index, viewport.width, indent}, layouts,
+                             style)
+                .value_or(0.0F);
+        y += preview_extent(block, extent, style.dpi) + bar;
         bottoms_.push_back(y);
     }
     return true;

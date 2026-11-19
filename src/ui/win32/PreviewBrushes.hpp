@@ -31,7 +31,7 @@ class PreviewBrushes final
     [[nodiscard]] std::uint64_t generation() const noexcept;
 
   private:
-    static constexpr std::size_t ink_count = 17;
+    static constexpr std::size_t ink_count = 18;
     // 作った brush の色をテーマの色に置き直す（作り直さない）。
     void recolour(const core::Theme &theme);
     ID2D1RenderTarget *target_ = nullptr;

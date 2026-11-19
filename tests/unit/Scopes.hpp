@@ -230,6 +230,8 @@ void verify_preview_image_scope();
 // PreviewTaskTests.cpp（ADR 0155 の追補 24〜26・タスクリストの切り替えの application の側）
 void verify_preview_task_scope();
 void verify_link_card_scope();
+// PreviewTableScrollTests.cpp（#1883・施主決定 D107・広い表の横の送り）
+void verify_preview_table_scope();
 
 // PointerTests.cpp（#1250・本文のダブルクリックの語とトリプルクリックの行・通常の選択と Vim の
 // VISUAL）
