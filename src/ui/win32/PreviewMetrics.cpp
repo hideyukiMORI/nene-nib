@@ -3,6 +3,7 @@
 #include "DevicePixels.hpp"
 #include "LayoutRect.hpp"
 #include "Offset.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewTaskBox.hpp"
 #include "Utf16.hpp"
 #include "Utf8.hpp"
@@ -160,6 +161,29 @@ float preview_code_padding(std::uint32_t dpi) noexcept
     return preview_pixels(code_padding_dips, dpi);
 }
 
+float preview_panel_top_inset(const core::PreviewBlock &block, std::uint32_t dpi) noexcept
+{
+    return preview_paneled(block.kind) && core::preview_code_piece_opens(block.piece)
+               ? preview_code_padding(dpi)
+               : 0.0F;
+}
+
+float preview_panel_bottom_inset(const core::PreviewBlock &block, std::uint32_t dpi) noexcept
+{
+    return preview_paneled(block.kind) && core::preview_code_piece_closes(block.piece)
+               ? preview_code_padding(dpi)
+               : 0.0F;
+}
+
+bool preview_code_continues(const core::PreviewBlock &previous,
+                            const core::PreviewBlock &next) noexcept
+{
+    return previous.kind == core::PreviewBlockKind::code &&
+           next.kind == core::PreviewBlockKind::code &&
+           !core::preview_code_piece_closes(previous.piece) &&
+           !core::preview_code_piece_opens(next.piece);
+}
+
 float preview_table_padding_x(std::uint32_t dpi) noexcept
 {
     return preview_pixels(table_padding_x_dips, dpi);
@@ -221,6 +245,10 @@ float preview_top_margin(std::uint32_t dpi) noexcept
 float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &next,
                   const PreviewTextStyle &style, bool same_list) noexcept
 {
+    if (preview_code_continues(previous, next))
+    {
+        return 0.0F;
+    }
     if (same_list && previous.kind == core::PreviewBlockKind::list_item &&
         next.kind == core::PreviewBlockKind::list_item)
     {
@@ -236,15 +264,16 @@ float preview_gap(const core::PreviewBlock &previous, const core::PreviewBlock &
     return std::max(after(previous.kind, line), before(next.kind, line));
 }
 
-float preview_extent(core::PreviewBlockKind kind, float text_height, std::uint32_t dpi) noexcept
+float preview_extent(const core::PreviewBlock &block, float text_height, std::uint32_t dpi) noexcept
 {
-    switch (kind)
+    switch (block.kind)
     {
     case core::PreviewBlockKind::rule:
         return std::max(preview_pixels(rule_dips, dpi), 1.0F);
     case core::PreviewBlockKind::code:
     case core::PreviewBlockKind::front_matter:
-        return text_height + 2.0F * preview_code_padding(dpi);
+        return preview_panel_top_inset(block, dpi) + text_height +
+               preview_panel_bottom_inset(block, dpi);
     case core::PreviewBlockKind::table_row:
         return text_height + 2.0F * preview_table_padding_y(dpi);
     case core::PreviewBlockKind::paragraph:
@@ -374,7 +403,8 @@ core::PreviewBlock preview_marker_block(const core::PreviewBlock &item)
                               std::nullopt,
                               std::nullopt,
                               std::nullopt,
-                              {}};
+                              {},
+                              core::PreviewCodePiece::only};
 }
 
 float preview_marker_layout_width() noexcept
