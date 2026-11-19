@@ -363,7 +363,7 @@ std::optional<D2D1_RECT_F> PreviewPane::text_range_of(std::size_t index, std::si
         return std::nullopt;
     }
     const auto &element = measured_->blocks.at(index);
-    // 描く所（hit_block と同じ）の幅と原点。
+    // 描く所（hit_block と同じ）の幅と原点（上の余白は切れの形に依る・#1863）。
     const auto inset = preview_paneled(element.kind) ? preview_code_padding(style.dpi) : 0.0F;
     const auto width =
         preview_text_width(element, static_cast<float>(core::width_of(area_.value())),
@@ -379,8 +379,9 @@ std::optional<D2D1_RECT_F> PreviewPane::text_range_of(std::size_t index, std::si
     const auto shown = core::preview_shown_text(element);
     const auto first = preview_units(shown, std::min(begin, shown.size()));
     const auto last = preview_units(shown, std::min(end, shown.size()));
-    return preview_text_range_box(*layout.value().Get(), first, last - first,
-                                  D2D1::Point2F(inset, inset));
+    return preview_text_range_box(
+        *layout.value().Get(), first, last - first,
+        D2D1::Point2F(inset, preview_panel_top_inset(element, style.dpi)));
 }
 
 std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops &tops,
@@ -400,8 +401,10 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
                         D2D1::Point2F(point.x - tops.indent(index), point.y - tops.top(index)),
                         style, mode);
     }
-    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ下げる。
+    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ右へ、
+    // 上の余白（上の余白を持たない切れは 0・#1863）だけ下げる。
     const auto inset = preview_paneled(block.kind) ? preview_code_padding(style.dpi) : 0.0F;
+    const auto top_inset = preview_panel_top_inset(block, style.dpi);
     const auto width = preview_text_width(block, static_cast<float>(core::width_of(area)),
                                           tops.indent(index), style.dpi);
     // 描く所と同じ箱で同じ layout を引く（画像の上の点は箱の前か後ろ・画像は 1 つの単位）。
@@ -415,7 +418,7 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     }
     const auto units = hit_units(
         *layout.value().Get(),
-        D2D1::Point2F(point.x - tops.indent(index) - inset, point.y - tops.top(index) - inset),
+        D2D1::Point2F(point.x - tops.indent(index) - inset, point.y - tops.top(index) - top_inset),
         mode);
     if (!units.has_value())
     {

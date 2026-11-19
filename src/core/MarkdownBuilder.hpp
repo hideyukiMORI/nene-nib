@@ -9,6 +9,7 @@
 #include "PreviewAlert.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
 
@@ -113,6 +114,17 @@ class MarkdownBuilder final
     void mark_alert(PreviewBlock &block);
     // 段落 block の 1 行目が alert の印の行なら、印を種類の名前に置き換えてその種類を返す。
     [[nodiscard]] std::optional<PreviewAlert> titled_alert(PreviewBlock &block);
+    // 囲みのコードの要素に足した文字 shown（本文の位置 at）から、切れ（preview_code_piece_lines
+    // 行ごと）の最初の行の本文の位置を覚える（#1863）。
+    void note_code_text(std::string_view shown, std::optional<std::size_t> at);
+    // 囲みのコードの次の行へ進む（切れの最初の行なら、その行頭の見込みを覚える）。
+    void next_code_line();
+    // 今の行 code_line_ の行頭の本文の位置の見込み（最後に位置を持った行の終わりから行を数えて
+    // 進める・空の行は位置を持たないので）。前に位置を持った行が無ければ nullopt。
+    [[nodiscard]] std::optional<std::size_t> code_line_start() const noexcept;
+    // 閉じた囲みのコードの要素を、切れの列にして色の区間を置いて足す（#1863）。
+    void place_code(PreviewBlock block);
+    [[nodiscard]] Offset piece_begin(std::size_t piece) const;
 
     std::string_view input_;
     const MarkdownStop *stop_;
@@ -149,6 +161,12 @@ class MarkdownBuilder final
     std::optional<PreviewAlert> alert_;
     // 開いている囲みのコードの言語（open_code・閉じたら空）。
     std::optional<Language> code_language_;
+    // 開いている囲みのコードの今の行の番号（0 から）・今の行が本文の位置を持ったか・最後に位置を
+    // 持った行の番号・2 つ目からの切れの最初の行の本文の位置（#1863）。
+    std::size_t code_line_ = 0;
+    bool code_line_located_ = false;
+    std::optional<std::size_t> code_located_line_;
+    std::vector<std::optional<std::size_t>> code_piece_begins_;
     bool stopped_ = false;
     bool exhausted_ = false;
 };
