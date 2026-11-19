@@ -82,6 +82,7 @@
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
+#include "ScriptedReveal.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
@@ -430,6 +431,7 @@ void verify_controller_initial_appearance()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedReveal reveal;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -441,7 +443,8 @@ void verify_controller_initial_appearance()
             themes,       session,         history,     folders,        bookmarks,
             text_layouts, autosave,        fonts,       bell,           markdown,
             reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
+            images,       start_lists,     ui_language, project_search, previews,
+            reveal},
         nenenib::core::Distribution::unpackaged);
     expect(from_light.frame().palette.background == RgbColor{0xF4, 0xF5, 0xF7},
            "a readable light setting is used");
@@ -452,7 +455,8 @@ void verify_controller_initial_appearance()
             themes,       session,         history,     folders,        bookmarks,
             text_layouts, autosave,        fonts,       bell,           markdown,
             reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
+            images,       start_lists,     ui_language, project_search, previews,
+            reveal},
         nenenib::core::Distribution::unpackaged);
     expect(from_dark.frame().palette.background == RgbColor{0x30, 0x0A, 0x24},
            "a readable dark setting is used");
@@ -480,6 +484,7 @@ void verify_controller_read_failures()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedReveal reveal;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -495,7 +500,8 @@ void verify_controller_read_failures()
                 themes,       session,         history,     folders,        bookmarks,
                 text_layouts, autosave,        fonts,       bell,           markdown,
                 reads,        language_server, wall_clock,  printer,        shell_registration,
-                images,       start_lists,     ui_language, project_search, previews},
+                images,       start_lists,     ui_language, project_search, previews,
+                reveal},
             nenenib::core::Distribution::unpackaged);
         expect(controller.frame().palette.background == dark.background,
                "an unreadable setting falls back to dark");
@@ -524,6 +530,7 @@ void verify_controller_refresh()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedReveal reveal;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -535,7 +542,8 @@ void verify_controller_refresh()
             themes,       session,         history,     folders,        bookmarks,
             text_layouts, autosave,        fonts,       bell,           markdown,
             reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews},
+            images,       start_lists,     ui_language, project_search, previews,
+            reveal},
         nenenib::core::Distribution::unpackaged);
     port.script(Reading{Appearance::dark});
     const auto frame = controller.apply_frame(RefreshAppearance{});

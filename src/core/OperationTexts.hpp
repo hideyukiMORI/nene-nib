@@ -14,16 +14,20 @@ namespace nenenib::core
 // 文は文の表の名前で持ち、画面の言語の文は ui_text が引く。EditorOperation の順に全値を 1 回ずつ
 // 持つ（OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で
 // 作る。読み（ひらがな）は画面に出ない検索の鍵なので operation_readings（OperationReadings.hpp）。
-inline constexpr std::array<OperationText, 50> operation_texts{{
+inline constexpr std::array<OperationText, 55> operation_texts{{
     {EditorOperation::open_file, UiMessage::operation_open_file_name,
      UiMessage::operation_open_file_description},
-    {EditorOperation::save, UiMessage::operation_save_name, UiMessage::operation_save_description},
+    // 保存・名前を付けて保存・タブを閉じるはタブのメニューにも載る（列 tab_menu・追補 #1790）。
+    {EditorOperation::save, UiMessage::operation_save_name, UiMessage::operation_save_description,
+     std::nullopt, std::nullopt, "", "", ContextMenuSlot{1, 0, ContextMenuNeed::loaded}},
     {EditorOperation::save_as, UiMessage::operation_save_as_name,
-     UiMessage::operation_save_as_description},
+     UiMessage::operation_save_as_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{1, 1, ContextMenuNeed::loaded}},
     {EditorOperation::new_tab, UiMessage::operation_new_tab_name,
      UiMessage::operation_new_tab_description},
     {EditorOperation::close_tab, UiMessage::operation_close_tab_name,
-     UiMessage::operation_close_tab_description},
+     UiMessage::operation_close_tab_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{2, 0, ContextMenuNeed::nothing}},
     {EditorOperation::recent_tab, UiMessage::operation_recent_tab_name,
      UiMessage::operation_recent_tab_description},
     {EditorOperation::recent_tab_back, UiMessage::operation_recent_tab_back_name,
@@ -120,6 +124,24 @@ inline constexpr std::array<OperationText, 50> operation_texts{{
      UiMessage::operation_show_information_description},
     {EditorOperation::open_settings, UiMessage::operation_open_settings_name,
      UiMessage::operation_open_settings_description},
+    // タブの右クリックのメニューの 5 つ（ADR 0078 の追補 #1790・施主決定 D98 の順: エクスプローラー
+    // で場所を開く・パスをコピー・ファイル名をコピー｜保存・名前を付けて保存｜閉じる・ほかのタブを
+    // 閉じる・右のタブを閉じる）。本文のメニューには載らない。
+    {EditorOperation::reveal_in_explorer, UiMessage::operation_reveal_in_explorer_name,
+     UiMessage::operation_reveal_in_explorer_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{0, 0, ContextMenuNeed::named}},
+    {EditorOperation::copy_path, UiMessage::operation_copy_path_name,
+     UiMessage::operation_copy_path_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{0, 1, ContextMenuNeed::named}},
+    {EditorOperation::copy_file_name, UiMessage::operation_copy_file_name_name,
+     UiMessage::operation_copy_file_name_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{0, 2, ContextMenuNeed::named}},
+    {EditorOperation::close_other_tabs, UiMessage::operation_close_other_tabs_name,
+     UiMessage::operation_close_other_tabs_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{2, 1, ContextMenuNeed::other_tabs}},
+    {EditorOperation::close_right_tabs, UiMessage::operation_close_right_tabs_name,
+     UiMessage::operation_close_right_tabs_description, std::nullopt, std::nullopt, "", "",
+     ContextMenuSlot{2, 2, ContextMenuNeed::right_tabs}},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

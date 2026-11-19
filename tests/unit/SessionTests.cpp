@@ -49,6 +49,7 @@
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
+#include "ScriptedReveal.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
@@ -546,6 +547,7 @@ void verify_recency_ranked()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedReveal reveal;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -556,7 +558,8 @@ void verify_recency_ranked()
                     themes,       session,         history,     folders,        bookmarks,
                     text_layouts, autosave,        fonts,       bell,           markdown,
                     reads,        language_server, wall_clock,  printer,        shell_registration,
-                    images,       start_lists,     ui_language, project_search, previews},
+                    images,       start_lists,     ui_language, project_search, previews,
+                    reveal},
         nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }

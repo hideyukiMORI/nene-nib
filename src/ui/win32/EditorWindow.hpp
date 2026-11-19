@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Appearance.hpp"
+#include "AutosaveId.hpp"
 #include "BodyLayout.hpp"
 #include "ClosingRoute.hpp"
 #include "ClosingStep.hpp"
@@ -29,6 +30,7 @@
 #include "LayoutRect.hpp"
 #include "Milestone.hpp"
 #include "MinimapGrab.hpp"
+#include "OperationTexts.hpp"
 #include "PaneLayouts.hpp"
 #include "PointText.hpp"
 #include "PointerClicks.hpp"
@@ -45,6 +47,7 @@
 #include "StartScreenView.hpp"
 #include "StatusBarHit.hpp"
 #include "TabCommand.hpp"
+#include "TabSweep.hpp"
 #include "TimingPort.hpp"
 #include "TitleBarHit.hpp"
 #include "TitleBarLayout.hpp"
@@ -57,6 +60,7 @@
 
 #include <windows.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -139,6 +143,16 @@ class EditorWindow final
     // タブを閉じる流れ（未保存なら切り替えて確かめる・ADR 0056 の決定 6）。
     void close_tab(std::size_t tab);
     void finish_tab_action(std::optional<std::size_t> close_request, bool closing);
+    // タブのメニューの「ほかのタブを閉じる」「右のタブを閉じる」（ADR 0078 の追補 #1790）。帯の順に
+    // 1 つずつ × と同じ閉じる道で閉じ、未保存のタブでは「保存しますか」（ask_save）を聞いて取消で
+    // 止める。アクティブでない相手を先に名指しで閉じ（まだ読んでいないタブは読まない）、アクティブが
+    // 相手なら最後に残すタブへ切り替えてから閉じる（切り替えが成り立たなければ止める）。
+    void finish_tab_sweep(std::optional<application::TabSweep> sweep);
+    void close_tabs_beside(application::TabSweep sweep);
+    [[nodiscard]] bool sweep_step(const application::TabSweep &sweep);
+    // 帯の位置 tab の未保存のタブを見せて確かめ、home へ戻る。閉じてよければ真。
+    [[nodiscard]] bool confirm_swept_tab(std::size_t tab, application::AutosaveId home);
+    [[nodiscard]] bool close_swept_tab(std::size_t tab, application::AutosaveId home);
     void finish_operation(std::optional<core::EditorOperation> operation_request);
     // 開いた文書に格子表示を聞く（ADR 0140 の決定 2）。deliver の終わりと、起動の終わり
     // （最初の frame の後）から呼ぶ。
@@ -169,6 +183,13 @@ class EditorWindow final
     // 右の押しと離し。押した点と離した点がどちらも操作中の枠の本文の中なら、離したときに開く。
     void press_right(LPARAM data);
     void release_right(LPARAM data);
+    // 帯のタブの上の右の離し（#1790）。押したタブと離したタブが同じときだけ、そのタブのメニューを
+    // 帯のすぐ下に開く。開いたら真。
+    [[nodiscard]] bool release_right_on_tab(LPARAM data);
+    // 点の下の帯のタブ（× の上もタブ）。Ctrl+P の面が開いている間とタブの外は値なし（設定の面と
+    // 補完の面の押しは press_right が先に取り、これを読まない）。
+    [[nodiscard]] std::optional<core::TitleBarTarget> tab_under(LPARAM data) const;
+    [[nodiscard]] bool press_right_on_menu(POINT point);
     // WM_CONTEXTMENU。鍵（Shift+F10・メニューキー）の分だけ（lParam が -1）キャレットの位置に開く。
     [[nodiscard]] bool open_context_menu_from_keys(LPARAM data);
     // メニューが開いている間の左の押しと離しとマウスの動き。開いていなければ false（今の道へ）。
@@ -427,6 +448,13 @@ class EditorWindow final
     // 関数は引数なしで、本体は前の run_operation の case のまま。
     using OperationFunction = void (EditorWindow::*)();
     [[nodiscard]] static OperationFunction runner_of(core::EditorOperation operation) noexcept;
+    // 表の本体（定義は EditorWindowOperations.cpp）。操作が 55 になり、表を runner_of の中に置くと
+    // 関数の長さの上限を超えたので、private の関数を指せる static
+    // メンバの変数にした（#1790）。宣言は static const、定義は constexpr で、runner_of の
+    // static_assert は定義の後ろにあるので表を読める。
+    static const std::array<std::pair<core::EditorOperation, OperationFunction>,
+                            core::operation_texts.size()>
+        operation_runners;
     void run_new_tab();
     void run_close_tab();
     void run_recent_tab();
@@ -468,6 +496,12 @@ class EditorWindow final
     void run_go_to_definition();
     void run_show_information();
     void run_open_settings();
+    // タブの 5 つ（ADR 0078 の追補 #1790）。F1 の一覧からはアクティブなタブに効く。
+    void run_reveal_in_explorer();
+    void run_copy_path();
+    void run_copy_file_name();
+    void run_close_other_tabs();
+    void run_close_right_tabs();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();
@@ -547,6 +581,8 @@ class EditorWindow final
     // 右の押しの点（本文の中で押したときだけ・離したら消す）と、開いたメニューの上で左を押したか
     // （#1051）。
     std::optional<POINT> right_pressed_;
+    // 右の押しを受けた帯のタブ（#1790・離したタブと比べる）。
+    std::optional<core::TitleBarTarget> tab_right_pressed_;
     bool context_menu_pressed_ = false;
     // 補完の面の上で押した行（離すまで・面の余白の押しは値なし）と、面のホイールの余り。
     std::optional<std::size_t> completion_pressed_;
