@@ -981,6 +981,9 @@ class EditorController final
     void open_link_card(const LinkCardView &card);
     void open_link_document(std::string_view path);
     void copy_link_card(const LinkCardView &card);
+    // 同じ文書の `#見出し` のリンク（段 L3）。名札の列で引いた見出しの元の行の頭へキャレットを置き
+    // （`''` に前の位置）、全面ではプレビューの送りもその見出しへ。見つからなければ 1 行知らせる。
+    void jump_to_heading(std::string_view fragment);
     // WorkCompleted の道で開く頼みの結果を引き、失敗を 1 行知らせる（頼んでいなければ呼ばない）。
     void collect_link_opens();
     void settle_language_answers(LspRequestKind kind);

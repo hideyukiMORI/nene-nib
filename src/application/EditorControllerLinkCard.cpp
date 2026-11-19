@@ -3,24 +3,35 @@
 // 閉じる。web と mail は LinkOpenPort（OS の既定の道・adapters がワーカーで渡す）、document は
 // open_listed の 1 本（Nib の新しいタブ）。札の状態は EditorState が持ち、frame に載るのは見せて
 // いる結果の同じ要素に同じリンクがある間だけ。当たりの計算（押した点 → 要素とバイト位置）は ui、
-// リンクの判定はここ。
+// リンクの判定はここ。同じ文書の `#見出し` は札を開かずに跳ぶ（段 L3・jump_to_heading）。
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
 
 #include "ActOnLinkCard.hpp"
 #include "AutosaveId.hpp"
 #include "ClickPreviewLink.hpp"
+#include "Column.hpp"
 #include "EditorIntent.hpp"
 #include "FilePath.hpp"
+#include "HeadingSlug.hpp"
+#include "LineNumber.hpp"
 #include "LinkCard.hpp"
 #include "LinkCardAction.hpp"
 #include "LinkCardView.hpp"
 #include "LinkDestination.hpp"
 #include "LinkKind.hpp"
+#include "MarkdownDocument.hpp"
+#include "Offset.hpp"
 #include "OpenedAs.hpp"
+#include "PlaceCaret.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewView.hpp"
+#include "SelectionAnchoring.hpp"
+#include "TextBuffer.hpp"
+#include "TextPosition.hpp"
 #include "UiMessage.hpp"
+#include "VimMarkEdits.hpp"
+#include "VimStep.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -118,9 +129,10 @@ void EditorController::accept(const ClickPreviewLink &intent)
     }
     const core::PreviewLink &link = block.links.at(pressed.value());
     auto destination = core::link_destination(link.target, state_.document().path);
-    // 見出しへ跳ぶのは段 L3。今はクリックしても何もしない。
+    // 同じ文書の見出しは札を開かずに跳ぶ（段 L3・確かめない）。
     if (destination.kind == core::LinkKind::heading)
     {
+        jump_to_heading(destination.text);
         return;
     }
     state_ = state_.with_link_card(
@@ -194,6 +206,53 @@ void EditorController::open_link_document(std::string_view path)
         return;
     }
     open_listed(parsed.value(), std::nullopt, OpenedAs::pinned);
+}
+
+// 名札の列（解析の 1 回で作った MarkdownDocument.headings）で見出しを引き、その要素の元の行
+// （source_begin・見せている結果が古い本文のものなら本文の長さに寄せる）の頭へキャレットを置く。
+// 前の位置は全文検索の着地と同じ `m'` の 1 本で `''` とジャンプの列に置く（Vim の `:tag` と同じく
+// 跳ぶ命令と数える）。プレビューは側も全面も、錨をその見出しの行へ置いて追従をやめる（プレビューの
+// 送りと同じ形・scroll_preview）。本文が次に送られると側のプレビューは追従に戻る。
+void EditorController::jump_to_heading(std::string_view fragment)
+{
+    const PreviewView *preview = state_.shown_preview();
+    if (preview == nullptr || preview->document == nullptr)
+    {
+        return;
+    }
+    const auto document = preview->document;
+    const auto block = core::heading_block_of(document->headings, fragment);
+    if (!block.has_value())
+    {
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_heading_not_found));
+        return;
+    }
+    const core::TextBuffer &text = state_.text();
+    const core::Offset begin{
+        std::min(document->blocks.at(block.value()).source_begin.value, text.size_bytes())};
+    const core::LineNumber line = text.position_of(begin).line;
+    const auto from = core::vim_mark_position_of(text, state_.selection().caret);
+    auto marks = core::vim_mark_set(state_.vim_marks(), U'\'', from);
+    if (marks.has_value())
+    {
+        state_ = state_.with_vim_marks(std::move(marks).value());
+    }
+    // 待っているオペレータと回数は捨てる（見出しの行がオペレータの動きにならない・メニューの
+    // 実行と同じ vim_operator_cleared の 1 本・VISUAL は保つ）。
+    state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
+    accept(
+        PlaceCaret{core::TextPosition{line, core::Column{1}}, core::SelectionAnchoring::collapse});
+    const PreviewView *shown = state_.shown_preview();
+    if (shown == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *shown;
+    view.anchor = state_.text().line_start(line);
+    view.follows = false;
+    state_ = state_.with_shown_preview(std::move(view));
+    preview_body_top_ = settled_scroll().first_visible;
+    request_preview_images();
 }
 
 // 宛先の綴りを写す（失敗は clipboard_written の 1 行・札は開いたまま）。写せたら札を閉じて 1 行

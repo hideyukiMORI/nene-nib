@@ -233,16 +233,19 @@ void left_block(MarkdownBuilder &builder, MD_BLOCKTYPE type)
 
 // NORMAL・CODE・HTML は綴りのまま（CODE / HTML の行末と字下げは md4c の固定の文字列で、本文の外を
 // 指すので位置には使われない）。ENTITY は表で解く。BR は改行、SOFTBR は空白 1 つ（段落の中の改行は
-// 描画が折る）、NULLCHAR は U+FFFD（md4c の勧め）。
+// 描画が折る）、NULLCHAR は U+FFFD（md4c の勧め）。HTML のタグは見出しの名札に数えない（ADR 0151 の
+// 段 L3）。
 void received_text(MarkdownBuilder &builder, MD_TEXTTYPE type, std::string_view piece)
 {
     switch (type)
     {
     case MD_TEXT_NORMAL:
     case MD_TEXT_CODE:
-    case MD_TEXT_HTML:
     case MD_TEXT_LATEXMATH:
         builder.text(piece, piece);
+        return;
+    case MD_TEXT_HTML:
+        builder.html(piece, piece);
         return;
     case MD_TEXT_ENTITY:
         builder.text(markdown_entity_text(piece), piece);
@@ -370,6 +373,20 @@ int on_leave_span(MD_SPANTYPE /*type*/, void * /*detail*/, void *userdata)
     return guarded(builder, [&] { builder.leave_span(); });
 }
 
+// 組み立てた結果（見出しの名札の列を 1 回だけ作る・ADR 0151 の追補 2026-11-19 の段 L3）。確保の
+// 失敗は md4c のコールバックと同じく insufficient_memory（ARC-010）。
+[[nodiscard]] std::expected<MarkdownDocument, MarkdownFailure> completed(MarkdownBuilder &&builder)
+{
+    try
+    {
+        return std::move(builder).finished();
+    }
+    catch (const std::bad_alloc &)
+    {
+        return std::unexpected(MarkdownFailure::insufficient_memory);
+    }
+}
+
 int on_text(MD_TEXTTYPE type, const MD_CHAR *text, MD_SIZE size, void *userdata)
 {
     auto &builder = builder_of(userdata);
@@ -412,7 +429,7 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
     const std::string_view parsed = text.substr(parsed_from);
     if (parsed.empty())
     {
-        return std::move(builder).finished();
+        return completed(std::move(builder));
     }
     // 打ち消し線と裸の URL・www・メールの自動リンク（GFM の拡張・#1840）と表（#1848）。
     const MD_PARSER parser{
@@ -430,7 +447,7 @@ parse_markdown(std::string_view text, const MarkdownStop &stop, DisplayLanguage 
     };
     if (md_parse(parsed.data(), static_cast<MD_SIZE>(parsed.size()), &parser, &builder) == 0)
     {
-        return std::move(builder).finished();
+        return completed(std::move(builder));
     }
     if (builder.exhausted())
     {

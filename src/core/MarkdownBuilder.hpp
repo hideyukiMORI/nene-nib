@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DisplayLanguage.hpp"
+#include "HeadingSource.hpp"
 #include "Language.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownImage.hpp"
@@ -90,11 +91,18 @@ class MarkdownBuilder final
     void enter_link(std::string target);
     void leave_span();
     // shown を要素の文字に足す。source が本文の中を指せば、要素の最初の位置と直前の終わりに使う。
+    // 見出しの中なら名札に数える文字にも足す（ADR 0151 の段 L3）。
     void text(std::string_view shown, std::string_view source);
+    // 生の HTML（md4c の MD_TEXT_HTML）を text と同じく要素の文字に足す。名札には数えない
+    // （GitHub はタグを見出しの文字に数えない・ADR 0151 の段 L3）。
+    void html(std::string_view shown, std::string_view source);
 
+    // 開いている要素を閉じ、要素の列と画像の節と見出しの名札の列（heading_slugs の 1 回）を返す。
     [[nodiscard]] MarkdownDocument finished() &&;
 
   private:
+    // text と html が共に通る、要素の文字に足す 1 本。
+    void append_shown(std::string_view shown, std::string_view source);
     [[nodiscard]] std::optional<std::size_t> located(std::string_view source) const;
     [[nodiscard]] std::size_t unlocated_begin() const noexcept;
     [[nodiscard]] PreviewBlock started(PreviewBlockKind kind, std::uint8_t level);
@@ -151,6 +159,9 @@ class MarkdownBuilder final
     std::vector<std::size_t> open_images_;
     // 開いている要素のリンクの装飾の番号と宛先（開いた順）。
     std::vector<std::pair<std::size_t, std::string>> link_targets_;
+    // 開いている見出しの名札に数える文字と、閉じた見出しの名札の元の列（ADR 0151 の段 L3）。
+    std::string heading_text_;
+    std::vector<HeadingSource> heading_sources_;
     std::optional<std::size_t> last_end_;
     // 今の表の次の行の番号。
     std::uint32_t table_row_ = 0;
