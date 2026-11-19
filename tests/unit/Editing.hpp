@@ -23,6 +23,7 @@
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
+#include "ScriptedReveal.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedShellRegistration.hpp"
@@ -211,6 +212,10 @@ class Editing final
     {
         return previews_;
     }
+    [[nodiscard]] ScriptedReveal &reveal() noexcept
+    {
+        return reveal_;
+    }
 
   private:
     [[nodiscard]] nenenib::application::EditorPorts
@@ -234,7 +239,8 @@ class Editing final
             themes_,       session_,         history_,     folders_,        bookmarks_,
             text_layouts_, autosave_,        fonts_,       bell_,           markdown_,
             reads_,        language_server_, wall_clock_,  printer_,        shell_registration_,
-            images_,       start_lists_,     ui_language_, project_search_, previews_};
+            images_,       start_lists_,     ui_language_, project_search_, previews_,
+            reveal_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -262,6 +268,7 @@ class Editing final
     ScriptedUiLanguage ui_language_;
     ScriptedProjectSearch project_search_;
     ScriptedPreview previews_;
+    ScriptedReveal reveal_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

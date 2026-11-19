@@ -598,7 +598,7 @@ void EditorController::cancel_command_input()
 bool EditorController::window_request_pending() const noexcept
 {
     return state_.close_request().has_value() || state_.operation_request().has_value() ||
-           state_.closing();
+           state_.tab_sweep_request().has_value() || state_.closing();
 }
 
 // engine が開いた Vim の入力行（`:` `/` `?`・#1549・#1569）。確定（vim_command_operated と検索の

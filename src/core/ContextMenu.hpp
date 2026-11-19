@@ -1,13 +1,16 @@
 #pragma once
 
 #include "ContextMenuItem.hpp"
+#include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
 #include "ContextMenuMode.hpp"
 #include "ContextMenuRequest.hpp"
 #include "ContextMenuShape.hpp"
 #include "ContextMenuSituation.hpp"
+#include "EditMode.hpp"
 #include "EditorOperation.hpp"
 #include "LayoutRect.hpp"
+#include "TabMenuSituation.hpp"
 
 #include <array>
 #include <cstddef>
@@ -24,6 +27,15 @@ namespace nenenib::core
 [[nodiscard]] std::array<ContextMenuItem, context_menu_size>
 context_menu_items(const ContextMenuSituation &situation) noexcept;
 
+// タブの右クリックのメニューの項目の列（ADR 0078 の追補 #1790）。操作の表の列 tab_menu の群と順に
+// 並べ、群の変わり目の行に区切り線の印を立てる。使えるかは列の need と situation で決める。
+[[nodiscard]] std::array<ContextMenuItem, tab_menu_size>
+tab_menu_items(const TabMenuSituation &situation) noexcept;
+
+// タブのメニューの行の右端の鍵の表示。そのモードで鍵のある操作（保存・名前を付けて保存・閉じる）
+// だけ shown_chord を key_chord_label で、ほかは空。
+[[nodiscard]] std::string tab_menu_key(EditorOperation operation, EditMode mode);
+
 // 行の右端の鍵の表示。通常モードと全面プレビューは通常モードの shown_chord を key_chord_label で、
 // Vim の INSERT は同じ鍵のうち INSERT で効くもの（クリップボードと全選択）、Vim の NORMAL と VISUAL
 // は 表の Vim の鍵の列。無ければ空。
@@ -39,9 +51,9 @@ context_menu_items(const ContextMenuSituation &situation) noexcept;
 // 削除・すべて選択）だけ。検索と置換は今までの一覧の道（`/` と `:%s/` の入力行）のまま。
 [[nodiscard]] bool listed_vim_routed(EditorOperation operation, ContextMenuMode mode) noexcept;
 
-// 面と行と区切り線の矩形。幅は 左右の余白 ＋ 名前 ＋ 空き ＋ 鍵（最小 200 DIP）。開く点から右下へ
-// 開き、bounds の右端・下端に収まらなければ点から左・上へ開く。それでも出る分は bounds の左上に
-// 寄せる。
+// 面と行と区切り線の矩形（行と区切り線の並びは request.kind のメニュー）。幅は 左右の余白 ＋ 名前
+// ＋ 空き ＋ 鍵（最小 200 DIP）。開く点から右下へ 開き、bounds
+// の右端・下端に収まらなければ点から左・上へ開く。それでも出る分は bounds の左上に 寄せる。
 [[nodiscard]] ContextMenuLayout context_menu_layout(const ContextMenuRequest &request) noexcept;
 
 // 点が載っている項目の番号。区切り線と上下の空きと面の外は値なし。

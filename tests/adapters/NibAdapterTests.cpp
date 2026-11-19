@@ -19,6 +19,9 @@
 #include "MapRow.hpp"
 #include "Milestone.hpp"
 #include "PlacementCleanup.hpp"
+#include "RevealCall.hpp"
+#include "RevealFailure.hpp"
+#include "RevealShelf.hpp"
 #include "SettingsCodec.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationStatus.hpp"
@@ -2543,6 +2546,38 @@ nenenib::core::ShellRegistrationPlan shell_test_plan(const std::string &exe_path
         .value_or(nenenib::core::ShellRegistrationPlan{});
 }
 
+// エクスプローラーで場所を開く呼び出しの前後（ADR 0078 の追補 #1790）。本物のエクスプローラーは
+// 開かない: シェルに渡す経路・失敗の読み替え・棚の順と合図だけを測る。
+void verify_reveal_calls()
+{
+    using nenenib::application::RevealFailure;
+    const auto target = nenenib::adapters::win32::reveal_target("C:\\work\\a b.txt");
+    expect(target.has_value() && target.value() == L"C:\\work\\a b.txt",
+           "the reveal target is the UTF-16 path without a long path prefix");
+    expect(nenenib::adapters::win32::reveal_target("").error() == RevealFailure::failed &&
+               nenenib::adapters::win32::reveal_target("\xFF").error() == RevealFailure::failed,
+           "an empty path or a path that is not UTF-8 fails before the shell is called");
+    expect(nenenib::adapters::win32::reveal_failure_of(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) ==
+                   RevealFailure::not_found &&
+               nenenib::adapters::win32::reveal_failure_of(
+                   HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)) == RevealFailure::not_found &&
+               nenenib::adapters::win32::reveal_failure_of(E_FAIL) == RevealFailure::failed &&
+               nenenib::adapters::win32::reveal_failure_of(E_ACCESSDENIED) == RevealFailure::failed,
+           "a missing file reads as not found and every other shell failure as failed");
+    nenenib::adapters::win32::RevealShelf shelf;
+    std::size_t signals = 0;
+    shelf.bind([&signals] { ++signals; });
+    shelf.deliver({});
+    shelf.deliver(std::unexpected(RevealFailure::not_found));
+    const auto taken = shelf.take();
+    expect(signals == 1 && taken.size() == 2 && taken.at(0).has_value() &&
+               taken.at(1).error() == RevealFailure::not_found && shelf.take().empty(),
+           "the shelf keeps the results in order and signals once when it fills");
+    shelf.close();
+    shelf.deliver({});
+    expect(signals == 1 && shelf.take().empty(), "a closed shelf keeps nothing and stays quiet");
+}
+
 // 書く → 読む → 別の exe の計画 → 消す → 読む → 根ごと片付けて残骸 0。
 void verify_shell_registration_round_trip(Win32ShellRegistration &registration,
                                           const std::wstring &root)
@@ -2626,6 +2661,8 @@ void verify_shell_registration()
     {
         RegDeleteKeyW(HKEY_CURRENT_USER, shell_test_parent);
     }
+    // エクスプローラーで場所を開く呼び出しの前後も、同じシェルの群で測る（#1790）。
+    verify_reveal_calls();
 }
 
 // WSL のディストリの一覧（ADR 0162 の追補 #1450）。本当の `Lxss` は読まず、試験の根の下に

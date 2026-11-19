@@ -31,7 +31,7 @@ namespace nenenib::ui::win32
 class ContextMenuPainter final
 {
   public:
-    // 保持の上限。7 行の名前と鍵。
+    // 保持の上限。本文の 7 行・タブの 8 行の名前と鍵。
     static constexpr std::size_t retained = 16;
 
     ContextMenuPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,

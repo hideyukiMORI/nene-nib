@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 50> expected_2{
+constexpr std::array<OperationChoiceExpected, 55> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -145,8 +145,23 @@ constexpr std::array<OperationChoiceExpected, 50> expected_2{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::open_settings, 49U, "設定", 2U,
       "設定の面を開きます（閉じると保存します）", 20U, "Ctrl+,", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 47> expected_3{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::reveal_in_explorer, 50U, "エクスプローラーで場所を開く", 14U,
+      "このタブのファイルを選んだ状態でフォルダを開きます", 25U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::copy_path, 51U, "パスをコピー", 6U,
+      "このタブのファイルの完全なパスをクリップボードに写します", 28U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::copy_file_name, 52U, "ファイル名をコピー", 9U,
+      "このタブのファイル名をクリップボードに写します", 23U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_other_tabs, 53U, "ほかのタブを閉じる", 9U,
+      "このタブを残して、ほかのタブを閉じます", 19U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
+      "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 52> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -268,8 +283,23 @@ constexpr std::array<OperationChoiceExpected, 47> expected_3{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::open_settings, 49U, "設定", 2U,
       "設定の面を開きます（閉じると保存します）", 20U, "Ctrl+,", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 50> expected_4{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::reveal_in_explorer, 50U, "エクスプローラーで場所を開く", 14U,
+      "このタブのファイルを選んだ状態でフォルダを開きます", 25U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::copy_path, 51U, "パスをコピー", 6U,
+      "このタブのファイルの完全なパスをクリップボードに写します", 28U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::copy_file_name, 52U, "ファイル名をコピー", 9U,
+      "このタブのファイル名をクリップボードに写します", 23U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_other_tabs, 53U, "ほかのタブを閉じる", 9U,
+      "このタブを残して、ほかのタブを閉じます", 19U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
+      "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 55> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -301,6 +331,21 @@ constexpr std::array<OperationChoiceExpected, 50> expected_4{
      {core::EditorOperation::show_information, 48U, "情報を表示", 5U,
       "キャレットの名前の情報を札で表示します（言語サーバー）", 27U, "", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::reveal_in_explorer, 50U, "エクスプローラーで場所を開く", 14U,
+      "このタブのファイルを選んだ状態でフォルダを開きます", 25U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::copy_path, 51U, "パスをコピー", 6U,
+      "このタブのファイルの完全なパスをクリップボードに写します", 28U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::copy_file_name, 52U, "ファイル名をコピー", 9U,
+      "このタブのファイル名をクリップボードに写します", 23U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_other_tabs, 53U, "ほかのタブを閉じる", 9U,
+      "このタブを残して、ほかのタブを閉じます", 19U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
+      "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
@@ -436,11 +481,17 @@ constexpr std::array<OperationChoiceExpected, 13> expected_5{
      {core::EditorOperation::toggle_mode, 15U, "通常 / Vim を切り替える", 15U,
       "編集のしかたを通常と Vim で切り替えます", 22U, "Ctrl+Shift+Space", "",
       core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 5> expected_6{
+constexpr std::array<OperationChoiceExpected, 7> expected_6{
     {{core::EditorOperation::close_tab, 4U, "タブを閉じる", 6U, "いまのタブを閉じます", 10U,
       "Ctrl+W", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
+      "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
      {core::EditorOperation::new_tab, 3U, "新しいタブ", 5U, "空の文書を新しいタブで開きます", 15U,
       "Ctrl+T", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::close_other_tabs, 53U, "ほかのタブを閉じる", 9U,
+      "このタブを残して、ほかのタブを閉じます", 19U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
      {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
       14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_files, 7U, "ファイルとタブの一覧", 10U,
@@ -469,20 +520,20 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 1810432U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 2039296U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 1703424U, expected_3,
+     {"", core::EditMode::vim, 256U, 1932288U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 1810432U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 2039296U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,
       "operation-choice-v1\nkey-vim\nvim\ncTrL+"
       "s\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {"タブ", core::EditMode::ordinary, 1024U, 569344U, expected_6,
+     {"タブ", core::EditMode::ordinary, 1024U, 891904U, expected_6,
       "operation-choice-v1\nname-"
       "ordinary\nordinary\nタブ\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f6882"
       "0d98\n"},
