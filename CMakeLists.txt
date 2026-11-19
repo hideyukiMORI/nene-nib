@@ -548,7 +548,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
     tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp
     tests/ui/CompletionPaintTests.cpp
-    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp)
+    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp tests/ui/DeliveryStepsTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -629,7 +629,7 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/PieceListProbe.cpp
     tests/performance/SubstituteProbe.cpp tests/performance/ExLinesProbe.cpp tests/performance/PatternCostProbe.cpp
     tests/performance/PatternProgramProbe.cpp
-    tests/performance/SearchObjectProbe.cpp)
+    tests/performance/SearchObjectProbe.cpp tests/performance/WordTableProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

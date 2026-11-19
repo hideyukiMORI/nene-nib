@@ -4,6 +4,9 @@
 #include "BodyLayout.hpp"
 #include "CancelComposition.hpp"
 #include "CommitText.hpp"
+#include "DeliveryFacts.hpp"
+#include "DeliveryStep.hpp"
+#include "DeliverySteps.hpp"
 #include "EditorIntent.hpp"
 #include "EditorSettings.hpp"
 #include "ExplorerLayout.hpp"
@@ -234,23 +237,6 @@ application::EditorDelivery EditorWindow::follow_look(application::EditorDeliver
     return controller_.apply(body_view());
 }
 
-// 入力行が閉じて変換が消えたら、IME を開け閉めする前に IME の側の変換も取り消す（ADR 0061
-// の決定 3）。確定と取消は IME が自分で終えたので触らない。取り消しで IME が送り返す通知は
-// 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。deliver の 1 か所が
-// 呼ぶ（関数の長さの上限のため deliver から出した・#1790）。
-void EditorWindow::follow_command_composition(const application::EditorIntent &intent,
-                                              const application::EditorDelivery &delivery)
-{
-    const bool command_composed = command_composing_;
-    command_composing_ = delivery.command_composition.has_value();
-    if (command_composed && !command_composing_ &&
-        !std::holds_alternative<application::CommitText>(intent) &&
-        !std::holds_alternative<application::CancelComposition>(intent))
-    {
-        cancel_ime_composition();
-    }
-}
-
 void EditorWindow::deliver(const application::EditorIntent &intent)
 {
     const auto previous_layout = controller_.split().layout;
@@ -259,11 +245,21 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         return;
     }
-    follow_command_composition(intent, delivery);
-    // 設定の面が閉じたら、探す欄の変換を IME の側に残さない（#1836 のレビュー M1）。
-    follow_settings_closing();
-    // 閉じたいタブは意図を送った結果の delivery にだけ載る（ADR 0057 の決定 6）。下で delivery を
-    // 作り直す前に読んでおく。
+    // 後を追う段（変換の取り消し 2 つ → タイマー → 外観 → 枠 → IME の開け閉め）の順は
+    // delivery_order、要るかは delivery_step_due が決める（#1854）。
+    // 入力行の変換の取り消しで IME が送り返す通知は
+    // 変換の無い delivery に CancelComposition を送るだけ（再入は 1 段で止まる）。
+    const DeliveryFacts facts{
+        .command_composed =
+            std::exchange(command_composing_, delivery.command_composition.has_value()),
+        .command_composing = command_composing_,
+        .composition_settled = std::holds_alternative<application::CommitText>(intent) ||
+                               std::holds_alternative<application::CancelComposition>(intent),
+        .settings_was_open = std::exchange(settings_shown_, controller_.settings_open()),
+        .settings_open = settings_shown_,
+        .font_size_adjusted = std::holds_alternative<application::AdjustFontSize>(intent)};
+    // 閉じたいタブは意図を送った結果の delivery にだけ載る（ADR 0057 の決定 6）。段の follow_look
+    // が delivery を作り直す前に読んでおく。
     const auto close_request = delivery.close_request;
     const bool closing = delivery.closing;
     // 一覧で選んだ操作も同じく意図を送った結果の delivery にだけ載る（ADR 0078 の決定 8）。
@@ -272,17 +268,8 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     const auto tab_sweep = delivery.tab_sweep;
     // 格子表示の問いも同じ（ADR 0140 の決定 2）。
     const bool display_asked = delivery.display_question;
-    follow_key_map_timer(window_, delivery.map_timer);
-    follow_tab_tip_timer(window_, delivery.tab_tip_timer, hover_setting_);
-    if (std::holds_alternative<application::AdjustFontSize>(intent))
-    {
-        announce_settings(delivery);
-    }
-    delivery = follow_look(std::move(delivery));
-    follow_split(previous_layout, delivery);
-    follow_explorer(delivery);
-    follow_minimap(delivery);
-    follow_ime(delivery);
+    run_delivery_steps(facts, [this, previous_layout, &delivery](DeliveryStep step)
+                       { delivery_step(step, previous_layout, delivery); });
     mode_ = delivery.mode;
     vim_mode_ = delivery.vim_mode;
     // 描くのは WM_PAINT。まとめて来た入力はここで無効化だけ積まれ、1 フレームに畳まれる（決定 6）。
@@ -304,6 +291,46 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
     {
         start_pressed_ = std::nullopt;
     }
+}
+
+// 後を追う 1 段を写す（順は delivery_order・要るかは delivery_step_due・#1854）。
+void EditorWindow::delivery_step(DeliveryStep step, core::SplitLayout previous_layout,
+                                 application::EditorDelivery &delivery)
+{
+    switch (step)
+    {
+    case DeliveryStep::cancel_command_composition:
+        cancel_ime_composition();
+        return;
+    case DeliveryStep::cancel_settings_composition:
+        follow_settings_closing();
+        return;
+    case DeliveryStep::follow_key_map_timer:
+        follow_key_map_timer(window_, delivery.map_timer);
+        return;
+    case DeliveryStep::follow_tab_tip_timer:
+        follow_tab_tip_timer(window_, delivery.tab_tip_timer, hover_setting_);
+        return;
+    case DeliveryStep::announce_font_size:
+        announce_settings(delivery);
+        return;
+    case DeliveryStep::follow_look:
+        delivery = follow_look(std::move(delivery));
+        return;
+    case DeliveryStep::follow_split:
+        follow_split(previous_layout, delivery);
+        return;
+    case DeliveryStep::follow_explorer:
+        follow_explorer(delivery);
+        return;
+    case DeliveryStep::follow_minimap:
+        follow_minimap(delivery);
+        return;
+    case DeliveryStep::follow_ime:
+        follow_ime(delivery);
+        return;
+    }
+    std::unreachable();
 }
 
 // プレビューの合図は other の枠にプレビューがある間だけ打つ（ADR 0155 の決定 8）。開いているかは
