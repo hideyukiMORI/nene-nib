@@ -287,6 +287,11 @@ constexpr auto superscript_digits =
 }
 } // namespace
 
+bool link_deceptive_code_point(char32_t value) noexcept
+{
+    return deceptive_code_point(value);
+}
+
 LinkDestination link_destination(std::string_view target, const std::optional<FilePath> &document)
 {
     if (target.empty() || target.front() == ' ' || target.back() == ' ' ||

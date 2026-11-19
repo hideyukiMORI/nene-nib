@@ -8,7 +8,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <d2d1.h>
 #include <dwrite.h>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -93,6 +95,14 @@ preview_unit_ranges(std::string_view shown, std::span<const PreviewByteRange> ra
 // layout の UTF-16 の位置 → 要素の文字の中のバイト位置（preview_units の逆・hit test が読む）。
 // code point の途中（代理対の後ろ半分）に落ちた位置はその code point の頭へ寄せ、文字の外は末尾。
 [[nodiscard]] std::size_t preview_byte_of_units(std::string_view shown, std::uint32_t units);
+
+// layout の UTF-16 の範囲 [first, first + length) を囲む矩形（原点 origin
+// から・折り返した範囲は全部 の行を囲む）。測れなければ nullopt（リンクの札の置き場・#1869 の段
+// L2）。
+[[nodiscard]] std::optional<D2D1_RECT_F> preview_text_range_box(IDWriteTextLayout &layout,
+                                                                std::uint32_t first,
+                                                                std::uint32_t length,
+                                                                D2D1_POINT_2F origin);
 // 箇条書きの記号（深さ 1 は •・2 は ◦・3 以上は ▪）。番号はそのまま。
 [[nodiscard]] std::string_view preview_marker(const core::PreviewBlock &block) noexcept;
 // 記号を描く layout の要素（本文の字体の段落）と、その layout の幅（折り返さないだけ広い）。

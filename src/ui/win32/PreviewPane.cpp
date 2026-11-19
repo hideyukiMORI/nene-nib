@@ -3,6 +3,7 @@
 #include "MarkdownImage.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
+#include "PreviewHitMode.hpp"
 #include "PreviewInlineImages.hpp"
 #include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
@@ -11,6 +12,8 @@
 #include "PreviewTableCell.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <optional>
 #include <utility>
@@ -19,6 +22,23 @@ namespace nenenib::ui::win32
 {
 namespace
 {
+// layout の点 point の UTF-16 の位置。character は文字の上（isInside）のときだけその文字の
+// 始まり、edge は近い端（後ろ半分なら文字の後ろ）。測れなければ nullopt。
+[[nodiscard]] std::optional<std::uint32_t> hit_units(IDWriteTextLayout &layout, D2D1_POINT_2F point,
+                                                     PreviewHitMode mode)
+{
+    BOOL trailing = FALSE;
+    BOOL inside = FALSE;
+    DWRITE_HIT_TEST_METRICS metrics{};
+    if (FAILED(layout.HitTestPoint(point.x, point.y, &trailing, &inside, &metrics)) ||
+        (mode == PreviewHitMode::character && inside == FALSE))
+    {
+        return std::nullopt;
+    }
+    return metrics.textPosition +
+           (mode == PreviewHitMode::edge && trailing != FALSE ? metrics.length : 0U);
+}
+
 [[nodiscard]] bool same_viewport(const PreviewViewport &left, const PreviewViewport &right) noexcept
 {
     return left.first == right.first && left.width == right.width && left.height == right.height;
@@ -281,23 +301,105 @@ std::optional<core::PreviewPoint> PreviewPane::point_at(std::int32_t x, std::int
     {
         return core::PreviewPoint{index, core::preview_shown_text(block).size()};
     }
-    return hit_block(tops, area, index, D2D1::Point2F(static_cast<float>(x - area.left), local));
+    return hit_block(tops, index, D2D1::Point2F(static_cast<float>(x - area.left), local),
+                     PreviewHitMode::edge);
 }
 
-std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops &tops,
-                                                         const core::LayoutRect &area,
-                                                         std::size_t index, D2D1_POINT_2F point)
+std::optional<core::PreviewPoint> PreviewPane::character_at(std::int32_t x, std::int32_t y)
 {
-    if (!measured_style_.has_value())
+    if (!area_.has_value() || !tops_.has_value() || measured_ == nullptr ||
+        !core::contains(area_.value(), x, y))
+    {
+        return std::nullopt;
+    }
+    const auto &area = area_.value();
+    const auto &tops = tops_.value();
+    const auto local = static_cast<float>(y - area.top);
+    for (auto index = tops.first(); index < tops.size(); ++index)
+    {
+        if (tops.top(index) <= local && local < tops.bottom(index))
+        {
+            return measured_->blocks.at(index).kind == core::PreviewBlockKind::rule
+                       ? std::nullopt
+                       : hit_block(tops, index,
+                                   D2D1::Point2F(static_cast<float>(x - area.left), local),
+                                   PreviewHitMode::character);
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<core::LayoutRect> PreviewPane::range_box(std::size_t block, std::size_t begin,
+                                                       std::size_t end)
+{
+    if (!area_.has_value() || !tops_.has_value() || measured_ == nullptr ||
+        !measured_style_.has_value() || block < tops_.value().first() ||
+        block >= tops_.value().size() || block >= measured_->blocks.size())
     {
         return std::nullopt;
     }
     const auto &style = measured_style_.value();
+    const auto local = measured_->blocks.at(block).kind == core::PreviewBlockKind::table_row
+                           ? cell_range_box(block, begin, end, style)
+                           : text_range_of(block, begin, end, style);
+    if (!local.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto left = static_cast<float>(area_.value().left) + tops_.value().indent(block);
+    const auto top = static_cast<float>(area_.value().top) + tops_.value().top(block);
+    return core::LayoutRect{static_cast<std::int32_t>(std::floor(left + local.value().left)),
+                            static_cast<std::int32_t>(std::floor(top + local.value().top)),
+                            static_cast<std::int32_t>(std::ceil(left + local.value().right)),
+                            static_cast<std::int32_t>(std::ceil(top + local.value().bottom))};
+}
+
+std::optional<D2D1_RECT_F> PreviewPane::text_range_of(std::size_t index, std::size_t begin,
+                                                      std::size_t end,
+                                                      const PreviewTextStyle &style)
+{
+    if (!area_.has_value() || !tops_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &element = measured_->blocks.at(index);
+    // 描く所（hit_block と同じ）の幅と原点（上の余白は切れの形に依る・#1863）。
+    const auto inset = preview_paneled(element.kind) ? preview_code_padding(style.dpi) : 0.0F;
+    const auto width =
+        preview_text_width(element, static_cast<float>(core::width_of(area_.value())),
+                           tops_.value().indent(index), style.dpi);
+    const auto layout =
+        layouts_.get(element, width, style,
+                     preview_inline_images(*measured_, measured_images_.lock().get(), index,
+                                           preview_dips_of(width, style.dpi)));
+    if (!layout)
+    {
+        return std::nullopt;
+    }
+    const auto shown = core::preview_shown_text(element);
+    const auto first = preview_units(shown, std::min(begin, shown.size()));
+    const auto last = preview_units(shown, std::min(end, shown.size()));
+    return preview_text_range_box(
+        *layout.value().Get(), first, last - first,
+        D2D1::Point2F(inset, preview_panel_top_inset(element, style.dpi)));
+}
+
+std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops &tops,
+                                                         std::size_t index, D2D1_POINT_2F point,
+                                                         PreviewHitMode mode)
+{
+    if (!measured_style_.has_value() || !area_.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &area = area_.value();
+    const auto &style = measured_style_.value();
     const auto &block = measured_->blocks.at(index);
     if (block.kind == core::PreviewBlockKind::table_row)
     {
-        return hit_cell(
-            index, D2D1::Point2F(point.x - tops.indent(index), point.y - tops.top(index)), style);
+        return hit_cell(index,
+                        D2D1::Point2F(point.x - tops.indent(index), point.y - tops.top(index)),
+                        style, mode);
     }
     // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ右へ、
     // 上の余白（上の余白を持たない切れは 0・#1863）だけ下げる。
@@ -314,21 +416,21 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     {
         return std::nullopt;
     }
-    BOOL trailing = FALSE;
-    BOOL inside = FALSE;
-    DWRITE_HIT_TEST_METRICS metrics{};
-    if (FAILED(layout.value()->HitTestPoint(point.x - tops.indent(index) - inset,
-                                            point.y - tops.top(index) - top_inset, &trailing,
-                                            &inside, &metrics)))
+    const auto units = hit_units(
+        *layout.value().Get(),
+        D2D1::Point2F(point.x - tops.indent(index) - inset, point.y - tops.top(index) - top_inset),
+        mode);
+    if (!units.has_value())
     {
         return std::nullopt;
     }
-    const auto units = metrics.textPosition + (trailing != FALSE ? metrics.length : 0U);
-    return core::PreviewPoint{index, preview_byte_of_units(core::preview_shown_text(block), units)};
+    return core::PreviewPoint{
+        index, preview_byte_of_units(core::preview_shown_text(block), units.value())};
 }
 
 std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_POINT_2F point,
-                                                        const PreviewTextStyle &style)
+                                                        const PreviewTextStyle &style,
+                                                        PreviewHitMode mode)
 {
     const auto &block = measured_->blocks.at(index);
     if (!block.table.has_value())
@@ -361,18 +463,50 @@ std::optional<core::PreviewPoint> PreviewPane::hit_cell(std::size_t index, D2D1_
     const auto left =
         preview_table_cell_left(widths, column, style.dpi) +
         preview_table_aligned(widths.at(column), metrics.width, table.aligns.at(column));
-    BOOL trailing = FALSE;
-    BOOL inside = FALSE;
-    DWRITE_HIT_TEST_METRICS hit{};
-    if (FAILED(layout.value()->HitTestPoint(point.x - left,
-                                            point.y - preview_table_padding_y(style.dpi), &trailing,
-                                            &inside, &hit)))
+    const auto units = hit_units(
+        *layout.value().Get(),
+        D2D1::Point2F(point.x - left, point.y - preview_table_padding_y(style.dpi)), mode);
+    if (!units.has_value())
     {
         return std::nullopt;
     }
-    const auto units = hit.textPosition + (trailing != FALSE ? hit.length : 0U);
     const auto first = core::preview_table_cell_range(block, column).first;
-    return core::PreviewPoint{index, first + preview_byte_of_units(cell.text, units)};
+    return core::PreviewPoint{index, first + preview_byte_of_units(cell.text, units.value())};
+}
+
+std::optional<D2D1_RECT_F> PreviewPane::cell_range_box(std::size_t index, std::size_t begin,
+                                                       std::size_t end,
+                                                       const PreviewTextStyle &style)
+{
+    const auto &block = measured_->blocks.at(index);
+    const auto columns = layouts_.table_columns(*measured_, index, style);
+    if (!block.table.has_value() || !columns || block.table.value().cells.empty())
+    {
+        return std::nullopt;
+    }
+    const auto &table = block.table.value();
+    const auto &widths = *columns.value();
+    const auto count = std::min(table.cells.size(), widths.size());
+    std::size_t column = 0;
+    while (column + 1U < count && core::preview_table_cell_range(block, column + 1U).first <= begin)
+    {
+        ++column;
+    }
+    const auto [first, second] = core::preview_table_cell_range(block, column);
+    const auto cell = core::preview_table_cell(block, column);
+    const auto layout = layouts_.get(cell, preview_marker_layout_width(), style);
+    DWRITE_TEXT_METRICS metrics{};
+    if (!layout || FAILED(layout.value()->GetMetrics(&metrics)))
+    {
+        return std::nullopt;
+    }
+    const auto left =
+        preview_table_cell_left(widths, column, style.dpi) +
+        preview_table_aligned(widths.at(column), metrics.width, table.aligns.at(column));
+    const auto from = preview_units(cell.text, std::clamp(begin, first, second) - first);
+    const auto to = preview_units(cell.text, std::clamp(end, first, second) - first);
+    return preview_text_range_box(*layout.value().Get(), from, to - from,
+                                  D2D1::Point2F(left, preview_table_padding_y(style.dpi)));
 }
 
 std::size_t PreviewPane::created() const noexcept

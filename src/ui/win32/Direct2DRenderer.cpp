@@ -495,6 +495,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     completion_layouts_.clear();
     settings_layouts_.clear();
     settings_formats_.reset();
+    link_card_formats_.reset();
+    link_card_paint_.reset();
     Microsoft::WRL::ComPtr<IUnknown> unknown;
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory7),
                                    unknown.GetAddressOf())) ||
@@ -2530,6 +2532,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // 札は面の上・右クリックのメニューの下（メニューが開いている間は出ない・#1789）。
     draw_tab_tip(frame, title);
     draw_hover_tip(frame, minimap.body);
+    draw_link_card(frame, minimap.body);
     draw_context_menu(frame, width, height);
     gutter_layouts_.end();
     D2D1_TAG failed_first = 0;
@@ -2713,5 +2716,11 @@ std::optional<std::size_t> Direct2DRenderer::preview_task_at(std::int32_t x, std
 std::optional<core::PreviewPoint> Direct2DRenderer::preview_point_at(std::int32_t x, std::int32_t y)
 {
     return preview_.point_at(x, y);
+}
+
+std::optional<core::PreviewPoint> Direct2DRenderer::preview_character_at(std::int32_t x,
+                                                                         std::int32_t y)
+{
+    return preview_.character_at(x, y);
 }
 } // namespace nenenib::ui::win32

@@ -1055,6 +1055,18 @@ EditorState EditorState::with_language_answers(LanguageAnswers answers) const
     return next;
 }
 
+const std::optional<LinkCardView> &EditorState::link_card() const noexcept
+{
+    return link_card_;
+}
+
+EditorState EditorState::with_link_card(std::optional<LinkCardView> card) const
+{
+    EditorState next(*this);
+    next.link_card_ = std::move(card);
+    return next;
+}
+
 // 置く（ADR 0056 の決定 1・4）。出ていく文書の選択はキャレットへ畳み（VISUAL を持ち越さない）、
 // undo の単位を閉じる。題名は置くこの 1 回だけ作り、frame は並べるだけにする。
 std::shared_ptr<const DocumentState> EditorState::parked_active() const
