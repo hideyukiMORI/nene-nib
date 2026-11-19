@@ -7,6 +7,7 @@
 #include "CommandEdit.hpp"
 #include "Composition.hpp"
 #include "CoverWindow.hpp"
+#include "DeliveryStep.hpp"
 #include "Direct2DRenderer.hpp"
 #include "EditMode.hpp"
 #include "EditorController.hpp"
@@ -215,7 +216,7 @@ class EditorWindow final
     void send_settings(const application::EditorIntent &intent);
     void send_settings_all(const std::vector<application::EditorIntent> &intents);
     [[nodiscard]] const std::optional<core::SettingsLayout> &settings_layout_drawn() const;
-    // 面が閉じた所で IME の変換を 1 回取り消す（deliver の 1 か所が呼ぶ・レビュー M1）。
+    // 面が閉じた所で IME の変換を 1 回取り消す（段 cancel_settings_composition・レビュー M1）。
     void follow_settings_closing();
     // 面の外を押して閉じた直後の 2 回目の押しか（読んだら消す）。
     [[nodiscard]] bool take_settings_dismissal() noexcept;
@@ -270,6 +271,9 @@ class EditorWindow final
     void send(const application::EditorIntent &intent);
     // send の本体（意図を写して frame を窓へ映す）。深さは数えない。
     void deliver(const application::EditorIntent &intent);
+    // 意図を送った後の 1 段を写す（順は delivery_order・要るかは delivery_step_due・#1854）。
+    void delivery_step(DeliveryStep step, core::SplitLayout previous_layout,
+                       application::EditorDelivery &delivery);
     // 合図のメッセージを受けた。send の途中なら覚えるだけ、そうでなければ送る。
     void receive_work();
     // WM_TIMER を窓のタイマーへ写す。自動退避の合図は AutosaveTick を 1 回送る（ADR 0137
