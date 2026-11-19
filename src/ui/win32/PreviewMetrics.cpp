@@ -200,11 +200,11 @@ float preview_table_rule(bool header, std::uint32_t dpi) noexcept
     return std::max(preview_pixels(header ? table_header_rule_dips : table_rule_dips, dpi), 1.0F);
 }
 
-float preview_table_cell_left(std::span<const float> columns, std::size_t column,
+float preview_table_cell_left(std::span<const float> columns, std::size_t column, float shift,
                               std::uint32_t dpi) noexcept
 {
     const auto padding = preview_table_padding_x(dpi);
-    float left = padding;
+    float left = padding - shift;
     for (std::size_t at = 0; at < column && at < columns.size(); ++at)
     {
         left += columns[at] + 2.0F * padding;
@@ -214,7 +214,8 @@ float preview_table_cell_left(std::span<const float> columns, std::size_t column
 
 float preview_table_width(std::span<const float> columns, std::uint32_t dpi) noexcept
 {
-    return preview_table_cell_left(columns, columns.size(), dpi) - preview_table_padding_x(dpi);
+    return preview_table_cell_left(columns, columns.size(), 0.0F, dpi) -
+           preview_table_padding_x(dpi);
 }
 
 float preview_table_aligned(float column_width, float cell_width,

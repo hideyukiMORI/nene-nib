@@ -268,6 +268,21 @@ class EditorWindow final
     // プレビューの枠の押し（チェックボックスが無ければリンクの文字を覚える・全面は選択も始める・
     // #1869 の段 L2）。
     void press_side_preview(LPARAM data);
+    // プレビューの表の横の送り（#1883・EditorWindowTableScroll.cpp）。棒の上の押しはつかむか 1 枠
+    // 送り（押したら真）、つかんだ間の動きと離しと捕まえの喪失はその表へ、Shift+ホイールと横の
+    // ホイールは点の下の広い表へ（送ったら真）、動きは載せた棒を知らせる。送りの量と端は
+    // application が決める。
+    [[nodiscard]] bool press_table_bar(LPARAM data);
+    [[nodiscard]] bool drag_table_bar(LPARAM data);
+    [[nodiscard]] bool release_table_bar();
+    [[nodiscard]] bool wheel_table(std::int32_t delta, LPARAM data);
+    void hover_table_bar(LPARAM data);
+    void hover_table_bar_of(std::optional<std::size_t> table);
+    // クライアントの点がプレビューの上に重なる面（設定の引き出し・Ctrl+P
+    // の面・補完の面・右クリックの メニュー・hover の札・リンクの札）の上か（#1884 のレビュー
+    // R1・L3）。面の下の表はホイールと 載せたマウスを受けない。判定はそれぞれの面の当たりの 1
+    // 本（縦のホイールと押しと同じ）を読む。
+    [[nodiscard]] bool faces_cover(std::int32_t x, std::int32_t y) const;
     void press_full_preview(LPARAM data);
     void release_preview_task(LPARAM data);
     // 全面プレビューの描いた文字の上の押しとドラッグ（ADR 0155 の改訂 18）。押した点の文字の位置を
@@ -557,6 +572,10 @@ class EditorWindow final
     core::RgbColor shown_border_{};
     std::int32_t zoom_wheel_remainder_ = 0;
     std::int32_t tab_wheel_remainder_ = 0;
+    // 表の横の送りのホイールの刻みに満たない分（DIP に変える前の WHEEL_DELTA の単位・#1883）と、
+    // 棒をつかんだ表の通し番号（捕まえを持つ間）。
+    std::int32_t table_wheel_remainder_ = 0;
+    std::optional<std::size_t> table_dragging_;
     // 本文のホイールの余り（「delta × 1 刻みの行数」の単位・WheelTurn）と、OS の
     // SPI_GETWHEELSCROLLLINES の値（起動と WM_SETTINGCHANGE で読む・#499）。
     std::int32_t body_wheel_remainder_ = 0;

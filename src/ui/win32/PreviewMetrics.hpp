@@ -63,9 +63,11 @@ namespace nenenib::ui::win32
 [[nodiscard]] float preview_table_padding_y(std::uint32_t dpi) noexcept;
 [[nodiscard]] float preview_table_rule(bool header, std::uint32_t dpi) noexcept;
 // 行の原点（字下げの位置）から column 番目の升の文字の箱の左端まで（前の列の幅と左右の余白の和
-// ＋ 自分の左の余白）。columns は列ごとの中身の幅（物理画素）。
+// ＋ 自分の左の余白 − 横の送り shift）。columns は列ごとの中身の幅（物理画素）。shift は枠より広い
+// 表の横の送り（preview_table_shift・#1883）で、描く・罫・升の当たり・リンクの札の錨・選択が
+// この 1 本を通して同じ送りを読む。
 [[nodiscard]] float preview_table_cell_left(std::span<const float> columns, std::size_t column,
-                                            std::uint32_t dpi) noexcept;
+                                            float shift, std::uint32_t dpi) noexcept;
 // 表の幅（列の幅と左右の余白の和）。
 [[nodiscard]] float preview_table_width(std::span<const float> columns, std::uint32_t dpi) noexcept;
 // 列の幅 column_width の中で、幅 cell_width の升の文字を揃えるために箱の左端から足す量。

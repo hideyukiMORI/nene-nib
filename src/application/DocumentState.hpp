@@ -10,6 +10,7 @@
 #include "EditHistory.hpp"
 #include "Language.hpp"
 #include "LineNumber.hpp"
+#include "PreviewTableScrolls.hpp"
 #include "Selection.hpp"
 #include "TextBuffer.hpp"
 #include "VimCount.hpp"
@@ -69,5 +70,8 @@ struct DocumentState
     // 読み込み済みの束のこの表から引く）。空は「作っていない」で、まだ補完を使っていない文書・
     // 1 MiB 超の文書・大きな編集で捨てた後。作るのはアクティブな文書で補完を使ったときだけ。
     std::optional<core::WordTable> words = std::nullopt;
+    // プレビューの表の横の送りの量（#1883・施主決定 D107）。文書の値で、脇に置いても保ち、タブを
+    // 替えて戻ったら残る。開いた文書・新しいタブは空。
+    PreviewTableScrolls table_scrolls{};
 };
 } // namespace nenenib::application
