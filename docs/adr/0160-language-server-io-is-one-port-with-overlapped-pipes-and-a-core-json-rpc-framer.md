@@ -70,3 +70,9 @@ LSP 3.17 は子プロセスと stdio で JSON-RPC 2.0 を話す（`Content-Lengt
 ## 追補（2026-10-30・#1165・PR #1164 の独立レビュー R1-1）: 見出しの上限は空行を含めた長さ
 
 - **決定 3 の見出しの上限**: `frame_at` は「空行 `\r\n\r\n` を含めた見出しの長さ」の 1 本で断る。空行が届いていればその長さ、まだ届いていなければ届いた分＋1 バイト（あと少なくとも 1 バイト要る）を `lsp_header_limit + 4` と比べる。空行の前が 8,192 バイトまでの見出しは、空行の途中のどこで読みが切れても受け、8,193 バイト以上はどこで切れても `header_too_long`（上限の値は変えない・空行の無い列は 8,195 バイトまで待つ）。契約 `--lsp-frames` が 8,190〜8,193 バイトの見出しを 1 バイトずつ渡して確かめる。
+
+## 追補（2026-11-20・#1897・設計席の決め・LSP 段 S1）: 起こせない理由を分ける
+
+- **決定 6 の失敗の値**: `ServerFailure` に `not_absolute`（実行ファイルが絶対パスでない）と `script_refused`（`.cmd` / `.bat`・大小を問わない）を足す。2026-10-28 の追補の「絶対パスでなければ `not_found`」は `not_absolute` に改める。adapter の `ServerChild::spawn` は起こす前に「絶対パスか → `.cmd` / `.bat` でないか（在るかを見ずに断る）→ 在るか」の順に見る。`.cmd` / `.bat` は `CreateProcessW` が暗黙に `cmd.exe` を挟み、引数の引用の規則が変わる（BatBadBut の種類の問題）ので起こさない。npm の言語サーバーは `node.exe` とスクリプトの形で書く。
+- **知らせ**: controller の `start_failure_message` の 1 本が `not_found`・`not_absolute`・`script_refused` を `UiMessage` の 3 値（`notice_language_server_not_found` `_not_absolute` `_script`・3 列）に、ほかを今までの「言語サーバーを起こせませんでした」に写す。PATH の探索と設定の面の候補は段 S4。
+- **契約**: `nib_language_server_tests`（相対は `not_absolute`・`.cmd` `.BAT` は `script_refused`）・`nib_tests --language-server`（4 種の文）。

@@ -82,6 +82,7 @@
 #include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -164,7 +165,9 @@ void started(Editing &editing)
     applied(editing.controller(), app::OpenDocument{path_of(source_path)});
     static_cast<void>(delivered(editing, app::ServerStarted{}));
     static_cast<void>(delivered(
-        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}})"}));
+        editing,
+        app::ServerMessage{
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
 }
 
 // 設定の 1 行を起こす要求にする（決定 7）。
@@ -225,7 +228,7 @@ void verify_lifecycle()
     static_cast<void>(delivered(
         editing,
         app::ServerMessage{
-            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8"}}})"}));
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2}}})"}));
     expect(server.sent().size() == 3 &&
                contains(server.sent().at(1), R"("method":"initialized")") &&
                !contains(server.sent().at(1), R"("id")") &&
@@ -328,7 +331,8 @@ void answered(Editing &editing)
     const std::size_t begin = sent.find(key) + key.size();
     const std::string id = sent.substr(begin, sent.find_first_of(",}", begin) - begin);
     static_cast<void>(delivered(
-        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" + id + R"(,"result":{}})"}));
+        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" + id +
+                                    R"(,"result":{"capabilities":{"textDocumentSync":2}}})"}));
 }
 
 // 失敗の数は続けて失敗した回数で、`initialized` まで届いたら 0 に戻る（決定 6・R1-4）。
@@ -356,7 +360,7 @@ void verify_start_refused()
     Editing editing(lsp_settings(true));
     hold_documents(editing);
     auto &server = editing.language_server();
-    server.refuse(app::ServerFailure::not_found);
+    server.refuse(app::ServerFailure::cannot_start);
     const auto opened = editing.controller().apply_frame(app::OpenDocument{path_of(source_path)});
     expect(message(opened) == "言語サーバーを起こせませんでした: cpp" &&
                server.launches().size() == 1,
@@ -382,7 +386,9 @@ void verify_staleness()
                server.launches().size() == 2 && message(stale) == "言語サーバーが答えません: cpp",
            "a silent initialize is cancelled after two ticks and counted as a failure");
     static_cast<void>(delivered(
-        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}})"}));
+        editing,
+        app::ServerMessage{
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
     expect(!contains(server.sent().back(), R"("initialized")"),
            "a late answer to the cancelled request is ignored");
 
@@ -665,7 +671,7 @@ void verify_did_close()
     static_cast<void>(editing.controller().apply_frame(
         app::SaveDocument{path_of(second_path), core::TextEncoding::utf8}));
     expect(server.sent().size() == quiet && server.launches().size() == 1,
-           "switching between open documents and saving send nothing (no didSave)");
+           "switching between open documents and saving send nothing (no save ability)");
     applied(editing.controller(), app::CloseTab{1});
     const auto closed = server.notifications("textDocument/didClose");
     expect(closed.size() == 1 && contains(closed.front(), second_uri),
@@ -945,7 +951,7 @@ void verify_line_end_diagnostic()
 
 // 補完（triggerCharacters の数は捨てる）・hover（true）・定義へ（object）を持つサーバーの答え。
 constexpr std::string_view capable_answer =
-    R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":[".","->",3]},"hoverProvider":true,"definitionProvider":{}}}})";
+    R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":[".","->",3]},"hoverProvider":true,"definitionProvider":{}}}})";
 constexpr std::string_view main_location =
     R"({"uri":"file:///C:/work/main.cpp","range":{"start":{"line":0,"character":4},"end":{"line":0,"character":8}}})";
 
@@ -1843,6 +1849,123 @@ void verify_language_queries()
     verify_hover_tip_core();
     verify_language_query_reviews();
 }
+// 2026-11-20 の追補（#1897）: `textDocumentSync` の種類に従う。none（数の 0・欄が無い）は
+// didChange を送らず、full は range の無い全文を 1 つ、object の `change` も読む。
+void verify_document_sync_kinds()
+{
+    const auto changes_after_typing = [](std::string_view capabilities)
+    {
+        Editing editing(lsp_settings(true));
+        started_with(editing, capabilities);
+        applied(editing.controller(), app::InsertText{"x"});
+        applied(editing.controller(), app::InsertText{"y"});
+        return editing.language_server().notifications("textDocument/didChange");
+    };
+    expect(changes_after_typing("{}").empty() &&
+               changes_after_typing(R"({"textDocumentSync":0})").empty() &&
+               changes_after_typing(R"({"textDocumentSync":{"openClose":true}})").empty(),
+           "a server without textDocumentSync, or with None, gets no didChange");
+    const auto full = changes_after_typing(R"({"textDocumentSync":1})");
+    expect(full.size() == 2 &&
+               contains(full.back(), R"("contentChanges":[{"text":"xyint main() {}\n"}])") &&
+               version_in(full.back()) == std::optional<std::uint64_t>{2},
+           "a Full server gets the whole text as one change without a range");
+    const auto object = changes_after_typing(R"({"textDocumentSync":{"change":1,"save":true}})");
+    expect(object.size() == 2 && !contains(object.back(), R"("range")"),
+           "the change kind of TextDocumentSyncOptions is read too");
+    const auto incremental = changes_after_typing(R"({"textDocumentSync":{"change":2}})");
+    expect(incremental.size() == 2 && contains(incremental.back(), R"("range")"),
+           "an Incremental server keeps getting ranges");
+}
+
+// 2026-11-20 の追補（#1897）: `save` を求めるサーバーには保存の後に `didSave`（`includeText` なら
+// 本文つき）。求めないサーバー・別のパスへの保存では送らない。積んだ変更を先に流す。
+void verify_did_save()
+{
+    const auto saved_with = [](std::string_view capabilities, std::string_view path)
+    {
+        Editing editing(lsp_settings(true));
+        started_with(editing, capabilities);
+        applied(editing.controller(), app::InsertText{"x"});
+        static_cast<void>(editing.controller().apply_frame(
+            app::SaveDocument{path_of(path), core::TextEncoding::utf8}));
+        return editing.language_server().sent();
+    };
+    const auto plain = saved_with(R"({"textDocumentSync":{"change":2,"save":true}})", source_path);
+    expect(
+        contains(
+            plain.back(),
+            R"("method":"textDocument/didSave","params":{"textDocument":{"uri":"file:///C:/work/main.cpp"}})") &&
+            contains(plain.at(plain.size() - 2), R"("method":"textDocument/didChange")"),
+        "saving sends didSave after the pending changes");
+    const auto text =
+        saved_with(R"({"textDocumentSync":{"change":2,"save":{"includeText":true}}})", source_path);
+    expect(contains(text.back(), R"("method":"textDocument/didSave")") &&
+               contains(text.back(), R"("text":"xint main() {}\n")"),
+           "includeText adds the saved text");
+    const auto quiet = saved_with(R"({"textDocumentSync":2})", source_path);
+    const auto other =
+        saved_with(R"({"textDocumentSync":{"change":2,"save":true}})", R"(C:\work\renamed.cpp)");
+    const auto said = [](const std::vector<std::string> &sent)
+    {
+        return std::ranges::any_of(
+            sent, [](const std::string &body)
+            { return contains(body, R"("method":"textDocument/didSave")"); });
+    };
+    expect(!said(quiet) && !said(other),
+           "no didSave without the save ability or when saving under another name");
+}
+
+// 2026-11-20 の追補（#1897）: 診断の URI は定義の着地と同じ規則（パスへ写して same_file）で照合し、
+// ドライブ文字の大小と百分率の符号化の違いで捨てない。
+void verify_diagnostics_uri_forms()
+{
+    for (const std::string_view uri : {std::string_view{"file:///c:/work/main.cpp"},
+                                       std::string_view{"file:///C%3A/work/main.cpp"},
+                                       std::string_view{"file:///c%3a/work/%6Dain.cpp"}})
+    {
+        Editing editing(lsp_settings(true));
+        started_with_lines(editing);
+        editing.language_server().publish(uri, 0, main_error);
+        const auto frame = editing.controller().apply_frame(app::WorkCompleted{});
+        expect(underlined(frame.lines.at(0), 5, 9, core::DiagnosticSeverity::error),
+               "diagnostics for another spelling of the same file URI are placed");
+    }
+}
+
+// 2026-11-20 の追補（#1897）: 起こせない理由を分けて 1 行で知らせる。
+void verify_start_failure_notices()
+{
+    const auto told = [](app::ServerFailure failure)
+    {
+        Editing editing(lsp_settings(true));
+        hold_documents(editing);
+        editing.language_server().refuse(failure);
+        return message(editing.controller().apply_frame(app::OpenDocument{path_of(source_path)}));
+    };
+    expect(
+        told(app::ServerFailure::not_found) == "言語サーバーの実行ファイルがありません: cpp" &&
+            told(app::ServerFailure::not_absolute) ==
+                "言語サーバーの命令は絶対パスで書きます: cpp" &&
+            told(app::ServerFailure::script_refused) ==
+                "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: cpp" &&
+            told(app::ServerFailure::pipe_failed) == "言語サーバーを起こせませんでした: cpp",
+        "missing, relative, script and other start failures are told apart");
+}
+
+// 2026-11-20 の追補（#1897）: 表に無い名前の命令の行（後の版が足す言語）は使わない。
+void verify_unknown_command_rows_unused()
+{
+    auto settings = core::default_editor_settings();
+    settings.lsp = true;
+    settings.lsp_commands = {{"java", R"(C:\jdtls\jdtls.exe)"}};
+    Editing editing(SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}});
+    hold_documents(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    expect(editing.language_server().launches().empty(),
+           "a command row for a language this version does not know starts nothing");
+}
+
 } // namespace
 
 void verify_language_server_contracts()
@@ -1883,6 +2006,11 @@ void verify_language_server_contracts()
     verify_abilities_one_by_one();
     verify_requests_need_a_sent_document();
     verify_answers_after_restart();
+    verify_document_sync_kinds();
+    verify_did_save();
+    verify_diagnostics_uri_forms();
+    verify_start_failure_notices();
+    verify_unknown_command_rows_unused();
 }
 
 void verify_language_server_scope()

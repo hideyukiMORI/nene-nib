@@ -1,6 +1,7 @@
 #include "EditorController.hpp"
 
 #include "DisplayText.hpp"
+#include "DocumentSync.hpp"
 #include "DocumentUri.hpp"
 #include "FileFolder.hpp"
 #include "JsonNull.hpp"
@@ -22,8 +23,10 @@
 #include "LspShowMessage.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
+#include "SaveNotice.hpp"
 #include "ServerAbilities.hpp"
 #include "ServerCommand.hpp"
+#include "ServerFailure.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 
@@ -120,6 +123,58 @@ namespace
     return (flag != nullptr && *flag) || std::holds_alternative<core::JsonObject>(value);
 }
 
+// `TextDocumentSyncKind` の数（0 None・1 Full・2 Incremental）。知らない値は仕様の既定の none。
+[[nodiscard]] DocumentSync sync_of_kind(std::optional<std::uint64_t> kind) noexcept
+{
+    constexpr std::uint64_t full_kind = 1;
+    constexpr std::uint64_t incremental_kind = 2;
+    return kind == std::optional{full_kind}          ? DocumentSync::full
+           : kind == std::optional{incremental_kind} ? DocumentSync::incremental
+                                                     : DocumentSync::none;
+}
+
+// `TextDocumentSyncOptions.save`（true か `SaveOptions`・`includeText` が true なら本文を添える）。
+[[nodiscard]] SaveNotice save_of(const core::JsonObject &options)
+{
+    const auto member = core::json_member(options, "save");
+    if (!member.has_value())
+    {
+        return SaveNotice::none;
+    }
+    const auto &value = member.value().get().value;
+    if (const auto *flag = std::get_if<bool>(&value))
+    {
+        return *flag ? SaveNotice::plain : SaveNotice::none;
+    }
+    const auto *save = std::get_if<core::JsonObject>(&value);
+    if (save == nullptr)
+    {
+        return SaveNotice::none;
+    }
+    const auto text = core::json_member(*save, "includeText");
+    const auto *include = text.has_value() ? std::get_if<bool>(&text.value().get().value) : nullptr;
+    return include != nullptr && *include ? SaveNotice::with_text : SaveNotice::plain;
+}
+
+// `capabilities.textDocumentSync`（ADR 0161 の 2026-11-20 の追補）。数の形は種類だけで save は
+// none、`TextDocumentSyncOptions` は `change` と `save`。無ければ仕様の既定の none。
+void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capabilities)
+{
+    const auto member = core::json_member(capabilities, "textDocumentSync");
+    if (!member.has_value())
+    {
+        return;
+    }
+    const core::JsonValue &value = member.value().get();
+    if (const auto *options = core::json_object_of(value))
+    {
+        abilities.sync = sync_of_kind(core::json_count_member(*options, "change"));
+        abilities.save = save_of(*options);
+        return;
+    }
+    abilities.sync = sync_of_kind(core::json_count_of(value));
+}
+
 // `capabilities` → サーバーの能力（ADR 0190 の決定 3）。補完は `completionProvider` の object が
 // あるときで、`triggerCharacters` の文字列だけを届いた順に持つ。
 [[nodiscard]] ServerAbilities server_abilities(const core::JsonObject *capabilities)
@@ -131,7 +186,10 @@ namespace
     ServerAbilities abilities{.completion = false,
                               .trigger_characters = {},
                               .hover = provided(*capabilities, "hoverProvider"),
-                              .definition = provided(*capabilities, "definitionProvider")};
+                              .definition = provided(*capabilities, "definitionProvider"),
+                              .sync = DocumentSync::none,
+                              .save = SaveNotice::none};
+    read_document_sync(abilities, *capabilities);
     const auto *completion = core::json_object_member(*capabilities, "completionProvider");
     if (completion == nullptr)
     {
@@ -158,6 +216,29 @@ namespace
     core::JsonObject params;
     params.emplace_back("id", core::JsonValue{core::json_integer(id)});
     return core::JsonValue{std::move(params)};
+}
+
+// 起こせなかった理由 → 1 行の知らせ（ADR 0160 の 2026-11-20 の追補）。見つからない・絶対パスで
+// ない・`.cmd` / `.bat` を分け、ほかは「起こせませんでした」。
+[[nodiscard]] core::UiMessage start_failure_message(ServerFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case ServerFailure::not_found:
+        return core::UiMessage::notice_language_server_not_found;
+    case ServerFailure::not_absolute:
+        return core::UiMessage::notice_language_server_not_absolute;
+    case ServerFailure::script_refused:
+        return core::UiMessage::notice_language_server_script;
+    case ServerFailure::cannot_start:
+    case ServerFailure::pipe_failed:
+    case ServerFailure::write_failed:
+    case ServerFailure::read_failed:
+    case ServerFailure::message_too_long:
+    case ServerFailure::header_too_long:
+        return core::UiMessage::notice_language_server_not_started;
+    }
+    return core::UiMessage::notice_language_server_not_started;
 }
 
 // 1 行の知らせ（ADR 0160 の決定 6）。言語の名前を置き場 {0} に入れる。
@@ -258,9 +339,8 @@ void EditorController::start_language_server(core::Language language, ServerLaun
     if (!started)
     {
         link.given_up = true;
-        state_ = state_.with_command_message(
-            server_notice(core::UiMessage::notice_language_server_not_started, language,
-                          state_.display_language()));
+        state_ = state_.with_command_message(server_notice(start_failure_message(started.error()),
+                                                           language, state_.display_language()));
         return;
     }
     link.phase = LanguageServerPhase::starting;

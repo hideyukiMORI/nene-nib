@@ -289,25 +289,39 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
            !fields.maps.empty() || fields.mapleader.has_value();
 }
 
-// `lsp.<language>.command=<値>` の行。言語は LanguageTable の名前だけ、同じ言語の 2 行目は
-// 重複、値は空でないことだけを見る（絶対パスかは使う所が見る）。並びは言語の名前の順。
+// 名前の形（ASCII の小文字・数字・`+` `-` `_` の 1〜32 字・ADR 0170 の 2026-11-20 の追補）。
+[[nodiscard]] bool command_name_shaped(std::string_view name) noexcept
+{
+    constexpr std::size_t longest_command_name = 32;
+    return !name.empty() && name.size() <= longest_command_name &&
+           std::ranges::all_of(name,
+                               [](char character)
+                               {
+                                   return (character >= 'a' && character <= 'z') ||
+                                          (character >= '0' && character <= '9') ||
+                                          character == '+' || character == '-' || character == '_';
+                               });
+}
+
+// `lsp.<language>.command=<値>` の行。同じ名前の 2 行目は重複、値は空でないことだけを見る（絶対
+// パスかは使う所が見る）。v4 は言語を LanguageTable の名前だけ受ける（1.0.0 と同じ厳しさ・D91）。
+// v5 は名前の形だけを厳密に読み、表に無い名前の行も持って書き戻す（後の版が足した言語の行を
+// 1.1.0 が読めて消さない・使うのは表の名前の行だけ・ADR 0170 の 2026-11-20
+// の追補）。並びは名前の順。
 [[nodiscard]] std::expected<std::vector<std::pair<std::string, std::string>>, Failure>
-lsp_commands_from(const SettingsFields &fields)
+lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
 {
     std::vector<std::pair<std::string, std::string>> commands;
     for (const auto &[name, value] : fields.lsp_commands)
     {
-        const auto language = core::language_of_name(name);
-        if (!language.has_value() || value.empty())
+        const bool named = core::language_of_name(name).has_value() ||
+                           (version == SettingsVersion::v5 && command_name_shaped(name));
+        if (!named || value.empty() ||
+            std::ranges::any_of(commands, [name](const auto &row) { return row.first == name; }))
         {
             return std::unexpected(Failure::malformed);
         }
-        const std::string canonical(core::language_name(language.value_or(core::Language{})));
-        if (std::ranges::any_of(commands, [&](const auto &row) { return row.first == canonical; }))
-        {
-            return std::unexpected(Failure::malformed);
-        }
-        commands.emplace_back(canonical, value);
+        commands.emplace_back(name, value);
     }
     std::ranges::sort(commands, {},
                       [](const auto &row) -> const std::string & { return row.first; });
@@ -387,7 +401,7 @@ lsp_commands_from(const SettingsFields &fields)
     const auto explorer = switch_from(fields.explorer);
     auto root = root_from(fields.root.value());
     auto features = features_from(fields.features.value());
-    auto commands = lsp_commands_from(fields);
+    auto commands = lsp_commands_from(fields, version);
     const auto ignorecase = later_switch_from(fields.ignorecase);
     const auto smartcase = later_switch_from(fields.smartcase);
     const auto relativenumber = later_switch_from(fields.relativenumber);

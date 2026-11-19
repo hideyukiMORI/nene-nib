@@ -288,7 +288,7 @@ void answer(Arguments arguments, std::string_view body)
     {
         write_all(frame(
             R"({"jsonrpc":"2.0","id":)" + id +
-            R"(,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":["."]},"hoverProvider":true,"definitionProvider":true}}})"));
+            R"(,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":["."]},"hoverProvider":true,"definitionProvider":true}}})"));
     }
     else if (calls(body, "shutdown"))
     {

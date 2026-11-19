@@ -690,7 +690,8 @@ void verify_settings_codec()
 void verify_bad_settings_fields()
 {
     const std::string valid = encode_settings(default_editor_settings());
-    for (const auto suffix : {"version=1\n", "unknown=yes\n", "broken\n", "lsp.nosuch.command=x\n"})
+    for (const auto suffix :
+         {"version=1\n", "unknown=yes\n", "broken\n", "lsp.No such.command=x\n"})
     {
         const auto result = decode_settings(valid + suffix, SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed,
@@ -918,15 +919,35 @@ void verify_settings_lsp_commands()
     const auto plain = encode_settings(default_editor_settings());
     const auto none = decode_settings(plain, SettingsVersion::v5);
     expect(none && none.value().lsp_commands.empty(), "zero command lines are accepted");
-    for (const auto line : {"lsp.nosuch.command=x\n", "lsp.cpp.command=\n", "lsp..command=x\n",
-                            "lsp.CPP.command=x\n", "lsp.cpp.args=x\n"})
+    for (const auto line :
+         {"lsp.cpp.command=\n", "lsp..command=x\n", "lsp.CPP.command=x\n", "lsp.cpp.args=x\n",
+          "lsp.a b.command=x\n", "lsp.j\xc3\xa1va.command=x\n",
+          "lsp.abcdefghijklmnopqrstuvwxyz0123456.command=x\n"})
     {
         const auto result = decode_settings(plain + line, SettingsVersion::v5);
         expect(!result && result.error() == SettingsFailure::malformed,
-               "unknown languages, empty values and other lsp keys are refused");
+               "misshapen names, empty values and other lsp keys are refused");
     }
     expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v5),
            "a second line for the same language is refused");
+    // 表に無い名前の行（後の版が足す言語）は v5 では形だけ見て持ち、書き戻す（ADR 0170 の
+    // 2026-11-20 の追補・#1897）。v4 は 1.0.0 と同じく拒む（D91）。
+    const std::string later = plain + "lsp.java.command=C:\\jdtls\\jdtls.exe\n"
+                                      "lsp.c++_x-1.command=y\n"
+                                      "lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n";
+    const auto kept = decode_settings(later, SettingsVersion::v5);
+    expect(kept && kept.value().lsp_commands.size() == 3 &&
+               encode_settings(kept.value())
+                   .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
+                              "lsp.c++_x-1.command=y\nlsp.java.command=C:\\jdtls\\jdtls.exe\n"),
+           "v5 keeps command rows for languages it does not know and writes them back");
+    expect(
+        !decode_settings(plain + "lsp.java.command=x\nlsp.java.command=y\n", SettingsVersion::v5),
+        "a second row for an unknown name is refused too");
+    const auto v4 = decode_settings(std::string(released_v4_settings) + "lsp.java.command=x\n",
+                                    SettingsVersion::v4);
+    expect(!v4 && v4.error() == SettingsFailure::malformed,
+           "v4 still refuses a command row for a language 1.0.0 does not know");
     const auto old =
         decode_settings(std::string(v3_settings) + "lsp.cpp.command=x\n", SettingsVersion::v3);
     expect(!old && old.error() == SettingsFailure::malformed, "v3 rejects command lines");

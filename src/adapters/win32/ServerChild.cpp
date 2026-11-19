@@ -7,8 +7,11 @@
 #include "ServerCommandLine.hpp"
 #include "Utf16.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <string_view>
 
@@ -57,12 +60,48 @@ bool absolute(std::wstring_view path) noexcept
 
 bool runnable(const std::wstring &executable)
 {
-    if (!absolute(executable))
+    const DWORD attributes = GetFileAttributesW(native_path(executable).c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+// `.cmd` と `.bat`（大小を問わない）。CreateProcessW は暗黙に cmd.exe を挟み、引数の引用の規則が
+// 変わるので起こさずに断る（ADR 0160 の 2026-11-20 の追補・npm の shim は node.exe とスクリプトで
+// 書く）。
+bool batch_script(std::wstring_view executable) noexcept
+{
+    constexpr std::size_t extension_size = 4;
+    if (executable.size() <= extension_size)
     {
         return false;
     }
-    const DWORD attributes = GetFileAttributesW(native_path(executable).c_str());
-    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    const std::wstring_view extension = executable.substr(executable.size() - extension_size);
+    const auto lowered = [](wchar_t letter)
+    {
+        return letter >= L'A' && letter <= L'Z' ? static_cast<wchar_t>(letter - L'A' + L'a')
+                                                : letter;
+    };
+    std::wstring folded(extension);
+    std::ranges::transform(folded, folded.begin(), lowered);
+    return folded == L".cmd" || folded == L".bat";
+}
+
+// 起こす前の検査（ADR 0160 の 2026-11-20 の追補）。絶対パスでない・`.cmd` / `.bat`（在るかを
+// 見ずに断る）・無いを分ける。
+std::expected<void, ServerFailure> launchable(const std::wstring &executable)
+{
+    if (!absolute(executable))
+    {
+        return std::unexpected(ServerFailure::not_absolute);
+    }
+    if (batch_script(executable))
+    {
+        return std::unexpected(ServerFailure::script_refused);
+    }
+    if (!runnable(executable))
+    {
+        return std::unexpected(ServerFailure::not_found);
+    }
+    return {};
 }
 
 HANDLE server_pipe(const std::wstring &name, DWORD direction)
@@ -135,9 +174,10 @@ ServerChild::~ServerChild()
 std::expected<void, ServerFailure> ServerChild::spawn(const application::ServerLaunch &launch)
 {
     const std::wstring executable = widen(launch.executable.text());
-    if (!runnable(executable))
+    const auto checked = launchable(executable);
+    if (!checked)
     {
-        return std::unexpected(ServerFailure::not_found);
+        return checked;
     }
     KernelHandle child_input;
     KernelHandle child_output;

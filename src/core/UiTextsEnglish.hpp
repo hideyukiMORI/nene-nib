@@ -419,5 +419,10 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_link_open_failed, "Couldn't open the link"},
     {UiMessage::notice_link_copied, "Copied the destination"},
     {UiMessage::notice_heading_not_found, "No such heading in this document"},
+    {UiMessage::notice_language_server_not_found, "The language server executable is missing: {0}"},
+    {UiMessage::notice_language_server_not_absolute,
+     "Write the language server command with an absolute path: {0}"},
+    {UiMessage::notice_language_server_script,
+     "A .cmd or .bat cannot be a language server (write node.exe and the script): {0}"},
 }};
 } // namespace nenenib::core

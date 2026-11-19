@@ -163,6 +163,7 @@ void verify_lsp_frames_property_scope();
 void verify_lsp_diagnostics_scope();
 // LspAnswersTests.cpp（#1825・ADR 0190 の決定 4・答えの読み 3 本と URI → パス）
 void verify_lsp_answers_scope();
+void verify_lsp_sync_property_scope();
 // LanguageServerTests.cpp（#994・controller の配線と寿命・`:set lsp`・替え玉のサーバー）
 void verify_language_server_contracts();
 void verify_language_server_scope();
