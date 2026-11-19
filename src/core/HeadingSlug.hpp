@@ -16,8 +16,11 @@ namespace nenenib::core
 // 名札は表示の文字（PreviewBlock.text・装飾の記号を除いた後）から作る:
 // - 前後の空白（ASCII の空白）を除く。
 // - ASCII の大文字を小文字に畳む（非 ASCII の大小は畳まない）。
-// - ASCII の英数字と `-` `_` と非 ASCII の字（日本語・絵文字など）を残し、空白を `-` に
-//   （続く空白はまとめない）、ほかの ASCII の字（記号・Tab・改行）を消す。
+// - ASCII の英数字と `-` `_` と非 ASCII の字（日本語など）を残し、空白を `-` に（続く空白は
+//   まとめない）、ほかの ASCII の字（記号・Tab・改行）を消す。
+// - 非 ASCII のうち CJK と全角の句読点・記号（U+2010〜U+2027・U+3000〜U+303F・全角の記号）と
+//   絵文字（U+1F000〜U+1FAFF・U+2600〜U+27BF・U+FE0F・U+200D）を消す（範囲は HeadingSlug.cpp の
+//   removed_code_points の表 1 つ）。非 ASCII の大文字は畳まない（全角の英数字も残す）。
 // - 同じ名札が 2 つ目から現れたら `-1` `-2` … を付ける（GitHub の公開の説明の「hyphen と
 //   増える整数」。付けた形が既にあればさらに次の数へ進む・github-slugger と同じ数え方）。
 // parse_markdown が文書を解析するときに 1 回だけ呼び、MarkdownDocument.headings に置く。

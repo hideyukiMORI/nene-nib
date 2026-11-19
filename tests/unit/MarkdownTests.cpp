@@ -1150,7 +1150,8 @@ void verify_link_targets()
 
 // 名札の表。GitHub の公開の説明（Basic writing and formatting syntax の Section links）の規則と例:
 // 小文字に・空白は `-`・ほかの空白と記号は消す・前後の空白は除く・装飾は中身だけ・同じ名札は
-// `-1` `-2` …。大小を畳むのは ASCII だけ、非 ASCII の字は残す（設計の決め・ADR 0151 の段 L3）。
+// `-1` `-2` …。大小を畳むのは ASCII だけ（説明の例の Θ は GitHub では θ・Nib は畳まない）。非 ASCII
+// は CJK と全角の句読点・記号と絵文字だけを消す（設計の決め・ADR 0151 の段 L3）。
 void verify_heading_slugs()
 {
     expect(slugged("# Example headings\n\n## Sample Section\n",
@@ -1170,15 +1171,48 @@ void verify_heading_slugs()
            "a numbered anchor that already exists moves on to the next number");
     expect(slugged("# C++ & C#\n\n# a  b\n\n# x_y-z 9\n", {"c--c", "a--b", "x_y-z-9"}),
            "symbols go, each space is a hyphen and digits, `-` and `_` stay");
+}
+
+// 日本語の文書の名札（設計席の決め 2026-11-19 の追記）。
+void verify_heading_slugs_cjk()
+{
     expect(slugged("# \xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB "
-                   "\xE6\xA6\x82\xE8\xA6\x81\n\n# \xF0\x9F\x8E\x89 Party\n",
+                   "\xE6\xA6\x82\xE8\xA6\x81\n",
                    {"\xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB-"
-                    "\xE6\xA6\x82\xE8\xA6\x81",
-                    "\xF0\x9F\x8E\x89-party"}),
-           "Japanese and an emoji stay as they are");
+                    "\xE6\xA6\x82\xE8\xA6\x81"}),
+           "Japanese letters stay");
+    // GitHub の名札（右の列）は github-slugger（GitHub の見出しの名札の作り方を写した npm の
+    // github-slugger 2.x の規則: 小文字に・Unicode の句読点と記号と絵文字を消す・空白を `-` に）で
+    // 求めた値。Nib の名札はこの例では同じになる。
+    // 「設定（Ctrl+,）」→ 設定ctrl・「手順 1. 準備」→ 手順-1-準備・「🚀 Launch」→ -launch・
+    // 「はじめに、概要。」→ はじめに概要・「「引用」と“quote”…」→ 引用とquote・「❤️ Love」→ -love。
+    expect(slugged("# \xE8\xA8\xAD\xE5\xAE\x9A\xEF\xBC\x88"
+                   "Ctrl+,\xEF\xBC\x89\n\n"
+                   "# \xE6\x89\x8B\xE9\xA0\x86 1. \xE6\xBA\x96\xE5\x82\x99\n\n"
+                   "# \xF0\x9F\x9A\x80 Launch\n\n"
+                   "# \xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB\xE3\x80\x81"
+                   "\xE6\xA6\x82\xE8\xA6\x81\xE3\x80\x82\n\n"
+                   "# \xE3\x80\x8C\xE5\xBC\x95\xE7\x94\xA8\xE3\x80\x8D\xE3\x81\xA8\xE2\x80\x9C"
+                   "quote\xE2\x80\x9D\xE2\x80\xA6\n\n"
+                   "# \xE2\x9D\xA4\xEF\xB8\x8F Love\n",
+                   {"\xE8\xA8\xAD\xE5\xAE\x9A"
+                    "ctrl",
+                    "\xE6\x89\x8B\xE9\xA0\x86-1-\xE6\xBA\x96\xE5\x82\x99", "-launch",
+                    "\xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB\xE6\xA6\x82\xE8\xA6\x81",
+                    "\xE5\xBC\x95\xE7\x94\xA8\xE3\x81\xA8quote", "-love"}),
+           "CJK and full-width punctuation and emoji go as on GitHub");
+    // 非 ASCII の大文字は畳まない（GitHub は「ＡＢＣ１」を「ａｂｃ１」に畳む・ADR の限界）。
+    expect(slugged("# \xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xEF\xBC\x91\n",
+                   {"\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xEF\xBC\x91"}),
+           "full-width letters and digits stay and are not folded");
     expect(slugged("# **Bold** `code` [link](x)\n\nSetext\n===\n", {"bold-code-link", "setext"}),
            "a decorated heading and a setext heading are named by their shown text");
     expect(slugged("#\n\n#\n\ntext\n", {"", "-1"}), "an empty heading has an empty anchor");
+}
+
+// 名札の列で `#…` を引く。
+void verify_heading_lookup()
+{
     const auto parsed = core::parse_markdown(
         "intro\n\n# Sample Section\n\n# \xE6\xA6\x82\xE8\xA6\x81\n", MarkdownStop::never());
     expect(parsed.has_value(), "the headings parse");
@@ -1473,6 +1507,8 @@ void verify_markdown_scope()
     verify_alerts();
     verify_link_targets();
     verify_heading_slugs();
+    verify_heading_slugs_cjk();
+    verify_heading_lookup();
     verify_link_destinations();
     verify_link_destination_uris();
     verify_link_destination_paths();
