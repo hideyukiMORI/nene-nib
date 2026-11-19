@@ -663,3 +663,20 @@ endforeach()
 target_compile_definitions(nib_preview_probe PRIVATE
     NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
     NIB_PROBE_CONFIGURATION="$<CONFIG>")
+
+# #1905: 本文のスクロールの 1 刻みの費用の probe（ADR 0082 の閉じた比較の範囲・正式なゲートの外）。
+# 製品の BodyTextLayouts を結ぶので nib_perf_probes（performance_tests は ui_win32 に依存できない）
+# ではなく nib_preview_probe と同じ土台に置く。替え玉のポートは tests/unit の inline の足場を借りる。
+# 時刻は adapters の Win32TimingAdapter の節目だけ（ARC-007）。CTest に登録しない。
+nenenib_target(nib_scroll_probe preview_tests EXECUTABLE tests/preview/ScrollProbe.cpp)
+nenenib_link(nib_scroll_probe nenenib_core)
+nenenib_link(nib_scroll_probe nenenib_application)
+nenenib_link(nib_scroll_probe nenenib_adapters)
+nenenib_link(nib_scroll_probe nenenib_window)
+foreach(library IN ITEMS ole32 d2d1 dwrite)
+    nenenib_system_link(nib_scroll_probe ${library})
+endforeach()
+target_include_directories(nib_scroll_probe PRIVATE "${CMAKE_SOURCE_DIR}/tests/unit")
+target_compile_definitions(nib_scroll_probe PRIVATE
+    NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
+    NIB_PROBE_CONFIGURATION="$<CONFIG>")
