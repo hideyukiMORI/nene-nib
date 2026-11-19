@@ -221,12 +221,6 @@ constexpr std::string_view cmake_template_suffix = ".cmake.in";
 // `Dockerfile.*` `Containerfile.*`（StarSetf）と同じく、拡張子の表が先に勝つ。
 constexpr std::array<std::string_view, 2> dockerfile_prefixes{"Dockerfile.", "Containerfile."};
 
-[[nodiscard]] constexpr bool same_ignoring_case(std::string_view left,
-                                                std::string_view right) noexcept
-{
-    return left.size() == right.size() && ascii_prefix_ignoring_case(left, right);
-}
-
 [[nodiscard]] constexpr bool is_separator(char byte) noexcept
 {
     return byte == '\\' || byte == '/';
@@ -287,14 +281,14 @@ Language language_of_path(std::string_view path) noexcept
 {
     const auto name = file_name_of(path);
     const auto named = std::ranges::find_if(language_file_names, [name](const LanguageName &row)
-                                            { return same_ignoring_case(name, row.first); });
+                                            { return ascii_equal_ignoring_case(name, row.first); });
     if (named != language_file_names.end())
     {
         return named->second;
     }
     if (name.size() >= cmake_template_suffix.size() &&
-        same_ignoring_case(name.substr(name.size() - cmake_template_suffix.size()),
-                           cmake_template_suffix))
+        ascii_equal_ignoring_case(name.substr(name.size() - cmake_template_suffix.size()),
+                                  cmake_template_suffix))
     {
         return Language::cmake;
     }
@@ -302,7 +296,7 @@ Language language_of_path(std::string_view path) noexcept
     const auto extension = dot.has_value() ? name.substr(dot.value() + 1) : std::string_view{};
     const auto found =
         std::ranges::find_if(language_extensions, [extension](const LanguageExtension &row)
-                             { return same_ignoring_case(extension, row.first); });
+                             { return ascii_equal_ignoring_case(extension, row.first); });
     if (dot.has_value() && found != language_extensions.end())
     {
         return found->second;
@@ -323,7 +317,7 @@ bool header_of_path(std::string_view path) noexcept
     }
     const auto extension = name.substr(dot.value() + 1);
     return std::ranges::any_of(header_extensions, [extension](std::string_view header)
-                               { return same_ignoring_case(extension, header); });
+                               { return ascii_equal_ignoring_case(extension, header); });
 }
 
 std::string_view language_name(Language language) noexcept

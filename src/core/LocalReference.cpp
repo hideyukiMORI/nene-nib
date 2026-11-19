@@ -28,11 +28,6 @@ constexpr std::size_t drive_length = 2;
     return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z');
 }
 
-[[nodiscard]] bool same_ignoring_case(std::string_view left, std::string_view right) noexcept
-{
-    return left.size() == right.size() && ascii_prefix_ignoring_case(left, right);
-}
-
 // `\\` `//` `\/` `/\` で始まる（UNC・host のある参照）。
 [[nodiscard]] bool network_prefix(std::string_view text) noexcept
 {
@@ -117,15 +112,15 @@ relative_path(std::string_view reference, const std::optional<FilePath> &documen
                                                                      std::size_t length)
 {
     const std::string_view scheme = reference.substr(0, length);
-    if (same_ignoring_case(scheme, "http") || same_ignoring_case(scheme, "https"))
+    if (ascii_equal_ignoring_case(scheme, "http") || ascii_equal_ignoring_case(scheme, "https"))
     {
         return std::unexpected(LocalReferenceRefusal::remote);
     }
-    if (same_ignoring_case(scheme, "data"))
+    if (ascii_equal_ignoring_case(scheme, "data"))
     {
         return std::unexpected(LocalReferenceRefusal::data);
     }
-    if (same_ignoring_case(scheme, "file"))
+    if (ascii_equal_ignoring_case(scheme, "file"))
     {
         return file_url(reference.substr(length + 1U));
     }
