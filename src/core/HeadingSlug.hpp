@@ -14,9 +14,9 @@ namespace nenenib::core
 // 見出しの名札（slug）を GitHub の形で作る唯一の純関数（ADR 0151 の追補 2026-11-19 の段 L3・
 // #1869）。sources の見出しごとに 1 つ、同じ順に返す。名札は github-slugger 2.0.0 の slug() と同じ
 // 3 つだけで作る:
-// - ASCII の大文字を小文字に畳む（github-slugger は toLowerCase で非 ASCII も畳むが、GitHub
-// の実物は
-//   ASCII だけを畳む・ADR の限界）。
+// - ASCII の大文字を小文字に畳む。github-slugger は toLowerCase()（非 ASCII も畳む）。Nib は
+//   ASCII だけを畳む（core に大小の表を持たないため・限界）。非 ASCII の大文字（ギリシャ・
+//   キリル・全角の英字）を含む見出しは、小文字で書いた宛先からは当たらないことがある。
 // - github-slugger の regex.js が消す code point を消す（表は生成物 HeadingSlugTable.hpp の 1 つ・
 //   python eng/heading-slug-table.py --write）。
 // - 空白（U+0020）を `-` に（続く空白はまとめない）。

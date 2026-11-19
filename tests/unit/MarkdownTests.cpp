@@ -1151,9 +1151,10 @@ slugs_of(std::string_view text, core::DisplayLanguage language = core::DisplayLa
 }
 
 // 名札の表。GitHub の公開の説明（Basic writing and formatting syntax の Section links）の規則と例:
-// 小文字に・空白は `-`・ほかの空白と記号は消す・装飾は中身だけ・同じ名札は `-1` `-2` …。大小を
-// 畳むのは ASCII だけ（説明の例の Θ は GitHub では θ・Nib は畳まない）。消す字は github-slugger
-// 2.0.0 の regex.js から作った表の 1 つ（ADR 0151 の段 L3）。
+// 小文字に・空白は `-`・ほかの空白と記号は消す・装飾は中身だけ・同じ名札は `-1` `-2` …。大小は、
+// github-slugger は toLowerCase()（非 ASCII も畳む）で、Nib は ASCII だけを畳む（core に大小の表を
+// 持たないため・限界）ので、例の Θ は残る。消す字は github-slugger 2.0.0 の regex.js から作った
+// 表の 1 つ（ADR 0151 の段 L3）。
 void verify_heading_slugs()
 {
     expect(slugged("# Example headings\n\n## Sample Section\n",
@@ -1228,7 +1229,8 @@ void verify_heading_slugs_cjk()
                    {"\xE8\xA8\xAD\xE8\xA8\x88\xE5\xAE\x9F\xE8\xA3\x85", "-\xE6\xB3\xA8",
                     "\xE5\x89\x8D\xE5\xBE\x8C", "-\xE6\xBA\x96\xE5\x82\x99", "23", "90", "ab"}),
            "the middle dot, reference mark, arrows, circled digits, Latin-1 signs and NBSP go");
-    // 非 ASCII の大文字は畳まない（GitHub は「ＡＢＣ１」を「ａｂｃ１」に畳む・ADR の限界）。
+    // 非 ASCII の大文字は畳まない（github-slugger は「ＡＢＣ１」を「ａｂｃ１」に畳む・ADR
+    // の限界）。
     expect(slugged("# \xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xEF\xBC\x91\n",
                    {"\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3\xEF\xBC\x91"}),
            "full-width letters and digits stay and are not folded");
