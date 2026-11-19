@@ -43,7 +43,8 @@ core::PreviewTableSpan preview_table_span(PreviewTableBand band, std::uint32_t d
 
 bool preview_table_overflows(PreviewTableBand band, std::uint32_t dpi) noexcept
 {
-    return dpi > 0 && band.view >= 1.0F && band.width > band.view;
+    // 1 DIP に満たない枠は送れない（DIP の枠が 0）ので、棒も出さない（#1884 の再確認 L-c）。
+    return dpi > 0 && band.view >= preview_pixels(1.0F, dpi) && band.width > band.view;
 }
 
 std::int32_t preview_table_offset(std::span<const std::int32_t> scrolls, std::size_t table) noexcept

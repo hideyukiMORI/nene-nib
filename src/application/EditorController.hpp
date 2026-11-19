@@ -994,6 +994,7 @@ class EditorController final
     void accept(const ScrollPreviewTable &intent);
     void accept(const HoverPreviewTable &intent);
     void adopt_table_scrolls(std::size_t tables);
+    void drop_table_pointer();
     [[nodiscard]] std::optional<std::int32_t>
     table_scroll_moved(const ScrollPreviewTable &intent, std::int32_t from,
                        const std::optional<PreviewTableGrip> &grip);

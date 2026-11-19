@@ -612,9 +612,7 @@ void EditorController::place_preview(PreviewPlacement placement)
     {
         return;
     }
-    // 見せ方が替わると描く枠が替わるので、つかみと載せた棒を捨てる（送りの量は文書の値で残す・
-    // #1884 のレビュー L4）。
-    state_ = state_.with_table_grip(std::nullopt).with_table_hovered(std::nullopt);
+    drop_table_pointer();
     switch (placement)
     {
     case PreviewPlacement::off:
@@ -651,11 +649,13 @@ void EditorController::place_preview(PreviewPlacement placement)
 // 全面をやめる（改訂 16・17）。本文の見える位置を錨の行に揃える（キャレットは動かさない）。
 void EditorController::leave_full_preview(PreviewPlacement placement)
 {
-    const PreviewView *full = state_.full_preview();
-    if (full == nullptr)
+    if (state_.full_preview() == nullptr)
     {
         return;
     }
+    // 全面の Esc（place_preview を通らない道）も同じ 1 本で捨てる（#1884 の再確認 L-a）。
+    drop_table_pointer();
+    const PreviewView *full = state_.full_preview();
     const core::TextBuffer &text = state_.text();
     const ScrollState scroll = settled_scroll();
     const core::Offset anchor =
@@ -958,7 +958,8 @@ void EditorController::copy_preview_selection()
 
 // 送りの量を決めるのは手の動きごとにここの 1 か所。範囲の外の表（再解析で消えた表）は送らない。
 // つかみは press のつまみの上で始まり、release・つまみの外の押し・ほかの表の押しで終わる。
-// 縦の錨・追従・選択は動かさない。
+// 縦の錨・追従・選択は動かさない。送りの量が変わらなくても描き直す（入口の forget_unkept_marks と
+// begin_intent が閉じた札・メニュー・補完の面・知らせを画面から消すため・#1884 の再確認 M-b）。
 void EditorController::accept(const ScrollPreviewTable &intent)
 {
     const PreviewView *preview = state_.shown_preview();
@@ -975,8 +976,6 @@ void EditorController::accept(const ScrollPreviewTable &intent)
     if (intent.table >= tables || intent.gesture == PreviewTableGesture::release ||
         !core::preview_table_wide(intent.span))
     {
-        // 何も変わらなければ描き直さない（離しでつかみが消えたときだけ描く・#1884 のレビュー L2）。
-        repaint_ = !(state_.table_grip() == grip);
         return;
     }
     const auto from = core::preview_table_scroll_clamped(
@@ -984,18 +983,18 @@ void EditorController::accept(const ScrollPreviewTable &intent)
     const auto moved = table_scroll_moved(intent, from, grip);
     if (!moved.has_value())
     {
-        repaint_ = !(state_.table_grip() == grip);
         return;
     }
     const auto next = moved.value();
-    if (next == table_scroll_of(state_.table_scrolls(), intent.table) &&
-        state_.table_grip() == grip)
-    {
-        repaint_ = false;
-        return;
-    }
     state_ = state_.with_table_scrolls(
         table_scroll_set(state_.table_scrolls(), tables, intent.table, next));
+}
+
+// 見せ方が替わると描く枠が替わるので、つかみと載せた棒を捨てる（送りの量は文書の値で残す・
+// #1884 のレビュー L4）。見せ方を替える place_preview と全面の Esc の leave_full_preview が呼ぶ。
+void EditorController::drop_table_pointer()
+{
+    state_ = state_.with_table_grip(std::nullopt).with_table_hovered(std::nullopt);
 }
 
 // 結果の差し替え（#1883）。表の横の送りは表の数が同じなら残し、違えば捨てる（通し番号で引く）。

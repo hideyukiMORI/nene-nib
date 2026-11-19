@@ -8,6 +8,7 @@
 #include "LayoutRect.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
+#include "RectCovers.hpp"
 #include "RgbColor.hpp"
 #include "TabTip.hpp"
 #include "TabTipBox.hpp"
@@ -221,21 +222,13 @@ void Direct2DRenderer::draw_tab_tip(const application::EditorFrame &frame,
     const auto paint = tab_tip_layout_.painted(layout, tab, frame.palette, dpi_);
     if (paint.has_value())
     {
-        hover_tip_box_ = paint.value().box;
         paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
     }
 }
 
 bool Direct2DRenderer::hover_tip_covers(std::int32_t x, std::int32_t y) const
 {
-    if (!hover_tip_box_.has_value())
-    {
-        return false;
-    }
-    const auto &box = hover_tip_box_.value();
-    const auto px = static_cast<float>(x);
-    const auto py = static_cast<float>(y);
-    return px >= box.left && px < box.right && py >= box.top && py < box.bottom;
+    return hover_tip_box_.has_value() && rect_covers(hover_tip_box_.value(), x, y);
 }
 
 // hover の札（ADR 0190 の決定 6）。文は frame の値（12 行に切ってある）で、幅の上限で折り返す
@@ -257,6 +250,7 @@ void Direct2DRenderer::draw_hover_tip(const application::EditorFrame &frame,
     const auto paint = hover_tip_layout_.painted(caret, area, frame.palette, dpi_);
     if (paint.has_value())
     {
+        hover_tip_box_ = paint.value().box;
         paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
     }
 }

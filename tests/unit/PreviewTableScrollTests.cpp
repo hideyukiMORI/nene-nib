@@ -3,6 +3,7 @@
 // の表の通し番号と数、 application
 // の送りの量（表ごと・端への寄せ・幅の変化・再解析・タブの往復・つかみと載せた棒）と
 // 意図の側（本文・キャレット・履歴に触れない・合図ではない・全面プレビューでも通す）。
+#include "CancelSelection.hpp"
 #include "ClickPreviewLink.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -298,6 +299,55 @@ void verify_operation_side()
     expect(controller.settings_open() && offset_of(scrolled, 0) == 10,
            "scrolling a table keeps the settings panel open");
 }
+// 8. 入口で閉じた札は、送りの量が変わらない送り（端に着いた表）でも描き直して消す（#1884 の
+//    再確認 M-b）。
+void verify_edge_scroll_repaints()
+{
+    Editing editing;
+    open_previewed(editing, "| [a](https://example.com/a) | b |\n|---|---|\n| 1 | 2 |\n");
+    auto &controller = editing.controller();
+    static_cast<void>(turned(editing, 0, 1000));
+    applied(controller, app::ClickPreviewLink{core::PreviewPoint{0, 0}, core::PreviewPoint{0, 0}});
+    expect(controller.link_card_active(), "the card opens over a table at its end");
+    const auto delivered =
+        controller.apply(app::ScrollPreviewTable{0, PreviewTableGesture::wheel, 40, wide});
+    expect(delivered.repaint && !controller.link_card_active() &&
+               !controller.frame().link_card.has_value() && offset_of(controller.frame(), 0) == 200,
+           "a scroll that cannot move the table still repaints to take the card away");
+}
+
+// 9. つかみと載せた棒: 表の数が同じ再解析では残り、タブの往復と全面の Esc で消える（#1884 の
+//    レビュー L1・L4・再確認 L-a）。
+void verify_grip_lifetime()
+{
+    Editing editing;
+    open_previewed(editing, std::string(two_tables));
+    auto &controller = editing.controller();
+    const auto grab = [&controller](std::int32_t at)
+    {
+        applied(controller, app::ScrollPreviewTable{0, PreviewTableGesture::press, at, wide});
+        return lit_of(controller.frame()) == std::optional<std::size_t>{0};
+    };
+    expect(grab(5), "a press on the thumb grabs the table");
+    applied(controller, app::InsertText{"x\n\n"});
+    reparsed(editing);
+    expect(lit_of(controller.frame()) == std::optional<std::size_t>{0} &&
+               offset_of(controller.apply_frame(
+                             app::ScrollPreviewTable{0, PreviewTableGesture::drag, 72, wide}),
+                         0) == 200,
+           "a re-parse with the same tables keeps the grip and the drag goes on");
+    applied(controller, app::NewTab{});
+    applied(controller, app::SwitchTab{0});
+    serve_parsed(editing);
+    expect(!lit_of(controller.frame()).has_value(), "switching tabs drops the grip");
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    serve_parsed(editing);
+    // 送りの量は 200 のまま残り、つまみは [67, 100)。
+    expect(grab(80), "the table is grabbed again in the full preview");
+    applied(controller, app::CancelSelection{});
+    expect(controller.frame().other.has_value() && !lit_of(controller.frame()).has_value(),
+           "Esc out of the full preview drops the grip");
+}
 } // namespace
 
 void verify_preview_table_scope()
@@ -309,5 +359,7 @@ void verify_preview_table_scope()
     verify_reparse_and_tabs();
     verify_intent_side();
     verify_operation_side();
+    verify_edge_scroll_repaints();
+    verify_grip_lifetime();
 }
 } // namespace nenenib::tests
