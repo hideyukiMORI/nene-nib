@@ -48,7 +48,7 @@ constexpr std::size_t code_point_bytes = 4;
 // 表を作る間の 1 行: 語の先頭 8 バイトを大きい桁から詰めた鍵・語・数。tuple の < は鍵で比べ、
 // 鍵が同じときだけ語のバイト列で比べるので、並びは語のバイト列の順と同じ（#1872）。
 using Tally = std::tuple<std::uint64_t, std::string_view, std::int64_t>;
-// 語 → Tally の列の位置の開番地の表（線形の探索）。大きさは語の数の 2 倍以上の 2 の冪なので、
+// 語 → Tally の列の位置の開番地の表（線形の探索）。大きさは語の出現の数の 2 倍以上の 2 の冪なので、
 // 埋まりは半分までで作り直さない。1 枠は上位 32 ビットが語の hash の上位、
 // 下位 32 ビットが位置 + 1（0 は空の枠）。
 using Slots = std::vector<std::uint64_t>;
@@ -72,7 +72,8 @@ constexpr std::uint64_t fnv_prime = 1099511628211ULL;
     return key;
 }
 
-// FNV-1a（語の表の中だけで使う・外へ出さない）。
+// FNV-1a（語の表の中だけで使う・外へ出さない）。鍵を持たないので、細工した文書では探索が
+// 語の出現の数の 2 乗に近づきうる（使う人が自分で開いた文書だけが対象・#1874 の L2）。
 [[nodiscard]] std::uint64_t hashed(std::string_view word) noexcept
 {
     std::uint64_t hash = fnv_offset;

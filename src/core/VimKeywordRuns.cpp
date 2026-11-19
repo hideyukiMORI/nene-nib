@@ -22,7 +22,8 @@ constexpr unsigned char ascii_end = 0x80U;
     return byte < ascii_end ? char32_t{byte} : code_point_at(line, Offset{at});
 }
 
-// line の at の次の code point の先頭。
+// line の at の次の code point の先頭。正しい UTF-8 のとき next_code_point と同じ。ASCII の
+// バイトの直後の孤立した継続バイトを読み飛ばさない所だけ前と違う（不正な UTF-8 は前提の外）。
 [[nodiscard]] std::size_t after(std::string_view line, std::size_t at) noexcept
 {
     return static_cast<unsigned char>(line[at]) < ascii_end
