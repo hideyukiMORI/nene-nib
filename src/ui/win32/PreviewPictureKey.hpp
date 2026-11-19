@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace nenenib::ui::win32
 {
@@ -19,7 +20,8 @@ namespace nenenib::ui::win32
 // 知らせの帯の高さはここに入る）・字体の設定（DPI を含む）・テーマの名前（brush の鍵と同じ）・
 // 全面プレビューの選択（ADR 0155 の改訂 18・選ぶたびに描き直す）・画像の状態（指す先の同一性・
 // 画像が読めると替わる・ADR 0155 の追補 62。弱い参照で覚え、絵の鍵が画素を生かし続けない）。
-// どれかが違えば描き直す。互いに独立して妥当なので公開 aggregate（CPP-003）。
+// 表の横の送りの量と明るいつまみの表（#1883）。どれかが違えば描き直す。互いに独立して妥当なので公開
+// aggregate（CPP-003）。
 struct PreviewPictureKey
 {
     const ID2D1RenderTarget *target;
@@ -31,6 +33,8 @@ struct PreviewPictureKey
     std::string theme;
     std::optional<core::PreviewSelection> selection;
     std::weak_ptr<const application::PreviewImages> images;
+    std::vector<std::int32_t> table_scrolls{};
+    std::optional<std::size_t> table_lit{};
 };
 
 [[nodiscard]] inline bool operator==(const PreviewPictureKey &left, const PreviewPictureKey &right)
@@ -39,6 +43,7 @@ struct PreviewPictureKey
            left.anchor == right.anchor && left.width == right.width &&
            left.height == right.height && left.style == right.style && left.theme == right.theme &&
            left.selection == right.selection && !left.images.owner_before(right.images) &&
-           !right.images.owner_before(left.images);
+           !right.images.owner_before(left.images) && left.table_scrolls == right.table_scrolls &&
+           left.table_lit == right.table_lit;
 }
 } // namespace nenenib::ui::win32

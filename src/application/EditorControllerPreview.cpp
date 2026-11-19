@@ -26,6 +26,10 @@
 #include "PreviewPoint.hpp"
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
+#include "PreviewTableGesture.hpp"
+#include "PreviewTableGrip.hpp"
+#include "PreviewTableScroll.hpp"
+#include "PreviewTableScrolls.hpp"
 #include "PreviewView.hpp"
 #include "QuantityText.hpp"
 #include "ScrollState.hpp"
@@ -131,7 +135,8 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
 // 寸法）は not_user_operation の 1 本を経て全部通す。ここに無い意図は key_route が鍵ごとに決め、
 // どれにも当たらなければ本文に届かない（refuse）。新しい意図を足すときは、ここか key_route に書く。
 // 設定の面の意図 8 つも通す（F1 の一覧から全面の間に開ける・#1835 のレビュー M1）。リンクの札の
-// 意図 2 つも通す（札の Esc は全面を抜けずに札を閉じる・#1869 の段 L2）。
+// 意図 2 つも通す（札の Esc は全面を抜けずに札を閉じる・#1869 の段 L2）。表の横の送り
+// （ScrollPreviewTable・#1883）も通す（縦の錨は動かさない）。
 [[nodiscard]] bool passes_full_preview(const EditorIntent &intent) noexcept
 {
     return detail::not_user_operation(intent) || std::holds_alternative<SelectEditMode>(intent) ||
@@ -157,7 +162,8 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<ChooseContextMenu>(intent) ||
            std::holds_alternative<CloseContextMenu>(intent) || detail::is_settings_intent(intent) ||
            std::holds_alternative<ClickPreviewLink>(intent) ||
-           std::holds_alternative<ActOnLinkCard>(intent) || passes_full_preview_window(intent);
+           std::holds_alternative<ActOnLinkCard>(intent) ||
+           std::holds_alternative<ScrollPreviewTable>(intent) || passes_full_preview_window(intent);
 }
 
 // 通常モードの矢印・PgUp / PgDn・Ctrl+Home / End（改訂 17）。左右と行頭・行末・語は届くが何も
@@ -459,6 +465,7 @@ void EditorController::collect_preview()
             view.notice.reset();
             // 選択の位置は前の結果の要素を指すので、差し替えたら捨てる（改訂 18）。
             view.selection.reset();
+            adopt_table_scrolls(view.document->tables);
             changed = true;
             continue;
         }
@@ -605,6 +612,9 @@ void EditorController::place_preview(PreviewPlacement placement)
     {
         return;
     }
+    // 見せ方が替わると描く枠が替わるので、つかみと載せた棒を捨てる（送りの量は文書の値で残す・
+    // #1884 のレビュー L4）。
+    state_ = state_.with_table_grip(std::nullopt).with_table_hovered(std::nullopt);
     switch (placement)
     {
     case PreviewPlacement::off:
@@ -943,5 +953,113 @@ void EditorController::copy_preview_selection()
     }
     static_cast<void>(clipboard_written(
         detail::with_document_newlines(text, core::newline_of(state_.line_ending()))));
+}
+// ---------------------------------------------------------------- 表の横の送り（#1883・D107）
+
+// 送りの量を決めるのは手の動きごとにここの 1 か所。範囲の外の表（再解析で消えた表）は送らない。
+// つかみは press のつまみの上で始まり、release・つまみの外の押し・ほかの表の押しで終わる。
+// 縦の錨・追従・選択は動かさない。
+void EditorController::accept(const ScrollPreviewTable &intent)
+{
+    const PreviewView *preview = state_.shown_preview();
+    // 指す先は状態を写すまでなので、表の数を先に読む。
+    const std::size_t tables =
+        preview == nullptr || preview->document == nullptr ? 0 : preview->document->tables;
+    const auto grip = state_.table_grip();
+    // つかみを終えるのは押しと離しだけ（つかんだ間のホイールとほかの表への動きで切らない）。
+    if (intent.gesture == PreviewTableGesture::press ||
+        intent.gesture == PreviewTableGesture::release)
+    {
+        state_ = state_.with_table_grip(std::nullopt);
+    }
+    if (intent.table >= tables || intent.gesture == PreviewTableGesture::release ||
+        !core::preview_table_wide(intent.span))
+    {
+        // 何も変わらなければ描き直さない（離しでつかみが消えたときだけ描く・#1884 のレビュー L2）。
+        repaint_ = !(state_.table_grip() == grip);
+        return;
+    }
+    const auto from = core::preview_table_scroll_clamped(
+        table_scroll_of(state_.table_scrolls(), intent.table), intent.span);
+    const auto moved = table_scroll_moved(intent, from, grip);
+    if (!moved.has_value())
+    {
+        repaint_ = !(state_.table_grip() == grip);
+        return;
+    }
+    const auto next = moved.value();
+    if (next == table_scroll_of(state_.table_scrolls(), intent.table) &&
+        state_.table_grip() == grip)
+    {
+        repaint_ = false;
+        return;
+    }
+    state_ = state_.with_table_scrolls(
+        table_scroll_set(state_.table_scrolls(), tables, intent.table, next));
+}
+
+// 結果の差し替え（#1883）。表の横の送りは表の数が同じなら残し、違えば捨てる（通し番号で引く）。
+// つかみと載せた棒も、表の数が同じなら同じ表を指すので残し、違えば捨てる（#1884 のレビュー L1）。
+void EditorController::adopt_table_scrolls(std::size_t tables)
+{
+    if (state_.table_scrolls().tables == tables)
+    {
+        return;
+    }
+    state_ = state_.with_table_scrolls(table_scrolls_for(state_.table_scrolls(), tables))
+                 .with_table_grip(std::nullopt)
+                 .with_table_hovered(std::nullopt);
+}
+
+// 手の動き intent の後の送りの量（送りの前は from・つかみは grip）。press のつまみの上はつかみを
+// 置く。つかんでいない表の drag は何もしない（nullopt）。
+std::optional<std::int32_t>
+EditorController::table_scroll_moved(const ScrollPreviewTable &intent, std::int32_t from,
+                                     const std::optional<PreviewTableGrip> &grip)
+{
+    // 押した点の場所（press のときだけ使う）。
+    const auto part = core::preview_table_bar_part(from, intent.at, intent.span);
+    switch (intent.gesture)
+    {
+    case PreviewTableGesture::wheel:
+        return core::preview_table_scroll_clamped(from + intent.at, intent.span);
+    case PreviewTableGesture::press:
+        if (part == core::PreviewTableBarPart::thumb)
+        {
+            state_ = state_.with_table_grip(PreviewTableGrip{intent.table, intent.at, from});
+        }
+        return core::preview_table_scroll_paged(from, part, intent.span);
+    case PreviewTableGesture::drag:
+        if (!grip.has_value() || grip.value().table != intent.table)
+        {
+            return std::nullopt;
+        }
+        return core::preview_table_scroll_dragged(grip.value().offset,
+                                                  intent.at - grip.value().pointer, intent.span);
+    case PreviewTableGesture::release:
+        return std::nullopt;
+    }
+    std::unreachable();
+}
+
+void EditorController::accept(const HoverPreviewTable &intent)
+{
+    if (state_.table_hovered() == intent.table)
+    {
+        repaint_ = false;
+        return;
+    }
+    state_ = state_.with_table_hovered(intent.table);
+}
+
+std::optional<std::size_t> EditorController::preview_table_hovered() const noexcept
+{
+    return state_.table_hovered();
+}
+
+std::optional<std::size_t> EditorController::preview_table_lit() const
+{
+    const auto &grip = state_.table_grip();
+    return grip.has_value() ? std::optional(grip.value().table) : state_.table_hovered();
 }
 } // namespace nenenib::application

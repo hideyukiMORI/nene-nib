@@ -66,7 +66,7 @@ class MarkdownBuilder final
     // 要素 table_row を 1 つ開き（閉じるのは close_leaf）、升ごとに始まりと揃えを足す（升の間は
     // Tab 1 つ）。header は升が見出しの升（TH）か。
     void enter_table();
-    // 表を閉じる。表の行の全部に表の要約（preview_table_digest）を置く。
+    // 表を閉じる。表の行の全部に表の要約（preview_table_digest）を置き、表の通し番号を進める。
     void leave_table();
     void enter_row();
     void enter_cell(PreviewTableAlign align, bool header);
@@ -167,6 +167,8 @@ class MarkdownBuilder final
     std::uint32_t table_row_ = 0;
     // 今の表の最初の行の要素の番号。
     std::size_t table_start_ = 0;
+    // 今の表の通し番号（閉じた表の数・#1883）。
+    std::uint32_t tables_ = 0;
     // いちばん外の引用（リストの外）の最初の要素の番号と、その引用が alert ならその種類。
     std::optional<std::size_t> alert_start_;
     std::optional<PreviewAlert> alert_;

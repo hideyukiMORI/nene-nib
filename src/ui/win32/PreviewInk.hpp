@@ -12,7 +12,8 @@ namespace nenenib::ui::win32
 // 18）。
 // 表の罫は Palette.panel_border、alert の線と名前は SyntaxPalette の function・string・number・
 // warning・error（採用案 D103・#1848）。囲みのコードの構文の色は SyntaxPalette の 10 役割で、
-// 足りなかった type と constant を末尾に足した（#1858・色のトークンは足していない）。
+// 足りなかった type と constant を末尾に足した（#1858・色のトークンは足していない）。表の横の送りの
+// 棒の明るいつまみは Palette.text（#1883・役割を末尾に足しただけで色のトークンは足していない）。
 enum class PreviewInk : std::uint8_t
 {
     background,
@@ -31,6 +32,7 @@ enum class PreviewInk : std::uint8_t
     warning,
     error,
     type,
-    constant
+    constant,
+    text
 };
 } // namespace nenenib::ui::win32

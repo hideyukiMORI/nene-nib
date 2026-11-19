@@ -8,7 +8,10 @@
 #include "PreviewSelection.hpp"
 #include "PreviewTextStyle.hpp"
 
+#include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <span>
 
 namespace nenenib::ui::win32
 {
@@ -16,7 +19,8 @@ namespace nenenib::ui::win32
 // 生かす。frame は枠の矩形、scroll は上の送り（どちらも描画先の物理画素）。selection
 // は全面プレビューの 選択（ADR 0155 の改訂 18・選択の面を文字の下に塗る・無ければ nullopt）。
 // images は画像の状態、bitmaps は読めた画像の bitmap（ADR 0155 の追補 62・63・どちらも null なら
-// 画像は「[画像: alt]」の文字のまま描く）。
+// 画像は「[画像: alt]」の文字のまま描く）。table_scrolls
+// は表の通し番号ごとの横の送りの量（DIP・借用・ #1883）、table_lit はつまみを明るく描く表。
 struct PreviewScene
 {
     const core::MarkdownDocument &document;
@@ -27,5 +31,7 @@ struct PreviewScene
     std::optional<core::PreviewSelection> selection;
     const application::PreviewImages *images = nullptr;
     const PreviewBitmaps *bitmaps = nullptr;
+    std::span<const std::int32_t> table_scrolls = {};
+    std::optional<std::size_t> table_lit = std::nullopt;
 };
 } // namespace nenenib::ui::win32
