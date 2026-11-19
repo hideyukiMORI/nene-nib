@@ -299,8 +299,10 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
         return hit_cell(
             index, D2D1::Point2F(point.x - tops.indent(index), point.y - tops.top(index)), style);
     }
-    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ下げる。
+    // 描く所（PreviewPainter::draw_text）と同じ幅と原点。面に描く要素は面の内側の余白だけ右へ、
+    // 上の余白（上の余白を持たない切れは 0・#1863）だけ下げる。
     const auto inset = preview_paneled(block.kind) ? preview_code_padding(style.dpi) : 0.0F;
+    const auto top_inset = preview_panel_top_inset(block, style.dpi);
     const auto width = preview_text_width(block, static_cast<float>(core::width_of(area)),
                                           tops.indent(index), style.dpi);
     // 描く所と同じ箱で同じ layout を引く（画像の上の点は箱の前か後ろ・画像は 1 つの単位）。
@@ -316,8 +318,8 @@ std::optional<core::PreviewPoint> PreviewPane::hit_block(const PreviewBlockTops 
     BOOL inside = FALSE;
     DWRITE_HIT_TEST_METRICS metrics{};
     if (FAILED(layout.value()->HitTestPoint(point.x - tops.indent(index) - inset,
-                                            point.y - tops.top(index) - inset, &trailing, &inside,
-                                            &metrics)))
+                                            point.y - tops.top(index) - top_inset, &trailing,
+                                            &inside, &metrics)))
     {
         return std::nullopt;
     }

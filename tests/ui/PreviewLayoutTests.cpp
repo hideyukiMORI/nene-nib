@@ -12,6 +12,7 @@
 
 #include "FontSize.hpp"
 #include "FullPreviewBody.hpp"
+#include "Language.hpp"
 #include "LayoutRect.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownParse.hpp"
@@ -22,6 +23,7 @@
 #include "PreviewBrushes.hpp"
 #include "PreviewCodeColor.hpp"
 #include "PreviewCodeColors.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewInk.hpp"
 #include "PreviewMetrics.hpp"
@@ -43,6 +45,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <combaseapi.h>
 #include <cstddef>
 #include <cstdint>
@@ -92,7 +95,8 @@ constexpr win32::PreviewViewport whole{0, width, std::numeric_limits<float>::max
                               std::nullopt,
                               std::nullopt,
                               std::nullopt,
-                              {}};
+                              {},
+                              core::PreviewCodePiece::only};
 }
 
 void check_reuse()
@@ -1580,7 +1584,8 @@ void check_fence_paint(const core::MarkdownDocument &document, std::size_t inks)
 }
 
 // lines 行の row の囲み（language）を 400 × 200 に描き、2 回目の描画と送りで layout の生成と色の
-// 置き直しが 0 で、最初の描画で置いた色の数が inks であることを確かめる。
+// 置き直しが 0 で、最初の描画で置いた色の数が inks であることを確かめる。長い囲みは切れの列で、
+// 最初の描画が作って色を置くのは見えている最初の切れだけ（#1863）。
 void check_fence_cost(std::size_t lines, std::string_view language, std::string_view row,
                       std::size_t inks)
 {
@@ -1591,9 +1596,10 @@ void check_fence_cost(std::size_t lines, std::string_view language, std::string_
         text += "\n";
     }
     const auto parsed = core::parse_markdown(text + "```\n", core::MarkdownStop::never());
-    if (!parsed || parsed.value().blocks.front().code_colors.has_value() != (inks != 0U))
+    const auto colors = parsed ? parsed.value().blocks.front().code_colors : std::nullopt;
+    if (!colors.has_value() || colors.value().size() != inks)
     {
-        expect(false, "a large fence parses with colours only under the colour limit");
+        expect(false, "a large fence parses with the colours of its first piece");
         return;
     }
     check_fence_paint(parsed.value(), inks);
@@ -1641,14 +1647,164 @@ void check_code_colors()
            "a repaint of a coloured fence makes no layout and sets no colour");
 }
 
-// 区間の数が上限いっぱいの囲み（1 行に数 1 つ）の色は最初に描くときに区間の数だけ 1 回置き、
-// 描き直しも画面の送りも色を置き直さない（色の区間は要素が持つ）。上限を超える密な JSON の囲みは
-// 1 色で、layout に置く effect は 0（#1860 のレビュー M1）。
+// 密な JSON の 1 行の色の区間の数。
+[[nodiscard]] std::size_t json_row_colors()
+{
+    constexpr std::string_view row = "[1,2,3,4,5,6,7,8,9]\n";
+    const auto colors = core::preview_code_piece_colors(core::Language::json, row,
+                                                        core::preview_code_piece_starts(row))
+                            .front();
+    return colors.value_or(std::vector<core::PreviewCodeColor>{}).size();
+}
+
+// 区間の数が上限いっぱいの切れ（1 行に数を上限の数だけ）の色は最初に描くときに区間の数だけ 1 回
+// 置き、描き直しも画面の送りも色を置き直さない（色の区間は要素が持つ）。長い囲み（1 行に数 1 つ）と
+// 密な JSON の囲みは切れの列で、最初の描画が置くのは最初の切れの区間だけ（#1860 のレビュー M1・
+// #1863）。
 void check_large_fence_cost()
 {
+    std::string crowded = "1";
+    for (std::size_t at = 1; at < core::preview_code_color_count_limit; ++at)
+    {
+        crowded += " 1";
+    }
+    check_fence_cost(1U, "py", crowded, core::preview_code_color_count_limit);
     check_fence_cost(core::preview_code_color_count_limit, "py", "1",
-                     core::preview_code_color_count_limit);
-    check_fence_cost(1000U, "json", "[1,2,3,4,5,6,7,8,9]", 0U);
+                     core::preview_code_piece_lines);
+    check_fence_cost(1000U, "json", "[1,2,3,4,5,6,7,8,9]",
+                     core::preview_code_piece_lines * json_row_colors());
+}
+
+// 囲みのコードの切れ（#1863）: 続く切れの間の空きは 0 で、境の上下の面の端（角の位置）も panel の
+// 色（面が 1 枚につながる）。角を丸めるのは最初の切れの上と最後の切れの下だけで、切れの列の高さは
+// 同じ行の 1 つの囲みと同じ。
+void check_code_piece_pixels()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    core::MarkdownDocument pieces;
+    pieces.blocks.push_back(block_of(core::PreviewBlockKind::code, "a\nb\nc\n"));
+    pieces.blocks.push_back(block_of(core::PreviewBlockKind::code, "d\ne\n"));
+    pieces.blocks.front().piece = core::PreviewCodePiece::first;
+    pieces.blocks.back().piece = core::PreviewCodePiece::last;
+    core::MarkdownDocument joined;
+    joined.blocks.push_back(block_of(core::PreviewBlockKind::code, "a\nb\nc\nd\ne\n"));
+    PreviewTextLayouts layouts;
+    const win32::PreviewViewport viewport{0, 400.0F, 200.0F};
+    const auto tops = win32::PreviewBlockTops::measure(pieces, layouts, style_of(), viewport);
+    const auto one = win32::PreviewBlockTops::measure(joined, layouts, style_of(), viewport);
+    const auto pixels =
+        theme ? directly_painted(pieces, theme.value().view(), core::LayoutRect{0, 0, 400, 200}, 0)
+              : std::vector<std::uint8_t>{};
+    if (!tops || !one || pixels.empty() || tops.value().size() != 2U)
+    {
+        expect(false, "the code piece sample measures and paints");
+        return;
+    }
+    const auto &at = tops.value();
+    const auto panel = theme.value().view().ui.panel;
+    const auto seam = static_cast<std::int32_t>(at.bottom(0));
+    const auto left = static_cast<std::int32_t>(at.indent(0));
+    const auto right = 400 - static_cast<std::int32_t>(win32::preview_side_margin(96)) - 1;
+    expect(at.top(1) == at.bottom(0) &&
+               at.bottom(1) - at.top(0) == one.value().bottom(0) - one.value().top(0),
+           "pieces follow without a gap and are as tall as one fence of the same lines");
+    expect(distance_of(pixels, left, seam - 1, panel) <= 6 &&
+               distance_of(pixels, left, seam, panel) <= 6 &&
+               distance_of(pixels, right, seam - 1, panel) <= 6 &&
+               distance_of(pixels, right, seam, panel) <= 6,
+           "the panel joins across the piece boundary without corners");
+    expect(distance_of(pixels, right, static_cast<std::int32_t>(at.top(0)), panel) > 6 &&
+               distance_of(pixels, right, static_cast<std::int32_t>(at.bottom(1)) - 1, panel) > 6,
+           "the first piece rounds its top corner and the last piece its bottom corner");
+}
+
+// 錨 0 から 400 × 200 に style で描いた画素と、測った上端の列（どちらか失敗なら空）。
+[[nodiscard]] std::pair<std::vector<std::uint8_t>, std::optional<win32::PreviewBlockTops>>
+painted_in(const core::MarkdownDocument &document, const core::Theme &theme,
+           const win32::PreviewTextStyle &style)
+{
+    Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
+    const auto target = wic_target(bitmap);
+    PreviewTextLayouts layouts;
+    win32::PreviewBrushes brushes;
+    auto tops = win32::PreviewBlockTops::measure(document, layouts, style,
+                                                 win32::PreviewViewport{0, 400.0F, 200.0F});
+    if (target == nullptr || !tops || FAILED(brushes.prepare(*target.Get(), theme)))
+    {
+        return {};
+    }
+    std::optional<win32::RenderFailure> failure;
+    target->BeginDraw();
+    target->Clear(D2D1::ColorF(0.0F, 0.0F, 0.0F, 0.0F));
+    win32::PreviewPainter<ID2D1RenderTarget> painter(*target.Get(), layouts, brushes, failure);
+    painter.paint(win32::PreviewScene{document, tops.value(), style,
+                                      core::LayoutRect{0, 0, 400, 200}, 0.0F, std::nullopt});
+    if (FAILED(target->EndDraw()) || failure.has_value())
+    {
+        return {};
+    }
+    return {pixels_of(*bitmap.Get()), std::move(tops).value()};
+}
+
+// 継ぎ目の y（seam）の前後 3 行の、面の右端と中ほどの画素が面の色か（許容は差 2）。
+[[nodiscard]] bool seam_joined(const std::vector<std::uint8_t> &pixels, float seam,
+                               core::RgbColor panel)
+{
+    const auto row = static_cast<std::int32_t>(std::floor(seam));
+    const auto right = 400 - static_cast<std::int32_t>(win32::preview_side_margin(120)) - 1;
+    bool joined = true;
+    for (const std::int32_t y : {row - 1, row, row + 1})
+    {
+        joined = joined && distance_of(pixels, right, y, panel) <= 2 &&
+                 distance_of(pixels, 300, y, panel) <= 2;
+    }
+    return joined;
+}
+
+// 段落 1 つと、続く 2 つの切れ（first・last）の文書。
+[[nodiscard]] core::MarkdownDocument seam_document()
+{
+    core::MarkdownDocument document;
+    document.blocks.push_back(block_of(core::PreviewBlockKind::paragraph, "a"));
+    document.blocks.push_back(block_of(core::PreviewBlockKind::code, "a\nb\n"));
+    document.blocks.push_back(block_of(core::PreviewBlockKind::code, "c\nd\n"));
+    document.blocks.at(1).piece = core::PreviewCodePiece::first;
+    document.blocks.at(2).piece = core::PreviewCodePiece::last;
+    return document;
+}
+
+// 切れの継ぎ目が端数の y に来ても（120 DPI・囲みの上に段落・#1877 のレビュー R1）、継ぎ目の
+// 前後の行は面の色のまま（地の色が混ざった線が出ない）。字の大きさは継ぎ目が画素の間に来る最初の
+// ものを選ぶ。
+void check_code_piece_seam()
+{
+    const auto catalog = core::ThemeCatalog::builtins();
+    const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
+    if (!theme)
+    {
+        expect(false, "the theme for the seam check is found");
+        return;
+    }
+    const auto document = seam_document();
+    for (const float size : {13.5F, 14.0F, 15.0F, 12.0F, 11.0F, 16.0F})
+    {
+        const auto [pixels, tops] = painted_in(document, theme.value().view(),
+                                               win32::PreviewTextStyle{"Segoe UI", size, 120});
+        if (pixels.empty() || !tops.has_value() || tops.value().size() != 3U)
+        {
+            expect(false, "the seam sample measures and paints");
+            return;
+        }
+        const auto seam = tops.value().bottom(1);
+        if (seam != std::floor(seam))
+        {
+            expect(seam_joined(pixels, seam, theme.value().view().ui.panel),
+                   "a seam between pixels keeps the panel colour on its rows");
+            return;
+        }
+    }
+    expect(false, "a font size puts the seam between pixels");
 }
 } // namespace
 
@@ -1671,6 +1827,8 @@ void verify_preview_layouts()
     check_recolour_every_ink();
     check_code_colors();
     check_large_fence_cost();
+    check_code_piece_pixels();
+    check_code_piece_seam();
     check_unit_ranges_match_units();
     check_html_and_style();
     check_markers();
