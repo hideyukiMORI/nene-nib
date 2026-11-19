@@ -28,6 +28,7 @@
 #include "TextObjectWorkload.hpp"
 #include "VimBlockWorkload.hpp"
 #include "WordObjectWorkload.hpp"
+#include "WordTableWorkload.hpp"
 
 #include <span>
 #include <string_view>
@@ -43,7 +44,7 @@ using ProbeSelection =
                  TextObjectWorkload, MarkdownWorkload, NewlineIndexWorkload, LexerWorkload,
                  ExplorerFrameWorkload, VimBlockWorkload, WordObjectWorkload, EditedHistoryWorkload,
                  PieceListWorkload, SubstituteWorkload, PatternCostWorkload, PatternProgramWorkload,
-                 SearchObjectWorkload, ExLinesWorkload>;
+                 SearchObjectWorkload, ExLinesWorkload, WordTableWorkload>;
 
 [[nodiscard]] std::optional<ProbeSelection> workload_of(std::string_view name) noexcept;
 // 表 ProbeDispatchRow の全 workload の名前（表の順・#1604 の --expectations が流す）。

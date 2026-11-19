@@ -268,6 +268,7 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 [[nodiscard]] bool keeps_wanted_x_for_menu(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<OpenContextMenu>(intent) ||
+           std::holds_alternative<OpenTabMenu>(intent) ||
            std::holds_alternative<PointContextMenu>(intent) ||
            std::holds_alternative<StepContextMenu>(intent) ||
            std::holds_alternative<CloseContextMenu>(intent);
@@ -728,6 +729,8 @@ void EditorController::settle_transient()
     settle_project_search();
     // プレビュー欄の窓の要求と取消も同じ出口（選択の移動・面の閉じ・ADR 0189 の決定 4）。
     settle_finder_preview();
+    // タブのメニューの帯の変わりも同じ出口（合図で読めないタブが外れた など・#1790）。
+    settle_context_menu();
     if (state_.transient().has_value() && !state_.transient_saved())
     {
         state_ = state_.without_transient();
@@ -740,9 +743,10 @@ void EditorController::begin_intent(bool keeps_message)
     // 最後のタブを閉じる印も同じく 1 意図だけ（ADR 0056 の決定 6）。
     // 一覧で頼まれた操作も同じく 1 意図だけ（ADR 0078 の決定 8）。
     // 格子表示を聞く印も同じく 1 意図だけ（ADR 0140 の決定 2）。
+    // タブのメニューのまとめて閉じる頼みも同じく 1 意図だけ（ADR 0078 の追補 #1790）。
     if (state_.last_failure().has_value() || state_.closing() ||
         state_.close_request().has_value() || state_.operation_request().has_value() ||
-        state_.display_question())
+        state_.tab_sweep_request().has_value() || state_.display_question())
     {
         state_ = state_.with_intent_cleared();
     }
@@ -876,6 +880,8 @@ void EditorController::accept(const WorkCompleted &)
     collect_project_search();
     // プレビュー欄の窓（ADR 0189 の決定 4）。頼んでいなければ呼ばない。
     collect_finder_preview();
+    // エクスプローラーで場所を開く頼みの失敗（ADR 0078 の追補 #1790）。頼んでいなければ呼ばない。
+    collect_reveals();
     // リンクを OS に渡す頼みの失敗（#1869 の段 L2）。頼んでいなければ呼ばない。
     collect_link_opens();
     const auto &input = state_.command_input();
@@ -1279,24 +1285,26 @@ EditorDelivery EditorController::delivery() const
 {
     auto settings = shown_settings();
     const auto &theme = core::selected_theme(settings, state_.appearance());
-    return EditorDelivery{theme.appearance,
-                          state_.mode(),
-                          state_.vim().mode,
-                          shown_ime_stance(),
-                          state_.command_input().transform(input_line_prompt_of),
-                          composed(),
-                          command_composed(),
-                          active_document_view(),
-                          std::move(settings),
-                          state_.settings_failure(),
-                          command_message(),
-                          state_.closing(),
-                          state_.close_request(),
-                          state_.operation_request(),
-                          state_.display_question(),
-                          layout_failure_,
-                          true,
-                          std::nullopt};
+    EditorDelivery delivered{theme.appearance,
+                             state_.mode(),
+                             state_.vim().mode,
+                             shown_ime_stance(),
+                             state_.command_input().transform(input_line_prompt_of),
+                             composed(),
+                             command_composed(),
+                             active_document_view(),
+                             std::move(settings),
+                             state_.settings_failure(),
+                             command_message(),
+                             state_.closing(),
+                             state_.close_request(),
+                             state_.operation_request(),
+                             state_.display_question(),
+                             layout_failure_,
+                             true,
+                             std::nullopt};
+    delivered.tab_sweep = state_.tab_sweep_request();
+    return delivered;
 }
 
 namespace

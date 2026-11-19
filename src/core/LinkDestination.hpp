@@ -32,7 +32,9 @@ struct LinkDestination
 // - `#` で始まる → heading。
 // - scheme（uri_scheme_length・1 文字はドライブ）は ASCII の大小を畳んで見る。
 // - http / https は `//` と空でない ASCII の host を求めて web。
+//   authority に `%` か `@` があれば refused。
 // - mailto は引数を subject / body / cc / bcc だけ受けて mail。
+//   値の中の 2 つ目の生の `?` は refused。
 // - web と mail は RFC 3986 に無い ASCII か不完全な `%` があれば refused。
 // - ほかの scheme → refused。
 // - scheme の無い宛先と file: は resolve_local_reference（画像と同じ規則）で解く。

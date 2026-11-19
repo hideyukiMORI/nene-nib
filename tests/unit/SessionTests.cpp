@@ -50,6 +50,7 @@
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
 #include "ScriptedProjectSearch.hpp"
+#include "ScriptedReveal.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
 #include "ScriptedStartLists.hpp"
@@ -547,6 +548,7 @@ void verify_recency_ranked()
     ScriptedUiLanguage ui_language;
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
+    ScriptedReveal reveal;
     ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
@@ -554,12 +556,13 @@ void verify_recency_ranked()
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     EditorController controller(
-        EditorPorts{appearance,   clipboard,       files,       code_pages,     settings,
-                    themes,       session,         history,     folders,        bookmarks,
-                    text_layouts, autosave,        fonts,       bell,           markdown,
-                    reads,        language_server, wall_clock,  printer,        shell_registration,
-                    images,       start_lists,     ui_language, project_search, previews,
-                    links},
+        EditorPorts{appearance,      clipboard,   files,        code_pages,
+                    settings,        themes,      session,      history,
+                    folders,         bookmarks,   text_layouts, autosave,
+                    fonts,           bell,        markdown,     reads,
+                    language_server, wall_clock,  printer,      shell_registration,
+                    images,          start_lists, ui_language,  project_search,
+                    previews,        reveal,      links},
         nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }

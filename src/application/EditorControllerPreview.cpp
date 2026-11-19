@@ -149,6 +149,9 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
            std::holds_alternative<ActivateCommandChoice>(intent) ||
            std::holds_alternative<SearchHop>(intent) ||
            std::holds_alternative<OpenContextMenu>(intent) ||
+           std::holds_alternative<OpenTabMenu>(intent) ||
+           std::holds_alternative<CopyTabName>(intent) ||
+           std::holds_alternative<RevealTab>(intent) ||
            std::holds_alternative<PointContextMenu>(intent) ||
            std::holds_alternative<StepContextMenu>(intent) ||
            std::holds_alternative<ChooseContextMenu>(intent) ||

@@ -976,11 +976,15 @@ void verify_link_destination_uris()
                refused_link("http://", base) && refused_link("http://u@:80/", base) &&
                destined("http://[::1]:80/", base, web, "http://[::1]:80/"),
            "http and https need // and a host");
+    expect(refused_link("http://%65vil.com/", base) &&
+               refused_link("https://good.example@evil.example/", base),
+           "a percent sign or an at sign in the authority is refused");
     expect(destined("mailto:a@b.c?subject=hi&body=x&CC=d@e.f&bcc=g@h.i", base, mail,
                     "mailto:a@b.c?subject=hi&body=x&CC=d@e.f&bcc=g@h.i") &&
                refused_link("mailto:a@b.c?attach=x", base) &&
                refused_link("mailto:a@b.c?%61ttach=x", base) &&
-               refused_link("mailto:a@b.c?subject=x&attachment=y", base),
+               refused_link("mailto:a@b.c?subject=x&attachment=y", base) &&
+               refused_link("mailto:a@b.c?subject=x?attach=y", base),
            "mailto takes only subject, body, cc and bcc");
     expect(refused_link(" https://x.y", base) && refused_link(" b.md", base) &&
                refused_link("b.md ", base),
@@ -1004,12 +1008,18 @@ void verify_link_destination_paths()
                             base) &&
                refused_link("a%E2%80%AE.md", base),
            "bidirectional controls, C1 controls and zero-width characters are refused");
+    expect(refused_link("a\xD8\x9C.md", base) && refused_link("a\xE1\xA0\x8E.md", base) &&
+               refused_link("a\xE1\x85\x9F.md", base) && refused_link("a\xE3\x85\xA4.md", base) &&
+               refused_link("a\xEF\xBE\xA0.md", base) && refused_link("a\xF3\xA0\x81\x81.md", base),
+           "the Arabic letter mark, Hangul fillers and tag characters are refused");
     expect(refused_link("a\xFF.md", base) && refused_link("a%FF.md", base),
            "invalid UTF-8 is refused");
     expect(refused_link("COM1", base) && refused_link("con.md", base) &&
                refused_link("C:\\x\\AUX", base) && refused_link("NUL.tar.md", base) &&
                refused_link("lpt\xC2\xB9.txt", base) && refused_link("prn", base) &&
-               refused_link("CONOUT$", base) && refused_link("file:///C:/x/com0.md", base),
+               refused_link("CONOUT$", base) && refused_link("file:///C:/x/com0.md", base) &&
+               refused_link("./COM1:", base) && refused_link("sub/con:", base) &&
+               refused_link("NUL :", base) && refused_link("./NUL:x", base),
            "reserved device names are refused");
     expect(destined("console.md", base, document, "C:\\docs\\console.md") &&
                destined("com10.md", base, document, "C:\\docs\\com10.md") &&

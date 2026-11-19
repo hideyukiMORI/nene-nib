@@ -7,10 +7,10 @@
 
 #include "ContextMenu.hpp"
 #include "ContextMenuItem.hpp"
+#include "ContextMenuKind.hpp"
 #include "ContextMenuMode.hpp"
 #include "ContextMenuOpen.hpp"
 #include "ContextMenuRow.hpp"
-#include "ContextMenuShape.hpp"
 #include "ContextMenuSituation.hpp"
 #include "ContextMenuView.hpp"
 #include "EditMode.hpp"
@@ -28,13 +28,13 @@
 #include "VimMode.hpp"
 #include "VimStep.hpp"
 
-#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -44,6 +44,7 @@ namespace
 [[nodiscard]] bool is_menu_intent(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<OpenContextMenu>(intent) ||
+           std::holds_alternative<OpenTabMenu>(intent) ||
            std::holds_alternative<PointContextMenu>(intent) ||
            std::holds_alternative<StepContextMenu>(intent) ||
            std::holds_alternative<ChooseContextMenu>(intent) ||
@@ -68,10 +69,14 @@ namespace
 
 // from の次（down）か前の使える行。回り込み、使える行が無ければ無し。
 [[nodiscard]] std::optional<std::size_t>
-stepped_row(const std::array<core::ContextMenuItem, core::context_menu_size> &items,
-            std::optional<std::size_t> from, bool down) noexcept
+stepped_row(const std::vector<core::ContextMenuItem> &items, std::optional<std::size_t> from,
+            bool down) noexcept
 {
     const std::size_t count = items.size();
+    if (count == 0)
+    {
+        return std::nullopt;
+    }
     std::size_t at = from.value_or(down ? count - 1 : 0);
     for (std::size_t tried = 0; tried < count; ++tried)
     {
@@ -164,9 +169,15 @@ void EditorController::accept(const OpenContextMenu &intent)
                    core::preview_selection_range(*preview->document, preview->selection.value())
                        .has_value();
     }
-    context_menu_ = ContextMenuOpen{
-        intent.x, intent.y, mode,
-        core::context_menu_items(core::ContextMenuSituation{mode, selected}), std::nullopt};
+    const auto items = core::context_menu_items(core::ContextMenuSituation{mode, selected});
+    context_menu_ = ContextMenuOpen{intent.x,
+                                    intent.y,
+                                    core::ContextMenuKind::body,
+                                    mode,
+                                    {items.begin(), items.end()},
+                                    std::nullopt,
+                                    std::nullopt,
+                                    {}};
 }
 
 void EditorController::accept(const PointContextMenu &intent)
@@ -203,9 +214,27 @@ void EditorController::accept(const ChooseContextMenu &intent)
     {
         return;
     }
-    const auto chosen = context_menu_.value();
+    const auto chosen = std::move(context_menu_).value();
     context_menu_.reset();
-    run_context_menu_row(chosen.items.at(row.value()), chosen.mode);
+    run_chosen_row(chosen, row.value());
+}
+
+// 本文のメニューは本文の道へ、タブのメニューは右クリックしたタブ（退避番号で引き直す）へ。
+void EditorController::run_chosen_row(const ContextMenuOpen &menu, std::size_t row)
+{
+    switch (menu.kind)
+    {
+    case core::ContextMenuKind::body:
+        run_context_menu_row(menu.items.at(row), menu.mode);
+        return;
+    case core::ContextMenuKind::tab:
+        if (menu.tab.has_value())
+        {
+            run_tab_menu_row(menu.items.at(row).operation, menu.tab.value());
+        }
+        return;
+    }
+    std::unreachable();
 }
 
 void EditorController::accept(const CloseContextMenu &)
@@ -258,14 +287,17 @@ std::optional<ContextMenuView> EditorController::context_menu_view() const
     }
     const auto &menu = context_menu_.value();
     const auto language = state_.display_language();
-    ContextMenuView view{menu.x, menu.y, {}, menu.highlighted};
-    for (std::size_t index = 0; index < menu.items.size(); ++index)
+    ContextMenuView view{menu.x, menu.y, menu.kind, {}, menu.highlighted};
+    view.rows.reserve(menu.items.size());
+    for (const auto &item : menu.items)
     {
-        const auto &item = menu.items.at(index);
-        view.rows.at(index) = ContextMenuRow{
+        view.rows.push_back(ContextMenuRow{
             item.operation,
             std::string(core::ui_text(core::operation_text(item.operation).name, language)),
-            core::context_menu_key(item.operation, menu.mode), item.enabled, item.separated};
+            menu.kind == core::ContextMenuKind::tab
+                ? core::tab_menu_key(item.operation, state_.mode())
+                : core::context_menu_key(item.operation, menu.mode),
+            item.enabled, item.separated});
     }
     return view;
 }

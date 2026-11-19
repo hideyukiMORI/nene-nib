@@ -96,7 +96,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp src/application/EditorControllerFinderPreview.cpp src/application/PreviewLines.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
-    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerLinkCard.cpp src/application/EditorControllerSettings.cpp src/application/EditorControllerCompletion.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
+    src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerLinkCard.cpp src/application/EditorControllerSettings.cpp src/application/EditorControllerCompletion.cpp src/application/EditorControllerTabMenu.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
@@ -207,6 +207,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/AutosaveRestorePropertyTests.cpp
     tests/unit/OperationsTests.cpp
     tests/unit/ContextMenuTests.cpp
+    tests/unit/TabMenuTests.cpp
     tests/unit/UiTextsTests.cpp
     tests/unit/UiLanguageTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/SubstituteConfirmTests.cpp tests/unit/ExLinesTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
@@ -292,7 +293,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/MarkdownShelf.cpp src/adapters/win32/Win32MarkdownAdapter.cpp
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
     src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
-    src/adapters/win32/StartListShelf.cpp src/adapters/win32/Win32StartListAdapter.cpp
+    src/adapters/win32/StartListShelf.cpp src/adapters/win32/RevealShelf.cpp src/adapters/win32/RevealCall.cpp src/adapters/win32/Win32RevealAdapter.cpp src/adapters/win32/Win32StartListAdapter.cpp
     src/adapters/win32/LinkOpenShelf.cpp src/adapters/win32/LinkOpenCall.cpp src/adapters/win32/Win32LinkOpenAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
@@ -548,7 +549,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
     tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp
     tests/ui/CompletionPaintTests.cpp
-    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp)
+    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp tests/ui/DeliveryStepsTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)
@@ -629,7 +630,7 @@ nenenib_target(nib_perf_probes performance_tests EXECUTABLE
     tests/performance/PieceListProbe.cpp
     tests/performance/SubstituteProbe.cpp tests/performance/ExLinesProbe.cpp tests/performance/PatternCostProbe.cpp
     tests/performance/PatternProgramProbe.cpp
-    tests/performance/SearchObjectProbe.cpp)
+    tests/performance/SearchObjectProbe.cpp tests/performance/WordTableProbe.cpp)
 nenenib_link(nib_perf_probes nenenib_core)
 nenenib_link(nib_perf_probes nenenib_application)
 nenenib_link(nib_perf_probes nenenib_adapters)

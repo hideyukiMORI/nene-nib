@@ -23,7 +23,7 @@ namespace
 // 外した workload の期待は `eng/check.ps1 -Full` の `eng/probe-smoke.ps1` が見る（ADR 0082 の #690
 // の追補）。workload を足すときは、Debug で 2 秒を超えるならここに 1 行足す。
 using SkippedWorkload = std::pair<std::string_view, std::string_view>;
-constexpr std::array<SkippedWorkload, 73> skipped_workloads{{
+constexpr std::array<SkippedWorkload, 79> skipped_workloads{{
     {"controller-open-utf8-16mib", "Debug 3.5 s"},
     {"buffer-from-utf8-16mib", "Debug 3.3 s"},
     {"controller-insert-200-after-delete-16mib", "Debug 7.9 s"},
@@ -97,6 +97,12 @@ constexpr std::array<SkippedWorkload, 73> skipped_workloads{{
     {"vim-gn-1mib-line-end", "Debug 3.3 s"},
     {"vim-dgn-1mib-line-end", "Debug 4.7 s"},
     {"vim-dg-shift-n-1mib-line-end", "Debug 4.3 s"},
+    {"controller-word-table-first-ascii-1mib", "Debug 8.0 s"},
+    {"controller-word-table-second-ascii-1mib", "Debug 6.3 s"},
+    {"controller-word-table-rebuilt-ascii-1mib", "Debug 18.3 s"},
+    {"controller-word-table-first-japanese-1mib", "Debug 5.3 s"},
+    {"controller-word-table-second-japanese-1mib", "Debug 7.0 s"},
+    {"controller-word-table-rebuilt-japanese-1mib", "Debug 10.3 s"},
 }};
 
 [[nodiscard]] bool skipped(std::string_view name) noexcept

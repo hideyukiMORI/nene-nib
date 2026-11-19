@@ -19,6 +19,7 @@
 #include "PreviewPort.hpp"
 #include "PrintPort.hpp"
 #include "ProjectSearchPort.hpp"
+#include "RevealPort.hpp"
 #include "SessionPort.hpp"
 #include "SettingsPort.hpp"
 #include "ShellRegistrationPort.hpp"
@@ -78,6 +79,10 @@ struct EditorPorts
     ProjectSearchPort &project_search;
     // 探して見る面のプレビューの窓の読み（ADR 0189 の決定 4）。
     PreviewPort &previews;
+    // エクスプローラーでファイルを選んだ状態でフォルダを開かせる（ADR 0078 の追補 #1790）。
+    // 「エクスプローラーで場所を開く」とその後の合図だけが呼び、起動・開く・切り替え・保存・打鍵の
+    // 道では呼ばない。
+    RevealPort &reveal;
     // プレビューのリンク（web と mail）を OS の既定の道に渡す（施主決定 D105・#1869 の段 L2）。
     // 札で開くときと、頼んだ後の合図のときだけ呼ぶ。
     LinkOpenPort &links;

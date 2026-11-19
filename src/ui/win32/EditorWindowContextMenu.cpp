@@ -1,6 +1,7 @@
-// 本文の右クリックのメニューの窓の側（ADR 0078 の追補 #1051・D71・FR-031）。右クリック・
-// Shift+F10・メニューキーで開き、開いている間の鍵とマウスはメニューへ送る。何を出すか・何で閉じる
-// か・選んだ行で何をするかは controller が決め、窓は意図を送るだけ（ARC-011）。当たりは renderer が
+// 右クリックのメニューの窓の側（ADR 0078 の追補 #1051・D71・FR-031・タブのメニューは #1790・D98）。
+// 本文は右クリック・Shift+F10・メニューキーで、タブは帯のタブの上の右クリックだけで開き、開いて
+// いる間の鍵とマウスはメニューへ送る。何を出すか・何で閉じるか・選んだ行で何をするかは controller
+// が決め、窓は意図を送るだけ（ARC-011）。当たりは renderer が
 // 最後に描いた配置（core::context_menu_layout の 1 本）を引く。
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
@@ -10,12 +11,17 @@
 #include "ContextMenuKey.hpp"
 #include "LayoutRect.hpp"
 #include "OpenContextMenu.hpp"
+#include "OpenTabMenu.hpp"
 #include "PaneLayouts.hpp"
 #include "PointContextMenu.hpp"
 #include "PointerClicks.hpp"
 #include "SelectionAnchoring.hpp"
 #include "StepContextMenu.hpp"
 #include "SwitchPane.hpp"
+#include "TabRightPress.hpp"
+#include "TitleBarHit.hpp"
+#include "TitleBarLayout.hpp"
+#include "TitleBarTarget.hpp"
 
 #include <windows.h>
 
@@ -60,38 +66,79 @@ bool EditorWindow::in_other_text_body(POINT point) const
     return other.has_value() && core::contains(other.value().content, point.x, point.y);
 }
 
+// 右の押し。設定の面の間（外なら面を閉じるだけ・#1836）・補完の面の上（面を閉じるだけ・#1844 の
+// L3b）・開いているメニューの上の押しは、本文のメニューもタブのメニューも開かない。面とメニューが
+// 取った押しでは本文とタブの両方の覚えを消す（窓の外で離した古いタブの押しを残さない・#1790 の
+// レビューの推奨 1）。
 void EditorWindow::press_right(LPARAM data)
 {
-    // 設定の面が開いている間の右の押しは本文のメニューを開かない（外なら面を閉じるだけ・#1836）。
-    if (press_settings_right(data))
-    {
-        right_pressed_ = std::nullopt;
-        return;
-    }
     const auto point = point_of(data);
-    // 補完の面の上の右の押しは面を閉じるだけで、面の下の位置でメニューを開かない（#1844 の L3b）。
-    if (close_completion_under(data))
+    const bool taken =
+        press_settings_right(data) || close_completion_under(data) || press_right_on_menu(point);
+    right_pressed_ = !taken && (in_text_body(point) || in_other_text_body(point))
+                         ? std::optional{point}
+                         : std::nullopt;
+    tab_right_pressed_ = tab_right_press_kept(taken, taken ? std::nullopt : tab_under(data));
+}
+
+// 開いているメニューの上の右の押しは取る（何もしない）。外の押しはメニューを閉じてから、新しい点の
+// 押しとして続ける。
+bool EditorWindow::press_right_on_menu(POINT point)
+{
+    if (!controller_.context_menu_active())
     {
-        right_pressed_ = std::nullopt;
-        return;
+        return false;
     }
-    // 開いているメニューの外の右の押しは閉じてから、新しい点の押しとして覚える（中は何もしない）。
-    if (controller_.context_menu_active())
+    if (renderer_ != nullptr && renderer_->context_menu_covers(point.x, point.y))
     {
-        if (renderer_ != nullptr && renderer_->context_menu_covers(point.x, point.y))
-        {
-            right_pressed_ = std::nullopt;
-            return;
-        }
-        send(application::CloseContextMenu{});
+        return true;
     }
-    right_pressed_ =
-        in_text_body(point) || in_other_text_body(point) ? std::optional{point} : std::nullopt;
+    send(application::CloseContextMenu{});
+    return false;
+}
+
+std::optional<core::TitleBarTarget> EditorWindow::tab_under(LPARAM data) const
+{
+    if (controller_.command_palette_active())
+    {
+        return std::nullopt;
+    }
+    const auto target = title_bar_target_at(data);
+    if (target.hit != core::TitleBarHit::tab && target.hit != core::TitleBarHit::tab_close)
+    {
+        return std::nullopt;
+    }
+    return core::TitleBarTarget{core::TitleBarHit::tab, target.tab};
+}
+
+// 押したタブと離したタブが同じときだけ開く（ADR 0056 の決定 9・押して帯が送られ、同じ点に来た別の
+// タブでは開かない）。置き場は離した点の横位置と帯のすぐ下で、窓の右端と下端に収まらなければ
+// core::context_menu_layout が寄せる。
+bool EditorWindow::release_right_on_tab(LPARAM data)
+{
+    const auto pressed = std::exchange(tab_right_pressed_, std::nullopt);
+    if (!pressed.has_value())
+    {
+        return false;
+    }
+    const auto released = tab_under(data);
+    const auto target =
+        released.has_value() ? core::title_bar_released(pressed, released.value()) : std::nullopt;
+    if (!target.has_value())
+    {
+        return false;
+    }
+    send(application::OpenTabMenu{low_word_of(data), title_bar().band.bottom, target.value().tab});
+    return true;
 }
 
 void EditorWindow::release_right(LPARAM data)
 {
     const auto pressed = std::exchange(right_pressed_, std::nullopt);
+    if (release_right_on_tab(data))
+    {
+        return;
+    }
     const auto point = point_of(data);
     if (!pressed.has_value())
     {

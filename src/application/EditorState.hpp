@@ -33,6 +33,7 @@
 #include "SplitLayout.hpp"
 #include "SplitState.hpp"
 #include "TabRecency.hpp"
+#include "TabSweep.hpp"
 #include "TabTipPhase.hpp"
 #include "TextBuffer.hpp"
 #include "TitleBarTarget.hpp"
@@ -312,6 +313,11 @@ class EditorState final
     [[nodiscard]] const std::optional<core::EditorOperation> &operation_request() const noexcept;
     [[nodiscard]] EditorState
     with_operation_request(std::optional<core::EditorOperation> operation) const;
+    // タブのメニューの「ほかのタブを閉じる」「右のタブを閉じる」の頼み（ADR 0078 の追補 #1790）。
+    // close_request と同じく 1 意図だけ立ち、状態は変えない（閉じるのは ui が × と同じ閉じる流れで
+    // 1 つずつ行う）。
+    [[nodiscard]] const std::optional<TabSweep> &tab_sweep_request() const noexcept;
+    [[nodiscard]] EditorState with_tab_sweep_request(std::optional<TabSweep> sweep) const;
     // 帯（ADR 0056 の決定 2）。帯の幅は ui が知らせる DIP で、まだ知らないあいだは 0。送り量は
     // DIP。マウスを載せている要素は、載せていなければ nullopt。
     [[nodiscard]] std::int32_t title_bar_width() const noexcept;
@@ -476,6 +482,7 @@ class EditorState final
     bool closing_ = false;
     std::optional<std::size_t> close_request_;
     std::optional<core::EditorOperation> operation_request_;
+    std::optional<TabSweep> tab_sweep_request_;
     std::int32_t title_bar_width_ = 0;
     std::int32_t tab_scroll_ = 0;
     std::optional<core::TitleBarTarget> hovered_;

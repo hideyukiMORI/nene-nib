@@ -93,12 +93,12 @@ void ContextMenuPainter::paint(const application::ContextMenuView &view,
     target_.FillRoundedRectangle(panel, &brush_);
     brush_.SetColor(to_color(palette.panel_border));
     target_.DrawRoundedRectangle(panel, &brush_, scaled(1.0F));
-    for (const auto &line : layout.separators)
+    for (std::size_t index = 0; index < layout.separator_count; ++index)
     {
-        target_.FillRectangle(to_rect(line), &brush_);
+        target_.FillRectangle(to_rect(layout.separators.at(index)), &brush_);
     }
     const auto inset = core::to_pixels(row_inset_dips, text_.dpi);
-    for (std::size_t index = 0; index < view.rows.size(); ++index)
+    for (std::size_t index = 0; index < view.rows.size() && index < layout.row_count; ++index)
     {
         if (view.highlighted == index)
         {

@@ -87,6 +87,13 @@ enum class EditorOperation : std::uint8_t
     show_information,
     // 設定の面を開く（ADR 0170 の決定 5・施主決定 D102・#1836）。Ctrl+, で両モード・F1 の一覧から。
     // 開いている間の Ctrl+, は面の鍵（閉じて保存する）。
-    open_settings
+    open_settings,
+    // タブの右クリックのメニューの 5 つ（ADR 0078 の追補 #1790・施主決定 D98）。鍵は無く、F1 の
+    // 一覧ではアクティブなタブに、メニューでは右クリックしたタブに効く。
+    reveal_in_explorer,
+    copy_path,
+    copy_file_name,
+    close_other_tabs,
+    close_right_tabs
 };
 } // namespace nenenib::core

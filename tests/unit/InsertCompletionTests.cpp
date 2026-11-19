@@ -177,6 +177,21 @@ void verify_table()
            "prefixed lists the words that start with the prefix");
 }
 
+// 表の並びは語のバイト列の順（#1872 の鍵つきの比べ・#1874 の R2）。先頭 8 バイトが同じ語どうし・
+// 8 バイト目を境にした語・長い語と短い語・非 ASCII と ASCII の混在を固定の列で確かめる。
+void verify_table_order()
+{
+    const core::WordTable words = held(
+        buffer_of("zz abcdefgz \xE6\x97\xA5\xE6\x9C\xAC abcdefghi abcdefgh \xE3\x83\x86\xE3\x82\xB9"
+                  "\xE3\x83\x88 abcdefg\xC3\xA9 abcdefgha ab abcdefgh_z abcdefg abcdefgh"));
+    expect(words_of(words) == std::vector<std::string>{"ab=1", "abcdefg=1", "abcdefgh=2",
+                                                       "abcdefgh_z=1", "abcdefgha=1", "abcdefghi=1",
+                                                       "abcdefgz=1", "abcdefg\xC3\xA9=1", "zz=1",
+                                                       "\xE3\x83\x86\xE3\x82\xB9\xE3\x83\x88=1",
+                                                       "\xE6\x97\xA5\xE6\x9C\xAC=1"},
+           "the table lists words in byte order across the 8-byte key boundary");
+}
+
 // 1 MiB を超える文書は表を持たない（設計席の追補 2026-11-18）。候補は窓の語と他のタブの表だけ。
 void verify_size_limit()
 {
@@ -576,6 +591,7 @@ void verify_controller_property()
 void verify_insert_completion_contracts()
 {
     verify_table();
+    verify_table_order();
     verify_size_limit();
     verify_incremental_property();
     verify_fold();

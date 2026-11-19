@@ -45,8 +45,9 @@ void Direct2DRenderer::draw_context_menu(const application::EditorFrame &frame, 
         ContextMenuText{dwrite_.Get(), command_format_.Get(), key_format_.Get(), dpi_},
         context_menu_layouts_);
     const auto widths = painter.measure(view);
-    context_menu_layout_ = core::context_menu_layout(core::ContextMenuRequest{
-        view.x, view.y, core::LayoutRect{0, 0, width, height}, widths.name, widths.key, dpi_});
+    context_menu_layout_ = core::context_menu_layout(
+        core::ContextMenuRequest{view.x, view.y, core::LayoutRect{0, 0, width, height}, widths.name,
+                                 widths.key, dpi_, view.kind});
     painter.paint(view, context_menu_layout_.value(), frame.palette);
 }
 } // namespace nenenib::ui::win32

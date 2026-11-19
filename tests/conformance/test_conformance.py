@@ -1020,7 +1020,35 @@ class UiTextChecks(unittest.TestCase):
         literal = [str(f) for path in cnf.inventory(ROOT) if path.suffix in {".cpp", ".hpp"}
                    for f in cnf.ui_text_literal_checks(path.as_posix(),
                                                        (ROOT / path).read_text(encoding="utf-8"), RULES)]
-        self.assertEqual([], literal + [str(f) for f in cnf.ui_message_table_checks(ROOT, RULES)])
+        self.assertEqual([], literal + [str(f) for f in cnf.enum_table_checks(ROOT, RULES)])
+
+    OPERATION_ENUM = "enum class EditorOperation : std::uint8_t\n{\n    open_file,\n    save\n};\n"
+    OPERATION_COUNT = ("[[nodiscard]] consteval std::size_t operation_count() noexcept\n{\n"
+                       "    return std::to_underlying(EditorOperation::save) + 1U;\n}\n")
+    OPERATION_ROWS = ("inline constexpr std::array<OperationText, 2> operation_texts{{\n"
+                      "    {EditorOperation::open_file, UiMessage::alpha},\n"
+                      "    {EditorOperation::save, UiMessage::beta},\n}};\n")
+
+    def operation_problems(self, enum, count=None):
+        return cnf.enum_table_problems("EditorOperation", "operation_count", enum,
+                                       self.OPERATION_COUNT if count is None else count,
+                                       {"texts": self.OPERATION_ROWS})
+
+    def test_cnf016_operation_count_positive(self):
+        self.assertEqual([], self.operation_problems(self.OPERATION_ENUM))
+
+    def test_cnf016_operation_added_after_the_last_without_moving_the_count_fails(self):
+        grown = self.OPERATION_ENUM.replace("    save\n};", "    save,\n    print\n};")
+        problems = self.operation_problems(grown)
+        self.assertIn(("", "operation_count names save, but the last enumerator is print"), problems)
+        self.assertIn(("texts", "2 rows for 3 EditorOperation values"), problems)
+
+    def test_cnf016_operation_count_not_named_fails(self):
+        self.assertEqual([("", "operation_count is not std::to_underlying(EditorOperation::<last>) + 1U")],
+                         self.operation_problems(self.OPERATION_ENUM, "constexpr std::size_t operation_count = 2;\n"))
+
+    def test_cnf016_rules_cover_both_tables(self):
+        self.assertEqual(["UiMessage", "EditorOperation"], [table["enum"] for table in RULES["enumTables"]])
 
 
 class GitChecks(unittest.TestCase):

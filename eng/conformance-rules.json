@@ -27,10 +27,21 @@
   "simdModulePath": "src/core/simd/",
   "markdownParserHeader": "md4c.h",
   "markdownParserAllowedPath": "src/core/MarkdownParse.cpp",
-  "uiMessageTable": {
-    "enum": "src/core/UiMessage.hpp",
-    "columns": ["src/core/UiTextsJapanese.hpp", "src/core/UiTextsEnglish.hpp", "src/core/UiTextsSimplifiedChinese.hpp"]
-  },
+  "enumTables": [
+    {
+      "enum": "UiMessage",
+      "enumFile": "src/core/UiMessage.hpp",
+      "count": "ui_message_count",
+      "columns": ["src/core/UiTextsJapanese.hpp", "src/core/UiTextsEnglish.hpp", "src/core/UiTextsSimplifiedChinese.hpp"]
+    },
+    {
+      "enum": "EditorOperation",
+      "enumFile": "src/core/EditorOperation.hpp",
+      "count": "operation_count",
+      "countFile": "src/core/OperationTexts.cpp",
+      "columns": ["src/core/OperationTexts.hpp", "src/core/OperationReadings.hpp"]
+    }
+  ],
   "uiTextLiteralAllowedPaths": ["src/core/UiTextsJapanese.hpp", "src/core/UiTextsSimplifiedChinese.hpp", "src/core/OperationReadings.hpp", "src/core/DisplayLanguageNames.cpp"],
   "cppExtensions": [".cpp", ".hpp", ".h", ".cc", ".cxx", ".hxx"],
   "configurationExtensions": [".ps1", ".cmake", ".yml", ".yaml"],
