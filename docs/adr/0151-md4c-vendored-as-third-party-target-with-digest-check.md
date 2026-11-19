@@ -175,3 +175,13 @@ PR #1860 の実装と独立レビュー（`D:/NeNeNib/outputs/20261118/review-18
 5. **文。** 札に描く宛先の綴りは、制御文字と `link_deceptive_code_point`（`link_destination` の見えない字の判定と同じ 1 本）の字を U+FFFD に置き換える（`link_card_shown_text`・写すのは元の綴りのまま）。札の題・開き方・ボタン・鍵の案内と 2 つの知らせを `UiMessage` の末尾に 17 値足す（鍵の名前は訳さない・中国語の案内は全角のコロンで区切る）。色は `panel` / `panel_border` / `text`・構文の `comment` / `error` / `function` のトークンだけ。
 
 **限界（段 L2）。** 札の位置はクリックした frame で描いたリンクの矩形から決め、測った範囲の外なら領域の左上に置く。ワーカーは 1 本なので、`ShellExecuteExW`（`SEE_MASK_NOASYNC`）が戻るまで（冷えたブラウザ・DDE のハンドラで数百 ms〜数秒）同じワーカーのほかの裏の仕事（Markdown の解析・フォルダ・画像・プレビューの窓）が待つ（#1790 の `RevealPort` と同じ形・専用のスレッドにするかは `RevealPort` とまとめるかと一緒に後で決める・#1876 のレビュー R2）。マウスを載せたときの見た目（指の形のカーソル）は入れていない。見出しへ跳ぶのは段 L3。
+
+### 段 L3（2026-11-19・#1869）: プレビューの `#見出し` のリンクで、その見出しへ跳ぶ（確かめない）
+
+1. **名札（slug）は core の純関数 `heading_slugs` の 1 本**（`HeadingSlug.hpp`）。見出しの要素（`PreviewBlockKind::heading`）の表示の文字（`PreviewBlock.text`・装飾の記号を除いた後）から、前後の ASCII の空白を除き、ASCII の大文字を小文字に畳み、ASCII の英数字と `-` `_` と非 ASCII の字（日本語・絵文字など）を残し、空白を 1 つずつ `-` にし（続く空白をまとめない）、ほかの ASCII の字（記号・Tab・改行）を消す。同じ名札が 2 つ目から現れたら `-1` `-2` … を付け、付けた形が既にあればさらに次の数へ進む（GitHub の公開の説明「Basic writing and formatting syntax」の Section links の規則と例・数え方は github-slugger と同じ・`# a` `# a` `# a-1` は `a` `a-1` `a-1-1`）。列は `parse_markdown` が解析の終わりに 1 回だけ作って `MarkdownDocument.headings`（`MarkdownHeading{block, slug}` の本文の順の列）に置き、frame ごとに作り直さない。確保の失敗は `insufficient_memory`。
+2. **リンクの `#…` を名札の列で引く**（`heading_block_of`）。`LinkDestination.text`（`#` の後ろ）を `percent_decoded` の 1 本で解いてから、ASCII の大小を畳んで名札と比べ、最初の 1 つ。見つからなければ 1 行の知らせ（`UiMessage::notice_heading_not_found`・3 列の末尾に 1 行ずつ）。札は出さない。
+3. **跳ぶ先。** 見出しの要素の `source_begin`（見せている結果が古い本文のものなら本文の長さに寄せる）の行の頭（桁 0）へ、本文のクリックと同じ `PlaceCaret` の道でキャレットを置く（通常・Vim の両方。Vim の VISUAL と INSERT の扱いもクリックと同じ）。横のプレビューは今の追従のまま動く（本文が送られれば追従に戻る）。全面のプレビューは送りの錨をその行の頭に置き（追従をやめる・`scroll_preview` と同じく本文の先頭行を覚え直す）、本文のキャレットも同じく動かす。
+4. **ジャンプの印。** Vim の `:help jump-motions` は「新しいファイルを開く命令」と `:tag` を跳ぶ命令に数え、文書の中のリンクで別の所へ移るのは help のタグへ跳ぶ（`Ctrl-]`）と同じ形なので、跳ぶ前の位置を `''` とジャンプの列に置く。道は全文検索の着地（`land_project_hit`）と同じ `vim_mark_set(…, '\'', …)`（`m'` の 1 本）で、モードを問わず置く（通常モードでは読まれないだけ）。
+5. **入口は段 L2 の札の道と同じ。** `ClickPreviewLink` で押しと離しが同じリンクに当たり、種類が `heading` なら札を開かずに `jump_to_heading` へ。表の升の中のリンクも同じ道。
+
+**限界（段 L3）。** 他の文書の `other.md#sec` は文書を開くだけで、見出しへは跳ばない（段 L1 のとおり解決器が `#` の後ろを捨てる）。GitHub（github-slugger）は Unicode の大文字も小文字に畳み（`Θ` → `θ`）、非 ASCII の句読点（`、` `。` `（` など）と絵文字も消すが、Nib は設計の決めで ASCII だけを畳み、非 ASCII の字は全部残す。そのため GitHub の名札をそのまま写した `#…` が、非 ASCII の大文字・句読点・絵文字を含む見出しに当たらないことがある（その形の見出しは Nib の名札で書けば当たる）。空の `#` は空の見出しがあればそれに当たる（GitHub の「頁の頭」の意味は持たない）。本文（プレビューでない側）の `#見出し` から跳ぶ道と見出しの一覧（目次）は無い。

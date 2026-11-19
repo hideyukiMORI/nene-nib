@@ -369,10 +369,11 @@ enum class UiMessage : std::uint16_t
     link_card_hint_refused,
     notice_link_open_failed,
     notice_link_copied,
+    notice_heading_not_found,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_link_copied) + 1U;
+    std::to_underlying(UiMessage::notice_heading_not_found) + 1U;
 } // namespace nenenib::core

@@ -418,5 +418,6 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::link_card_hint_refused, "Ctrl+C {0} · Esc {1}"},
     {UiMessage::notice_link_open_failed, "Couldn't open the link"},
     {UiMessage::notice_link_copied, "Copied the destination"},
+    {UiMessage::notice_heading_not_found, "No such heading in this document"},
 }};
 } // namespace nenenib::core

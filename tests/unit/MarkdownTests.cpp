@@ -3,6 +3,7 @@
 // 期待は CommonMark の HTML を平らな leaf の列に読み替えた値。source_begin は最初の文字の位置。
 #include "CaretMotion.hpp"
 #include "FilePath.hpp"
+#include "HeadingSlug.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "Lexer.hpp"
@@ -1118,6 +1119,85 @@ void verify_link_targets()
     return destined(target, document, core::LinkKind::refused, target);
 }
 
+// 見出しの名札（段 L3・#1869）。text の見出しを解析して、名札の列を文書の順に並べた形。
+[[nodiscard]] std::vector<std::string> slugs_of(std::string_view text)
+{
+    const auto parsed = core::parse_markdown(text, MarkdownStop::never());
+    std::vector<std::string> slugs;
+    if (!parsed.has_value())
+    {
+        return slugs;
+    }
+    for (const auto &each : parsed.value().headings)
+    {
+        slugs.push_back(each.slug);
+    }
+    return slugs;
+}
+
+[[nodiscard]] bool slugged(std::string_view text, const std::vector<std::string> &expected)
+{
+    const auto found = slugs_of(text);
+    if (found != expected)
+    {
+        for (const auto &slug : found)
+        {
+            std::fprintf(stderr, "  slug [%s]\n", slug.c_str());
+        }
+    }
+    return found == expected;
+}
+
+// 名札の表。GitHub の公開の説明（Basic writing and formatting syntax の Section links）の規則と例:
+// 小文字に・空白は `-`・ほかの空白と記号は消す・前後の空白は除く・装飾は中身だけ・同じ名札は
+// `-1` `-2` …。大小を畳むのは ASCII だけ、非 ASCII の字は残す（設計の決め・ADR 0151 の段 L3）。
+void verify_heading_slugs()
+{
+    expect(slugged("# Example headings\n\n## Sample Section\n",
+                   {"example-headings", "sample-section"}),
+           "the examples of the GitHub description: lower case and a hyphen for each space");
+    expect(slugged("## This'll be a _Helpful_ Section About the Greek Letter \xCE\x98!\n",
+                   {"thisll-be-a-helpful-section-about-the-greek-letter-\xCE\x98"}),
+           "markup keeps its contents, ASCII punctuation goes and a non-ASCII letter stays");
+    expect(slugged("## This heading is not unique in the file\n\n"
+                   "## This heading is not unique in the file\n\n"
+                   "## This heading is not unique in the file\n",
+                   {"this-heading-is-not-unique-in-the-file",
+                    "this-heading-is-not-unique-in-the-file-1",
+                    "this-heading-is-not-unique-in-the-file-2"}),
+           "a repeated anchor gets a hyphen and an increasing number");
+    expect(slugged("# a\n\n# a\n\n# a-1\n", {"a", "a-1", "a-1-1"}),
+           "a numbered anchor that already exists moves on to the next number");
+    expect(slugged("# C++ & C#\n\n# a  b\n\n# x_y-z 9\n", {"c--c", "a--b", "x_y-z-9"}),
+           "symbols go, each space is a hyphen and digits, `-` and `_` stay");
+    expect(slugged("# \xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB "
+                   "\xE6\xA6\x82\xE8\xA6\x81\n\n# \xF0\x9F\x8E\x89 Party\n",
+                   {"\xE3\x81\xAF\xE3\x81\x98\xE3\x82\x81\xE3\x81\xAB-"
+                    "\xE6\xA6\x82\xE8\xA6\x81",
+                    "\xF0\x9F\x8E\x89-party"}),
+           "Japanese and an emoji stay as they are");
+    expect(slugged("# **Bold** `code` [link](x)\n\nSetext\n===\n", {"bold-code-link", "setext"}),
+           "a decorated heading and a setext heading are named by their shown text");
+    expect(slugged("#\n\n#\n\ntext\n", {"", "-1"}), "an empty heading has an empty anchor");
+    const auto parsed = core::parse_markdown(
+        "intro\n\n# Sample Section\n\n# \xE6\xA6\x82\xE8\xA6\x81\n", MarkdownStop::never());
+    expect(parsed.has_value(), "the headings parse");
+    const auto &headings = parsed.value().headings;
+    expect(headings.size() == 2 && headings.front().block == 1 && headings.back().block == 2,
+           "each anchor points at its heading block");
+    expect(core::heading_block_of(headings, "sample-section") == std::optional<std::size_t>{1} &&
+               core::heading_block_of(headings, "Sample-SECTION") == std::optional<std::size_t>{1},
+           "a fragment is matched without ASCII case");
+    expect(core::heading_block_of(headings, "%E6%A6%82%E8%A6%81") ==
+                   std::optional<std::size_t>{2} &&
+               core::heading_block_of(headings, "\xE6\xA6\x82\xE8\xA6\x81") ==
+                   std::optional<std::size_t>{2},
+           "a fragment is percent-decoded before it is matched");
+    expect(!core::heading_block_of(headings, "missing").has_value() &&
+               !core::heading_block_of(headings, "sample section").has_value(),
+           "an unknown fragment finds nothing");
+}
+
 void verify_link_destinations()
 {
     using enum core::LinkKind;
@@ -1392,6 +1472,7 @@ void verify_markdown_scope()
     verify_tables();
     verify_alerts();
     verify_link_targets();
+    verify_heading_slugs();
     verify_link_destinations();
     verify_link_destination_uris();
     verify_link_destination_paths();
