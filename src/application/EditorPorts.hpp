@@ -14,6 +14,7 @@
 #include "HistoryPort.hpp"
 #include "ImagePort.hpp"
 #include "LanguageServerPort.hpp"
+#include "LinkOpenPort.hpp"
 #include "MarkdownPort.hpp"
 #include "PreviewPort.hpp"
 #include "PrintPort.hpp"
@@ -82,5 +83,8 @@ struct EditorPorts
     // 「エクスプローラーで場所を開く」とその後の合図だけが呼び、起動・開く・切り替え・保存・打鍵の
     // 道では呼ばない。
     RevealPort &reveal;
+    // プレビューのリンク（web と mail）を OS の既定の道に渡す（施主決定 D105・#1869 の段 L2）。
+    // 札で開くときと、頼んだ後の合図のときだけ呼ぶ。
+    LinkOpenPort &links;
 };
 } // namespace nenenib::application

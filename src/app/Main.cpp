@@ -30,6 +30,7 @@
 #include "Win32HistoryAdapter.hpp"
 #include "Win32ImageAdapter.hpp"
 #include "Win32LanguageServer.hpp"
+#include "Win32LinkOpenAdapter.hpp"
 #include "Win32MarkdownAdapter.hpp"
 #include "Win32PreviewAdapter.hpp"
 #include "Win32Printer.hpp"
@@ -300,14 +301,17 @@ last_resort_for(nenenib::application::EditorController &controller)
 // 借りてファイルを読み WIC で復号し（壊れる順は folders と同じ）、
 // 窓ができてから合図を結ぶ（bind_work_signal）。
 // Markdown の解析（ADR 0155 の決定 5・壊れる順は folders と同じ）と探して見る面のプレビューの窓
-// （ADR 0189 の決定 4）とエクスプローラーで場所を開く口（ADR 0078 の追補 #1790）も同じワーカーを
-// 借りる。
+// （ADR 0189 の決定 4）とエクスプローラーで場所を開く口（ADR 0078 の追補 #1790）と
+// プレビューのリンクを OS に渡す口（#1869 の段 L2）も同じワーカーを借りる。
 // 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
 // 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
-// 借りるので、ワーカーより先に作って後に壊す。表示言語の観測（ADR 0123 の追補 2026-11-13 の決定
-// 2）は controller が起動の 1 回だけ呼ぶ。字体の一覧は ui/win32 が DirectWrite から読み、adapters
-// が OS の照合順に並べる（#696）。起動の最初の節目 document_opened は引数の解析・adapters の構築・
+// 借りるので、ワーカーより先に作って後に壊す。
+// 表示言語の観測（ADR 0123 の追補 2026-11-13 の決定 2）は controller が起動の 1 回だけ呼ぶ。
+// 字体の一覧は ui/win32 が DirectWrite から読み、adapters が OS の照合順に並べる（#696）。
+// 起動の最初の節目 document_opened は、引数の解析・adapters の構築・
 // 起動引数の読み込みと復号の後（Issue #19）。
+// 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
+// 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -320,9 +324,7 @@ int run(HINSTANCE instance)
     nenenib::adapters::win32::Win32CodePageAdapter code_pages;
     nenenib::adapters::win32::Win32SettingsAdapter settings(files, reclaimed_settings_paths());
     nib_adapters::Win32ThemeAdapter themes(files, nib_adapters::local_theme_directory());
-    // 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
     nib_adapters::Win32SessionAdapter session(files, nib_adapters::local_session_paths());
-    // 閉じたファイルの履歴は閉じたときに書き Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
     nib_adapters::Win32HistoryAdapter history(files, nib_adapters::local_history_path());
     nib_adapters::Win32BookmarkAdapter bookmarks(files, nib_adapters::local_bookmark_path());
     nenenib::ui::win32::DeviceWarmup warmup;
@@ -347,14 +349,16 @@ int run(HINSTANCE instance)
     nib_adapters::Win32ProjectSearchAdapter project_search(worker);
     nib_adapters::Win32PreviewAdapter previews(worker, code_pages);
     nib_adapters::Win32RevealAdapter reveal(worker);
+    nib_adapters::Win32LinkOpenAdapter links(worker);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
-            appearance,   clipboard,       files,       code_pages,     settings,
-            themes,       session,         history,     folders,        bookmarks,
-            text_layouts, autosave,        fonts,       bell,           markdown,
-            reads,        language_server, wall_clock,  printer,        shell_registration,
-            images,       start_lists,     ui_language, project_search, previews,
-            reveal},
+            appearance,      clipboard,   files,        code_pages,
+            settings,        themes,      session,      history,
+            folders,         bookmarks,   text_layouts, autosave,
+            fonts,           bell,        markdown,     reads,
+            language_server, wall_clock,  printer,      shell_registration,
+            images,          start_lists, ui_language,  project_search,
+            previews,        reveal,      links},
         nib_adapters::current_distribution(), initial_documents(given));
     const auto last_resort = last_resort_for(controller);
     timing.mark(nenenib::core::Milestone::document_opened);
@@ -366,7 +370,7 @@ int run(HINSTANCE instance)
     }
     bind_window_handle(*window.value(), clipboard, language_server);
     bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists,
-                     project_search, previews, reveal);
+                     project_search, previews, reveal, links);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

@@ -21,6 +21,7 @@
 #include "InputLineView.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LinkCardView.hpp"
 #include "MinimapFrame.hpp"
 #include "OperationGuide.hpp"
 #include "OtherFrame.hpp"
@@ -172,6 +173,10 @@ struct EditorFrame
     // 12 行に切った値で、答えの文脈（文書・revision・キャレット）が今と同じ間だけ値を持つ。
     // renderer はキャレットの上（入らなければ下）に札を描く。
     std::optional<std::string> hover{};
+    // プレビューのリンクの札（施主決定 D106・#1869 の段 L2）。札が開いていて、見せている結果の同じ
+    // 要素に同じリンクがある間だけ値を持つ。renderer はリンクの下（入らなければ上）に札を描く
+    // （置き場は core::link_card_rect・文は core::link_card_texts）。
+    std::optional<LinkCardView> link_card{};
     // 設定の面（ADR 0170 の決定 5・2026-11-18 の追補 2・施主決定 D102）。開いている間だけ値を持つ。
     // renderer は値があれば右の引き出しに描く（配置は ui の工程）。
     std::optional<SettingsView> settings_panel{};

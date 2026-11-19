@@ -92,6 +92,7 @@
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
+#include "LinkCardView.hpp"
 #include "LspCompletionList.hpp"
 #include "LspLocation.hpp"
 #include "LspNotification.hpp"
@@ -244,6 +245,10 @@ class EditorController final
     // 本文の右クリックのメニューが開いているか（ADR 0078 の追補 #1051）。窓が鍵とマウスの行き先を
     // 決めるための安い読みで、frame を作らない。
     [[nodiscard]] bool context_menu_active() const noexcept;
+    // プレビューのリンクの札が出ているか（施主決定 D106・#1869 の段 L2）。窓が Enter・Esc・
+    // Ctrl+C と押しの行き先を決めるための安い読みで、frame を作らない（frame の link_card と同じ
+    // 判定）。
+    [[nodiscard]] bool link_card_active() const;
     // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
     // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
     [[nodiscard]] bool settings_open() const noexcept;
@@ -961,6 +966,23 @@ class EditorController final
     void settle_hover(const EditorIntent &intent);
     void drop_hover();
     [[nodiscard]] std::optional<std::string> shown_hover() const;
+    // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2・EditorControllerLinkCard.cpp）。
+    // 開くのは ClickPreviewLink、閉じるのは札の意図と入口の close_link_card_before（札の意図と
+    // 使う人の操作でない意図のほか）。web と mail は LinkOpenPort、document は open_listed の 1
+    // 本。
+    void accept(const ClickPreviewLink &intent);
+    void accept(const ActOnLinkCard &intent);
+    void close_link_card_before(const EditorIntent &intent);
+    // 札を開いたタブがアクティブでなくなったら札を消す（#1876 のレビュー R1）。
+    void drop_stale_link_card();
+    [[nodiscard]] AutosaveId active_tab_id() const;
+    // frame に載せる札（見せている結果の同じ要素に同じリンクがある間だけ）。
+    [[nodiscard]] std::optional<LinkCardView> shown_link_card() const;
+    void open_link_card(const LinkCardView &card);
+    void open_link_document(std::string_view path);
+    void copy_link_card(const LinkCardView &card);
+    // WorkCompleted の道で開く頼みの結果を引き、失敗を 1 行知らせる（頼んでいなければ呼ばない）。
+    void collect_link_opens();
     void settle_language_answers(LspRequestKind kind);
     void settle_hover_answer();
     void settle_definition_answer();
@@ -1767,6 +1789,8 @@ class EditorController final
     std::optional<std::size_t> start_selection_;
     // 開いている右クリックのメニュー（ADR 0078 の追補 #1051 / #1790）。
     std::optional<ContextMenuOpen> context_menu_;
+    // LinkOpenPort に頼んで結果をまだ引いていない数（#1869 の段 L2）。
+    std::size_t link_opens_pending_ = 0;
     // 開いている補完の面と、面の通し番号（ADR 0190 の決定 1・5）。
     std::optional<CompletionSession> completion_;
     std::uint64_t completion_sessions_ = 0;

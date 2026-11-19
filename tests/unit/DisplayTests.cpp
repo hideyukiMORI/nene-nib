@@ -40,6 +40,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
 #include "ScriptedPrinter.hpp"
@@ -244,6 +245,7 @@ void verify_startup_question()
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
     ScriptedReveal reveal;
+    ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -256,7 +258,7 @@ void verify_startup_question()
                          fonts,           bell,        markdown,     reads,
                          language_server, wall_clock,  printer,      shell_registration,
                          images,          start_lists, ui_language,  project_search,
-                         previews,        reveal},
+                         previews,        reveal,      links},
         nenenib::core::Distribution::unpackaged, {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -659,6 +661,7 @@ void verify_startup_before_layout()
     ScriptedProjectSearch project_search;
     ScriptedPreview previews;
     ScriptedReveal reveal;
+    ScriptedLinkOpen links;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -670,7 +673,7 @@ void verify_startup_before_layout()
                                  fonts,           bell,        markdown,     reads,
                                  language_server, wall_clock,  printer,      shell_registration,
                                  images,          start_lists, ui_language,  project_search,
-                                 previews,        reveal};
+                                 previews,        reveal,      links};
     app::EditorController started(ports, nenenib::core::Distribution::unpackaged,
                                   {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");
