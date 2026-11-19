@@ -24,6 +24,7 @@
 #include "PreviewImages.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewTableGesture.hpp"
@@ -427,6 +428,8 @@ void EditorController::request_preview(bool fresh)
         view.images.reset();
         view.notice.reset();
         view.follows = true;
+        view.nudge = 0.0F;
+        view.pending = 0;
     }
     // 券は頼まなくても進め、前の要求の結果を捨てる（決定 6）。
     view.ticket = ++preview_tickets_;
@@ -592,6 +595,8 @@ void EditorController::follow_preview_on_scroll(core::LineNumber first_visible)
     }
     PreviewView view = *preview;
     view.follows = true;
+    view.nudge = 0.0F;
+    view.pending = 0;
     state_ = state_.with_shown_preview(std::move(view));
 }
 
@@ -732,7 +737,7 @@ void EditorController::finish_vim_g(const VimKeyPress &press)
     const char32_t code = character == nullptr ? U'\0' : character->code;
     if (code == U'g')
     {
-        scroll_preview(-static_cast<std::int64_t>(state_.vim_text().line_count()));
+        anchor_preview_at(core::LineNumber{1});
         return;
     }
     if (code == U't' || code == U'T')
@@ -785,10 +790,10 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
         scroll_preview(-page);
         return;
     case PreviewFullRoute::top:
-        scroll_preview(-lines);
+        anchor_preview_at(core::LineNumber{1});
         return;
     case PreviewFullRoute::bottom:
-        scroll_preview(lines);
+        anchor_preview_at(core::LineNumber{static_cast<std::size_t>(lines)});
         return;
     case PreviewFullRoute::wheel:
         scroll_preview(wheel_lines(intent));
@@ -807,7 +812,10 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
     std::unreachable();
 }
 
-// 錨を本文の行で動かし、追従をやめる（決定 7）。側の ScrollPane と全面の鍵が共用する。
+// 送りの量を足し、追従をやめる（決定 7 の 2026-11-20 の追補・#1894）。側の ScrollPane と全面の鍵と
+// ホイールが共用する。錨は動かさず、要素の高さを知っている ui が (錨の要素, nudge + pending × 行の
+// 送り) を畳んで PreviewScrollSettled で返す。追従中から送り始めるときは、本文の先頭行の行頭を錨に
+// して nudge を 0 にしてから足す（今までと同じ起点）。
 void EditorController::scroll_preview(std::int64_t lines)
 {
     const PreviewView *preview = state_.shown_preview();
@@ -816,16 +824,66 @@ void EditorController::scroll_preview(std::int64_t lines)
         return;
     }
     PreviewView view = *preview;
-    const core::TextBuffer &text = state_.text();
     const core::LineNumber top = settled_scroll().first_visible;
-    const core::Offset base = view.follows ? text.line_start(top) : view.anchor;
-    const auto line = static_cast<std::int64_t>(text.position_of(base).line.value);
-    const auto last = static_cast<std::int64_t>(state_.vim_text().line_count());
-    const auto moved = std::clamp(line + lines, std::int64_t{1}, last);
-    view.anchor = text.line_start(core::LineNumber{static_cast<std::size_t>(moved)});
+    if (view.follows)
+    {
+        view.anchor = state_.text().line_start(top);
+        view.nudge = 0.0F;
+        view.pending = 0;
+    }
+    view.pending += lines;
     view.follows = false;
     state_ = state_.with_shown_preview(std::move(view));
     preview_body_top_ = top;
+}
+
+void EditorController::anchor_preview_at(core::LineNumber line)
+{
+    const PreviewView *preview = state_.shown_preview();
+    if (preview == nullptr)
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    const core::TextBuffer &text = state_.text();
+    const auto last = std::max<std::size_t>(state_.vim_text().line_count(), 1);
+    view.anchor = text.line_start(core::LineNumber{std::clamp<std::size_t>(line.value, 1, last)});
+    view.nudge = 0.0F;
+    view.pending = 0;
+    view.follows = false;
+    state_ = state_.with_shown_preview(std::move(view));
+    preview_body_top_ = settled_scroll().first_visible;
+    request_preview_images();
+}
+
+// ui が畳んだ送りを受ける（#1894）。錨は要素の source_begin で、囲みのコードは枠の上端に掛かる行の
+// 行頭へ写す（同じ要素の中に限る・全面を閉じるときの本文の揃え）。送りの量は畳んだ分だけ引き、
+// 間に来た送りを残す。追従に戻っていれば（本文が送られた）古い答えなので捨てる。
+void EditorController::accept(const PreviewScrollSettled &intent)
+{
+    const PreviewView *preview = state_.shown_preview();
+    if (preview == nullptr || preview->follows)
+    {
+        return;
+    }
+    PreviewView view = *preview;
+    const core::TextBuffer &text = state_.text();
+    core::Offset anchor{std::min(intent.anchor.value, text.size_bytes())};
+    if (intent.lines > 0 && view.document != nullptr)
+    {
+        const auto block = core::preview_anchor_block(*view.document, anchor);
+        const auto line = text.position_of(anchor).line.value + intent.lines;
+        const auto last = std::max<std::size_t>(state_.vim_text().line_count(), 1);
+        const core::Offset inside = text.line_start(core::LineNumber{std::min(line, last)});
+        if (core::preview_anchor_block(*view.document, inside) == block)
+        {
+            anchor = inside;
+        }
+    }
+    view.anchor = anchor;
+    view.nudge = intent.nudge;
+    view.pending -= intent.consumed;
+    state_ = state_.with_shown_preview(std::move(view));
     request_preview_images();
 }
 

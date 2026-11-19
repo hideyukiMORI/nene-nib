@@ -22,6 +22,9 @@ namespace nenenib::application
 // 移すときと結果が差し替わるときに捨てる）。images は document の画像の状態（ADR 0155 の追補 50・
 // document に画像の節が無ければ null・文書が替わると捨てる）。どの欄も単独で妥当な値なので公開
 // aggregate （CPP-003）。比較は非メンバーで、document と images は指す先の同一性で比べる。
+// nudge は錨の要素の上端から枠の上端までの DIP（ui が正規化した後は 0 以上でその要素の高さ未満）、
+// pending はまだ ui が畳んでいない送りの量（プレビューの行の単位・符号つき）。追従の間はどちらも 0
+// （ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。
 struct PreviewView
 {
     std::shared_ptr<const core::MarkdownDocument> document;
@@ -33,6 +36,8 @@ struct PreviewView
     std::optional<core::DisplayText> notice;
     std::optional<core::PreviewSelection> selection;
     std::shared_ptr<const PreviewImages> images = nullptr;
+    float nudge = 0.0F;
+    std::int64_t pending = 0;
 };
 
 [[nodiscard]] inline bool same_notice(const std::optional<core::DisplayText> &left,
@@ -51,6 +56,7 @@ struct PreviewView
            left.requested_revision == right.requested_revision &&
            left.seen_revision == right.seen_revision && left.anchor == right.anchor &&
            left.follows == right.follows && same_notice(left.notice, right.notice) &&
-           left.selection == right.selection && left.images == right.images;
+           left.selection == right.selection && left.images == right.images &&
+           left.nudge == right.nudge && left.pending == right.pending;
 }
 } // namespace nenenib::application

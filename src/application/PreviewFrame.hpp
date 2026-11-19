@@ -22,7 +22,9 @@ namespace nenenib::application
 // 「[画像: alt]」の文字のまま。images の指す先が変われば ui は錨から測り直す（段 3）。
 // table_scrolls は表の通し番号ごとの横の送りの量（DIP・無い表は 0・端へ寄せるのは ui
 // が描く枠の寸法で core::preview_table_scroll_clamped・#1883）、table_lit
-// はつまみを明るく描く表（つかんでいる表か、 マウスを載せた棒の表）。
+// はつまみを明るく描く表（つかんでいる表か、 マウスを載せた棒の表）。nudge と pending は
+// PreviewView の写しで、ui は錨の要素の上端を -(nudge + pending × 行の送り) に置いて正規化し、
+// 変わったら PreviewScrollSettled を送る（ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。
 struct PreviewFrame
 {
     std::shared_ptr<const core::MarkdownDocument> document;
@@ -32,5 +34,7 @@ struct PreviewFrame
     std::shared_ptr<const PreviewImages> images = nullptr;
     std::vector<std::int32_t> table_scrolls{};
     std::optional<std::size_t> table_lit{};
+    float nudge = 0.0F;
+    std::int64_t pending = 0;
 };
 } // namespace nenenib::application

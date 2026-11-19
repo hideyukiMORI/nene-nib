@@ -1465,9 +1465,9 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
         const core::Offset anchor =
             full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
         result.full_preview =
-            PreviewFrame{full->document,     anchor,       full->notice,
-                         full->selection,    full->images, state_.table_scrolls().offsets,
-                         preview_table_lit()};
+            PreviewFrame{full->document,      anchor,       full->notice,
+                         full->selection,     full->images, state_.table_scrolls().offsets,
+                         preview_table_lit(), full->nudge,  full->pending};
         return;
     }
     const auto &other = state_.split().other;
@@ -1486,9 +1486,9 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 {
     const core::Offset anchor =
         view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
-    result.other = PreviewFrame{view.document,      anchor,      view.notice,
-                                std::nullopt,       view.images, state_.table_scrolls().offsets,
-                                preview_table_lit()};
+    result.other = PreviewFrame{view.document,       anchor,      view.notice,
+                                std::nullopt,        view.images, state_.table_scrolls().offsets,
+                                preview_table_lit(), view.nudge,  view.pending};
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,

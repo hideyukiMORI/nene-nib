@@ -155,6 +155,12 @@ table_bar_extent(const core::MarkdownDocument &document, PreviewTableRowAt row,
     return block.kind == core::PreviewBlockKind::list_item && block.task.has_value();
 }
 
+// 次の要素を置くか（積んだ y が枠の高さより上か、through より前の要素・#1894）。
+[[nodiscard]] bool placing(const PreviewViewport &viewport, float y, std::size_t index) noexcept
+{
+    return y < viewport.height || index < viewport.through;
+}
+
 // 錨の要素の上端（最初の要素のときだけ上の余白）。
 [[nodiscard]] float first_top(std::size_t first, const PreviewTextStyle &style)
 {
@@ -193,8 +199,9 @@ std::expected<bool, RenderFailure> PreviewBlockTops::place(const core::MarkdownD
     bottoms_.clear();
     indents_.clear();
     task_boxes_.clear();
-    float y = first_top(first_, style);
-    for (auto index = first_; index < document.blocks.size() && y < viewport.height; ++index)
+    float y = first_top(first_, style) - viewport.nudge;
+    for (auto index = first_; index < document.blocks.size() && placing(viewport, y, index);
+         ++index)
     {
         const auto &block = document.blocks.at(index);
         y += gap_before(document, index, style);

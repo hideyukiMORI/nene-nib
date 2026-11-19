@@ -222,7 +222,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LexerPropertyTests.cpp
     tests/unit/PreviewTests.cpp
     tests/unit/PreviewImageTests.cpp
-    tests/unit/PreviewTaskTests.cpp tests/unit/LinkCardTests.cpp tests/unit/PreviewTableScrollTests.cpp
+    tests/unit/PreviewTaskTests.cpp tests/unit/LinkCardTests.cpp tests/unit/PreviewTableScrollTests.cpp tests/unit/PreviewScrollTests.cpp
     tests/unit/PointerTests.cpp
     tests/unit/PreviewFullTests.cpp
     tests/unit/StartScreenTests.cpp
@@ -507,7 +507,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/SettingsPanelPainter.cpp src/ui/win32/SettingsPanelFormats.cpp src/ui/win32/CompletionPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
-    src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp src/ui/win32/PreviewTableMetrics.cpp
+    src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewScrollFold.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp src/ui/win32/PreviewTableMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
     src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
     src/ui/win32/ProjectHitPainter.cpp src/ui/win32/PreviewPanePainter.cpp)
@@ -533,7 +533,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/WheelTurnTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp
     tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp
-    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp
+    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp tests/ui/PreviewScrollFoldTests.cpp
     tests/ui/FallbackSegmentMemoTests.cpp
     tests/ui/ForwardingFont.cpp
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp tests/ui/DiagnosticWaveTests.cpp

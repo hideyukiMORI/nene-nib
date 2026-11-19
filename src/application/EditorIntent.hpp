@@ -67,6 +67,7 @@
 #include "PointPreview.hpp"
 #include "PointText.hpp"
 #include "PointTitleBar.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewTick.hpp"
 #include "PrintDocument.hpp"
 #include "QueryLanguage.hpp"
@@ -143,5 +144,6 @@ using EditorIntent = std::variant<
     CloseCompletion, ScrollCompletion, QueryLanguage, WindowDeactivated, OpenSettings,
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
-    RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable>;
+    RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
+    PreviewScrollSettled>;
 } // namespace nenenib::application

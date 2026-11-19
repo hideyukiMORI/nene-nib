@@ -1,5 +1,6 @@
 #include "PreviewPane.hpp"
 
+#include "DevicePixels.hpp"
 #include "MarkdownImage.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
@@ -8,6 +9,8 @@
 #include "PreviewMetrics.hpp"
 #include "PreviewPainter.hpp"
 #include "PreviewScene.hpp"
+#include "PreviewScrollFold.hpp"
+#include "PreviewScrollSpot.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewTableCell.hpp"
 #include "PreviewTableMetrics.hpp"
@@ -42,7 +45,15 @@ namespace
 
 [[nodiscard]] bool same_viewport(const PreviewViewport &left, const PreviewViewport &right) noexcept
 {
-    return left.first == right.first && left.width == right.width && left.height == right.height;
+    return left.first == right.first && left.width == right.width && left.height == right.height &&
+           left.nudge == right.nudge && left.through == right.through;
+}
+
+// 物理画素 → DIP（application と絵の鍵は nudge を DIP で持つ・#1894）。
+[[nodiscard]] float dips_from(float pixels, std::uint32_t dpi) noexcept
+{
+    return dpi == 0 ? pixels
+                    : pixels * static_cast<float>(core::reference_dpi) / static_cast<float>(dpi);
 }
 } // namespace
 
@@ -91,7 +102,8 @@ std::expected<void, RenderFailure> PreviewPane::draw_scene(ID2D1RenderTarget &ta
     // 鍵は弱い参照で覚えるので、描く間だけ強い参照にする（frame が持っているので消えていない）。
     const auto images = key.images.lock();
     const PreviewViewport viewport{key.anchor, static_cast<float>(key.width),
-                                   static_cast<float>(key.height), images.get()};
+                                   static_cast<float>(key.height), images.get(),
+                                   preview_pixels(key.nudge, key.style.dpi)};
     const auto measured = remeasure(key.document, images, key.style, viewport);
     if (!measured)
     {
@@ -153,6 +165,7 @@ void PreviewPane::release() noexcept
     area_.reset();
     pictured_.reset();
     table_scrolls_.clear();
+    settled_.reset();
 }
 
 const PreviewBitmaps &PreviewPane::bitmaps() const noexcept
@@ -213,6 +226,7 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
 {
     const auto &document = frame.document;
     area_.reset();
+    settled_.reset();
     if (document == nullptr)
     {
         target.FillRectangle(
@@ -225,17 +239,32 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     const auto width = core::width_of(area);
     const auto height = core::height_of(area);
     table_scrolls_ = frame.table_scrolls;
-    PreviewPictureKey key{&target,
-                          document,
-                          core::preview_anchor_block(*document, frame.anchor),
-                          width,
-                          height,
-                          style,
-                          theme_,
-                          frame.selection,
-                          frame.images,
-                          frame.table_scrolls,
-                          frame.table_lit};
+    const auto block = core::preview_anchor_block(*document, frame.anchor);
+    PreviewPictureKey key{
+        &target,         document,   block,           width,        height,
+        style,           theme_,     frame.selection, frame.images, frame.table_scrolls,
+        frame.table_lit, frame.nudge};
+    const auto folded = fold(frame, key);
+    if (!folded)
+    {
+        return folded;
+    }
+    const auto to = key.anchor;
+    const auto nudge = key.nudge;
+    const auto painted = paint_key(target, std::move(key), area);
+    if (painted && (frame.pending != 0 || to != block || nudge != frame.nudge))
+    {
+        settle(frame, to, nudge);
+    }
+    return painted;
+}
+
+std::expected<void, RenderFailure> PreviewPane::paint_key(ID2D1RenderTarget &target,
+                                                          PreviewPictureKey key,
+                                                          const core::LayoutRect &area)
+{
+    const auto width = core::width_of(area);
+    const auto height = core::height_of(area);
     // 座標は物理画素の整数なので、拡大縮小せず最近傍で写せば滲まない。
     const auto destination =
         D2D1::RectF(static_cast<float>(area.left), static_cast<float>(area.top),
@@ -267,6 +296,86 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     context->DrawBitmap(picture, destination, 1.0F, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
                         nullptr, nullptr);
     return {};
+}
+
+std::expected<void, RenderFailure> PreviewPane::fold(const application::PreviewFrame &frame,
+                                                     PreviewPictureKey &key)
+{
+    // 送りが無く、錨の要素の上端が枠の上端（追従の形）か、前に畳んで描いた鍵と同じなら畳まない。
+    if (frame.pending == 0 &&
+        (key.nudge == 0.0F || (pictured_.has_value() && pictured_.value() == key)))
+    {
+        return {};
+    }
+    const PreviewScrollSpot from{key.anchor, preview_pixels(key.nudge, key.style.dpi) +
+                                                 static_cast<float>(frame.pending) *
+                                                     preview_line_pixels(key.style)};
+    const auto spot =
+        preview_scroll_fold(from, key.document->blocks.size(), static_cast<float>(key.height),
+                            [this, &key](std::size_t index) { return this->span_of(key, index); });
+    if (!spot)
+    {
+        return std::unexpected(spot.error());
+    }
+    // 送りが無く畳んでも同じ位置なら DIP のまま残す（写し直しの丸めで答えを往復させない）。
+    if (frame.pending != 0 || !(spot.value() == from))
+    {
+        key.anchor = spot.value().block;
+        key.nudge = dips_from(spot.value().nudge, key.style.dpi);
+    }
+    return {};
+}
+
+std::expected<float, RenderFailure> PreviewPane::span_of(const PreviewPictureKey &key,
+                                                         std::size_t index)
+{
+    const auto images = key.images.lock();
+    // 高さ 0 の枠で、index と次の要素だけを置く（through）。
+    const PreviewViewport viewport{
+        index, static_cast<float>(key.width), 0.0F, images.get(), 0.0F, index + 2U};
+    const auto tops = PreviewBlockTops::measure(*key.document, layouts_, key.style, viewport);
+    if (!tops)
+    {
+        return std::unexpected(tops.error());
+    }
+    const auto &measured = tops.value();
+    return measured.size() > index + 1U ? measured.top(index + 1U) : measured.bottom(index);
+}
+
+void PreviewPane::settle(const application::PreviewFrame &frame, std::size_t block, float nudge)
+{
+    if (measured_ == nullptr || block >= measured_->blocks.size())
+    {
+        return;
+    }
+    settled_ = application::PreviewScrollSettled{measured_->blocks.at(block).source_begin,
+                                                 code_line_at_top(block), nudge, frame.pending};
+}
+
+std::size_t PreviewPane::code_line_at_top(std::size_t index)
+{
+    if (!area_.has_value() || !tops_.has_value() || measured_ == nullptr ||
+        index != tops_.value().first() ||
+        measured_->blocks.at(index).kind != core::PreviewBlockKind::code)
+    {
+        return 0;
+    }
+    // 枠の上端の点を描く所と同じ layout で引き、その前の改行を数える。
+    const auto &tops = tops_.value();
+    const auto point =
+        hit_block(tops, index, D2D1::Point2F(tops.indent(index), 0.0F), PreviewHitMode::edge);
+    if (!point.has_value())
+    {
+        return 0;
+    }
+    const auto shown = core::preview_shown_text(measured_->blocks.at(index));
+    const auto before = shown.substr(0, std::min(point.value().offset, shown.size()));
+    return static_cast<std::size_t>(std::ranges::count(before, '\n'));
+}
+
+const std::optional<application::PreviewScrollSettled> &PreviewPane::settled() const noexcept
+{
+    return settled_;
 }
 
 std::optional<std::size_t> PreviewPane::task_at(std::int32_t x, std::int32_t y) const

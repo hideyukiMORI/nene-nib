@@ -24,6 +24,7 @@
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewFrame.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewTick.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -365,7 +366,8 @@ void verify_size_limit()
            "a body over 16 MiB is not requested and the preview says one line");
 }
 
-// 7. 錨は本文の行で動き、本文が送られると追従に戻る（決定 7）。
+// 7. 送りは量だけを積み（畳むのは ui・決定 7 の 2026-11-20 の追補・#1894）、本文が送られると追従に
+// 戻る（決定 7）。
 void verify_anchor()
 {
     Editing editing;
@@ -374,19 +376,24 @@ void verify_anchor()
     applied(controller, app::InsertText{"l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8"});
     applied(controller, app::ScrollLines{-100});
     const EditorFrame opened = controller.apply_frame(app::TogglePreview{});
-    expect(preview_of(opened)->anchor == core::Offset{0},
+    expect(preview_of(opened)->anchor == core::Offset{0} && preview_of(opened)->pending == 0,
            "a following preview anchors at the first visible line of the body");
     const EditorFrame moved = controller.apply_frame(app::ScrollPane{2});
-    expect(preview_of(moved)->anchor == core::Offset{6} && moved.first_visible.value == 1,
-           "ScrollPane moves the anchor by body lines and leaves the body");
-    const EditorFrame stayed = controller.apply_frame(app::ScrollPane{-10});
-    expect(preview_of(stayed)->anchor == core::Offset{0}, "the anchor stops at the first line");
-    applied(controller, app::ScrollPane{100});
-    expect(preview_of(controller.frame())->anchor == core::Offset{21},
-           "the anchor stops at the last line");
+    expect(preview_of(moved)->anchor == core::Offset{0} && preview_of(moved)->pending == 2 &&
+               moved.first_visible.value == 1,
+           "ScrollPane adds to the pending amount from the followed line and leaves the body");
+    const EditorFrame back = controller.apply_frame(app::ScrollPane{-10});
+    expect(preview_of(back)->anchor == core::Offset{0} && preview_of(back)->pending == -8,
+           "the pending amount is signed and the ui clamps it");
+    const EditorFrame settled =
+        controller.apply_frame(app::PreviewScrollSettled{core::Offset{6}, 0, 4.5F, -8});
+    expect(preview_of(settled)->anchor == core::Offset{6} && preview_of(settled)->nudge == 4.5F &&
+               preview_of(settled)->pending == 0,
+           "the settled answer places the anchor and the nudge and takes the consumed amount");
     const EditorFrame scrolled = controller.apply_frame(app::ScrollLines{1});
-    expect(preview_of(scrolled)->anchor == core::Offset{3} && scrolled.first_visible.value == 2,
-           "scrolling the body makes the preview follow again");
+    expect(preview_of(scrolled)->anchor == core::Offset{3} && scrolled.first_visible.value == 2 &&
+               preview_of(scrolled)->nudge == 0.0F && preview_of(scrolled)->pending == 0,
+           "scrolling the body makes the preview follow again and drops the nudge");
 }
 
 // 8. tick は使う人の操作ではない。歩き・`.`・undo を動かさない（決定 8）。

@@ -212,7 +212,7 @@ void EditorController::open_link_document(std::string_view path)
 // （source_begin・見せている結果が古い本文のものなら本文の長さに寄せる）の頭へキャレットを置く。
 // 前の位置は全文検索の着地と同じ `m'` の 1 本で `''` とジャンプの列に置く（Vim の `:tag` と同じく
 // 跳ぶ命令と数える）。プレビューは側も全面も、錨をその見出しの行へ置いて追従をやめる（プレビューの
-// 送りと同じ形・scroll_preview）。本文が次に送られると側のプレビューは追従に戻る。
+// 送りの絶対の行き先と同じ形・anchor_preview_at）。本文が次に送られると側のプレビューは追従に戻る。
 void EditorController::jump_to_heading(std::string_view fragment)
 {
     const PreviewView *preview = state_.shown_preview();
@@ -242,17 +242,7 @@ void EditorController::jump_to_heading(std::string_view fragment)
     state_ = state_.with_vim(core::vim_operator_cleared(state_.vim()));
     accept(
         PlaceCaret{core::TextPosition{line, core::Column{1}}, core::SelectionAnchoring::collapse});
-    const PreviewView *shown = state_.shown_preview();
-    if (shown == nullptr)
-    {
-        return;
-    }
-    PreviewView view = *shown;
-    view.anchor = state_.text().line_start(line);
-    view.follows = false;
-    state_ = state_.with_shown_preview(std::move(view));
-    preview_body_top_ = settled_scroll().first_visible;
-    request_preview_images();
+    anchor_preview_at(line);
 }
 
 // 宛先の綴りを写す（失敗は clipboard_written の 1 行・札は開いたまま）。写せたら札を閉じて 1 行

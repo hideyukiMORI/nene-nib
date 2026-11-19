@@ -38,6 +38,7 @@
 #include "PreviewFrame.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewSelection.hpp"
 #include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
@@ -304,7 +305,14 @@ void verify_vim_refusals()
            "the body is untouched after the Vim refusals");
 }
 
-// 6. スクロールは錨を本文の行で動かし、本文のキャレットと先頭行は動かさない（改訂 17）。
+// 全面の送りの量（全面でなければ 0）。
+[[nodiscard]] std::int64_t pending_of(const EditorFrame &frame)
+{
+    return frame.full_preview.has_value() ? frame.full_preview.value().pending : 0;
+}
+
+// 6. スクロールは送りの量を積み（畳むのは ui・決定 7 の 2026-11-20 の追補・#1894）、`gg` `G` は錨を
+// 置き直す。本文のキャレットと先頭行は動かさない（改訂 17）。
 void verify_scroll_keys()
 {
     Editing editing;
@@ -313,37 +321,43 @@ void verify_scroll_keys()
     applied(controller, app::SelectEditMode{core::EditMode::vim});
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
     const auto caret = controller.frame().caret.position;
-    expect(anchor_line(editing, vim_keys(controller, "j")) == 2, "j moves the anchor one line");
-    expect(anchor_line(editing, vim_keys(controller, "k")) == 1, "k moves it back");
-    expect(anchor_line(editing, vim_keys(controller, "<C-d>")) == 3, "Ctrl-d moves half a page");
-    expect(anchor_line(editing, vim_keys(controller, "<C-f>")) == 7, "Ctrl-f moves a page");
-    expect(anchor_line(editing, vim_keys(controller, "<C-b>")) == 3, "Ctrl-b moves a page back");
+    expect(pending_of(vim_keys(controller, "j")) == 1, "j sends one line");
+    expect(pending_of(vim_keys(controller, "k")) == 0, "k sends it back");
+    expect(pending_of(vim_keys(controller, "<C-d>")) == 2, "Ctrl-d sends half a page");
+    expect(pending_of(vim_keys(controller, "<C-f>")) == 6, "Ctrl-f sends a page");
+    expect(pending_of(vim_keys(controller, "<C-b>")) == 2, "Ctrl-b sends a page back");
     // 改行で終わる本文の最後の行は 40 行目（Vim のモードは最後の空の行を数えない・ADR 0188）。
-    expect(anchor_line(editing, vim_keys(controller, "G")) == 40, "G goes to the last line");
-    expect(anchor_line(editing, vim_keys(controller, "gg")) == 1, "gg goes to the first line");
-    expect(anchor_line(editing, controller.apply_frame(app::ScrollLines{3})) == 4,
-           "the wheel over the body moves the anchor");
-    expect(anchor_line(editing, controller.apply_frame(app::ScrollPane{-1})) == 3,
-           "the wheel over the hidden pane moves the anchor too");
+    const EditorFrame last = vim_keys(controller, "G");
+    expect(anchor_line(editing, last) == 40 && pending_of(last) == 0 &&
+               last.full_preview.has_value() && last.full_preview.value().nudge == 0.0F,
+           "G places the anchor at the last line and drops what was pending");
+    const EditorFrame first = vim_keys(controller, "gg");
+    expect(anchor_line(editing, first) == 1 && pending_of(first) == 0,
+           "gg places the anchor at the first line");
+    expect(pending_of(controller.apply_frame(app::ScrollLines{3})) == 3,
+           "the wheel over the body sends the preview");
+    expect(pending_of(controller.apply_frame(app::ScrollPane{-1})) == 2,
+           "the wheel over the hidden pane sends it too");
     const EditorFrame after = vim_keys(controller, "<Down>");
-    expect(anchor_line(editing, after) == 4 && after.caret.position == caret &&
+    expect(pending_of(after) == 3 && after.caret.position == caret &&
                after.first_visible.value == 1,
            "scrolling never moves the caret nor the body");
     applied(controller, app::SelectEditMode{core::EditMode::ordinary});
     const auto ordinary = [&](core::CaretMotion motion)
-    {
-        return anchor_line(editing, controller.apply_frame(app::MoveCaret{
-                                        motion, core::SelectionAnchoring::collapse}));
-    };
-    expect(ordinary(core::CaretMotion::next_line) == 5, "Down moves the anchor in ordinary mode");
-    expect(ordinary(core::CaretMotion::page_down) == 9, "PgDn moves a page");
-    expect(ordinary(core::CaretMotion::document_start) == 1, "Ctrl+Home goes to the first line");
-    expect(ordinary(core::CaretMotion::next_character) == 1 &&
+    { return controller.apply_frame(app::MoveCaret{motion, core::SelectionAnchoring::collapse}); };
+    expect(pending_of(ordinary(core::CaretMotion::next_line)) == 4,
+           "Down sends the preview in ordinary mode");
+    expect(pending_of(ordinary(core::CaretMotion::page_down)) == 8, "PgDn sends a page");
+    const EditorFrame home = ordinary(core::CaretMotion::document_start);
+    expect(anchor_line(editing, home) == 1 && pending_of(home) == 0,
+           "Ctrl+Home goes to the first line");
+    const EditorFrame right = ordinary(core::CaretMotion::next_character);
+    expect(pending_of(right) == 0 && anchor_line(editing, right) == 1 &&
                message_of(controller.frame()).empty(),
            "Right reaches the preview and does nothing");
 }
 
-// 7. 錨の往復: 全面で送った位置へ off の本文が揃い、側へ戻ると側の錨も同じ（改訂 17）。
+// 7. 錨の往復: 全面で送って ui が畳んだ位置へ off の本文が揃い、側へ戻ると側の錨も同じ（改訂 17）。
 void verify_anchor_round_trip()
 {
     Editing editing;
@@ -351,6 +365,8 @@ void verify_anchor_round_trip()
     open_text(editing, numbered_lines(20));
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
     applied(controller, app::ScrollLines{10});
+    const auto eleventh = controller.text().line_start(core::LineNumber{11});
+    applied(controller, app::PreviewScrollSettled{eleventh, 0, 0.0F, 10});
     const EditorFrame off = controller.apply_frame(app::CancelSelection{});
     expect(off.first_visible.value == 11, "leaving full lines the body up with the anchor");
     applied(controller, app::TogglePreview{});
@@ -358,6 +374,8 @@ void verify_anchor_round_trip()
     const EditorFrame full = controller.frame();
     expect(anchor_line(editing, full) == 11, "full from side keeps the followed anchor");
     applied(controller, app::ScrollLines{-4});
+    const auto seventh = controller.text().line_start(core::LineNumber{7});
+    applied(controller, app::PreviewScrollSettled{seventh, 0, 0.0F, -4});
     const EditorFrame side = controller.apply_frame(app::CancelSelection{});
     expect(side.first_visible.value == 7 &&
                controller.text().position_of(side_of(side)->anchor).line.value == 7,

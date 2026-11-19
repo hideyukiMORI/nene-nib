@@ -14,6 +14,7 @@
 #include "ImageRequest.hpp"
 #include "ImageSize.hpp"
 #include "InsertText.hpp"
+#include "LineNumber.hpp"
 #include "LocalReference.hpp"
 #include "LocalReferenceRefusal.hpp"
 #include "MarkdownDocument.hpp"
@@ -28,6 +29,7 @@
 #include "PreviewImageStatus.hpp"
 #include "PreviewImageWindow.hpp"
 #include "PreviewImages.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTick.hpp"
 #include "SaveDocument.hpp"
@@ -751,19 +753,27 @@ void verify_requests_visible_images()
     // 錨は行頭で、画像の段落の source_begin は alt の文字の位置なので、行 5（p2
     // の段落）の行頭の錨の 要素は 1 つ前の p1 の段落（preview_anchor_block）。見える範囲は [1, 4)
     // で、新しいのは p3 だけ。
-    applied(controller, app::ScrollPane{4});
+    // 送りは ui が畳んで錨を返す（#1894）。ここでは ui の答えを手で送る。
+    const auto settle_at = [&](std::size_t line, std::int64_t sent)
+    {
+        applied(controller, app::ScrollPane{static_cast<std::int32_t>(sent)});
+        applied(controller,
+                app::PreviewScrollSettled{controller.text().line_start(core::LineNumber{line}), 0,
+                                          0.0F, sent});
+    };
+    settle_at(5, 4);
     expect(editing.images().requests().size() == 4U &&
                editing.images().requests().back().path.text() == "C:\\docs\\p3.png",
            "moving the anchor requests the images that came into the window");
     serve_until_quiet(editing, ImageSize{1U, 1U});
-    applied(controller, app::ScrollPane{12});
+    settle_at(17, 12);
     serve_until_quiet(editing, ImageSize{1U, 1U});
     expect(requested_paths(editing.images()) ==
                std::vector<std::string>{"C:\\docs\\p0.png", "C:\\docs\\p1.png", "C:\\docs\\p2.png",
                                         "C:\\docs\\p3.png", "C:\\docs\\p7.png", "C:\\docs\\p8.png",
                                         "C:\\docs\\p9.png"},
            "the images skipped by the anchor are not requested and the anchor block goes first");
-    applied(controller, app::ScrollPane{100});
+    settle_at(controller.text().line_count(), 100);
     expect(editing.images().requests().size() == 7U, "the net image at the end is never requested");
 }
 
