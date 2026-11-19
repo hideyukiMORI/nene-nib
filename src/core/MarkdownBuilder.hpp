@@ -83,9 +83,9 @@ class MarkdownBuilder final
     // 画像の装飾を開き、画像の節を覚える（ADR 0155 の追補 47）。source と title は実体参照を解いた
     // md4c の属性。閉じる leave_span が alt と範囲の終わりを書く。
     void enter_image(std::string source, std::string title);
-    // リンクの装飾を開き、宛先を覚える（ADR 0151 の追補 2026-11-19・#1869）。target は実体参照と
-    // エスケープを解いた md4c の href。閉じる close_leaf が装飾の範囲と合わせて要素の links
-    // に置く。
+    // リンクの装飾を開き、宛先を覚える（ADR 0151 の追補 2026-11-19・#1869）。
+    // target は実体参照とエスケープを解いた md4c の href。
+    // 閉じる close_leaf が装飾の範囲と合わせて要素の links に置く。
     void enter_link(std::string target);
     void leave_span();
     // shown を要素の文字に足す。source が本文の中を指せば、要素の最初の位置と直前の終わりに使う。

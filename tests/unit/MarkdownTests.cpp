@@ -950,6 +950,82 @@ void verify_link_destinations()
            "a destination with an extension that is not text is refused");
 }
 
+// OS に渡す web と mail の綴りは ASCII の URI だけ（#1873 のレビュー M1）。
+// 非 ASCII の字は path・query・fragment で `%XX` に符号化する。
+// host の非 ASCII・URI に無い ASCII・不完全な `%` は断る。
+void verify_link_destination_uris()
+{
+    using enum core::LinkKind;
+    const std::optional<core::FilePath> base = core::FilePath::parse("C:\\docs\\a.md").value();
+    expect(destined("https://ja.wikipedia.org/wiki/日本?q=語#節", base, web,
+                    "https://ja.wikipedia.org/wiki/%E6%97%A5%E6%9C%AC?q=%E8%AA%9E#%E7%AF%80") &&
+               destined("https://a/\xE2\x80\xAE"
+                        "gpj.exe",
+                        base, web, "https://a/%E2%80%AEgpj.exe"),
+           "non-ASCII characters after the host are percent-encoded");
+    expect(refused_link("https://例え.jp/", base) && refused_link("https://u@例え.jp/", base),
+           "a non-ASCII host is refused");
+    expect(refused_link("https://a.example/\" --flag", base) && refused_link("https://a b", base) &&
+               refused_link("https://a/{x}", base) && refused_link("https://a/x|y", base) &&
+               refused_link("https://a/x\\y", base) && refused_link("mailto:a <b@c.d>", base),
+           "ASCII characters outside RFC 3986 are refused, not encoded");
+    expect(refused_link("https://a/%zz", base) && refused_link("https://a/%4", base) &&
+               destined("https://a/%41%e3", base, web, "https://a/%41%e3"),
+           "an incomplete percent sign is refused and a complete one is kept");
+    expect(refused_link("http:", base) && refused_link("https:x", base) &&
+               refused_link("http://", base) && refused_link("http://u@:80/", base) &&
+               destined("http://[::1]:80/", base, web, "http://[::1]:80/"),
+           "http and https need // and a host");
+    expect(destined("mailto:a@b.c?subject=hi&body=x&CC=d@e.f&bcc=g@h.i", base, mail,
+                    "mailto:a@b.c?subject=hi&body=x&CC=d@e.f&bcc=g@h.i") &&
+               refused_link("mailto:a@b.c?attach=x", base) &&
+               refused_link("mailto:a@b.c?%61ttach=x", base) &&
+               refused_link("mailto:a@b.c?subject=x&attachment=y", base),
+           "mailto takes only subject, body, cc and bcc");
+    expect(refused_link(" https://x.y", base) && refused_link(" b.md", base) &&
+               refused_link("b.md ", base),
+           "a destination with a leading or trailing space is refused");
+}
+
+// 文書へのリンクの経路（#1873 のレビュー M2・M3）。見えない字・不正な UTF-8・
+// 装置の予約名・`.` か空白で終わる名前・`\\?\` と `\\.\` は断る。
+void verify_link_destination_paths()
+{
+    using enum core::LinkKind;
+    const std::optional<core::FilePath> base = core::FilePath::parse("C:\\docs\\a.md").value();
+    expect(refused_link("a\xE2\x80\xAE"
+                        "b.md",
+                        base) &&
+               refused_link("a\xE2\x81\xA6.md", base) && refused_link("a\xE2\x80\x8E.md", base) &&
+               refused_link("a\xC2\x85.md", base) && refused_link("a\xE2\x80\x8B.md", base) &&
+               refused_link("a\xE2\x81\xA0.md", base) &&
+               refused_link("\xEF\xBB\xBF"
+                            "a.md",
+                            base) &&
+               refused_link("a%E2%80%AE.md", base),
+           "bidirectional controls, C1 controls and zero-width characters are refused");
+    expect(refused_link("a\xFF.md", base) && refused_link("a%FF.md", base),
+           "invalid UTF-8 is refused");
+    expect(refused_link("COM1", base) && refused_link("con.md", base) &&
+               refused_link("C:\\x\\AUX", base) && refused_link("NUL.tar.md", base) &&
+               refused_link("lpt\xC2\xB9.txt", base) && refused_link("prn", base) &&
+               refused_link("CONOUT$", base) && refused_link("file:///C:/x/com0.md", base),
+           "reserved device names are refused");
+    expect(destined("console.md", base, document, "C:\\docs\\console.md") &&
+               destined("com10.md", base, document, "C:\\docs\\com10.md") &&
+               destined("a.con", base, document, "C:\\docs\\a.con"),
+           "names that only look like device names are documents");
+    expect(refused_link("x.exe.", base) && refused_link("x.md%20", base) &&
+               refused_link("x.md.#sec", base),
+           "a name that ends with a dot or a space is refused");
+    expect(refused_link("\\\\?\\C:\\x.md", base) && refused_link("\\\\.\\COM1", base) &&
+               refused_link("//?/C:/x.md", base),
+           "verbatim and device paths are refused");
+    expect(destined("file://localhost/C:/x/y.md", base, document, "C:\\x\\y.md") &&
+               destined("FILE:/C:/x/y.md", base, document, "C:\\x\\y.md"),
+           "a file URL on localhost is a document");
+}
+
 void verify_html_and_line_endings()
 {
     expect_blocks("<div>\n*hello*\n</div>", {leaf(html, "<div>\n*hello*\n</div>\n", 0U)},
@@ -1094,6 +1170,8 @@ void verify_markdown_scope()
     verify_alerts();
     verify_link_targets();
     verify_link_destinations();
+    verify_link_destination_uris();
+    verify_link_destination_paths();
     verify_html_and_line_endings();
     verify_carriage_returns();
     verify_stop_and_size();

@@ -9,9 +9,9 @@
 
 namespace nenenib::core
 {
-// Markdown の画像の参照先（md4c の src）とリンクの宛先（href・link_destination が scheme の無いもの
-// と file: を渡す）を、実体参照を解いた後にローカルのファイルの経路に解く唯一の純関数（施主決定
-// D79・ ADR 0155 の追補 48・#1381・ADR 0151 の追補 2026-11-19・#1869 で画像とリンクの共用に改名）。
+// Markdown の画像の参照先（md4c の src）とリンクの宛先（href）を、実体参照を解いた後に
+// ローカルのファイルの経路に解く唯一の純関数（施主決定 D79・ADR 0155 の追補 48・#1381）。
+// リンクは link_destination が scheme の無いものと file: を渡す（#1869 で共用の名前に改めた）。
 // ファイルに触れない（文字列の計算だけ・ARC-007）。
 // document は開いている Markdown のファイルの経路（無題なら nullopt）。
 //
