@@ -373,9 +373,10 @@ class EditorState final
     // inserted と removed を入れ替えた編集を渡す。
     [[nodiscard]] EditorState with_other_adjusted(const core::Edit &edit,
                                                   const core::TextBuffer &after) const;
-    // もう 1 つの枠の先頭行と画面行を置く（ScrollPane）。1 枠では何も変えない。
+    // もう 1 つの枠の先頭行と画面行と端数（#1898）を置く（ScrollPane）。1 枠では何も変えない。
     [[nodiscard]] EditorState with_other_scrolled(core::LineNumber first_visible,
-                                                  std::size_t first_row) const;
+                                                  std::size_t first_row,
+                                                  std::size_t fraction = 0) const;
     // もう 1 つの枠を操作中の枠の形で読む写し（決定 8）。本文・選択（キャレットに畳む）・
     // スクロール・表示形式がもう 1 つの枠のもので、変換・入力行・検索の preview は無い。frame と
     // ScrollPane が操作中の枠と同じ関数を通すための読み取りの口で、状態には戻さない。1 枠と、

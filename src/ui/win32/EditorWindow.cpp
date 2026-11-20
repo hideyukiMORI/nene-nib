@@ -112,9 +112,13 @@ core::ExplorerLayout EditorWindow::explorer_frame() const
                                  controller_.explorer_width());
 }
 
+// 端数のずらし（#1898）を載せた操作中の枠。描いた frame と同じ値を読む（当たり判定と描画が同じ
+// 1 本の scrolled_body を通る）。
 core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const
 {
-    return core::active_pane_layout(body_panes(settings), controller_.split().active_side);
+    return core::scrolled_body(
+        core::active_pane_layout(body_panes(settings), controller_.split().active_side),
+        controller_.scroll_fraction());
 }
 
 // 寸法は操作中の枠の本文（両枠の幅と高さは等しいので、もう 1 つの枠も同じ寸法・決定 1）。

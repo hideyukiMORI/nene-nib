@@ -1565,7 +1565,8 @@ void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
     preview_.release();
     const application::CaretView caret{other.caret.position, passive_shape(frame.mode),
                                        other.caret.affinity};
-    draw_pane(frame, BodyPane{body, other.lines, other.grid, caret, PaneRole::passive});
+    const auto scrolled = core::scrolled_body(body, other.fraction);
+    draw_pane(frame, BodyPane{scrolled, other.lines, other.grid, caret, PaneRole::passive});
 }
 
 // プレビューの枠（ADR 0155 の決定 7・11）。地は受け身の本文の枠と同じく枠の帯の全体を塗り、
@@ -1611,7 +1612,9 @@ void Direct2DRenderer::draw_body_area(const application::EditorFrame &frame,
                    frame.full_preview.value());
         return;
     }
-    const auto body = core::active_pane_layout(panes, frame.active_side);
+    // 端数のずらし（#1898）は枠ごとに scrolled_body で載せる。起動画面と案内はずらしを読まない。
+    const auto body =
+        core::scrolled_body(core::active_pane_layout(panes, frame.active_side), frame.fraction);
     draw_body(frame, body);
     draw_other_body(frame, panes);
     // 起動画面は操作中の枠に描く。出ている frame の案内は draw の入口で hidden にしてあるので、

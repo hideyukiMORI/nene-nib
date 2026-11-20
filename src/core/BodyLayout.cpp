@@ -1,10 +1,12 @@
 #include "BodyLayout.hpp"
 
 #include "DevicePixels.hpp"
+#include "ScrollFraction.hpp"
 #include "StatusBarLayout.hpp"
 #include "TitleBarLayout.hpp"
 
 #include <algorithm>
+#include <limits>
 
 namespace nenenib::core
 {
@@ -50,7 +52,8 @@ BodyLayout body_layout_in(LayoutRect band, std::uint32_t dpi, FontSize font_size
                       .content = LayoutRect{content_left, first, band.right, band.bottom},
                       .line_height = line_height,
                       .caret_width = to_pixels(caret_width_dips, dpi),
-                      .visible_lines = static_cast<std::size_t>(rows)};
+                      .visible_lines = static_cast<std::size_t>(rows),
+                      .scrolled = 0};
 }
 
 LayoutRect body_line_rect(const BodyLayout &layout, std::size_t index) noexcept
@@ -58,5 +61,29 @@ LayoutRect body_line_rect(const BodyLayout &layout, std::size_t index) noexcept
     const std::int32_t top =
         layout.content.top + layout.line_height * static_cast<std::int32_t>(index);
     return LayoutRect{layout.band.left, top, layout.band.right, top + layout.line_height};
+}
+
+BodyLayout scrolled_body(BodyLayout layout, std::size_t fraction) noexcept
+{
+    const auto units = static_cast<std::int64_t>(scroll_fraction_units);
+    const auto part = static_cast<std::int64_t>(std::min(fraction, scroll_fraction_units - 1));
+    layout.scrolled =
+        static_cast<std::int32_t>(part * std::max<std::int64_t>(layout.line_height, 1) / units);
+    return layout;
+}
+
+std::int32_t body_row_top(const BodyLayout &layout, std::int64_t row) noexcept
+{
+    const auto value = static_cast<double>(layout.content.top) - layout.scrolled +
+                       (static_cast<double>(row) * layout.line_height);
+    return static_cast<std::int32_t>(
+        std::clamp(value, static_cast<double>(std::numeric_limits<std::int32_t>::min()) / 2.0,
+                   static_cast<double>(std::numeric_limits<std::int32_t>::max()) / 2.0));
+}
+
+std::int64_t body_row_at(const BodyLayout &layout, std::int32_t y) noexcept
+{
+    const auto from = static_cast<std::int64_t>(y) - layout.content.top + layout.scrolled;
+    return std::max<std::int64_t>(from, 0) / std::max<std::int64_t>(layout.line_height, 1);
 }
 } // namespace nenenib::core

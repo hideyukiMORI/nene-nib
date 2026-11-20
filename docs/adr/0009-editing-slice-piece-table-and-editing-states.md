@@ -100,3 +100,15 @@ CPP-014 は「内部表現は Phase 3 の piece table の ADR で決める」と
 8. **1 打鍵ごとに行の全体を写さない**（CLAUDE.md の「1 打鍵ごとに呼ばれる所は行の全体を `text_range` で写さない」・#1410 のレビュー M1）。`ordinary_word_boundary` はキャレットの前後の窓（4 KiB）だけを読み、窓の端で code point を割らない（`whole_code_points` と先頭の続きのバイトを落とす）。判断が窓の端に掛かったとき（着いた所の 1 文字が窓の終わりで切れる・前の 1 文字や `'` の隣が窓の外）だけ窓を倍にして読み直すので、答えは行の全体で歩いた答えと同じ。後ろ向きはキャレットの後の 1 code point（`'` の判定）だけを後ろに読む。費用の probe は `ordinary-word-boundary-giant-1line`（16 MiB の 1 行の真ん中で後ろ向きと前向きを 1 回ずつ・窓を出さない）。
 
 検証は `--ordinary-words`（英文・記号・Tab・空白・日本語・混在・結合文字・行をまたぐ・行頭行末・CRLF・Vim のモードの不変・controller の移動と削除と undo・選択があるときの Ctrl+Delete・字下げの行頭の Ctrl+Backspace・固定 seed の本文で 1・2・3・7・64 バイトと既定の窓が行の全体の答えと同じ・窓より長い語）と nib_window_tests の `--word-delete`。fixture は変えない。
+
+## 追補（2026-11-20・#1898）: 縦の送りは行の端数を持つ（FR-011 の滑らかスクロール）
+
+決定 6 の「縦スクロールの量は application が所有する」を、1 画面行に満たない量まで広げる。
+
+1. **端数は `ScrollState::fraction` の 1 欄**（先頭の画面行が上へはみ出している量・1/120 行・0〜119・単位は `core::scroll_fraction_units`）。split の 2 枠は枠ごと（もう 1 つの枠は `PaneView::fraction`）。タブの束と一覧（`session.v2`）には持たない（復元は行の境から）。
+2. **意図は今の `ScrollLines` / `ScrollPane` に `parts`（1 行に満たない量・同じ向き）を 1 欄足した形**。新しい意図は作らない（合図・歩き・`map` の待ち・全面プレビューの振り分けの表はそのまま）。ui の `scroll_body` は `wheel_scrolled`（delta × 1 刻みの行数を 1/120 行の量にして行と parts に分ける）を送るだけで、本文の余り（`body_wheel_remainder_`）は持たない。
+3. **端数を持つのは text の表示の本文だけ**（`EditorController::keeps_fractions`・通常モードも Vim のモードも・wrap あり・なし・巨大な行の窓の行を含む）。格子・問いの答えを待つ間・プレビュー（側と全面）は端数を持たず、controller の `coarse_wheel_` に余りを貯めて行で送る（向きが反転したら捨てる・今までの ui の `wheel_turned` と同じ規則・`coarse_carried`）。
+4. **端数を置くのは `finely_scrolled` の 1 本**（`fine_carried` で行の境を越えた分を画面行に繰り上げ、`reached` と `constrained` で送る）。本文の先頭で止まった・送りの上限で収めた・上限に着いた（`kept_fraction`）ときは 0。`parts` も端数も無い送り（普通のホイールの刻み・ドラッグの選択の送り）は今までの行の単位の道（`scroll_lines`）をそのまま通り、仕事は増えない。
+5. **行に揃える所**: 入口の `align_scroll_before`（`forget_unkept_marks` の中）が、端数を保つ意図（ホイール・面とエクスプローラーとタブの帯のホイール・本文のクリックとドラッグ・右クリックのメニュー・使う人の操作でない意図）のほかの前で端数を 0 にする（先頭の行は動かさない・最大 1 行未満だけ下へ戻る）。鍵・打鍵・モードとタブの切り替え・検索の跳びはここで揃う。窓が動く追従（`VisualTextView::followed`）・`zt` `zz` `zb`・PgUp / PgDn・Vim の鍵の窓・ミニマップ・タブの復元は `ScrollState` を作り直すので 0。`clamp_scroll` は先頭が動かなければ端数を保つ（上限に着けば 0）。
+6. **描く・当てる 1 本**: frame は `EditorFrame::fraction` と `PaneFrame::fraction`（格子は 0）を運び、端数があるときだけ `visible_lines + 1` 画面行を作る。ui は `core::scrolled_body` で端数を行の高さの物理画素に切り捨てて `BodyLayout::scrolled` に置き、画面行の上端は `body_row_top`、点の画面行は `body_row_at` が同じ値を読む。renderer の `row_pixel`（本文・行番号・現在行・選択・検索・診断・括弧・キャレット・IME の差し込み・イージーモーションの印）と、そこから作る `caret_rectangle_`（IME の候補窓・補完の面・hover の札・メニューの錨）は全部この 1 本を通る。本文は今までどおり枠（`content.top` から `band.bottom`）で切る。
+7. **動き（animation）は入れない**。普通のホイールの 1 刻みは今と同じ行数だけ一度に動き、行の境に止まる。

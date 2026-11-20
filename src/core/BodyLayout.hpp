@@ -18,6 +18,10 @@ struct BodyLayout
     std::int32_t line_height;
     std::int32_t caret_width;
     std::size_t visible_lines;
+    // 先頭の画面行が本文の上端（content.top）より上へはみ出している物理画素（#1898）。0 以上
+    // line_height 未満で、置くのは scrolled_body の 1 か所。画面行の上端（body_row_top）と点の
+    // 画面行（body_row_at）が同じ値を読み、描く所と当てる所が同じずらしになる（ARC-001）。
+    std::int32_t scrolled = 0;
 };
 
 [[nodiscard]] BodyLayout body_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
@@ -34,4 +38,14 @@ struct BodyLayout
                                         FontSize font_size) noexcept;
 
 [[nodiscard]] LayoutRect body_line_rect(const BodyLayout &layout, std::size_t index) noexcept;
+
+// 端数 fraction（1/scroll_fraction_units 行・ScrollState::fraction）を行の高さの物理画素に丸めて
+// layout に置く（#1898）。切り捨てなので 0 は 0 のまま、どの端数も line_height 未満。
+[[nodiscard]] BodyLayout scrolled_body(BodyLayout layout, std::size_t fraction) noexcept;
+
+// 画面行 row（先頭の画面行が 0）の上端の物理画素。ずらし（scrolled）を引いた値。
+[[nodiscard]] std::int32_t body_row_top(const BodyLayout &layout, std::int64_t row) noexcept;
+
+// 点の縦 y の画面行。本文の上端より上は 0（クリックとドラッグの当たり判定の 1 本）。
+[[nodiscard]] std::int64_t body_row_at(const BodyLayout &layout, std::int32_t y) noexcept;
 } // namespace nenenib::core

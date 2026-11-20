@@ -85,4 +85,5 @@ void verify_window_corners();
 void verify_question_backdrop();
 // 表示言語の ui の文・画面の文字の locale・固定の枠の幅（ADR 0123 の追補 2026-11-13・#1594）。
 void verify_language_texts();
+void verify_fine_scroll_paint();
 } // namespace nenenib::tests::ui

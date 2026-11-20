@@ -477,4 +477,5 @@ void verify_vim_viewport_mode_edges();
 void verify_vim_insert_page_move_breaks_undo();
 void verify_vim_visual_step_edges();
 void verify_vim_engine();
+void verify_fine_scroll_scope();
 } // namespace nenenib::tests

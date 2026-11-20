@@ -576,10 +576,9 @@ class EditorWindow final
     // 棒をつかんだ表の通し番号（捕まえを持つ間）。
     std::int32_t table_wheel_remainder_ = 0;
     std::optional<std::size_t> table_dragging_;
-    // 本文のホイールの余り（「delta × 1 刻みの行数」の単位・WheelTurn）と、OS の
-    // SPI_GETWHEELSCROLLLINES の値（起動と WM_SETTINGCHANGE で読む・#499）。
-    std::int32_t body_wheel_remainder_ = 0;
-    // 面の一覧のホイールの余り（単位は本文と同じ・#737）。本文の余りとは別の対象なので共有しない。
+    // 本文のホイールの 1 行に満たない量は application の端数（ScrollState::fraction）と余り
+    // （coarse_wheel_）が持ち、ui は持たない（#1898）。下は面の一覧のホイールの余り（「delta ×
+    // 1 刻みの行数」の単位・WheelTurn・#737）。本文とは別の対象なので共有しない。
     std::int32_t palette_wheel_remainder_ = 0;
     // エクスプローラーの面のホイールの余り（ADR 0162 の決定 4）。
     std::int32_t explorer_wheel_remainder_ = 0;

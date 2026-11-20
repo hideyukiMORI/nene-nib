@@ -24,12 +24,15 @@ struct PaneView
     std::size_t first_row = 0;
     float horizontal = 0;
     std::optional<core::VimWantedColumn> wanted_column;
+    // ScrollState::fraction と同じ端数（#1898）。枠ごとに持つ。
+    std::size_t fraction = 0;
 };
 
 [[nodiscard]] constexpr bool operator==(const PaneView &left, const PaneView &right) noexcept
 {
     return left.tab == right.tab && left.caret == right.caret && left.affinity == right.affinity &&
            left.first_visible == right.first_visible && left.first_row == right.first_row &&
-           left.horizontal == right.horizontal && left.wanted_column == right.wanted_column;
+           left.horizontal == right.horizontal && left.wanted_column == right.wanted_column &&
+           left.fraction == right.fraction;
 }
 } // namespace nenenib::application

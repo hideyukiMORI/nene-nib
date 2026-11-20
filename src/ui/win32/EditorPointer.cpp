@@ -28,8 +28,7 @@ application::PointText EditorWindow::text_point(POINT point, core::SelectionAnch
                                                 application::PointerClicks clicks) const
 {
     const auto body = active_body(controller_.delivery().settings);
-    const auto row =
-        static_cast<std::int64_t>(std::max(point.y - body.content.top, 0L) / body.line_height);
+    const auto row = core::body_row_at(body, static_cast<std::int32_t>(point.y));
     return application::PointText{static_cast<float>(point.x - body.content.left), row, anchoring,
                                   clicks};
 }

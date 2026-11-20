@@ -919,20 +919,19 @@ void EditorWindow::scroll_body(std::int32_t delta, LPARAM data)
                                     controller_.delivery().settings.font_size)
                       .visible_lines;
     }
-    const auto turn =
-        wheel_turned(body_wheel_remainder_, delta, wheel_lines_per_notch(wheel_setting_, visible));
-    body_wheel_remainder_ = turn.remainder;
-    if (turn.lines == 0)
+    // 1 刻みに満たない量も送る（端数と余りは application・#1898）。0 の量は送らない。
+    const auto turn = wheel_scrolled(delta, wheel_lines_per_notch(wheel_setting_, visible));
+    if (turn.lines == 0 && turn.parts == 0)
     {
         return;
     }
     // 点の下の枠を送る。もう 1 つの枠なら枠を移らずに送る（ADR 0148 の決定 11）。
     if (over_other_pane(data))
     {
-        send(application::ScrollPane{turn.lines});
+        send(application::ScrollPane{turn.lines, turn.parts});
         return;
     }
-    send(application::ScrollLines{turn.lines});
+    send(turn);
 }
 
 void EditorWindow::read_wheel_setting()
@@ -946,7 +945,6 @@ void EditorWindow::read_wheel_setting()
     }
     if (lines != wheel_setting_)
     {
-        body_wheel_remainder_ = 0;
         palette_wheel_remainder_ = 0;
     }
     wheel_setting_ = lines;

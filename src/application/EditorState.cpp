@@ -1396,15 +1396,15 @@ PaneView EditorState::active_pane() const
 {
     return PaneView{autosave_ids_.at(active_), selection_.caret,  caret_affinity_,
                     scroll_.first_visible,     scroll_.first_row, scroll_.horizontal,
-                    vim_.wanted_column};
+                    vim_.wanted_column,        scroll_.fraction};
 }
 
 void EditorState::spread_pane(const PaneView &view)
 {
     selection_ = core::collapsed_at(core::Offset{std::min(view.caret.value, text_.size_bytes())});
     caret_affinity_ = view.affinity;
-    scroll_ =
-        ScrollState{view.first_visible, scroll_.visible_lines, view.first_row, view.horizontal};
+    scroll_ = ScrollState{view.first_visible, scroll_.visible_lines, view.first_row,
+                          view.horizontal, view.fraction};
     vim_ = core::vim_switched_document(vim_, view.wanted_column, vim_.scroll_lines);
 }
 
@@ -1501,8 +1501,8 @@ EditorState EditorState::with_other_adjusted(const core::Edit &edit,
     return next;
 }
 
-EditorState EditorState::with_other_scrolled(core::LineNumber first_visible,
-                                             std::size_t first_row) const
+EditorState EditorState::with_other_scrolled(core::LineNumber first_visible, std::size_t first_row,
+                                             std::size_t fraction) const
 {
     const PaneView *shown = pane_of(split_.other);
     if (shown == nullptr)
@@ -1512,6 +1512,7 @@ EditorState EditorState::with_other_scrolled(core::LineNumber first_visible,
     PaneView other = *shown;
     other.first_visible = first_visible;
     other.first_row = first_row;
+    other.fraction = fraction;
     EditorState next(*this);
     next.split_.other = other;
     return next;

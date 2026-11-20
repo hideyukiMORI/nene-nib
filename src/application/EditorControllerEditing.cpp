@@ -775,11 +775,44 @@ void EditorController::redo_edit()
     follow_caret();
 }
 
+// 1 行に満たない量（parts）か端数があり、端数を持てる窓なら端数の道（#1898）。どちらも無い送り
+// （普通のホイールの刻みとドラッグの選択の送り）は今までの行の単位の道のまま。端数を持たない窓
+// （格子・問いの答えを待つ間）は余りを貯めて行で送る。
 void EditorController::accept(const ScrollLines &intent)
 {
     const auto &scroll = settled_scroll();
-    const auto moved = visual_view().shifted(
-        core::VisualPosition{scroll.first_visible, scroll.first_row}, intent.lines);
+    if (intent.parts == 0 && scroll.fraction == 0)
+    {
+        scroll_lines(intent.lines);
+        return;
+    }
+    if (!keeps_fractions(state_))
+    {
+        const auto lines = coarse_wheel(intent.lines, intent.parts);
+        if (lines.has_value())
+        {
+            scroll_lines(lines.value());
+        }
+        return;
+    }
+    coarse_wheel_ = 0;
+    auto view = visual_view();
+    const auto moved =
+        finely_scrolled(view, state_.scroll(), intent, detail::scroll_extent_for(state_.mode()));
+    if (!moved)
+    {
+        layout_failure_ = moved.error();
+        return;
+    }
+    state_ = state_.with_scroll(moved.value());
+}
+
+// 行の単位の送り（端数は 0）。送って clamp_scroll で収める。
+void EditorController::scroll_lines(std::int64_t lines)
+{
+    const auto &scroll = settled_scroll();
+    const auto moved =
+        visual_view().shifted(core::VisualPosition{scroll.first_visible, scroll.first_row}, lines);
     if (!moved)
     {
         layout_failure_ = moved.error();

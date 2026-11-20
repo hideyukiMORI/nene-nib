@@ -298,16 +298,21 @@ void EditorController::accept(const ClosePane &)
 }
 
 // もう 1 つの枠だけを送る（決定 11）。送り方と収め方は ScrollLines と同じ 2 本（shifted と
-// constrained）を、もう 1 つの枠を操作中の枠の形で読む写しに通す。
+// constrained）を、もう 1 つの枠を操作中の枠の形で読む写しに通す。端数（#1898）も操作中の枠と
+// 同じ finely_scrolled で、枠ごとに持つ。端数を持たない枠とプレビューは余りを貯めて行で送る。
 void EditorController::accept(const ScrollPane &intent)
 {
+    const auto pane = state_.other_pane_state();
+    if (scrolled_other_by_parts(pane, intent))
+    {
+        return;
+    }
     // プレビューは錨を本文の行で動かし、追従をやめる（ADR 0155 の決定 7）。
     if (state_.preview() != nullptr)
     {
         scroll_preview(intent.lines);
         return;
     }
-    const auto pane = state_.other_pane_state();
     if (!pane.has_value())
     {
         return;

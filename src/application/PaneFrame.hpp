@@ -25,5 +25,7 @@ struct PaneFrame
     core::DisplayForm display;
     std::vector<GridRowView> grid;
     DocumentView document;
+    // もう 1 つの枠の端数（EditorFrame::fraction と同じ・#1898）。格子は 0。
+    std::size_t fraction = 0;
 };
 } // namespace nenenib::application

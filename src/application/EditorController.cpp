@@ -665,6 +665,8 @@ void EditorController::forget_unkept_marks(const EditorIntent &intent)
     // 補完の面も、面の意図・文字の入力・手前への削除・使う人の操作でない意図のほかで閉じる
     // （ADR 0190 の決定 5）。
     close_completion_before(intent);
+    // ホイールの端数も、ホイール・本文のマウス・使う人の操作でない意図のほかで行に揃える（#1898）。
+    align_scroll_before(intent);
 }
 
 // `map` の待ちの鍵は、待ちを保つ意図のほかは受ける前に流す（ADR 0176 の決定 4）。
@@ -847,6 +849,11 @@ const core::VimState &EditorController::vim_state() const noexcept
 const SplitState &EditorController::split() const noexcept
 {
     return state_.split();
+}
+
+std::size_t EditorController::scroll_fraction() const noexcept
+{
+    return state_.scroll().fraction;
 }
 
 PreviewPlacement EditorController::preview_placement() const noexcept
@@ -1078,8 +1085,9 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
     // 4）。
     const std::size_t total = state.vim_text().line_count();
     const std::size_t first = std::min(scroll.first_visible.value, total);
-    const std::size_t last =
-        std::min(first + std::max<std::size_t>(scroll.visible_lines, 1) - 1, total);
+    // 端数があるときだけ下端に 1 画面行ぶん余分に作る（#1898・端数が 0 なら今までと同じ行数）。
+    const std::size_t drawn = scroll.visible_lines + (scroll.fraction > 0 ? 1 : 0);
+    const std::size_t last = std::min(first + std::max<std::size_t>(drawn, 1) - 1, total);
     const core::Offset caret = source.pattern != nullptr && first <= last
                                    ? previewed_offset(state).value_or(state.selection().caret)
                                    : state.selection().caret;
@@ -1098,8 +1106,8 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
     // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
     const VisualTextView visual(state, ports_.text_layouts, view_geometry_);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
-    for (std::size_t number = first;
-         number <= last && row < static_cast<std::int64_t>(scroll.visible_lines); ++number)
+    for (std::size_t number = first; number <= last && row < static_cast<std::int64_t>(drawn);
+         ++number)
     {
         const core::LineNumber line{number};
         auto shown = line_view(source, visual.line(line),
@@ -1395,6 +1403,8 @@ EditorFrame EditorController::frame()
 void EditorController::finish_frame(EditorFrame &result, const PaneSource &source, bool gridded,
                                     std::size_t lexed)
 {
+    // 端数（#1898）。格子は持たない。
+    result.fraction = gridded ? 0 : state_.scroll().fraction;
     // 表示言語の文（ADR 0123 の追補 2026-11-13）。モードの名前と案内はここで今の言語から引く。
     result.language = state_.display_language();
     result.mode_label =
@@ -1538,6 +1548,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
         auto lines = visible_lines(source, passive_syntax_cache(), lexed);
         failure = lines ? std::nullopt : std::optional{lines.error()};
         other.lines = std::move(lines).value_or(std::vector<LineView>{});
+        other.fraction = state.scroll().fraction;
     }
     result.layout_failure = result.layout_failure.has_value() ? result.layout_failure : failure;
     result.other = std::move(other);

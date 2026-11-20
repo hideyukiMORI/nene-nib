@@ -1006,6 +1006,11 @@ std::expected<ScrollState, TextLayoutFailure> VisualTextView::followed(core::Tex
         return std::unexpected(first.error());
     }
     auto result = state_.scroll();
+    // 窓が動く追従は行に揃える。動かなければ端数を保つ（本文のクリックとドラッグ・#1898）。
+    if (!(first.value() == visual_first(state_.scroll())))
+    {
+        result.fraction = 0;
+    }
     result.first_visible = first.value().line;
     result.first_row = first.value().row;
     result.horizontal = horizontal_for(caret, point.value().x);

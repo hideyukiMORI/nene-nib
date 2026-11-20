@@ -315,15 +315,15 @@ template <typename Row, typename Key>
     return passes_full_preview(intent) ? PreviewFullRoute::pass : key_route(intent, mode, vim_mode);
 }
 
-// ホイールの行数（route が wheel のときだけ呼ぶ）。
-[[nodiscard]] std::int64_t wheel_lines(const EditorIntent &intent) noexcept
+// ホイールの量（route が wheel のときだけ呼ぶ）。1 行に満たない parts は呼び手が貯める（#1898）。
+[[nodiscard]] ScrollLines wheel_lines(const EditorIntent &intent) noexcept
 {
     if (const auto *pane = std::get_if<ScrollPane>(&intent); pane != nullptr)
     {
-        return pane->lines;
+        return ScrollLines{pane->lines, pane->parts};
     }
     const auto *lines = std::get_if<ScrollLines>(&intent);
-    return lines == nullptr ? 0 : lines->lines;
+    return lines == nullptr ? ScrollLines{0} : *lines;
 }
 } // namespace
 
@@ -791,7 +791,7 @@ void EditorController::run_full_preview_route(PreviewFullRoute route, const Edit
         scroll_preview(lines);
         return;
     case PreviewFullRoute::wheel:
-        scroll_preview(wheel_lines(intent));
+        scroll_preview_by_wheel(wheel_lines(intent));
         return;
     case PreviewFullRoute::vim_g:
         preview_vim_g_ = true;

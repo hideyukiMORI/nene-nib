@@ -159,6 +159,10 @@ struct EditorFrame
     // Vim のモードで描かない最後の改行があるか（eol の旗・ADR 0188 の決定 4）。lines と total_lines
     // は除いた本文の行で、真なら最後の行の後ろに改行がもう 1 つある。renderer は読まない。
     bool hidden_line_break = false;
+    // 操作中の枠の先頭の画面行が上へはみ出している端数（ScrollState::fraction・#1898）。ui は
+    // core::scrolled_body で行の高さの物理画素に丸め、描く所と当てる所が同じずらしを読む。格子は
+    // 0。
+    std::size_t fraction = 0;
     // 本文の右クリックのメニュー（ADR 0078 の追補 #1051）。開いている間だけ値を持ち、renderer は
     // ほかの全部の上に描く。
     std::optional<ContextMenuView> context_menu{};

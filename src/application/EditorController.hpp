@@ -330,6 +330,9 @@ class EditorController final
     // 枠の配置と操作中の枠の側（ADR 0148 の決定 8）。窓がマウスの点の下の枠と、本文の行数を
     // 数える枠（pane_layouts の片側）を引くための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] const SplitState &split() const noexcept;
+    // 操作中の枠の端数（ScrollState::fraction・#1898）。ui のマウスの当たり判定が frame を作らずに
+    // 読む口（描いた frame の EditorFrame::fraction と同じ値）。
+    [[nodiscard]] std::size_t scroll_fraction() const noexcept;
     // プレビューの見せ方（ADR 0155 の改訂 15）。窓が tick
     // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
     [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
@@ -402,6 +405,8 @@ class EditorController final
     void accept(const ClipboardAction &intent);
     void accept(const HistoryAction &intent);
     void accept(const ScrollLines &intent);
+    // 行の単位の送り（ScrollLines の端数の無い道・端数を持たない窓の貯めた行）。
+    void scroll_lines(std::int64_t lines);
     void accept(const VisibleLines &intent);
     void accept(const SelectEditMode &intent);
     void accept(const VimKeyPress &intent);
@@ -856,6 +861,12 @@ class EditorController final
     void finish_vim_g(const VimKeyPress &press);
     // 見せているプレビューの錨を本文の行で lines 動かす（ADR 0155 の決定 7・改訂 17）。端で止まる。
     void scroll_preview(std::int64_t lines);
+    // もう 1 つの枠の端数の道（#1898）。端数を持つ枠なら finely_scrolled、持たない枠とプレビューの
+    // 1 行に満たない量は coarse_wheel に貯めて行で送る。受けたら真（行の単位の道へ進まない）。
+    [[nodiscard]] bool scrolled_other_by_parts(const std::optional<EditorState> &pane,
+                                               const ScrollPane &intent);
+    // 全面のホイール。1 行に満たない量は coarse_wheel に貯める（#1898）。
+    void scroll_preview_by_wheel(const ScrollLines &wheel);
     // 全面で通常モードの Space（追補 25）。キャレットの行のタスクを切り替え、無ければ知らせる。
     void toggle_caret_task();
     // 全面の選択とコピー（改訂 18）。select_preview は preview_full_route が select と決めた意図
@@ -1463,6 +1474,22 @@ class EditorController final
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
     void clamp_scroll();
+    // ホイールの端数（#1898・ADR 0009 の決定 6 の 2026-11-20 の追補）。端数を持つ送り先は text の
+    // 表示の本文だけ（格子・問いの答えを待つ間は持たない）。
+    [[nodiscard]] static bool keeps_fractions(const EditorState &state) noexcept;
+    // 窓の先頭 at で端数 fraction を保てるか。at が送りの上限（下へ送れない）なら 0。fraction が
+    // 0 なら文字組みを問わずに 0（行の単位の道の仕事を増やさない）。
+    [[nodiscard]] static std::expected<std::size_t, TextLayoutFailure>
+    kept_fraction(VisualTextView &view, core::VisualPosition at, std::size_t fraction,
+                  core::ScrollExtent extent);
+    // 送りの量を、端数を持つ窓の先頭と端数に写す（ScrollLines と ScrollPane の共用・端で 0）。
+    [[nodiscard]] static std::expected<ScrollState, TextLayoutFailure>
+    finely_scrolled(VisualTextView &view, const ScrollState &scroll, const ScrollLines &wheel,
+                    core::ScrollExtent extent);
+    // 端数を持たない送り先の行数（余り coarse_wheel_ に貯める）。送る行が無ければ値なし。
+    [[nodiscard]] std::optional<std::int64_t> coarse_wheel(std::int32_t lines, std::int32_t parts);
+    // 入口で、端数を保たない意図の前に操作中の枠の端数を 0 に戻す（行に揃える 1 か所）。
+    void align_scroll_before(const EditorIntent &intent);
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
@@ -1653,6 +1680,9 @@ class EditorController final
     // 行高を変えた設定が頼んだ clamp。新しい幾何が届いた後のスクロールの読みで、追従より先に
     // 1 回だけ解決する（ADR 0128 の決定 8）。
     bool pending_clamp_ = false;
+    // 端数を持たない送り先（格子・プレビュー）へのホイールの 1 行に満たない余り（#1898）。ui の
+    // 本文の余りを移した 1 か所（向きの規則は coarse_carried）。
+    std::int64_t coarse_wheel_ = 0;
     std::optional<float> wanted_x_;
     // `.` と `@` の再生で流す鍵の列と、それぞれの鍵の入れ子の深さと種類（ADR 0046 の決定 3・4・
     // #1312）。replay_depth_ はいま流している鍵の深さで、再生の外（打った鍵）では空。どれも

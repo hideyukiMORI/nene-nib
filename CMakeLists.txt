@@ -91,7 +91,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
     src/application/FindState.cpp src/application/MatchParen.cpp src/application/MinimapCache.cpp src/application/EditorControllerMinimap.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
-    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
+    src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp src/application/EditorControllerFineScroll.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp src/application/EditorControllerFinderPreview.cpp src/application/PreviewLines.cpp
     src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
@@ -121,6 +121,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimRecordedKeysTests.cpp
     tests/unit/ApplicationTests.cpp
     tests/unit/WrappedViewTests.cpp
+    tests/unit/FineScrollTests.cpp
     tests/unit/EdgeArrowTests.cpp
     tests/unit/SelectionArrowTests.cpp
     tests/unit/VimWrappedTests.cpp
@@ -531,6 +532,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/FallbackKeyTests.cpp tests/ui/FallbackCacheTests.cpp tests/ui/FileDropTests.cpp
     tests/ui/GutterLayoutTests.cpp tests/ui/DeviceWarmupTests.cpp tests/ui/WindowTimerTests.cpp
     tests/ui/WheelTurnTests.cpp
+    tests/ui/FineScrollPaintTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp
     tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp
     tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp

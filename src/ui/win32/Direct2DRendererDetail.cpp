@@ -45,13 +45,10 @@ bool body_caret_hidden(const application::EditorFrame &frame) noexcept
            (frame.explorer.has_value() && frame.explorer.value().focused);
 }
 
+// 画面行の上端。端数のずらし（body.scrolled・#1898）は core::body_row_top の 1 本が引く。
 std::int32_t row_pixel(const core::BodyLayout &body, std::int64_t row)
 {
-    const auto value =
-        static_cast<double>(body.content.top) + static_cast<double>(row) * body.line_height;
-    return static_cast<std::int32_t>(
-        std::clamp(value, static_cast<double>(std::numeric_limits<std::int32_t>::min()) / 2.0,
-                   static_cast<double>(std::numeric_limits<std::int32_t>::max()) / 2.0));
+    return core::body_row_top(body, row);
 }
 
 // 行の文字組みの領域。原点のずれ（横の送りと巨大な行の窓の x）は application が行ごとに決める

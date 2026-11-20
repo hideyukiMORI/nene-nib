@@ -16,6 +16,8 @@
 //   vim-page            10,000 行の .cpp・折り返し・Vim のモードの <C-f>
 //   grid-ascii-wheel3   16.8 MB の ASCII の 1 行・格子・ScrollLines{3}
 //   grid-mixed-wheel3   16 MB の日本語と ASCII の混じった 1 行・格子・ScrollLines{3}
+//   wrap-fine15         10,000 行の .cpp・折り返し・delta 15 の小さな送り（ScrollLines{0, 45}・
+//                       3 行の設定で 1 刻みの 1/8・端数の道・#1898）
 #include "ScrollProbeEditing.hpp"
 
 #include "BodyLayout.hpp"
@@ -88,12 +90,13 @@ enum class ScrollPath : std::uint8_t
     page_wheel,
     vim_page,
     grid_ascii_wheel3,
-    grid_mixed_wheel3
+    grid_mixed_wheel3,
+    wrap_fine15
 };
 
-constexpr std::array<std::string_view, 7> path_names{
-    "wrap-wheel3", "nowrap-long-wheel3", "page-down",        "page-wheel",
-    "vim-page",    "grid-ascii-wheel3",  "grid-mixed-wheel3"};
+constexpr std::array<std::string_view, 8> path_names{
+    "wrap-wheel3", "nowrap-long-wheel3", "page-down",         "page-wheel",
+    "vim-page",    "grid-ascii-wheel3",  "grid-mixed-wheel3", "wrap-fine15"};
 
 // 名前の表の i 番目は ScrollPath の i 番目（path_of
 // が添字で引く）。並びを崩したらコンパイルで落とす。
@@ -115,6 +118,8 @@ constexpr std::array<std::string_view, 7> path_names{
         return "grid-ascii-wheel3";
     case ScrollPath::grid_mixed_wheel3:
         return "grid-mixed-wheel3";
+    case ScrollPath::wrap_fine15:
+        return "wrap-fine15";
     }
     std::unreachable();
 }
@@ -128,7 +133,7 @@ constexpr std::array<std::string_view, 7> path_names{
             return false;
         }
     }
-    return static_cast<std::size_t>(ScrollPath::grid_mixed_wheel3) + 1 == path_names.size();
+    return static_cast<std::size_t>(ScrollPath::wrap_fine15) + 1 == path_names.size();
 }
 static_assert(names_follow_paths(), "path_names must follow the order of ScrollPath");
 
@@ -221,6 +226,7 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     case ScrollPath::page_down:
     case ScrollPath::page_wheel:
     case ScrollPath::vim_page:
+    case ScrollPath::wrap_fine15:
         return code_text();
     case ScrollPath::nowrap_long_wheel3:
         return long_text();
@@ -240,6 +246,7 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     case ScrollPath::page_down:
     case ScrollPath::page_wheel:
     case ScrollPath::vim_page:
+    case ScrollPath::wrap_fine15:
         return "C:\\nib-probe\\code.cpp";
     case ScrollPath::nowrap_long_wheel3:
         return "C:\\nib-probe\\long.txt";
@@ -276,6 +283,8 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     case ScrollPath::grid_ascii_wheel3:
     case ScrollPath::grid_mixed_wheel3:
         return application::ScrollLines{3};
+    case ScrollPath::wrap_fine15:
+        return application::ScrollLines{0, 45};
     }
     std::unreachable();
 }

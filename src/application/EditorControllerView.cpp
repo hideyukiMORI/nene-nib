@@ -244,16 +244,26 @@ void EditorController::clamp_scroll()
         return;
     }
     const auto &scroll = settled_scroll();
-    const auto within =
-        visual_view().constrained(core::VisualPosition{scroll.first_visible, scroll.first_row},
-                                  scroll_extent_for(state_.mode()));
+    const core::VisualPosition first{scroll.first_visible, scroll.first_row};
+    auto view = visual_view();
+    const auto within = view.constrained(first, scroll_extent_for(state_.mode()));
     if (!within)
     {
         layout_failure_ = within.error();
         return;
     }
-    state_ = state_.with_scroll(ScrollState{within.value().line, scroll.visible_lines,
-                                            within.value().row, scroll.horizontal});
+    // 収めて先頭が動かなければ端数を保つ（上限に着いていれば 0・#1898）。端数が 0 なら問わない。
+    const auto fraction =
+        kept_fraction(view, within.value(), within.value() == first ? scroll.fraction : 0,
+                      scroll_extent_for(state_.mode()));
+    if (!fraction)
+    {
+        layout_failure_ = fraction.error();
+        return;
+    }
+    state_ =
+        state_.with_scroll(ScrollState{within.value().line, scroll.visible_lines,
+                                       within.value().row, scroll.horizontal, fraction.value()});
 }
 
 // view はスクロールを読むので、頼まれた追従を先に解決する（ADR 0128 の決定 2）。

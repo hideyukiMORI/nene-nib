@@ -1,6 +1,8 @@
 #pragma once
 
 #include "EditorOperation.hpp"
+#include "ScrollFraction.hpp"
+#include "ScrollLines.hpp"
 
 #include <windows.h>
 
@@ -47,6 +49,20 @@ inline constexpr std::int32_t wheel_lines_limit = 10'000;
     const std::int32_t scaled = (reversed ? 0 : remainder) + (delta * per_notch);
     return WheelTurn{scaled % WHEEL_DELTA, -(scaled / WHEEL_DELTA)};
 }
+
+// 本文のホイールの送り（#1898）。delta × 1 刻みの行数をそのまま 1/WHEEL_DELTA 行の量にして、
+// 行（lines）と 1 行に満たない量（parts・同じ向き）に分ける。累積と端数は application が持つ
+// （ScrollState::fraction と端数を持たない送り先の余り）。WHEEL_DELTA は
+// core::scroll_fraction_units と同じ 120。
+[[nodiscard]] constexpr application::ScrollLines wheel_scrolled(std::int32_t delta,
+                                                                std::int32_t per_notch) noexcept
+{
+    const std::int32_t amount = -(delta * per_notch);
+    return application::ScrollLines{amount / WHEEL_DELTA, amount % WHEEL_DELTA};
+}
+
+static_assert(static_cast<std::size_t>(WHEEL_DELTA) == core::scroll_fraction_units,
+              "the wheel delta and the scroll fraction must share one unit");
 
 // Ctrl つきのホイールの 1 段の向き（#1048・ADR 0150 の追補）。wheel_turned の lines の負（奥）が
 // 大きく、正（手前）が小さく。回数は lines の絶対値。
