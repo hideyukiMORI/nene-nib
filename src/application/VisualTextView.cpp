@@ -287,7 +287,7 @@ TextLayoutRequest VisualTextView::request(const LineView &line) const
 {
     return TextLayoutRequest{
         presented_text(line), state_.settings(), geometry_, core::DisplayForm::text, {},
-        line.window};
+        line.window,          line.number};
 }
 
 // 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。行の全体を読まない。
