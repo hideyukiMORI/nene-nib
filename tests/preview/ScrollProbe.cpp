@@ -12,8 +12,8 @@
 //   wrap-wheel3         10,000 行の .cpp・折り返し・ScrollLines{3}
 //   nowrap-long-wheel3  15,000 字の行 × 300・nowrap・ScrollLines{3}
 //   page-down           10,000 行の .cpp・折り返し・通常モードの PgDn
-//   page-wheel          10,000 行の .cpp・折り返し・WHEEL_PAGESCROLL（見えている行数の
-//   ScrollLines） vim-page            10,000 行の .cpp・折り返し・Vim のモードの <C-f>
+//   page-wheel          10,000 行の .cpp・折り返し・WHEEL_PAGESCROLL（見えている行数）
+//   vim-page            10,000 行の .cpp・折り返し・Vim のモードの <C-f>
 //   grid-ascii-wheel3   16.8 MB の ASCII の 1 行・格子・ScrollLines{3}
 //   grid-mixed-wheel3   16 MB の日本語と ASCII の混じった 1 行・格子・ScrollLines{3}
 #include "ScrollProbeEditing.hpp"
@@ -94,6 +94,43 @@ enum class ScrollPath : std::uint8_t
 constexpr std::array<std::string_view, 7> path_names{
     "wrap-wheel3", "nowrap-long-wheel3", "page-down",        "page-wheel",
     "vim-page",    "grid-ascii-wheel3",  "grid-mixed-wheel3"};
+
+// 名前の表の i 番目は ScrollPath の i 番目（path_of
+// が添字で引く）。並びを崩したらコンパイルで落とす。
+[[nodiscard]] constexpr std::string_view name_of(ScrollPath path)
+{
+    switch (path)
+    {
+    case ScrollPath::wrap_wheel3:
+        return "wrap-wheel3";
+    case ScrollPath::nowrap_long_wheel3:
+        return "nowrap-long-wheel3";
+    case ScrollPath::page_down:
+        return "page-down";
+    case ScrollPath::page_wheel:
+        return "page-wheel";
+    case ScrollPath::vim_page:
+        return "vim-page";
+    case ScrollPath::grid_ascii_wheel3:
+        return "grid-ascii-wheel3";
+    case ScrollPath::grid_mixed_wheel3:
+        return "grid-mixed-wheel3";
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] constexpr bool names_follow_paths()
+{
+    for (std::size_t index = 0; index < path_names.size(); ++index)
+    {
+        if (path_names.at(index) != name_of(static_cast<ScrollPath>(index)))
+        {
+            return false;
+        }
+    }
+    return static_cast<std::size_t>(ScrollPath::grid_mixed_wheel3) + 1 == path_names.size();
+}
+static_assert(names_follow_paths(), "path_names must follow the order of ScrollPath");
 
 [[nodiscard]] std::optional<ScrollPath> path_of(std::string_view name)
 {
@@ -332,13 +369,29 @@ void open(ScrollProbeEditing &editing, ScrollPath path, std::string text)
     send_view(editing);
 }
 
+// 開いた後の設定が道の名前どおりか（設定の道が変わって nowrap や格子が黙って効かなくなったら、
+// 別の道を測らずに失敗で終わる）。
+[[nodiscard]] bool opened_as(application::EditorController &controller, ScrollPath path)
+{
+    const bool unwrapped = path == ScrollPath::nowrap_long_wheel3;
+    const bool gridded =
+        path == ScrollPath::grid_ascii_wheel3 || path == ScrollPath::grid_mixed_wheel3;
+    const auto frame = controller.frame();
+    return (frame.settings.wrapping == core::LineWrapping::no_wrap) == unwrapped &&
+           frame.grid.empty() != gridded && frame.lines.empty() == gridded;
+}
+
 // 道を開いて暖機の後に steps 刻みを測る。節目は timing のデストラクタが書く。
 // 戻り値は最後の frame の先頭の論理行と画面行の数（同じ道の前後で一致するかの照合）。
-[[nodiscard]] std::pair<std::size_t, std::size_t> timed_run(ScrollPath path, std::size_t steps,
-                                                            const std::wstring &timing_path)
+[[nodiscard]] std::optional<std::pair<std::size_t, std::size_t>>
+timed_run(ScrollPath path, std::size_t steps, const std::wstring &timing_path)
 {
     ScrollProbeEditing editing;
     open(editing, path, text_of(path));
+    if (!opened_as(editing.controller(), path))
+    {
+        return std::nullopt;
+    }
     const auto intent = intent_of(path, editing.controller());
     nenenib::adapters::win32::Win32TimingAdapter timing;
     for (std::size_t index = 0; index < warmup_steps; ++index)
@@ -351,7 +404,7 @@ void open(ScrollProbeEditing &editing, ScrollPath path, std::string text)
         step(editing, intent, timing);
     }
     const auto last = editing.controller().frame();
-    return {last.first_visible.value, last.lines.size() + last.grid.size()};
+    return std::pair{last.first_visible.value, last.lines.size() + last.grid.size()};
 }
 
 [[nodiscard]] std::optional<std::string> read_text(const std::string &path)
@@ -431,6 +484,11 @@ void open(ScrollProbeEditing &editing, ScrollPath path, std::string text)
         return 2;
     }
     const auto last = timed_run(path, steps, wide.value());
+    if (!last.has_value())
+    {
+        std::fputs("scroll probe: the document did not open with the path's settings\n", stderr);
+        return 1;
+    }
     const auto timing = read_text(timing_path);
     const auto times =
         timing.has_value() ? mark_times(timing.value()) : std::vector<std::int64_t>{};
@@ -439,7 +497,8 @@ void open(ScrollProbeEditing &editing, ScrollPath path, std::string text)
         std::fputs("scroll probe: the timing file has the wrong number of marks\n", stderr);
         return 1;
     }
-    const auto text = report_of(path_names.at(static_cast<std::size_t>(path)), steps, last, times);
+    const auto text =
+        report_of(path_names.at(static_cast<std::size_t>(path)), steps, last.value(), times);
     std::ofstream file(output, std::ios::binary);
     file << text;
     std::fputs(text.c_str(), stdout);
