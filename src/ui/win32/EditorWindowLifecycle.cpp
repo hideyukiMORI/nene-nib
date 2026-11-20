@@ -11,6 +11,7 @@
 #include "FirstFramePresented.hpp"
 #include "Milestone.hpp"
 #include "PointerPress.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "RgbColor.hpp"
 #include "TitleBarLayout.hpp"
 #include "TitleBarWidth.hpp"
@@ -663,6 +664,12 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
             place_candidate_window();
         }
         signal_first_frame();
+        // プレビューの送りを畳んで位置が変わったら 1 回だけ返す（#1894・変わらなければ送らない
+        // ので、この合図で frame を作り続けない）。
+        if (const auto settled = renderer_->preview_settled(); settled.has_value())
+        {
+            send(settled.value());
+        }
     }
     return drawn;
 }

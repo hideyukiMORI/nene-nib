@@ -2734,4 +2734,10 @@ std::optional<PreviewTableHit> Direct2DRenderer::preview_table_bar(std::size_t t
 {
     return preview_.table_bar(table, x);
 }
+
+const std::optional<application::PreviewScrollSettled> &
+Direct2DRenderer::preview_settled() const noexcept
+{
+    return preview_.settled();
+}
 } // namespace nenenib::ui::win32
