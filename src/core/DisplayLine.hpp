@@ -20,6 +20,8 @@ struct DisplayLine
 };
 
 // 本文の 1 行（`\n` を含まない検証済みの UTF-8）から描画用の行を作る。
+// U+2028 / U+2029 が素のまま残ることを VisualTextView::unbroken が前提にする（#1899）。
+// 表を変えてこれらを置き換えるか、ほかの強制改行の文字を素で残すなら、そこも直す。
 [[nodiscard]] DisplayLine display_line(std::string_view text);
 
 // 本文の桁 → 描画の位置。`column` が範囲外なら描画の末尾。
