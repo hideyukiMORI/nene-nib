@@ -221,6 +221,8 @@ void EditorController::land_definition(const std::vector<core::LspLocation> &loc
             state_.with_command_message(ui_notice(core::UiMessage::notice_definition_not_found));
         return;
     }
+    // 今の文書かの照合は診断の照合（same_document_uri）と同じ規則（file_path_of_uri と
+    // same_file）。
     const auto file = core::file_path_of_uri(locations.front().uri);
     if (!file.has_value())
     {

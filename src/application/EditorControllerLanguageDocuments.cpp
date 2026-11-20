@@ -3,19 +3,23 @@
 #include "DiagnosticCounts.hpp"
 #include "DiagnosticEdits.hpp"
 #include "DiagnosticNotice.hpp"
+#include "DocumentSync.hpp"
 #include "DocumentUri.hpp"
+#include "FilePath.hpp"
+#include "FileUri.hpp"
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
-#include "LanguageTable.hpp"
 #include "LspDiagnostics.hpp"
+#include "LspLanguageId.hpp"
 #include "LspMessages.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
 #include "LspPositionJson.hpp"
 #include "OperationGuide.hpp"
+#include "SaveNotice.hpp"
 #include "SentRevision.hpp"
 
 #include <algorithm>
@@ -26,6 +30,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -56,6 +61,15 @@ namespace
     return core::JsonValue{std::move(change)};
 }
 
+// 種類 full の `TextDocumentContentChangeEvent`（range の無い全文）。
+[[nodiscard]] core::JsonValue whole_change_json(const core::TextBuffer &text)
+{
+    core::JsonObject change;
+    change.emplace_back(
+        "text", core::JsonValue{text.text_range(core::Offset{0}, core::Offset{text.size_bytes()})});
+    return core::JsonValue{std::move(change)};
+}
+
 // `textDocument` の欄（version があれば `VersionedTextDocumentIdentifier`）。
 [[nodiscard]] core::JsonObject document_identifier(const std::string &uri,
                                                    std::optional<std::uint64_t> version)
@@ -69,11 +83,12 @@ namespace
     return identifier;
 }
 
-[[nodiscard]] core::JsonValue did_open_params(const std::string &uri, core::Language language,
+// `languageId` は core の lsp_language_id の 1 本（仕様の表の名前・`.tsx` `.jsx` は拡張子で）。
+[[nodiscard]] core::JsonValue did_open_params(const std::string &uri, std::string_view language_id,
                                               std::uint64_t version, const core::TextBuffer &text)
 {
     core::JsonObject item = document_identifier(uri, std::nullopt);
-    item.emplace_back("languageId", core::JsonValue{std::string{core::language_name(language)}});
+    item.emplace_back("languageId", core::JsonValue{std::string{language_id}});
     item.emplace_back("version", count_json(version));
     item.emplace_back(
         "text", core::JsonValue{text.text_range(core::Offset{0}, core::Offset{text.size_bytes()})});
@@ -95,6 +110,19 @@ namespace
 {
     core::JsonObject params;
     params.emplace_back("textDocument", core::JsonValue{document_identifier(uri, std::nullopt)});
+    return core::JsonValue{std::move(params)};
+}
+
+// `didSave` の params（`includeText` なら保存した本文を `text` に）。
+[[nodiscard]] core::JsonValue did_save_params(const std::string &uri,
+                                              std::optional<std::string> text)
+{
+    core::JsonObject params;
+    params.emplace_back("textDocument", core::JsonValue{document_identifier(uri, std::nullopt)});
+    if (text.has_value())
+    {
+        params.emplace_back("text", core::JsonValue{std::move(text).value()});
+    }
     return core::JsonValue{std::move(params)};
 }
 
@@ -186,9 +214,12 @@ void EditorController::open_language_server_document(AutosaveId tab, std::string
 {
     auto &link = language_server_;
     const auto version = static_cast<std::uint64_t>(state_.history().revision());
+    const auto &path = state_.document().path;
+    const std::string_view language_id =
+        core::lsp_language_id(link.language.value_or(state_.language()),
+                              path.has_value() ? path.value().text() : std::string_view{});
     ports_.language_server.send(core::lsp_notification_body(
-        "textDocument/didOpen",
-        did_open_params(uri, link.language.value_or(state_.language()), version, state_.text())));
+        "textDocument/didOpen", did_open_params(uri, language_id, version, state_.text())));
     link.documents.push_back(
         LanguageServerDocument{tab, std::move(uri), {SentRevision{version, state_.text()}}});
 }
@@ -224,9 +255,13 @@ void EditorController::flush_language_server_changes(LanguageServerDocument &doc
         document.changes.clear();
         return;
     }
+    auto changes = std::exchange(document.changes, {});
+    if (language_server_.abilities.sync == DocumentSync::full)
+    {
+        changes = {whole_change_json(text)};
+    }
     ports_.language_server.send(core::lsp_notification_body(
-        "textDocument/didChange",
-        did_change_params(document.uri, version, std::exchange(document.changes, {}))));
+        "textDocument/didChange", did_change_params(document.uri, version, std::move(changes))));
     document.sent.push_back(SentRevision{version, text});
     if (document.sent.size() > language_server_kept_revisions)
     {
@@ -277,8 +312,61 @@ void EditorController::language_server_edit(const core::Edit &edit)
     {
         return;
     }
-    found->changes.push_back(change_json(state_.text(), edit, language_server_.encoding));
+    // 種類 none のサーバーへは変更を送らない。full は送るときに全文の 1 つへ置き換えるので、
+    // 位置を写さずに数だけを積む（ADR 0161 の 2026-11-20 の追補）。
+    switch (language_server_.abilities.sync)
+    {
+    case DocumentSync::none:
+        return;
+    case DocumentSync::full:
+        found->changes.emplace_back();
+        break;
+    case DocumentSync::incremental:
+        found->changes.push_back(change_json(state_.text(), edit, language_server_.encoding));
+        break;
+    }
     found->sent.back().edits.push_back(edit);
+}
+
+// 言語サーバーの URI が同じファイルを指すか（ADR 0161 の 2026-11-20 の追補）。定義の着地と同じ
+// 規則の 1 本で、core の file_path_of_uri で両方をパスへ写し（百分率の符号化を解き・ドライブ文字を
+// 大文字に）、FilePort::same_file で比べる。写せない URI は文字列の完全一致だけ。
+bool EditorController::same_document_uri(std::string_view sent, std::string_view answered) const
+{
+    if (sent == answered)
+    {
+        return true;
+    }
+    const auto left = core::file_path_of_uri(sent);
+    const auto right = core::file_path_of_uri(answered);
+    return left.has_value() && right.has_value() &&
+           ports_.files.same_file(left.value(), right.value());
+}
+
+// 保存の後の `didSave`（ADR 0161 の 2026-11-20 の追補）。別のパスへ保存した文書は URI が変わる
+// ので送らず、apply の終わりの同期が閉じて開き直す。本文は送った本文（改行の形を写す前）。
+void EditorController::language_server_saved(const core::FilePath &path)
+{
+    auto &link = language_server_;
+    if (link.abilities.save == SaveNotice::none || link.documents.empty())
+    {
+        return;
+    }
+    const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
+    const auto found = std::ranges::find_if(link.documents, [active](const auto &document)
+                                            { return document.tab == active; });
+    if (found == link.documents.end() || found->uri != document_uri(path))
+    {
+        return;
+    }
+    flush_language_server_changes(*found);
+    ports_.language_server.send(core::lsp_notification_body(
+        "textDocument/didSave",
+        did_save_params(found->uri,
+                        link.abilities.save == SaveNotice::with_text
+                            ? std::optional<std::string>{state_.text().text_range(
+                                  core::Offset{0}, core::Offset{state_.text().size_bytes()})}
+                            : std::nullopt)));
 }
 
 // `publishDiagnostics`（決定 2・3・5）。uri で送った文書を引き、届いた版の本文で位置を写す。版が
@@ -288,10 +376,10 @@ void EditorController::receive_diagnostics(const core::LspNotification &notifica
 {
     auto &link = language_server_;
     const std::string *uri = notified_uri(notification);
-    const auto found = uri == nullptr
-                           ? link.documents.end()
-                           : std::ranges::find_if(link.documents, [uri](const auto &document)
-                                                  { return document.uri == *uri; });
+    const auto found =
+        uri == nullptr ? link.documents.end()
+                       : std::ranges::find_if(link.documents, [this, uri](const auto &document)
+                                              { return same_document_uri(document.uri, *uri); });
     if (found == link.documents.end())
     {
         return;

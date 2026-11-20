@@ -942,6 +942,10 @@ class EditorController final
     void flush_language_server_changes(LanguageServerDocument &document);
     [[nodiscard]] std::optional<std::string> language_server_uri() const;
     void language_server_edit(const core::Edit &edit);
+    // 保存の成功の後（ADR 0161 の 2026-11-20 の追補）。サーバーが `save` を求め、アクティブな文書を
+    // 保存したパスの URI のまま開いていれば、積んだ変更を流してから `didSave` を 1 通送る。
+    void language_server_saved(const core::FilePath &path);
+    [[nodiscard]] bool same_document_uri(std::string_view sent, std::string_view answered) const;
     void receive_diagnostics(const core::LspNotification &notification);
     void place_diagnostics(AutosaveId tab, std::vector<core::Diagnostic> diagnostics,
                            std::uint64_t version, core::DiagnosticsCount count);

@@ -322,14 +322,32 @@ void verify_not_found()
 }
 
 // 作業フォルダ（ビルドの置き場）には替え玉があるが、相対の経路は解決しない（ADR 0160 の追補）。
+// 失敗は not_absolute で、見つからない（not_found）と分ける（2026-11-20 の追補）。
 void verify_relative_is_not_found()
 {
     adapters::Win32LanguageServer server([] {});
     const auto started =
         server.start(ServerLaunch{path_of("nib_fake_language_server.exe"), {}, path_of(".")});
-    expect(!started.has_value() && started.error() == ServerFailure::not_found,
-           "a relative executable is not_found even when it exists in the working folder");
+    expect(!started.has_value() && started.error() == ServerFailure::not_absolute,
+           "a relative executable is not_absolute even when it exists in the working folder");
     expect(server.waitable_handles().empty(), "a relative start has nothing to wait on");
+}
+
+// `.cmd` / `.bat` は cmd.exe を挟むので、在るかを見ずに起こさず断る（ADR 0160 の 2026-11-20 の
+// 追補）。拡張子の大小と末尾の点・空白は問わない（末尾の点と空白は Win32 の正規化で落ちて
+// cmd.exe が起きるので、落とした綴りで断る・#1907 のレビュー M1）。
+void verify_batch_script_refused()
+{
+    for (const std::string_view name :
+         {R"(C:\npm\server.cmd)", R"(C:\tools\SERVER.BAT)", R"(C:\npm\server.cmd.)",
+          R"(C:\tools\SERVER.BAT )", R"(C:\npm\T.CmD .. )"})
+    {
+        adapters::Win32LanguageServer server([] {});
+        const auto started = server.start(ServerLaunch{path_of(name), {}, path_of(".")});
+        expect(!started.has_value() && started.error() == ServerFailure::script_refused,
+               "a .cmd or .bat command is refused before it starts");
+        expect(server.waitable_handles().empty(), "a refused script has nothing to wait on");
+    }
 }
 
 void verify_too_long()
@@ -510,6 +528,7 @@ int main(int argc, char **argv)
     verify_crash();
     verify_not_found();
     verify_relative_is_not_found();
+    verify_batch_script_refused();
     verify_too_long();
     verify_header_too_long();
     verify_stop_does_not_wait();
