@@ -48,6 +48,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -753,12 +754,14 @@ void verify_requests_visible_images()
     // 錨は行頭で、画像の段落の source_begin は alt の文字の位置なので、行 5（p2
     // の段落）の行頭の錨の 要素は 1 つ前の p1 の段落（preview_anchor_block）。見える範囲は [1, 4)
     // で、新しいのは p3 だけ。
-    // 送りは ui が畳んで錨を返す（#1894）。ここでは ui の答えを手で送る。
+    // 送りは ui が畳んで錨を返す（#1894）。ここでは ui の答えを手で送る（要素の番号は運ばず、
+    // 範囲の外の番号で錨のバイト位置から引かせる）。
     const auto settle_at = [&](std::size_t line, std::int64_t sent)
     {
         applied(controller, app::ScrollPane{static_cast<std::int32_t>(sent)});
         applied(controller,
-                app::PreviewScrollSettled{controller.text().line_start(core::LineNumber{line}), 0,
+                app::PreviewScrollSettled{std::numeric_limits<std::size_t>::max(),
+                                          controller.text().line_start(core::LineNumber{line}), 0,
                                           0.0F, sent});
     };
     settle_at(5, 4);

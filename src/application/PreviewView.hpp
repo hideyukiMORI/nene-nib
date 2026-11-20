@@ -24,7 +24,8 @@ namespace nenenib::application
 // aggregate （CPP-003）。比較は非メンバーで、document と images は指す先の同一性で比べる。
 // nudge は錨の要素の上端から枠の上端までの DIP（ui が正規化した後は 0 以上でその要素の高さ未満）、
 // pending はまだ ui が畳んでいない送りの量（プレビューの行の単位・符号つき）。追従の間はどちらも 0
-// （ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。
+// （ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。anchor_block は ui の答えが運んだ錨の要素の
+// 番号で、document の指す先が同じ間だけ持つ（替えたら捨てる・読む口は preview_anchored_block）。
 struct PreviewView
 {
     std::shared_ptr<const core::MarkdownDocument> document;
@@ -38,6 +39,7 @@ struct PreviewView
     std::shared_ptr<const PreviewImages> images = nullptr;
     float nudge = 0.0F;
     std::int64_t pending = 0;
+    std::optional<std::size_t> anchor_block;
 };
 
 [[nodiscard]] inline bool same_notice(const std::optional<core::DisplayText> &left,
@@ -57,6 +59,7 @@ struct PreviewView
            left.seen_revision == right.seen_revision && left.anchor == right.anchor &&
            left.follows == right.follows && same_notice(left.notice, right.notice) &&
            left.selection == right.selection && left.images == right.images &&
-           left.nudge == right.nudge && left.pending == right.pending;
+           left.nudge == right.nudge && left.pending == right.pending &&
+           left.anchor_block == right.anchor_block;
 }
 } // namespace nenenib::application

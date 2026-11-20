@@ -18,6 +18,7 @@
 #include "MarkdownRequest.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "PreviewAnchoredBlock.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewFullRoute.hpp"
 #include "PreviewImageWindow.hpp"
@@ -425,6 +426,7 @@ void EditorController::request_preview(bool fresh)
     if (fresh)
     {
         view.document.reset();
+        view.anchor_block.reset();
         view.images.reset();
         view.notice.reset();
         view.follows = true;
@@ -464,6 +466,8 @@ void EditorController::collect_preview()
         {
             view.document =
                 std::make_shared<const core::MarkdownDocument>(std::move(outcome.result).value());
+            // 錨の要素の番号は前の結果の要素を指すので、差し替えたら捨てて錨から引く（#1894）。
+            view.anchor_block.reset();
             view.images = images_of(*view.document, state_.document().path, view.images.get());
             view.notice.reset();
             // 選択の位置は前の結果の要素を指すので、差し替えたら捨てる（改訂 18）。
@@ -512,7 +516,8 @@ void EditorController::request_preview_images()
     const ScrollState &scroll = settled_scroll();
     const core::Offset anchor =
         preview->follows ? state_.text().line_start(scroll.first_visible) : preview->anchor;
-    const std::size_t first = core::preview_anchor_block(document, anchor);
+    const std::size_t first = preview_anchored_block(
+        document, anchor, preview->follows ? std::nullopt : preview->anchor_block);
     const PreviewImageWindow window{first,
                                     first + std::max<std::size_t>(scroll.visible_lines, 1U) + 1U};
     const bool idle = !preview_image_pending_.has_value();
@@ -597,6 +602,7 @@ void EditorController::follow_preview_on_scroll(core::LineNumber first_visible)
     view.follows = true;
     view.nudge = 0.0F;
     view.pending = 0;
+    view.anchor_block.reset();
     state_ = state_.with_shown_preview(std::move(view));
 }
 
@@ -823,6 +829,11 @@ void EditorController::scroll_preview(std::int64_t lines)
     {
         return;
     }
+    // 要素の無い文書（まだ結果が無い・空の Markdown）は畳む先が無いので積まない（レビュー R1）。
+    if (preview->document == nullptr || preview->document->blocks.empty())
+    {
+        return;
+    }
     PreviewView view = *preview;
     const core::LineNumber top = settled_scroll().first_visible;
     if (view.follows)
@@ -830,6 +841,7 @@ void EditorController::scroll_preview(std::int64_t lines)
         view.anchor = state_.text().line_start(top);
         view.nudge = 0.0F;
         view.pending = 0;
+        view.anchor_block.reset();
     }
     view.pending += lines;
     view.follows = false;
@@ -850,6 +862,7 @@ void EditorController::anchor_preview_at(core::LineNumber line)
     view.anchor = text.line_start(core::LineNumber{std::clamp<std::size_t>(line.value, 1, last)});
     view.nudge = 0.0F;
     view.pending = 0;
+    view.anchor_block.reset();
     view.follows = false;
     state_ = state_.with_shown_preview(std::move(view));
     preview_body_top_ = settled_scroll().first_visible;
@@ -869,18 +882,19 @@ void EditorController::accept(const PreviewScrollSettled &intent)
     PreviewView view = *preview;
     const core::TextBuffer &text = state_.text();
     core::Offset anchor{std::min(intent.anchor.value, text.size_bytes())};
-    if (intent.lines > 0 && view.document != nullptr)
+    const bool held = view.document != nullptr && intent.block < view.document->blocks.size();
+    if (intent.lines > 0 && held)
     {
-        const auto block = core::preview_anchor_block(*view.document, anchor);
         const auto line = text.position_of(anchor).line.value + intent.lines;
         const auto last = std::max<std::size_t>(state_.vim_text().line_count(), 1);
         const core::Offset inside = text.line_start(core::LineNumber{std::min(line, last)});
-        if (core::preview_anchor_block(*view.document, inside) == block)
+        if (core::preview_anchor_block(*view.document, inside) == intent.block)
         {
             anchor = inside;
         }
     }
     view.anchor = anchor;
+    view.anchor_block = held ? std::optional<std::size_t>{intent.block} : std::nullopt;
     view.nudge = intent.nudge;
     view.pending -= intent.consumed;
     state_ = state_.with_shown_preview(std::move(view));
@@ -973,7 +987,9 @@ void EditorController::move_preview_selection(core::CaretMotion motion)
     const core::MarkdownDocument &document = *view.document;
     const core::Offset anchor =
         view.follows ? state_.text().line_start(settled_scroll().first_visible) : view.anchor;
-    const core::PreviewPoint top{core::preview_anchor_block(document, anchor), 0};
+    const core::PreviewPoint top{
+        preview_anchored_block(document, anchor, view.follows ? std::nullopt : view.anchor_block),
+        0};
     const core::PreviewPoint origin =
         view.selection.has_value() ? core::preview_selection_origin(view.selection.value()) : top;
     const core::PreviewPoint head =

@@ -375,7 +375,14 @@ void verify_anchor()
     applied(controller, app::VisibleLines{3});
     applied(controller, app::InsertText{"l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8"});
     applied(controller, app::ScrollLines{-100});
-    const EditorFrame opened = controller.apply_frame(app::TogglePreview{});
+    applied(controller, app::TogglePreview{});
+    // 要素の無い文書（まだ結果が無い）には送りを積まない（#1894 のレビュー R1）。
+    const EditorFrame waiting = controller.apply_frame(app::ScrollPane{2});
+    expect(preview_of(waiting)->pending == 0,
+           "nothing is sent while the preview has no element to fold into");
+    editing.markdown().serve(parsed(editing.markdown().requests().back().ticket, "l1"));
+    applied(controller, app::WorkCompleted{});
+    const EditorFrame opened = controller.apply_frame(app::ScrollLines{0});
     expect(preview_of(opened)->anchor == core::Offset{0} && preview_of(opened)->pending == 0,
            "a following preview anchors at the first visible line of the body");
     const EditorFrame moved = controller.apply_frame(app::ScrollPane{2});
@@ -386,7 +393,7 @@ void verify_anchor()
     expect(preview_of(back)->anchor == core::Offset{0} && preview_of(back)->pending == -8,
            "the pending amount is signed and the ui clamps it");
     const EditorFrame settled =
-        controller.apply_frame(app::PreviewScrollSettled{core::Offset{6}, 0, 4.5F, -8});
+        controller.apply_frame(app::PreviewScrollSettled{0, core::Offset{6}, 0, 4.5F, -8});
     expect(preview_of(settled)->anchor == core::Offset{6} && preview_of(settled)->nudge == 4.5F &&
                preview_of(settled)->pending == 0,
            "the settled answer places the anchor and the nudge and takes the consumed amount");

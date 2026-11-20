@@ -320,6 +320,7 @@ void verify_scroll_keys()
     open_text(editing, numbered_lines(20));
     applied(controller, app::SelectEditMode{core::EditMode::vim});
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
     const auto caret = controller.frame().caret.position;
     expect(pending_of(vim_keys(controller, "j")) == 1, "j sends one line");
     expect(pending_of(vim_keys(controller, "k")) == 0, "k sends it back");
@@ -364,18 +365,20 @@ void verify_anchor_round_trip()
     auto &controller = editing.controller();
     open_text(editing, numbered_lines(20));
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
     applied(controller, app::ScrollLines{10});
     const auto eleventh = controller.text().line_start(core::LineNumber{11});
-    applied(controller, app::PreviewScrollSettled{eleventh, 0, 0.0F, 10});
+    applied(controller, app::PreviewScrollSettled{5, eleventh, 0, 0.0F, 10});
     const EditorFrame off = controller.apply_frame(app::CancelSelection{});
     expect(off.first_visible.value == 11, "leaving full lines the body up with the anchor");
     applied(controller, app::TogglePreview{});
     applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
     const EditorFrame full = controller.frame();
     expect(anchor_line(editing, full) == 11, "full from side keeps the followed anchor");
     applied(controller, app::ScrollLines{-4});
     const auto seventh = controller.text().line_start(core::LineNumber{7});
-    applied(controller, app::PreviewScrollSettled{seventh, 0, 0.0F, -4});
+    applied(controller, app::PreviewScrollSettled{3, seventh, 0, 0.0F, -4});
     const EditorFrame side = controller.apply_frame(app::CancelSelection{});
     expect(side.first_visible.value == 7 &&
                controller.text().position_of(side_of(side)->anchor).line.value == 7,

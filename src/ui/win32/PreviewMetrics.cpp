@@ -92,6 +92,12 @@ float preview_pixels(float dips, std::uint32_t dpi) noexcept
     return dips * static_cast<float>(dpi) / static_cast<float>(core::reference_dpi);
 }
 
+float preview_dips(float pixels, std::uint32_t dpi) noexcept
+{
+    return dpi == 0 ? pixels
+                    : pixels * static_cast<float>(core::reference_dpi) / static_cast<float>(dpi);
+}
+
 float preview_font_pixels(const PreviewTextStyle &style) noexcept
 {
     return style.points * static_cast<float>(style.dpi) / points_per_inch;
