@@ -11,6 +11,7 @@
 #include "PreviewImages.hpp"
 #include "PreviewPictureKey.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewTableBand.hpp"
 #include "PreviewTableHit.hpp"
 #include "PreviewTextLayouts.hpp"
@@ -50,8 +51,9 @@ class PreviewPane final
     // 描く先とテーマの brush を用意する（描く先かテーマの名前が変わったときだけ作り直す）。
     [[nodiscard]] std::expected<void, RenderFailure> prepare(ID2D1RenderTarget &target,
                                                              const core::Theme &theme);
-    // prepare の後に、枠 area に frame の文書を描く。anchor を含む要素の上端を枠の上端に置く
-    // （最初の要素なら上の余白ごと見せる）。文書が空なら地だけ塗る。知らせは描かない
+    // prepare の後に、枠 area に frame の文書を描く。anchor を含む要素の上端を枠の上端から
+    // nudge + pending × 行の送りだけ上に置く（最初の要素なら上の余白ごと・畳んで正規化する・
+    // ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。文書が空なら地だけ塗る。知らせは描かない
     // （renderer が枠の上の 1 行に書く）。失敗は値で返す。
     [[nodiscard]] std::expected<void, RenderFailure> paint(ID2D1RenderTarget &target,
                                                            const application::PreviewFrame &frame,
@@ -60,6 +62,9 @@ class PreviewPane final
     // プレビューを描かない frame で renderer が呼ぶ。画像の bitmap と、測った文書・画像の状態の
     // 参照を放す（閉じたプレビューの画素と bitmap を持ち続けない・ADR 0155 の追補 63）。
     void release() noexcept;
+    // 最後の paint が送りを畳んで位置を変えたときの答え（変わらなければ nullopt・#1894）。ui は
+    // 描いた後に読んで 1 回だけ送る。
+    [[nodiscard]] const std::optional<application::PreviewScrollSettled> &settled() const noexcept;
     // 持っている画像の bitmap（試験が数える）。
     [[nodiscard]] const PreviewBitmaps &bitmaps() const noexcept;
     // 最後に描いた枠の中の点 (x, y)（描画先の物理画素）を押す範囲に含むチェックボックスの要素の
@@ -104,6 +109,23 @@ class PreviewPane final
     remeasure(const std::shared_ptr<const core::MarkdownDocument> &document,
               const std::shared_ptr<const application::PreviewImages> &images,
               const PreviewTextStyle &style, const PreviewViewport &viewport);
+    // frame の (錨の要素, nudge + pending × 行の送り) を畳んだ位置（#1894）。key は文書・字体・
+    // 枠の寸法・画像の状態を埋めた鍵で、畳んだ位置を anchor と nudge（DIP）に書く。前に描いた
+    // 鍵と同じで送りが無ければ畳まない（畳んだ結果は畳み直しても変わらない）。
+    [[nodiscard]] std::expected<void, RenderFailure> fold(const application::PreviewFrame &frame,
+                                                          PreviewPictureKey &key);
+    // 要素 index を置き始める位置から次の要素の上端（最後の要素は下端）までの長さ（物理画素）。
+    // 描く所と同じ PreviewBlockTops の測り方で 2 要素だけ測る。
+    [[nodiscard]] std::expected<float, RenderFailure> span_of(const PreviewPictureKey &key,
+                                                              std::size_t index);
+    // 描いた後の答え（位置が変わったか送りがあったときだけ呼ぶ）。block は畳んだ錨の要素、nudge
+    // はその DIP。
+    void settle(const application::PreviewFrame &frame, std::size_t block, float nudge);
+    // 畳んだ鍵 key の絵を枠 area に描く（保持の絵が同じなら写すだけ）。
+    [[nodiscard]] std::expected<void, RenderFailure>
+    paint_key(ID2D1RenderTarget &target, PreviewPictureKey key, const core::LayoutRect &area);
+    // 囲みのコードの要素 index で枠の上端に掛かる行の要素の中の番号（ほかの要素は 0）。
+    [[nodiscard]] std::size_t code_line_at_top(std::size_t index);
     // 測った要素 [tops.first(), tops.size()) の読めた画像の bitmap を target に作る（画像の状態が
     // null なら bitmap を全部放す）。
     // 作れない画像（device lost でない失敗）は飛ばし、箱は空のまま描く（ADR 0155 の追補 67）。
@@ -165,6 +187,7 @@ class PreviewPane final
     Microsoft::WRL::ComPtr<ID2D1Bitmap1> picture_;
     std::optional<PreviewPictureKey> pictured_;
     PreviewBitmaps bitmaps_;
+    std::optional<application::PreviewScrollSettled> settled_;
     std::size_t painted_ = 0;
     std::size_t reused_ = 0;
     std::size_t pictures_ = 0;

@@ -24,6 +24,8 @@ namespace nenenib::ui::win32
 
 // DIP → 物理画素（小数のまま）。
 [[nodiscard]] float preview_pixels(float dips, std::uint32_t dpi) noexcept;
+// 物理画素 → DIP（preview_pixels の逆・プレビューの縦の nudge を DIP で持つ・#1894）。
+[[nodiscard]] float preview_dips(float pixels, std::uint32_t dpi) noexcept;
 // 本文の字の大きさ（物理画素）と行高（本文と同じ比 1.6・BodyLayout と同じ丸め）。
 [[nodiscard]] float preview_font_pixels(const PreviewTextStyle &style) noexcept;
 [[nodiscard]] float preview_line_pixels(const PreviewTextStyle &style) noexcept;

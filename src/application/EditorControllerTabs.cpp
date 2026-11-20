@@ -301,7 +301,7 @@ void EditorController::accept(const ClosePane &)
 // constrained）を、もう 1 つの枠を操作中の枠の形で読む写しに通す。
 void EditorController::accept(const ScrollPane &intent)
 {
-    // プレビューは錨を本文の行で動かし、追従をやめる（ADR 0155 の決定 7）。
+    // プレビューは送りの量を積み、追従をやめる（ADR 0155 の決定 7・畳むのは ui・#1894）。
     if (state_.preview() != nullptr)
     {
         scroll_preview(intent.lines);
