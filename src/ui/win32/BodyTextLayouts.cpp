@@ -135,7 +135,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     }
     current_.clear();
     previous_.clear();
-    pending_.reset();
+    pending_.clear();
     cells_ = {};
     grid_format_.Reset();
     grid_coverage_.reset();
@@ -436,10 +436,15 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
         current_.push_back(std::move(*previous));
         return current_.back().layout;
     }
-    if (pending_.has_value() && matches(pending_.value()))
+    const auto pending = std::ranges::find_if(pending_, matches);
+    if (pending != pending_.end())
     {
-        auto entry = std::move(pending_).value();
-        pending_.reset();
+        if (!collecting_)
+        {
+            return pending->layout;
+        }
+        auto entry = std::move(*pending);
+        pending_.erase(pending);
         return retain(std::move(entry));
     }
     auto made = make_layout(request);
@@ -447,6 +452,7 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
     {
         return std::unexpected(made.error());
     }
+    made.value().line = request.line;
     return retain(std::move(made).value());
 }
 
@@ -457,8 +463,21 @@ BodyTextLayouts::TextLayout BodyTextLayouts::retain(BodyTextLayout entry)
         current_.push_back(std::move(entry));
         return current_.back().layout;
     }
-    pending_ = std::move(entry);
-    return pending_.value().layout;
+    // 同じ名札（名札の無いもの同士を含む）の前の 1 本は、同じ行の古い文字列なので捨てる。
+    std::erase_if(pending_,
+                  [&entry](const BodyTextLayout &held)
+                  {
+                      return held.line.has_value() == entry.line.has_value() &&
+                             (!held.line.has_value() || held.line.value() == entry.line.value());
+                  });
+    const auto limit = std::max<std::size_t>(current_.size(), 1);
+    if (pending_.size() >= limit)
+    {
+        pending_.erase(pending_.begin(),
+                       pending_.begin() + static_cast<std::ptrdiff_t>(pending_.size() - limit + 1));
+    }
+    pending_.push_back(std::move(entry));
+    return pending_.back().layout;
 }
 
 BodyTextLayout *BodyTextLayouts::find(IDWriteTextLayout *layout)
@@ -469,11 +488,9 @@ BodyTextLayout *BodyTextLayouts::find(IDWriteTextLayout *layout)
     {
         return &*found;
     }
-    if (pending_.has_value() && pending_.value().layout.Get() == layout)
-    {
-        return &pending_.value();
-    }
-    return nullptr;
+    const auto pending = std::ranges::find_if(pending_, [layout](const BodyTextLayout &entry)
+                                              { return entry.layout.Get() == layout; });
+    return pending != pending_.end() ? &*pending : nullptr;
 }
 
 std::expected<std::size_t, application::TextLayoutFailure>
@@ -629,7 +646,7 @@ void BodyTextLayouts::begin_frame()
 void BodyTextLayouts::end_frame()
 {
     previous_.clear();
-    pending_.reset();
+    pending_.clear();
     collecting_ = false;
 }
 } // namespace nenenib::ui::win32

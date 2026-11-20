@@ -217,3 +217,5 @@ build-release/nib_scroll_probe.exe nowrap-long-wheel3 300 out/scroll/nowrap-long
 | grid-mixed-wheel3 | 20 | 324.683 / 358.317 | 260.300 | 63.690 | 0.003 |
 
 （区間の列は中央値。）調べの席 A の probe（`D:\NeNeNib\outputs\20261120\scroll-audit.md`）は `frame()` を `begin_frame` の前に作っていたので、PgDn と WHEEL_PAGESCROLL で layout を 2 回組む形に見えた。製品の順では frame の layout は描画の保持に入り、2 回組むのは apply が layout を問う道（Vim の `<C-f>` `<C-d>` の画面行の問い）だけ。
+
+#1902（描く前に作った layout を行ごとに残す・`fix/1902-pending-layouts-per-line` の `52f0743e`）の後の `vim-page` は 1.963 / 2.965（apply 1.848・frame 0.070・draw 0.045・負荷 9/7/12）。ほかの道は変わらない。
