@@ -84,7 +84,7 @@ void open_previewed(Editing &editing, std::string text)
     return editing.controller().text().position_of(at).line.value;
 }
 
-// 見出し・空行・400 行の囲み・空行・段落（囲みは 128 行ごとの切れ・#1863）。
+// 見出し・空行・400 行の囲み・空行・段落（囲みは preview_code_piece_lines 行ごとの切れ・#1863）。
 [[nodiscard]] std::string long_fence()
 {
     std::string text = "# h\n\n```\n";
