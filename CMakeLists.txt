@@ -77,7 +77,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/HtmlAttribute.cpp src/core/HtmlMarkdownWriter.cpp src/core/HtmlToMarkdown.cpp
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/LexPhp.cpp src/core/LexSql.cpp src/core/LexLua.cpp src/core/LexDockerfile.cpp src/core/LexPowershell.cpp src/core/LexShell.cpp src/core/LexCmake.cpp src/core/SyntaxColor.cpp
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
-    src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp
+    src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp src/core/LspLanguageId.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
     src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
@@ -242,6 +242,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/VimDeleteKeyTests.cpp
     tests/unit/LspFramesTests.cpp
     tests/unit/LspMessagesTests.cpp
+    tests/unit/LspSyncPropertyTests.cpp
     tests/unit/LspFramesPropertyTests.cpp
     tests/unit/SubstitutePropertyTests.cpp
     tests/unit/LspDiagnosticsTests.cpp

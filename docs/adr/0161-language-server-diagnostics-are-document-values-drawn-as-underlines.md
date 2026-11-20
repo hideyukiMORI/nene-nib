@@ -64,3 +64,15 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 | 打鍵ごとに `didChange` | マクロ・`.`・貼り付けで 1 意図に数百の編集。束ねれば 1 通 |
 | 全文の `didChange`（Full） | 1 MiB の文書で打鍵ごとに 1 MiB を書く。増分は `replaced` の 1 編集と 1 対 1 |
 | 診断を状態に積まず届くたびに描くだけ | 編集でずれる。文書の値にして `EditAdjust` でずらすのが ADR 0152 と同じ形 |
+
+## 追補（2026-11-20・#1897・設計席の決め・LSP 段 S1）: 仕様どおりに話す
+
+実物の clangd 19 と jedi-language-server で往復を確かめた調べ（`D:\NeNeNib\outputs\20261120\lsp-gap-survey.md` の §2 の穴 2・3・4・8・10・11）の手当て。決定 1 と 9 の一部を改める。
+
+- **決定 1 の `languageId`**: `language_name` ではなく core の `lsp_language_id(Language, 文書のパス)` の 1 本（`LspLanguageId.hpp`）。LSP 3.17 の表の名前（`cs` → `csharp`・`ps1` → `powershell`・`sh` → `shellscript`・`dosini` → `ini`・`text` → `plaintext`）で、表に無い言語（`toml` `cmake` `gdscript` `gdresource`）は Nib の名前のまま。`.tsx` と `.jsx` は拡張子（大小を問わない）で `typescriptreact` / `javascriptreact`（`Language` の値は増やさない）。`switch` に `default` は無く、言語を足すと落ちる。
+- **決定 1 の「増分で送る」**: `initialize` の答えの `textDocumentSync`（数か `TextDocumentSyncOptions` の `change`）を `ServerAbilities.sync`（`DocumentSync` の none / full / incremental）に持つ。incremental は今までの形。full は意図の終わりの 1 通に range の無い全文を 1 つ（編集ごとには位置を写さず数だけを積む）。none（数の 0・欄が無い・知らない値。仕様の既定）は `didChange` を送らない（`didOpen` / `didClose` は今までどおり送る・`openClose` は読まない）。none のときは送った版が進まないので、診断は `didOpen` の版の本文で写す（ずらさない・限界）。
+- **決定 9 の `didSave` を外す**: `textDocumentSync.save` が true か `SaveOptions` なら `ServerAbilities.save` が plain、`includeText` が true なら with_text。保存の成功（`save_document` の 1 か所・文書の名乗りを保つ保存は除く）の後、アクティブな文書を同じ URI のまま開いていれば、積んだ変更を流してから `didSave` を 1 通（with_text は送った本文＝改行の形を写す前の本文を `text` に）。別のパスへの保存は URI が変わるので送らず、apply の終わりの同期が閉じて開き直す。決定 8 の「保存で 0 通」は「`save` を求めないサーバーには 0 通」に読み替える（`verify_quiet_paths` の off の 0 回は変わらない）。
+- **決定 5 の診断の URI の照合**: 文字列の完全一致ではなく、定義の着地（ADR 0190 の決定 4）と同じ規則の 1 本 `EditorController::same_document_uri`（完全一致か、core の `file_path_of_uri` で両方をパスへ写して `FilePort::same_file`）。ドライブ文字の大小・`%3A` などの百分率の符号化の違いで捨てない。
+- **打鍵の道（決定 1）**: `lsp_position_of` / `lsp_offset_of` は行の全体を写さない。utf-8 は桁の後ろの最大 4 バイトの窓だけ（境目へ寄せる・`leading_continuations`）、utf-16 は行頭から桁まで（`lsp_offset_of` は 1 単位 3 バイトの上限で切り `whole_code_points` で端を落とした窓）だけを読む。utf-16 の写しは桁に比例し、行の長さには比例しない。
+- **契約**: `--lsp-messages`（`languageId` の表・位置の写しの往復）・`--language-server`（同期の種類・`didSave`・URI の綴りの揺れ・起動の失敗の知らせ・表に無い命令の行）・新しい scope `--lsp-sync-property`（固定 seed の編集の列〔打鍵・削除・語の削除・キャレット・CRLF と代理対と結合文字の貼り付け・undo / redo・Vim の鍵とマクロと `.`〕を流し、送った `didOpen` に `didChange` の列を `lsp_offset_of` で当てた本文が controller の本文と同じ・incremental の utf-16 と utf-8・full）。
+- **残る限界**: lone CR の文書（#1049 で残す）は LSP では改行だが Nib の行の索引は `\n` だけなので、行の番号がずれる（まれ・性質の試験は lone CR を作らない列で回す）。
