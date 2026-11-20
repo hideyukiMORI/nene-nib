@@ -1768,10 +1768,10 @@ painted_in(const core::MarkdownDocument &document, const core::Theme &theme,
 
 // 継ぎ目の y（seam）の前後 3 行の、面の右端と中ほどの画素が面の色か（許容は差 2）。
 [[nodiscard]] bool seam_joined(const std::vector<std::uint8_t> &pixels, float seam,
-                               core::RgbColor panel)
+                               core::RgbColor panel, std::uint32_t dpi)
 {
     const auto row = static_cast<std::int32_t>(std::floor(seam));
-    const auto right = 400 - static_cast<std::int32_t>(win32::preview_side_margin(120)) - 1;
+    const auto right = 400 - static_cast<std::int32_t>(win32::preview_side_margin(dpi)) - 1;
     bool joined = true;
     for (const std::int32_t y : {row - 1, row, row + 1})
     {
@@ -1793,9 +1793,35 @@ painted_in(const core::MarkdownDocument &document, const core::Theme &theme,
     return document;
 }
 
-// 切れの継ぎ目が端数の y に来ても（120 DPI・囲みの上に段落・#1877 のレビュー R1）、継ぎ目の
-// 前後の行は面の色のまま（地の色が混ざった線が出ない）。字の大きさは継ぎ目が画素の間に来る最初の
-// ものを選ぶ。
+// 継ぎ目を測る DPI（125% と 150%・#1913）。
+constexpr std::array<std::uint32_t, 2> seam_dpis{120, 144};
+
+// dpi で切れの継ぎ目が端数の y に来ても、継ぎ目の前後の行は面の色のまま（地の色が混ざった線が
+// 出ない）。字の大きさは継ぎ目が画素の間に来る最初のものを選ぶ。
+void check_code_piece_seam_at(const core::MarkdownDocument &document, const core::Theme &theme,
+                              std::uint32_t dpi)
+{
+    for (const float size : {13.5F, 14.0F, 15.0F, 12.0F, 11.0F, 16.0F})
+    {
+        const auto [pixels, tops] =
+            painted_in(document, theme, win32::PreviewTextStyle{"Segoe UI", size, dpi});
+        if (pixels.empty() || !tops.has_value() || tops.value().size() != 3U)
+        {
+            expect(false, "the seam sample measures and paints");
+            return;
+        }
+        const auto seam = tops.value().bottom(1);
+        if (seam != std::floor(seam))
+        {
+            expect(seam_joined(pixels, seam, theme.ui.panel, dpi),
+                   "a seam between pixels keeps the panel colour on its rows");
+            return;
+        }
+    }
+    expect(false, "a font size puts the seam between pixels");
+}
+
+// 切れの継ぎ目（囲みの上に段落・#1877 のレビュー R1）を 120 と 144 の DPI で確かめる。
 void check_code_piece_seam()
 {
     const auto catalog = core::ThemeCatalog::builtins();
@@ -1806,24 +1832,10 @@ void check_code_piece_seam()
         return;
     }
     const auto document = seam_document();
-    for (const float size : {13.5F, 14.0F, 15.0F, 12.0F, 11.0F, 16.0F})
+    for (const auto dpi : seam_dpis)
     {
-        const auto [pixels, tops] = painted_in(document, theme.value().view(),
-                                               win32::PreviewTextStyle{"Segoe UI", size, 120});
-        if (pixels.empty() || !tops.has_value() || tops.value().size() != 3U)
-        {
-            expect(false, "the seam sample measures and paints");
-            return;
-        }
-        const auto seam = tops.value().bottom(1);
-        if (seam != std::floor(seam))
-        {
-            expect(seam_joined(pixels, seam, theme.value().view().ui.panel),
-                   "a seam between pixels keeps the panel colour on its rows");
-            return;
-        }
+        check_code_piece_seam_at(document, theme.value().view(), dpi);
     }
-    expect(false, "a font size puts the seam between pixels");
 }
 // 枠より広い表の横の送り（#1883・施主決定 D107 の案 A）の見本。3 列の長い升の表（400 物理画素の枠に
 // 入らない）と、その後の段落。
