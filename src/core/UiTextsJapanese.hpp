@@ -397,5 +397,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_link_open_failed, "リンクを開けませんでした"},
     {UiMessage::notice_link_copied, "宛先を写しました"},
     {UiMessage::notice_heading_not_found, "この文書にその見出しはありません"},
+    {UiMessage::notice_language_server_not_found, "言語サーバーの実行ファイルがありません: {0}"},
+    {UiMessage::notice_language_server_not_absolute, "言語サーバーの命令は絶対パスで書きます: {0}"},
+    {UiMessage::notice_language_server_script,
+     "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: {0}"},
 }};
 } // namespace nenenib::core

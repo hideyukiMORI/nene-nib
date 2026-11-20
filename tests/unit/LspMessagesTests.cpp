@@ -5,9 +5,11 @@
 #include "JsonNull.hpp"
 #include "JsonParse.hpp"
 #include "JsonValue.hpp"
+#include "Language.hpp"
 #include "LspError.hpp"
 #include "LspId.hpp"
 #include "LspIncoming.hpp"
+#include "LspLanguageId.hpp"
 #include "LspMessageFailure.hpp"
 #include "LspMessages.hpp"
 #include "LspNotification.hpp"
@@ -256,6 +258,37 @@ void verify_round_trips()
     const LspPosition past = core::lsp_position_of(buffer_of("ab\ncd"), Offset{99}, utf8);
     expect(past == LspPosition{1, 2}, "an offset past the text maps to its end");
 }
+
+// `languageId` は LSP 3.17 の表の名前（#1897・ADR 0161 の 2026-11-20 の追補）。表に無い言語は
+// Nib の名前のまま、`.tsx` `.jsx` は拡張子（大小を問わない）で react の名前。
+void verify_language_ids()
+{
+    using core::Language;
+    constexpr std::array<std::pair<Language, std::string_view>, 12> named{{
+        {Language::plain, "plaintext"},
+        {Language::cs, "csharp"},
+        {Language::powershell, "powershell"},
+        {Language::shell, "shellscript"},
+        {Language::dosini, "ini"},
+        {Language::cpp, "cpp"},
+        {Language::python, "python"},
+        {Language::toml, "toml"},
+        {Language::gdresource, "gdresource"},
+        {Language::dockerfile, "dockerfile"},
+        {Language::javascript, "javascript"},
+        {Language::typescript, "typescript"},
+    }};
+    for (const auto &[language, id] : named)
+    {
+        expect(core::lsp_language_id(language, "C:/w/a.x") == id,
+               "a language is sent with the specification's languageId");
+    }
+    expect(core::lsp_language_id(Language::typescript, "C:/w/App.TSX") == "typescriptreact" &&
+               core::lsp_language_id(Language::javascript, "C:/w/app.jsx") == "javascriptreact" &&
+               core::lsp_language_id(Language::typescript, "C:/w/app.ts") == "typescript" &&
+               core::lsp_language_id(Language::javascript, "") == "javascript",
+           ".tsx and .jsx documents are sent as the react language ids");
+}
 } // namespace
 
 void verify_lsp_messages_scope()
@@ -266,5 +299,6 @@ void verify_lsp_messages_scope()
     verify_bodies();
     verify_positions();
     verify_round_trips();
+    verify_language_ids();
 }
 } // namespace nenenib::tests

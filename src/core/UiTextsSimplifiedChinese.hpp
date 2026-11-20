@@ -369,5 +369,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_link_open_failed, "无法打开链接"},
     {UiMessage::notice_link_copied, "已复制目标"},
     {UiMessage::notice_heading_not_found, "此文档中没有该标题"},
+    {UiMessage::notice_language_server_not_found, "找不到语言服务器的可执行文件：{0}"},
+    {UiMessage::notice_language_server_not_absolute, "语言服务器的命令须使用绝对路径：{0}"},
+    {UiMessage::notice_language_server_script,
+     "语言服务器不能使用 .cmd / .bat（请写成 node.exe 和脚本）：{0}"},
 }};
 } // namespace nenenib::core

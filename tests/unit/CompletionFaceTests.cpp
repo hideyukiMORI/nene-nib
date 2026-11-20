@@ -71,7 +71,7 @@ using core::LayoutRect;
 constexpr std::string_view source_path = "C:\\work\\main.cpp";
 constexpr std::string_view clangd_command = R"("C:\LLVM\bin\clangd.exe" --log=error)";
 constexpr std::string_view capable_answer =
-    R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":[".","->"]}}}})";
+    R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":[".","->"]}}}})";
 constexpr std::string_view completion_method = "textDocument/completion";
 // 本文の 2 行が frame に載る行数。
 constexpr std::size_t shown_lines = 4;
@@ -626,7 +626,7 @@ void verify_word_trigger()
     Editing editing(lsp_settings(true));
     capable(
         editing,
-        R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","completionProvider":{"triggerCharacters":["b"]}}}})");
+        R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":["b"]}}}})");
     auto &server = editing.language_server();
     static_cast<void>(typed(editing, "a"));
     static_cast<void>(typed(editing, "b"));
