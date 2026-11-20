@@ -3,8 +3,10 @@
 #include "CommandText.hpp"
 #include "CommitText.hpp"
 #include "ComposeText.hpp"
+#include "Composition.hpp"
 #include "DeleteText.hpp"
 #include "Editing.hpp"
+#include "EditorSettings.hpp"
 #include "ExResult.hpp"
 #include "HistoryAction.hpp"
 #include "InsertText.hpp"
@@ -289,6 +291,50 @@ void verify_line_view_made_once()
     static_cast<void>(view.rows(LineNumber{1}));
     expect(layouts.row_texts() == 2, "another line is made once and the first one is kept");
 }
+// #1899: 折り返さない設定の行は表示文字列を作らずに 1 画面行と答える。段の区切り（U+2028 /
+// U+2029）を含む行と、IME の変換中の文字列を差し込むキャレットの行は今までどおり文字組みに問う。
+// 行は 1 普通・2 U+2028・3 U+2029・4 普通（キャレットの行・変換中の文字列のあるときだけ）。
+[[nodiscard]] EditorState unwrapped_state(bool composing)
+{
+    auto settings = nenenib::core::default_editor_settings();
+    settings.wrapping = LineWrapping::no_wrap;
+    // 4 行目の行頭は 27 + 8 + 8 = 43 バイト目。
+    const auto state = EditorState::create(Appearance::dark, EditMode::ordinary)
+                           .with_edit(buffer_of("abcdefghijklmnopqrstuvwxyz\nab\xE2\x80\xA8"
+                                                "cd\nab\xE2\x80\xA9"
+                                                "cd\nlast\n"),
+                                      Selection{Offset{43}, Offset{43}}, EditHistory::empty(),
+                                      Document{std::nullopt, TextEncoding::utf8, 0})
+                           .with_settings(settings);
+    return composing ? state.with_composition(nenenib::core::Composition{"x", {}, Offset{1}})
+                     : state;
+}
+
+void verify_unwrapped_rows_skip_layout()
+{
+    ScriptedTextLayouts layouts;
+    const auto state = unwrapped_state(false);
+    VisualTextView view{state, layouts, TextViewGeometry{40, 20, 96}};
+    const auto plain = view.rows(LineNumber{1});
+    const auto caret_line = view.rows(LineNumber{4});
+    expect(plain.has_value() && plain.value() == 1 && caret_line.has_value() &&
+               caret_line.value() == 1 && layouts.requests() == 0 && layouts.row_texts() == 0,
+           "#1899 an unwrapped line is one screen row without making its display text");
+    static_cast<void>(view.rows(LineNumber{2}));
+    expect(layouts.requests() == 1,
+           "#1899 an unwrapped line with a line separator still asks the text layout");
+    static_cast<void>(view.rows(LineNumber{3}));
+    expect(layouts.requests() == 2,
+           "#1899 an unwrapped line with a paragraph separator still asks the text layout");
+    ScriptedTextLayouts composed;
+    const auto composing = unwrapped_state(true);
+    VisualTextView composing_view{composing, composed, TextViewGeometry{40, 20, 96}};
+    static_cast<void>(composing_view.rows(LineNumber{1}));
+    static_cast<void>(composing_view.rows(LineNumber{4}));
+    expect(composed.requests() == 1,
+           "#1899 the caret line with an IME composition still asks the text layout");
+}
+
 // #664: row_span の位置の問いの答えはその位置を含む（段の境目は次の段・最後の段は行末も）。
 // 文字組みが位置の問いに隣の段を答えても、隣の段を番号で引き直して含む段を返す。
 [[nodiscard]] bool rows_hold_positions(const EditorState &state, ScriptedTextLayouts &layouts)
@@ -335,5 +381,6 @@ void verify_wrapped_view_scope()
     verify_unwrapped_drag();
     verify_line_view_made_once();
     verify_row_span_contains_request();
+    verify_unwrapped_rows_skip_layout();
 }
 } // namespace nenenib::tests
