@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FilePath.hpp"
 #include "Language.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerPhase.hpp"
@@ -28,31 +29,30 @@ inline constexpr std::size_t language_server_document_limit = std::size_t{4} * 1
 // 捨てる（サーバーは新しい版の診断を続けて送る）。
 inline constexpr std::size_t language_server_kept_revisions = 16;
 
-// controller が持つ言語サーバーとのつながりの控え（ADR 0160 の決定 5・6）。同時に起きているのは
-// 1 本で、language はその子の言語（idle なら空）。next_id は要求の通し番号、pending は答えを
-// 待っている要求、encoding はサーバーが選んだ位置の単位、failures
-// は続けて失敗した回数（`initialized` まで届くか `:set lsp` で 0 に戻る）、given_up
-// は上限を超えて止まったこと、retired は stop した子が adapter に 残っているかもしれないこと（次の
-// tick で expire_retired を呼ぶ）。considered は子が居ない
-// ときに起こすかを決めた言語（同じ言語では打鍵ごとに設定を引き直さない・止めると空に戻る）、
-// generation は stop のたびに進む数（止めた後の同じ集めの残りを読まない）。root_uri は起こした
-// ときの作業フォルダの URI（`initialize` の rootUri・ADR 0161 の決定 1）、documents は `didOpen`
-// した文書（ADR 0161 の決定 1・running の間だけ・止めると空）。abilities は `initialize` の答えから
-// 読んだサーバーの能力（ADR 0190 の決定 3・止めると空）。公開 aggregate（CPP-003）。
+// controller が持つ言語サーバー 1 席とのつながりの控え（ADR 0160 の決定 5・6・2026-11-20 の追補）。
+// 席ごとに 1 つで、language はその子の言語（idle なら空）。pending は答えを待っている要求（id
+// の表は 席ごと・id は席をまたいで一意）、encoding はサーバーが選んだ位置の単位、generation は stop
+// の たびに進む数（止めた後の同じ集めの残りを読まない）。root
+// はその子を起こした作業フォルダ（自動の 再起動は同じ root で起こす）、configured_root
+// は起こしたときの設定の root（設定の root があれば
+// それが同じ席だけが文書を受ける・無ければ同じ言語の席が受ける・段 S2 の root の鍵）、root_uri は
+// root の URI（`initialize` の rootUri・ADR 0161 の決定 1）。documents は `didOpen` した文書
+// （running の間だけ・止めると空）、abilities は `initialize` の答えから読んだサーバーの能力
+// （ADR 0190 の決定 3・止めると空）、used
+// はアクティブな文書で最後に使った順の印（大きいほど新しい・ 席が満ちたら最も小さい席を譲る）。公開
+// aggregate（CPP-003）。
 struct LanguageServerLink
 {
     LanguageServerPhase phase = LanguageServerPhase::idle;
     std::optional<core::Language> language = std::nullopt;
-    std::int64_t next_id = 1;
     std::vector<PendingLspRequest> pending = {};
     core::LspPositionEncoding encoding = core::LspPositionEncoding::utf16;
-    std::size_t failures = 0;
-    bool given_up = false;
-    bool retired = false;
-    std::optional<core::Language> considered = std::nullopt;
     std::uint64_t generation = 0;
+    std::optional<core::FilePath> root = std::nullopt;
+    std::optional<core::FilePath> configured_root = std::nullopt;
     std::string root_uri = {};
     std::vector<LanguageServerDocument> documents = {};
     ServerAbilities abilities = {};
+    std::uint64_t used = 0;
 };
 } // namespace nenenib::application

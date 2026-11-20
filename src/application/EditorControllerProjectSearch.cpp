@@ -317,7 +317,7 @@ core::TextPosition EditorController::landed_position(const core::TextPosition &p
 core::TextPosition EditorController::landed_position(const core::LspPosition &position) const
 {
     const core::TextBuffer &text = state_.text();
-    const auto at = core::lsp_offset_of(text, position, language_server_.encoding);
+    const auto at = core::lsp_offset_of(text, position, active_language_server().encoding);
     return text.position_of(at.value_or(core::Offset{text.size_bytes()}));
 }
 

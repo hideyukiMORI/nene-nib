@@ -8,8 +8,12 @@
 #include "JsonNumber.hpp"
 #include "JsonParse.hpp"
 #include "JsonValue.hpp"
+#include "LanguageServerEvent.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerPhase.hpp"
+#include "LanguageServerSlot.hpp"
+#include "LanguageServerTrouble.hpp"
+#include "LanguageServers.hpp"
 #include "LanguageTable.hpp"
 #include "LspDiagnostics.hpp"
 #include "LspIncoming.hpp"
@@ -31,6 +35,7 @@
 #include "UiTexts.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -249,75 +254,223 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
                core::ui_text_filled(message, display_language, {core::language_name(language)}))
         .value();
 }
+
+// 要求の種類 → JSON-RPC の method（1 か所）。
+[[nodiscard]] std::string_view lsp_method_of(LspRequestKind kind) noexcept
+{
+    switch (kind)
+    {
+    case LspRequestKind::initialize:
+        return "initialize";
+    case LspRequestKind::shutdown:
+        return "shutdown";
+    case LspRequestKind::completion:
+        return "textDocument/completion";
+    case LspRequestKind::hover:
+        return "textDocument/hover";
+    case LspRequestKind::definition:
+        return "textDocument/definition";
+    }
+    return "initialize";
+}
+
+// 席の番号 → awake の印のビット。
+[[nodiscard]] constexpr std::uint8_t slot_bit(LanguageServerSlot slot) noexcept
+{
+    return static_cast<std::uint8_t>(1U << slot_index(slot));
+}
+
+// 子が居て、まだ止めに向かっていない段（文書を受けられる席）。
+[[nodiscard]] constexpr bool serving_phase(LanguageServerPhase phase) noexcept
+{
+    switch (phase)
+    {
+    case LanguageServerPhase::starting:
+    case LanguageServerPhase::initializing:
+    case LanguageServerPhase::running:
+        return true;
+    case LanguageServerPhase::idle:
+    case LanguageServerPhase::shutting_down:
+        return false;
+    }
+    return false;
+}
 } // namespace
 
 // ---------------------------------------------------------------- 言語サーバー（ADR 0160）
 
-// 起きているべき子と今の子を合わせる 1 本（決定 6・7）。オフで子が居なければ欄を 2 つ読むだけで
-// 抜ける（決定 9 の 1 打鍵の費用）。オンでも同じ言語の子が居れば port を呼ばない。
+// 起きているべき子と今の子を合わせる 1 本（決定 6・7・2026-11-20 の追補）。オフで子が居なければ
+// 欄を 2 つ読むだけで抜ける（決定 9 の 1 打鍵の費用）。オンでは、アクティブな文書を受ける席が
+// 無ければ起こすかを決め、running の席ごとに文書を合わせる。言語の違うタブ・命令の無い言語の
+// タブへ移っても、どの席も止めない（段 S2）。
 void EditorController::reconcile_language_server()
 {
-    auto &link = language_server_;
-    const bool on = state_.settings().lsp && !link.given_up;
-    if (!on && link.phase == LanguageServerPhase::idle)
+    auto &servers = language_servers_;
+    const bool on = state_.settings().lsp;
+    if (!on && servers.awake == 0)
     {
+        return;
+    }
+    if (!on)
+    {
+        for (const LanguageServerSlot slot : language_server_slots)
+        {
+            shut_language_server(slot);
+        }
         return;
     }
     const core::Language language = state_.language();
-    switch (link.phase)
+    auto serving = serving_slot(language);
+    if (!serving.has_value())
     {
-    case LanguageServerPhase::idle:
         consider_language_server(language);
-        return;
-    case LanguageServerPhase::starting:
-    case LanguageServerPhase::initializing:
-        if (!on || link.language != std::optional<core::Language>{language})
+        serving = serving_slot(language);
+    }
+    if (serving.has_value())
+    {
+        link_of(serving.value()).used = ++servers.uses;
+    }
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        if (link_of(slot).phase == LanguageServerPhase::running)
         {
-            shut_language_server();
+            sync_language_server_documents(slot, serving == std::optional{slot});
         }
-        return;
-    case LanguageServerPhase::running:
-        if (!on || link.language != std::optional<core::Language>{language})
-        {
-            shut_language_server();
-            return;
-        }
-        sync_language_server_documents();
-        return;
-    case LanguageServerPhase::shutting_down:
-        return;
     }
 }
 
-// 子が居ないとき、この言語でまだ決めていなければ起こすかを決める（同じ言語では打鍵ごとに設定を
-// 引き直さない）。
+// language の文書を受ける席（段 S2 の root の鍵）。子が居て止めに向かっていない同じ言語の席で、
+// 設定に root があれば起こしたときの設定の root が同じ席だけ（無ければ最初の文書のフォルダで
+// 起きた同じ言語の席・ADR 0161 の決定 1）。2 つ以上なら最後に使った席。
+std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language language) const
+{
+    const auto &root = state_.settings().root;
+    const auto &links = language_servers_.links;
+    std::optional<LanguageServerSlot> best;
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        const LanguageServerLink &link = links.at(slot_index(slot));
+        if (!serving_phase(link.phase) || link.language != std::optional{language} ||
+            (root.has_value() && link.configured_root != root))
+        {
+            continue;
+        }
+        if (!best.has_value() || links.at(slot_index(best.value())).used < link.used)
+        {
+            best = slot;
+        }
+    }
+    return best;
+}
+
+// アクティブな文書を受ける席のつながり（能力・位置の単位・段）。無ければ空のつながり。
+const LanguageServerLink &EditorController::active_language_server() const
+{
+    if (language_servers_.awake == 0)
+    {
+        return language_servers_.idle;
+    }
+    const auto slot = serving_slot(state_.language());
+    return slot.has_value() ? language_servers_.links.at(slot_index(slot.value()))
+                            : language_servers_.idle;
+}
+
+LanguageServerLink &EditorController::link_of(LanguageServerSlot slot)
+{
+    return language_servers_.links.at(slot_index(slot));
+}
+
+// 言語の失敗の控え（無ければ 0 回で足す）。
+LanguageServerTrouble &EditorController::trouble_of(core::Language language)
+{
+    auto &troubles = language_servers_.troubles;
+    const auto found = std::ranges::find_if(troubles, [language](const auto &trouble)
+                                            { return trouble.language == language; });
+    if (found != troubles.end())
+    {
+        return *found;
+    }
+    return troubles.emplace_back(LanguageServerTrouble{.language = language});
+}
+
+bool EditorController::language_server_given_up(core::Language language) const
+{
+    return std::ranges::any_of(language_servers_.troubles, [language](const auto &trouble)
+                               { return trouble.language == language && trouble.given_up; });
+}
+
+// `:set lsp` と設定の面でオンにしたとき（決定 7）。全部の言語の失敗の数と given_up を消し、
+// 起こすかを決め直す。
+void EditorController::resume_language_servers()
+{
+    language_servers_.troubles.clear();
+    language_servers_.considered.reset();
+}
+
+// 受ける席が無いとき、この（言語・パス）でまだ決めていなければ起こすかを決める（同じ文書では
+// 打鍵ごとに設定を引き直さない）。空いた席が無ければ最も前に使った席を譲らせ、空けば起こす
+// （running の席は `shutdown` の答えの後の reconcile で起こす）。
 void EditorController::consider_language_server(core::Language language)
 {
-    auto &link = language_server_;
-    if (link.considered == std::optional<core::Language>{language})
+    auto &servers = language_servers_;
+    auto key = std::pair{language, state_.document().path};
+    if (servers.considered == key)
     {
         return;
     }
-    link.considered = language;
-    auto launch = wanted_language_server(language);
-    if (launch.has_value())
+    servers.considered = std::move(key);
+    if (language_server_given_up(language))
     {
-        start_language_server(language, std::move(launch).value());
+        return;
+    }
+    auto launch = wanted_language_server(language);
+    if (!launch.has_value())
+    {
+        return;
+    }
+    auto slot = free_slot();
+    if (!slot.has_value())
+    {
+        yield_language_server();
+        slot = free_slot();
+    }
+    if (slot.has_value())
+    {
+        start_language_server(slot.value(), language, std::move(launch).value(),
+                              state_.settings().root);
     }
 }
 
-// 設定に書いた命令だけを起こす（決定 7）。言語の名前で lsp_commands を引き、root は設定の root
-// か文書のフォルダ。命令が無い・読めない・root が決まらなければ値なし。
+std::optional<LanguageServerSlot> EditorController::free_slot() const
+{
+    const auto &links = language_servers_.links;
+    const auto found = std::ranges::find_if(
+        language_server_slots, [&links](LanguageServerSlot slot)
+        { return links.at(slot_index(slot)).phase == LanguageServerPhase::idle; });
+    return found != language_server_slots.end() ? std::optional{*found} : std::nullopt;
+}
+
+// 席が満ちたとき（段 S2）。止めに向かっている席があればその終わりを待ち、無ければアクティブな
+// 文書で最も前に使った席を `shutdown` して譲らせる（文書は `didClose`）。
+void EditorController::yield_language_server()
+{
+    const auto &links = language_servers_.links;
+    if (std::ranges::any_of(links, [](const LanguageServerLink &link)
+                            { return link.phase == LanguageServerPhase::shutting_down; }))
+    {
+        return;
+    }
+    const auto oldest =
+        std::ranges::min_element(language_server_slots, {}, [&links](LanguageServerSlot slot)
+                                 { return links.at(slot_index(slot)).used; });
+    shut_language_server(*oldest);
+}
+
+// 設定に書いた命令だけを起こす（決定 7）。root は設定の root か文書のフォルダ。命令が無い・読めない
+// ・root が決まらなければ値なし。
 std::optional<ServerLaunch> EditorController::wanted_language_server(core::Language language) const
 {
     const auto &settings = state_.settings();
-    const std::string_view name = core::language_name(language);
-    const auto command = std::ranges::find_if(settings.lsp_commands, [name](const auto &entry)
-                                              { return entry.first == name; });
-    if (command == settings.lsp_commands.end())
-    {
-        return std::nullopt;
-    }
     const auto &path = state_.document().path;
     const auto root = settings.root.has_value() ? settings.root
                       : path.has_value()        ? core::folder_of(path.value())
@@ -326,19 +479,39 @@ std::optional<ServerLaunch> EditorController::wanted_language_server(core::Langu
     {
         return std::nullopt;
     }
-    return server_launch_of(command->second, root.value());
+    return language_server_launch(language, root.value());
 }
 
-// 起こしてすぐ戻る（決定 1）。起こせなければ 1 行知らせて止まる（設定の誤りは何度起こしても
-// 同じなので自動では起こし直さない・`:set lsp` で再開）。
-void EditorController::start_language_server(core::Language language, ServerLaunch launch)
+// 言語の名前で lsp_commands を引き、root で起こす要求にする（命令が無い・読めなければ値なし）。
+std::optional<ServerLaunch>
+EditorController::language_server_launch(core::Language language, const core::FilePath &root) const
 {
-    auto &link = language_server_;
-    link.root_uri = document_uri(launch.root);
-    const auto started = ports_.language_server.start(std::move(launch));
+    const auto &commands = state_.settings().lsp_commands;
+    const std::string_view name = core::language_name(language);
+    const auto command =
+        std::ranges::find_if(commands, [name](const auto &entry) { return entry.first == name; });
+    if (command == commands.end())
+    {
+        return std::nullopt;
+    }
+    return server_launch_of(command->second, root);
+}
+
+// 起こしてすぐ戻る（決定 1）。起こせなければ 1 行知らせてその言語だけ止まる（設定の誤りは何度
+// 起こしても同じなので自動では起こし直さない・`:set lsp` で再開）。configured_root は起こした
+// ときの設定の root（受ける席の鍵）。
+void EditorController::start_language_server(LanguageServerSlot slot, core::Language language,
+                                             ServerLaunch launch,
+                                             std::optional<core::FilePath> configured_root)
+{
+    auto &servers = language_servers_;
+    auto &link = link_of(slot);
+    const core::FilePath root = launch.root;
+    link.root_uri = document_uri(root);
+    const auto started = ports_.language_server.start(slot, std::move(launch));
     if (!started)
     {
-        link.given_up = true;
+        trouble_of(language).given_up = true;
         state_ = state_.with_command_message(server_notice(start_failure_message(started.error()),
                                                            language, state_.display_language()));
         return;
@@ -346,14 +519,19 @@ void EditorController::start_language_server(core::Language language, ServerLaun
     link.phase = LanguageServerPhase::starting;
     link.language = language;
     link.pending.clear();
+    link.root = root;
+    link.configured_root = std::move(configured_root);
+    link.used = ++servers.uses;
+    servers.awake = static_cast<std::uint8_t>(servers.awake | slot_bit(slot));
 }
 
-// 子を待たずに止める（追補）。stop は出来事の列も捨てるので、同じ集めの残りは読まない。
-void EditorController::stop_language_server()
+// 子を待たずに止める（追補）。stop はその席の出来事の列も捨てるので、同じ集めの残りは読まない。
+void EditorController::stop_language_server(LanguageServerSlot slot)
 {
-    auto &link = language_server_;
-    close_language_server_documents(false);
-    ports_.language_server.stop();
+    auto &servers = language_servers_;
+    auto &link = link_of(slot);
+    close_language_server_documents(slot, false);
+    ports_.language_server.stop(slot);
     link.phase = LanguageServerPhase::idle;
     link.language.reset();
     link.pending.clear();
@@ -365,16 +543,17 @@ void EditorController::stop_language_server()
     {
         state_ = state_.with_language_answers({});
     }
-    link.considered.reset();
-    link.retired = true;
+    servers.considered.reset();
+    servers.retired = true;
+    servers.awake = static_cast<std::uint8_t>(servers.awake & ~slot_bit(slot));
     ++link.generation;
 }
 
 // `shutdown` を送り、答えで `exit` を送って止める（決定 6・追補）。`initialize` の答えの前は
 // 何も送れないので、そのまま止める。
-void EditorController::shut_language_server()
+void EditorController::shut_language_server(LanguageServerSlot slot)
 {
-    auto &link = language_server_;
+    auto &link = link_of(slot);
     switch (link.phase)
     {
     case LanguageServerPhase::idle:
@@ -382,90 +561,100 @@ void EditorController::shut_language_server()
         return;
     case LanguageServerPhase::starting:
     case LanguageServerPhase::initializing:
-        stop_language_server();
+        stop_language_server(slot);
         return;
     case LanguageServerPhase::running:
         link.pending.clear();
-        close_language_server_documents(true);
-        send_lsp_request(LspRequestKind::shutdown, "shutdown", core::JsonValue{core::JsonNull{}});
+        close_language_server_documents(slot, true);
+        send_lsp_request(slot, LspRequestKind::shutdown, core::JsonValue{core::JsonNull{}});
         link.phase = LanguageServerPhase::shutting_down;
         return;
     }
 }
 
-// 要求 id は controller の通し番号（決定 5）。答えを照合する文脈と共に、答えを待つ列に載せる
-// （ADR 0190 の決定 1）。
-void EditorController::send_lsp_request(LspRequestKind kind, std::string_view method,
+// 要求 id は controller の通し番号で、席をまたいで一意（決定 5）。method は種類から引く。答えを
+// 照合する文脈と共に、その席の答えを待つ列に載せる（ADR 0190 の決定 1）。
+void EditorController::send_lsp_request(LanguageServerSlot slot, LspRequestKind kind,
                                         const core::JsonValue &params, PendingLspContext context)
 {
-    auto &link = language_server_;
-    const std::int64_t id = link.next_id++;
-    ports_.language_server.send(core::lsp_request_body(id, method, params));
-    link.pending.push_back(PendingLspRequest{id, kind, std::move(context)});
+    const std::int64_t id = language_servers_.next_id++;
+    ports_.language_server.send(slot, core::lsp_request_body(id, lsp_method_of(kind), params));
+    link_of(slot).pending.push_back(PendingLspRequest{id, kind, std::move(context)});
 }
 
 // 答えを待つ要求 1 つを取り消す通知（決定 6・ADR 0190 の決定 1）。列から外すのは呼び出し元。
-void EditorController::send_lsp_cancel(std::int64_t id)
+void EditorController::send_lsp_cancel(LanguageServerSlot slot, std::int64_t id)
 {
-    ports_.language_server.send(core::lsp_notification_body("$/cancelRequest", cancel_params(id)));
+    ports_.language_server.send(slot,
+                                core::lsp_notification_body("$/cancelRequest", cancel_params(id)));
 }
 
-// 子が終わった・話せない・答えない（決定 6）。止めて 1 行知らせ、上限までは同じ言語で起こし直す。
-void EditorController::language_server_failed(core::UiMessage message)
+// 子が終わった・話せない・答えない（決定 6）。止めて 1 行知らせ、その言語の上限までは同じ席・
+// 同じ root で起こし直す。失敗の数は言語ごと（ほかの言語の席は止めない・段 S2）。
+void EditorController::language_server_failed(LanguageServerSlot slot, core::UiMessage message)
 {
-    auto &link = language_server_;
+    const auto &link = link_of(slot);
     const core::Language language = link.language.value_or(state_.language());
-    stop_language_server();
-    ++link.failures;
-    if (link.failures > language_server_restart_limit)
+    const auto root = link.root;
+    const auto configured_root = link.configured_root;
+    stop_language_server(slot);
+    auto &trouble = trouble_of(language);
+    ++trouble.failures;
+    if (trouble.failures > language_server_restart_limit)
     {
-        link.given_up = true;
+        trouble.given_up = true;
         state_ = state_.with_command_message(server_notice(
             core::UiMessage::notice_language_server_given_up, language, state_.display_language()));
         return;
     }
     state_ =
         state_.with_command_message(server_notice(message, language, state_.display_language()));
-    auto launch = wanted_language_server(language);
+    auto launch = root.has_value() ? language_server_launch(language, root.value()) : std::nullopt;
     if (launch.has_value())
     {
-        link.considered = language;
-        start_language_server(language, std::move(launch).value());
+        start_language_server(slot, language, std::move(launch).value(), configured_root);
     }
 }
 
-// WorkCompleted の道（決定 1）。子が居なければ port を呼ばない。止めた後の残りは読まない。
+// WorkCompleted の道（決定 1）。子が居なければ port を呼ばない。止めた席の同じ集めの残りと、
+// 子の居ない席の出来事は読まない。
 void EditorController::collect_language_server()
 {
-    if (language_server_.phase == LanguageServerPhase::idle)
+    const auto &links = language_servers_.links;
+    if (language_servers_.awake == 0)
     {
         return;
     }
     const auto events = ports_.language_server.collect();
-    const std::uint64_t generation = language_server_.generation;
-    for (const ServerEvent &event : events)
+    std::array<std::uint64_t, language_server_slot_limit> generations{};
+    std::ranges::transform(links, generations.begin(),
+                           [](const LanguageServerLink &link) { return link.generation; });
+    for (const LanguageServerEvent &event : events)
     {
-        if (language_server_.generation != generation)
+        const std::size_t index = slot_index(event.slot);
+        if (links.at(index).generation != generations.at(index) ||
+            links.at(index).phase == LanguageServerPhase::idle)
         {
-            return;
+            continue;
         }
-        std::visit([this](const auto &value) { this->receive_server(value); }, event);
+        std::visit([this, slot = event.slot](const auto &value)
+                   { this->receive_server(slot, value); }, event.event);
     }
 }
 
-void EditorController::receive_server(const ServerStarted & /*started*/)
+void EditorController::receive_server(LanguageServerSlot slot, const ServerStarted & /*started*/)
 {
-    auto &link = language_server_;
+    auto &link = link_of(slot);
     if (link.phase != LanguageServerPhase::starting)
     {
         return;
     }
     link.phase = LanguageServerPhase::initializing;
-    send_lsp_request(LspRequestKind::initialize, "initialize", initialize_params(link.root_uri));
+    send_lsp_request(slot, LspRequestKind::initialize, initialize_params(link.root_uri));
 }
 
 // 読めない本文は捨てる（段 L0 は寿命の答えだけを読む）。
-void EditorController::receive_server(const ServerMessage &message)
+void EditorController::receive_server(LanguageServerSlot slot, const ServerMessage &message)
 {
     const auto value = core::parse_json(message.body);
     if (!value)
@@ -477,34 +666,36 @@ void EditorController::receive_server(const ServerMessage &message)
     {
         return;
     }
-    std::visit([this](const auto &item) { this->receive_lsp(item); }, incoming.value());
+    std::visit([this, slot](const auto &item) { this->receive_lsp(slot, item); }, incoming.value());
 }
 
-void EditorController::receive_server(const ServerExited & /*exited*/)
+void EditorController::receive_server(LanguageServerSlot slot, const ServerExited & /*exited*/)
 {
-    end_language_server();
+    end_language_server(slot);
 }
 
-void EditorController::receive_server(const ServerFailed & /*failed*/)
+void EditorController::receive_server(LanguageServerSlot slot, const ServerFailed & /*failed*/)
 {
-    end_language_server();
+    end_language_server(slot);
 }
 
-// 子の終わり（決定 6）。`shutdown` を送った後なら頼んだ終わりで、合わせ直す。ほかは失敗。
-void EditorController::end_language_server()
+// 子の終わり（決定 6）。`shutdown` を送った後なら頼んだ終わりで、合わせ直す（譲った席ならここで
+// 次の言語が起きる）。ほかは失敗。
+void EditorController::end_language_server(LanguageServerSlot slot)
 {
-    if (language_server_.phase == LanguageServerPhase::shutting_down)
+    if (link_of(slot).phase == LanguageServerPhase::shutting_down)
     {
-        stop_language_server();
+        stop_language_server(slot);
         reconcile_language_server();
         return;
     }
-    language_server_failed(core::UiMessage::notice_language_server_ended);
+    language_server_failed(slot, core::UiMessage::notice_language_server_ended);
 }
 
-void EditorController::receive_lsp(const core::LspResponse &response)
+// 答えはその席の答えを待つ列だけで引く（ほかの席の id と取り違えない）。
+void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspResponse &response)
 {
-    auto &link = language_server_;
+    auto &link = link_of(slot);
     const auto *id = std::get_if<std::int64_t>(&response.id);
     if (id == nullptr)
     {
@@ -523,21 +714,21 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     case LspRequestKind::initialize:
         if (!response.result)
         {
-            language_server_failed(core::UiMessage::notice_language_server_not_started);
+            language_server_failed(slot, core::UiMessage::notice_language_server_not_started);
             return;
         }
         link.encoding = chosen_encoding(answered_capabilities(response.result.value()));
         link.abilities = server_abilities(answered_capabilities(response.result.value()));
         ports_.language_server.send(
-            core::lsp_notification_body("initialized", core::JsonValue{core::JsonObject{}}));
+            slot, core::lsp_notification_body("initialized", core::JsonValue{core::JsonObject{}}));
         link.phase = LanguageServerPhase::running;
-        // 続けて失敗した回数なので、initialized まで届いたら 0 に戻す（決定 6）。
-        link.failures = 0;
+        // 続けて失敗した回数なので、initialized まで届いたら 0 に戻す（決定 6・言語ごと）。
+        trouble_of(link.language.value_or(state_.language())).failures = 0;
         return;
     case LspRequestKind::shutdown:
         ports_.language_server.send(
-            core::lsp_notification_body("exit", core::JsonValue{core::JsonNull{}}));
-        stop_language_server();
+            slot, core::lsp_notification_body("exit", core::JsonValue{core::JsonNull{}}));
+        stop_language_server(slot);
         reconcile_language_server();
         return;
     case LspRequestKind::completion:
@@ -549,14 +740,15 @@ void EditorController::receive_lsp(const core::LspResponse &response)
     }
 }
 
-// サーバーからの通知（ADR 0161 の決定 5）。診断は文書の値へ写す。`window/showMessage` は Error と
-// Warning だけ 1 行の知らせ（lsp_shown_notice）にし、Info・Log と `window/logMessage` ほかの通知は
-// 捨てる。
-void EditorController::receive_lsp(const core::LspNotification &notification)
+// サーバーからの通知（ADR 0161 の決定 5）。診断はその席が開いた文書の値へ写す。
+// `window/showMessage` は Error と Warning だけ 1 行の知らせ（lsp_shown_notice）にし、Info・Log と
+// `window/logMessage` ほかの通知は捨てる。
+void EditorController::receive_lsp(LanguageServerSlot slot,
+                                   const core::LspNotification &notification)
 {
     if (notification.method == core::lsp_publish_diagnostics_method)
     {
-        receive_diagnostics(notification);
+        receive_diagnostics(slot, notification);
         return;
     }
     auto notice = core::lsp_shown_notice(notification);
@@ -567,24 +759,34 @@ void EditorController::receive_lsp(const core::LspNotification &notification)
 }
 
 // サーバーからの要求は MethodNotFound で断る（決定 5）。
-void EditorController::receive_lsp(const core::LspRequest &request)
+void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRequest &request)
 {
-    ports_.language_server.send(core::lsp_method_not_found_body(request.id));
+    ports_.language_server.send(slot, core::lsp_method_not_found_body(request.id));
 }
 
 // 古さの合図（決定 6・追補）。子が居ないときは port を呼ばない。2 回の tick を越えた要求は
-// 捨てる。退く子は adapter に片付けを頼む。
+// 席ごとに捨てる。退く子は adapter に片付けを頼む。
 void EditorController::accept(const LanguageServerTick &)
 {
     repaint_ = false;
-    auto &link = language_server_;
-    if (link.retired)
+    auto &servers = language_servers_;
+    if (servers.retired)
     {
-        link.retired = false;
+        servers.retired = false;
         ports_.language_server.expire_retired();
     }
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        age_lsp_requests(slot);
+    }
+}
+
+// 席 slot の答えを待つ要求の古さを 1 つ進め、2 回の tick を越えた要求を捨てる。
+void EditorController::age_lsp_requests(LanguageServerSlot slot)
+{
+    auto &pending = link_of(slot).pending;
     std::vector<PendingLspRequest> stale;
-    for (PendingLspRequest &request : link.pending)
+    for (PendingLspRequest &request : pending)
     {
         ++request.ticks;
         if (request.ticks >= language_server_stale_ticks)
@@ -592,40 +794,40 @@ void EditorController::accept(const LanguageServerTick &)
             stale.push_back(request);
         }
     }
-    std::erase_if(link.pending, [](const PendingLspRequest &request)
+    std::erase_if(pending, [](const PendingLspRequest &request)
                   { return request.ticks >= language_server_stale_ticks; });
     for (const PendingLspRequest &request : stale)
     {
-        expire_lsp_request(request);
+        expire_lsp_request(slot, request);
     }
 }
 
 // 古い要求 1 つ（決定 6）。`initialize` は `$/cancelRequest` を送って捨て、答えない子として
 // 失敗に数える。`shutdown` は `exit` を送らずに止める（依頼書・追補）。補完・hover・定義へは
 // `$/cancelRequest` を送って捨てるだけで、知らせは出さない（ADR 0190 の決定 1）。
-void EditorController::expire_lsp_request(const PendingLspRequest &request)
+void EditorController::expire_lsp_request(LanguageServerSlot slot, const PendingLspRequest &request)
 {
     switch (request.kind)
     {
     case LspRequestKind::initialize:
-        send_lsp_cancel(request.id);
+        send_lsp_cancel(slot, request.id);
         repaint_ = true;
-        language_server_failed(core::UiMessage::notice_language_server_silent);
+        language_server_failed(slot, core::UiMessage::notice_language_server_silent);
         return;
     case LspRequestKind::shutdown:
-        stop_language_server();
+        stop_language_server(slot);
         reconcile_language_server();
         return;
     case LspRequestKind::completion:
     case LspRequestKind::hover:
     case LspRequestKind::definition:
-        send_lsp_cancel(request.id);
+        send_lsp_cancel(slot, request.id);
         return;
     }
 }
 
-// `:set lsp` `:set nolsp` `:set lsp?`（決定 7）。オンは止まった後の手での再開も兼ね、失敗の
-// 数を 0 に戻す。どの形も今の値を 1 行で知らせる。保存できなければ断る。
+// `:set lsp` `:set nolsp` `:set lsp?`（決定 7）。オンは止まった後の手での再開も兼ね、全部の言語の
+// 失敗の数と given_up を消す。どの形も今の値を 1 行で知らせる。保存できなければ断る。
 void EditorController::answer_lsp(core::ExLspRequest request)
 {
     auto settings = state_.settings();
@@ -633,9 +835,7 @@ void EditorController::answer_lsp(core::ExLspRequest request)
     {
     case core::ExLspRequest::enable:
         settings.lsp = true;
-        language_server_.failures = 0;
-        language_server_.given_up = false;
-        language_server_.considered.reset();
+        resume_language_servers();
         break;
     case core::ExLspRequest::disable:
         settings.lsp = false;
@@ -653,13 +853,16 @@ void EditorController::answer_lsp(core::ExLspRequest request)
     reconcile_language_server();
 }
 
-// 窓が閉じていく（追補）。`shutdown` の答えは待てないので止めるだけで、子は adapter の Job
-// Object が片付ける。
+// 窓が閉じていく（追補）。`shutdown` の答えは待てないので全部の席を止めるだけで、子は adapter の
+// Job Object が片付ける。
 void EditorController::end_language_server_session()
 {
-    if (language_server_.phase != LanguageServerPhase::idle)
+    for (const LanguageServerSlot slot : language_server_slots)
     {
-        stop_language_server();
+        if (link_of(slot).phase != LanguageServerPhase::idle)
+        {
+            stop_language_server(slot);
+        }
     }
 }
 } // namespace nenenib::application

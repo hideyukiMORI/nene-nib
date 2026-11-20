@@ -32,6 +32,7 @@
 #include "KeyChord.hpp"
 #include "LanguageQueryKind.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerSlot.hpp"
 #include "LanguageServerTick.hpp"
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
@@ -278,25 +279,6 @@ void verify_switch()
     const auto asked = run_ex(editing.controller(), "set lsp?");
     expect(message(asked) == "lsp=on" && server.launches().size() == 2,
            "set lsp? only tells the current value");
-}
-
-// アクティブな文書の言語に命令が無くなれば止め、戻れば起こす（決定 6）。
-void verify_language_follow()
-{
-    Editing editing(lsp_settings(true));
-    started(editing);
-    auto &server = editing.language_server();
-    applied(editing.controller(), app::OpenDocument{path_of(note_path)});
-    const auto &sent = server.sent();
-    expect(contains(last_sent(editing), R"("method":"shutdown")") &&
-               contains(sent.at(sent.size() - 2), R"("method":"textDocument/didClose")"),
-           "a document without a command closes the open documents and shuts the server down");
-    static_cast<void>(
-        delivered(editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":2,"result":null})"}));
-    expect(server.stops() == 1 && server.launches().size() == 1,
-           "plain text starts no server after the shutdown");
-    applied(editing.controller(), app::SwitchTab{0});
-    expect(server.launches().size() == 2, "coming back to the C++ tab starts the server again");
 }
 
 // 失敗は 1 行の知らせ・自動の再起動は 3 回まで・超えたら止まり `:set lsp` で再開（決定 6）。
@@ -688,11 +670,13 @@ void verify_did_close()
     languages.files().hold_at(std::string(script_path), Bytes{std::string("x = 1\n")});
     started(languages);
     applied(languages.controller(), app::OpenDocument{path_of(script_path)});
-    const auto &order = languages.language_server().sent();
-    expect(contains(order.back(), R"("method":"shutdown")") &&
-               contains(order.at(order.size() - 2), R"("method":"textDocument/didClose")") &&
-               contains(order.at(order.size() - 2), source_uri),
-           "a document of a second language closes the first language's documents and server");
+    const auto &other = languages.language_server();
+    expect(other.notifications("shutdown").empty() &&
+               other.notifications("textDocument/didClose").empty() &&
+               other.launches().size() == 2 &&
+               other.started_slots().back() == app::LanguageServerSlot::second,
+           "a document of a second language starts its own server and keeps the first one "
+           "(ADR 0161 2026-11-20)");
 }
 
 // 決定 1（R5-1）: 名前を付けて保存で URI が変われば、古い URI を閉じて新しい URI を今の版で開き、
@@ -1228,12 +1212,14 @@ void verify_requests_need_a_sent_document()
     expect(editing.controller().request_hover(), "the sent C++ document still asks");
     applied(editing.controller(), app::OpenDocument{path_of(note_path)});
     const std::size_t sent = editing.language_server().sent().size();
-    expect(contains(last_sent(editing), R"("method":"shutdown")") &&
+    expect(editing.language_server().notifications("shutdown").empty() &&
                !editing.controller().request_hover() &&
                !editing.controller().request_definition() &&
                editing.language_server().sent().size() == sent,
-           "a document of another language shuts the server down and asks nothing meanwhile");
+           "a document of a language without a command keeps the server and asks nothing");
     applied(editing.controller(), app::SwitchTab{0});
+    expect(editing.controller().request_hover(), "the C++ document asks again when it is back");
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
     expect(!editing.controller().request_hover(),
            "the C++ document asks nothing while the server is shutting down");
 }
@@ -1996,7 +1982,7 @@ void verify_language_server_contracts()
     verify_ex_lsp_option();
     verify_lifecycle();
     verify_switch();
-    verify_language_follow();
+    verify_language_server_slots();
     verify_restart_limit();
     verify_failures_reset();
     verify_start_refused();

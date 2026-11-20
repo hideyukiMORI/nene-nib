@@ -30,6 +30,7 @@
 #include "LanguageAnswers.hpp"
 #include "LanguageCompletion.hpp"
 #include "LanguageServerPhase.hpp"
+#include "LanguageServerSlot.hpp"
 #include "LineEnding.hpp"
 #include "LspCompletionList.hpp"
 #include "LspDiagnostics.hpp"
@@ -242,7 +243,11 @@ void EditorController::close_completion()
     {
         return;
     }
-    cancel_lsp_requests(LspRequestKind::completion);
+    // 補完の要求はどの席に残っていても取り消す（席は文書の言語ごと・段 S2）。
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        cancel_lsp_requests(slot, LspRequestKind::completion);
+    }
     completion_.reset();
     forget_completion_answer();
     // Vim の INSERT の補完は engine の側も閉じる（#1845・選んでいた語は確定・記録には打った本文と
@@ -311,7 +316,7 @@ void EditorController::open_triggered_completion(std::string_view typed)
         return;
     }
     const core::Offset caret = state_.selection().caret;
-    for (const std::string &trigger : language_server_.abilities.trigger_characters)
+    for (const std::string &trigger : active_language_server().abilities.trigger_characters)
     {
         if (trigger.empty() || !trigger.ends_with(typed) || caret.value < trigger.size())
         {
@@ -401,7 +406,7 @@ void EditorController::settle_completion()
     }
     const bool answered = take_completion_answer(session);
     // 言語サーバーが止まったら、もう答えは届かない（待っているだけの面はここで閉じる）。
-    if (language_server_.phase != LanguageServerPhase::running)
+    if (active_language_server().phase != LanguageServerPhase::running)
     {
         session.awaiting = false;
     }
@@ -582,8 +587,8 @@ core::OffsetRange EditorController::completion_range(core::Offset origin,
     {
         return prefix;
     }
-    const auto placed =
-        core::lsp_range_to_offsets(state_.text(), entry.range.value(), language_server_.encoding);
+    const auto placed = core::lsp_range_to_offsets(state_.text(), entry.range.value(),
+                                                   active_language_server().encoding);
     const auto line_of = [this](core::Offset at)
     { return state_.text().position_of(at).line.value; };
     if (!placed.has_value() || caret < placed.value().begin ||
@@ -724,7 +729,7 @@ void EditorController::settle_vim_completion(CompletionSession &session)
         return;
     }
     static_cast<void>(take_completion_answer(session));
-    if (language_server_.phase != LanguageServerPhase::running)
+    if (active_language_server().phase != LanguageServerPhase::running)
     {
         session.awaiting = false;
     }
@@ -756,7 +761,8 @@ EditorController::vim_completion_text(const core::LspRange &typed, core::Offset 
     {
         return std::nullopt;
     }
-    const auto begin = core::lsp_offset_of(state_.text(), range.start, language_server_.encoding);
+    const auto begin =
+        core::lsp_offset_of(state_.text(), range.start, active_language_server().encoding);
     if (!begin.has_value())
     {
         return std::nullopt;
@@ -771,7 +777,7 @@ EditorController::vim_completion_text(const core::LspRange &typed, core::Offset 
 std::optional<core::LspRange> EditorController::vim_completion_span(core::Offset origin,
                                                                     std::string_view original) const
 {
-    const auto encoding = language_server_.encoding;
+    const auto encoding = active_language_server().encoding;
     const auto typed = core::TextBuffer::from_utf8(original);
     if (!typed.has_value())
     {

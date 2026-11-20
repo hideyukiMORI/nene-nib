@@ -11,6 +11,8 @@
 #include "JsonValue.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerSlot.hpp"
+#include "LanguageServers.hpp"
 #include "LspDiagnostics.hpp"
 #include "LspLanguageId.hpp"
 #include "LspMessages.hpp"
@@ -159,50 +161,53 @@ published_since(const core::LspNotification &notification, std::span<const SentR
 
 // ---------------------------------------------------------------- 文書の同期と診断（ADR 0161）
 
-// running の間の apply の終わり（決定 1）。閉じたタブを閉じ、アクティブな文書が送れなくなった・
-// URI が変わったら閉じ、この意図の編集を文書ごとに 1 通に束ね、まだ送っていないアクティブな文書を
-// 開く。切り替えでは閉じない（サーバーは複数の文書を持てる）。
-void EditorController::sync_language_server_documents()
+// running の席ごとの apply の終わり（決定 1・2026-11-20 の追補）。閉じたタブを閉じ、アクティブな
+// 文書がこの席で送れなくなった（言語・URI・大きさが変わった・この席が受けなくなった）ら閉じ、この
+// 意図の編集を文書ごとに 1 通に束ね、serves（この席がアクティブな文書を受ける）ならまだ送っていない
+// アクティブな文書を開く。切り替えでは閉じない（サーバーは複数の文書を持てる・ほかの言語のタブへ
+// 移っても閉じない・段 S2）。
+void EditorController::sync_language_server_documents(LanguageServerSlot slot, bool serves)
 {
-    auto &documents = language_server_.documents;
+    auto &documents = link_of(slot).documents;
     const auto &ids = state_.autosave_ids();
     for (auto document = documents.begin(); document != documents.end();)
     {
         if (std::ranges::find(ids, document->tab) == ids.end())
         {
-            close_language_server_document(*document, true);
+            close_language_server_document(slot, *document, true);
             document = documents.erase(document);
             continue;
         }
         ++document;
     }
     const AutosaveId active = ids.at(state_.active_tab());
-    const auto uri = language_server_uri();
+    const auto uri = serves ? language_server_uri(slot) : std::nullopt;
     const auto opened = [active](const LanguageServerDocument &document)
     { return document.tab == active; };
     const auto found = std::ranges::find_if(documents, opened);
     if (found != documents.end() && (!uri.has_value() || found->uri != uri.value()))
     {
-        close_language_server_document(*found, true);
+        close_language_server_document(slot, *found, true);
         documents.erase(found);
     }
     for (LanguageServerDocument &document : documents)
     {
-        flush_language_server_changes(document);
+        flush_language_server_changes(slot, document);
     }
     if (uri.has_value() && std::ranges::none_of(documents, opened))
     {
-        open_language_server_document(active, uri.value());
+        open_language_server_document(slot, active, uri.value());
     }
 }
 
-// アクティブな文書を送れるなら、その URI（決定 1）。パスのある文書で、言語が起きている子の言語
-// （命令がある）で、本文が上限以下のとき。無題は送らない。
-std::optional<std::string> EditorController::language_server_uri() const
+// アクティブな文書をこの席へ送れるなら、その URI（決定 1）。パスのある文書で、言語がこの席の子の
+// 言語（命令がある）で、本文が上限以下のとき。無題は送らない。
+std::optional<std::string> EditorController::language_server_uri(LanguageServerSlot slot) const
 {
     const auto &path = state_.document().path;
     if (!path.has_value() ||
-        language_server_.language != std::optional<core::Language>{state_.language()} ||
+        language_servers_.links.at(slot_index(slot)).language !=
+            std::optional<core::Language>{state_.language()} ||
         state_.text().size_bytes() > language_server_document_limit)
     {
         return std::nullopt;
@@ -210,23 +215,27 @@ std::optional<std::string> EditorController::language_server_uri() const
     return document_uri(path.value());
 }
 
-void EditorController::open_language_server_document(AutosaveId tab, std::string uri)
+void EditorController::open_language_server_document(LanguageServerSlot slot, AutosaveId tab,
+                                                     std::string uri)
 {
-    auto &link = language_server_;
+    auto &link = link_of(slot);
     const auto version = static_cast<std::uint64_t>(state_.history().revision());
     const auto &path = state_.document().path;
     const std::string_view language_id =
         core::lsp_language_id(link.language.value_or(state_.language()),
                               path.has_value() ? path.value().text() : std::string_view{});
-    ports_.language_server.send(core::lsp_notification_body(
-        "textDocument/didOpen", did_open_params(uri, language_id, version, state_.text())));
+    ports_.language_server.send(
+        slot,
+        core::lsp_notification_body("textDocument/didOpen",
+                                    did_open_params(uri, language_id, version, state_.text())));
     link.documents.push_back(
         LanguageServerDocument{tab, std::move(uri), {SentRevision{version, state_.text()}}});
 }
 
 // この意図の変更を 1 通の `didChange` に束ねる（決定 1）。version は意図の後の revision()。
 // 意図の途中で切り替えた文書は脇の束の本文と版で送る。
-void EditorController::flush_language_server_changes(LanguageServerDocument &document)
+void EditorController::flush_language_server_changes(LanguageServerSlot slot,
+                                                     LanguageServerDocument &document)
 {
     if (document.changes.empty())
     {
@@ -256,12 +265,14 @@ void EditorController::flush_language_server_changes(LanguageServerDocument &doc
         return;
     }
     auto changes = std::exchange(document.changes, {});
-    if (language_server_.abilities.sync == DocumentSync::full)
+    if (link_of(slot).abilities.sync == DocumentSync::full)
     {
         changes = {whole_change_json(text)};
     }
-    ports_.language_server.send(core::lsp_notification_body(
-        "textDocument/didChange", did_change_params(document.uri, version, std::move(changes))));
+    ports_.language_server.send(
+        slot,
+        core::lsp_notification_body("textDocument/didChange",
+                                    did_change_params(document.uri, version, std::move(changes))));
     document.sent.push_back(SentRevision{version, text});
     if (document.sent.size() > language_server_kept_revisions)
     {
@@ -270,24 +281,48 @@ void EditorController::flush_language_server_changes(LanguageServerDocument &doc
 }
 
 // 閉じた文書の診断は片付ける（その子の診断はもう新しくならない）。閉じたタブなら置く先が無い。
-void EditorController::close_language_server_document(const LanguageServerDocument &document,
+void EditorController::close_language_server_document(LanguageServerSlot slot,
+                                                      const LanguageServerDocument &document,
                                                       bool notify)
 {
     if (notify)
     {
         ports_.language_server.send(
+            slot,
             core::lsp_notification_body("textDocument/didClose", did_close_params(document.uri)));
     }
     place_diagnostics(document.tab, {}, 0, core::DiagnosticsCount::complete);
 }
 
-void EditorController::close_language_server_documents(bool notify)
+void EditorController::close_language_server_documents(LanguageServerSlot slot, bool notify)
 {
-    for (const LanguageServerDocument &document : language_server_.documents)
+    auto &documents = link_of(slot).documents;
+    for (const LanguageServerDocument &document : documents)
     {
-        close_language_server_document(document, notify);
+        close_language_server_document(slot, document, notify);
     }
-    language_server_.documents.clear();
+    documents.clear();
+}
+
+// アクティブな文書を `didOpen` してある席（文書は高々 1 つの席にだけ開く）。子が居なければ欄を
+// 1 つ読むだけで値なし。
+std::optional<LanguageServerSlot> EditorController::holding_slot() const
+{
+    if (language_servers_.awake == 0)
+    {
+        return std::nullopt;
+    }
+    const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
+    const auto &links = language_servers_.links;
+    const auto found = std::ranges::find_if(language_server_slots,
+                                            [&links, active](LanguageServerSlot slot)
+                                            {
+                                                return std::ranges::any_of(
+                                                    links.at(slot_index(slot)).documents,
+                                                    [active](const LanguageServerDocument &document)
+                                                    { return document.tab == active; });
+                                            });
+    return found != language_server_slots.end() ? std::optional{*found} : std::nullopt;
 }
 
 // 編集の 1 本（replace・undo・redo）が本文を置く前に呼ぶ（決定 1・3）。診断はマークと同じ規則で
@@ -300,21 +335,18 @@ void EditorController::language_server_edit(const core::Edit &edit)
         state_ = state_.with_diagnostics(core::diagnostics_adjusted(state_.diagnostics(), edit),
                                          state_.diagnostics_version(), state_.diagnostics_count());
     }
-    auto &documents = language_server_.documents;
-    if (documents.empty())
+    const auto slot = holding_slot();
+    if (!slot.has_value())
     {
         return;
     }
+    auto &link = link_of(slot.value());
     const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
-    const auto found = std::ranges::find_if(documents, [active](const auto &document)
+    const auto found = std::ranges::find_if(link.documents, [active](const auto &document)
                                             { return document.tab == active; });
-    if (found == documents.end())
-    {
-        return;
-    }
     // 種類 none のサーバーへは変更を送らない。full は送るときに全文の 1 つへ置き換えるので、
     // 位置を写さずに数だけを積む（ADR 0161 の 2026-11-20 の追補）。
-    switch (language_server_.abilities.sync)
+    switch (link.abilities.sync)
     {
     case DocumentSync::none:
         return;
@@ -322,7 +354,7 @@ void EditorController::language_server_edit(const core::Edit &edit)
         found->changes.emplace_back();
         break;
     case DocumentSync::incremental:
-        found->changes.push_back(change_json(state_.text(), edit, language_server_.encoding));
+        found->changes.push_back(change_json(state_.text(), edit, link.encoding));
         break;
     }
     found->sent.back().edits.push_back(edit);
@@ -347,34 +379,38 @@ bool EditorController::same_document_uri(std::string_view sent, std::string_view
 // ので送らず、apply の終わりの同期が閉じて開き直す。本文は送った本文（改行の形を写す前）。
 void EditorController::language_server_saved(const core::FilePath &path)
 {
-    auto &link = language_server_;
-    if (link.abilities.save == SaveNotice::none || link.documents.empty())
+    const auto slot = holding_slot();
+    if (!slot.has_value() || link_of(slot.value()).abilities.save == SaveNotice::none)
     {
         return;
     }
+    auto &link = link_of(slot.value());
     const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
     const auto found = std::ranges::find_if(link.documents, [active](const auto &document)
                                             { return document.tab == active; });
-    if (found == link.documents.end() || found->uri != document_uri(path))
+    if (found->uri != document_uri(path))
     {
         return;
     }
-    flush_language_server_changes(*found);
-    ports_.language_server.send(core::lsp_notification_body(
-        "textDocument/didSave",
-        did_save_params(found->uri,
-                        link.abilities.save == SaveNotice::with_text
-                            ? std::optional<std::string>{state_.text().text_range(
-                                  core::Offset{0}, core::Offset{state_.text().size_bytes()})}
-                            : std::nullopt)));
+    flush_language_server_changes(slot.value(), *found);
+    ports_.language_server.send(
+        slot.value(),
+        core::lsp_notification_body(
+            "textDocument/didSave",
+            did_save_params(found->uri,
+                            link.abilities.save == SaveNotice::with_text
+                                ? std::optional<std::string>{state_.text().text_range(
+                                      core::Offset{0}, core::Offset{state_.text().size_bytes()})}
+                                : std::nullopt)));
 }
 
 // `publishDiagnostics`（決定 2・3・5）。uri で送った文書を引き、届いた版の本文で位置を写す。版が
 // 最後に送った版より古ければ、その版の本文で写し直してから、その版の後の編集で順にずらして置く。
 // 覚えていない版・送った覚えのない文書の診断は捨てる。
-void EditorController::receive_diagnostics(const core::LspNotification &notification)
+void EditorController::receive_diagnostics(LanguageServerSlot slot,
+                                           const core::LspNotification &notification)
 {
-    auto &link = language_server_;
+    auto &link = link_of(slot);
     const std::string *uri = notified_uri(notification);
     const auto found =
         uri == nullptr ? link.documents.end()

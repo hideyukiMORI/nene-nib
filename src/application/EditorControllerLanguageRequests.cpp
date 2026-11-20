@@ -10,6 +10,8 @@
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerPhase.hpp"
+#include "LanguageServerSlot.hpp"
+#include "LanguageServers.hpp"
 #include "LspAnswerFailure.hpp"
 #include "LspAnswers.hpp"
 #include "LspCompletionContext.hpp"
@@ -23,6 +25,7 @@
 #include "LspResponse.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
+#include "ServerAbilities.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -137,43 +140,44 @@ locations_of(const std::expected<core::JsonValue, core::LspError> &result)
 bool EditorController::request_completion(std::uint64_t session,
                                           std::optional<std::string_view> trigger)
 {
-    const LanguageServerDocument *document =
-        requestable_document(language_server_.abilities.completion);
-    if (document == nullptr)
+    const auto slot = requestable_slot(&ServerAbilities::completion);
+    if (!slot.has_value())
     {
         return false;
     }
-    auto params = position_params(document->uri, request_position());
+    const LanguageServerDocument &document = active_document_of(slot.value());
+    auto params = position_params(document.uri, request_position(slot.value()));
     params.emplace_back("context", completion_context(trigger));
-    send_language_request(LspRequestKind::completion, "textDocument/completion",
+    send_language_request(slot.value(), LspRequestKind::completion,
                           core::JsonValue{std::move(params)},
-                          LspCompletionContext{.session = session, .document = document->tab});
+                          LspCompletionContext{.session = session, .document = document.tab});
     return true;
 }
 
 bool EditorController::request_hover()
 {
-    const LanguageServerDocument *document = requestable_document(language_server_.abilities.hover);
-    if (document == nullptr)
+    const auto slot = requestable_slot(&ServerAbilities::hover);
+    if (!slot.has_value())
     {
         return false;
     }
-    send_language_request(LspRequestKind::hover, "textDocument/hover",
-                          core::JsonValue{position_params(document->uri, request_position())},
+    send_language_request(slot.value(), LspRequestKind::hover,
+                          core::JsonValue{position_params(active_document_of(slot.value()).uri,
+                                                          request_position(slot.value()))},
                           request_context());
     return true;
 }
 
 bool EditorController::request_definition()
 {
-    const LanguageServerDocument *document =
-        requestable_document(language_server_.abilities.definition);
-    if (document == nullptr)
+    const auto slot = requestable_slot(&ServerAbilities::definition);
+    if (!slot.has_value())
     {
         return false;
     }
-    send_language_request(LspRequestKind::definition, "textDocument/definition",
-                          core::JsonValue{position_params(document->uri, request_position())},
+    send_language_request(slot.value(), LspRequestKind::definition,
+                          core::JsonValue{position_params(active_document_of(slot.value()).uri,
+                                                          request_position(slot.value()))},
                           request_context());
     return true;
 }
@@ -183,50 +187,58 @@ const LanguageAnswers &EditorController::language_answers() const noexcept
     return state_.language_answers();
 }
 
-// 要求を出せるアクティブな文書（決定 2・3）。running で、能力があり、アクティブな文書を今の URI で
-// `didOpen` してあるとき。無題・上限を超えた本文・言語の違う文書・まだ開いていない文書では
-// 値なし。出せるなら、要求より先に届くように未送信の変更を流す。
-LanguageServerDocument *EditorController::requestable_document(bool ability)
+// 要求を出せるアクティブな文書の席（決定 2・3・2026-11-20 の追補）。アクティブな文書を開いた席が
+// running で、能力（ability の欄）があり、その文書を今の URI で `didOpen` してあるとき。無題・
+// 上限を超えた本文・言語の違う文書・まだ開いていない文書では値なし。出せるなら、要求より先に
+// 届くように未送信の変更を流す。補完・hover・定義は文書の言語の席へ出る。
+std::optional<LanguageServerSlot> EditorController::requestable_slot(bool ServerAbilities::*ability)
 {
-    auto &link = language_server_;
-    if (link.phase != LanguageServerPhase::running || !ability)
+    const auto slot = holding_slot();
+    if (!slot.has_value())
     {
-        return nullptr;
+        return std::nullopt;
     }
-    const auto uri = language_server_uri();
-    if (!uri.has_value())
+    auto &link = link_of(slot.value());
+    if (link.phase != LanguageServerPhase::running || !(link.abilities.*ability))
     {
-        return nullptr;
+        return std::nullopt;
     }
+    const auto uri = language_server_uri(slot.value());
+    LanguageServerDocument &document = active_document_of(slot.value());
+    if (!uri.has_value() || document.uri != uri.value())
+    {
+        return std::nullopt;
+    }
+    flush_language_server_changes(slot.value(), document);
+    return slot;
+}
+
+// 席が開いたアクティブな文書（holding_slot が見つけた席でだけ呼ぶ）。
+LanguageServerDocument &EditorController::active_document_of(LanguageServerSlot slot)
+{
     const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
-    const auto found =
-        std::ranges::find_if(link.documents, [active, &uri](const LanguageServerDocument &document)
-                             { return document.tab == active && document.uri == uri.value(); });
-    if (found == link.documents.end())
-    {
-        return nullptr;
-    }
-    flush_language_server_changes(*found);
-    return &*found;
+    auto &documents = link_of(slot).documents;
+    return *std::ranges::find_if(documents, [active](const LanguageServerDocument &document)
+                                 { return document.tab == active; });
 }
 
 // 同じ種類の古い要求を取り消してから送る（決定 1）。遅れて届いた古い答えは id が表に無いので
 // 捨てられる。
-void EditorController::send_language_request(LspRequestKind kind, std::string_view method,
+void EditorController::send_language_request(LanguageServerSlot slot, LspRequestKind kind,
                                              core::JsonValue params, PendingLspContext context)
 {
-    cancel_lsp_requests(kind);
-    send_lsp_request(kind, method, params, std::move(context));
+    cancel_lsp_requests(slot, kind);
+    send_lsp_request(slot, kind, params, std::move(context));
 }
 
-void EditorController::cancel_lsp_requests(LspRequestKind kind)
+void EditorController::cancel_lsp_requests(LanguageServerSlot slot, LspRequestKind kind)
 {
-    auto &pending = language_server_.pending;
+    auto &pending = link_of(slot).pending;
     for (const PendingLspRequest &request : pending)
     {
         if (request.kind == kind)
         {
-            send_lsp_cancel(request.id);
+            send_lsp_cancel(slot, request.id);
         }
     }
     std::erase_if(pending,
@@ -234,10 +246,10 @@ void EditorController::cancel_lsp_requests(LspRequestKind kind)
 }
 
 // 要求の位置はキャレット（本文の位置 → Position は core の lsp_position_of の 1 本）。
-core::LspPosition EditorController::request_position() const
+core::LspPosition EditorController::request_position(LanguageServerSlot slot) const
 {
     return core::lsp_position_of(state_.text(), state_.selection().caret,
-                                 language_server_.encoding);
+                                 language_servers_.links.at(slot_index(slot)).encoding);
 }
 
 LspRequestContext EditorController::request_context() const

@@ -76,3 +76,15 @@ L0（ADR 0160）で port と JSON-RPC と設定が揃う。最初に見せる機
 - **打鍵の道（決定 1）**: `lsp_position_of` / `lsp_offset_of` は行の全体を写さない。utf-8 は桁の後ろの最大 4 バイトの窓だけ（境目へ寄せる・`leading_continuations`）、utf-16 は行頭から桁まで（`lsp_offset_of` は 1 単位 3 バイトの上限で切り `whole_code_points` で端を落とした窓）だけを読む。utf-16 の写しは桁に比例し、行の長さには比例しない。
 - **契約**: `--lsp-messages`（`languageId` の表・位置の写しの往復）・`--language-server`（同期の種類・`didSave`・URI の綴りの揺れ・起動の失敗の知らせ・表に無い命令の行）・新しい scope `--lsp-sync-property`（固定 seed の編集の列〔打鍵・削除・語の削除・キャレット・CRLF と代理対と結合文字の貼り付け・undo / redo・Vim の鍵とマクロと `.`〕を流し、送った `didOpen` に `didChange` の列を `lsp_offset_of` で当てた本文が controller の本文と同じ・incremental の utf-16 と utf-8・full）。
 - **残る限界**: lone CR の文書（#1049 で残す）は LSP では改行だが Nib の行の索引は `\n` だけなので、行の番号がずれる（まれ・性質の試験は lone CR を作らない列で回す）。
+
+## 追補（2026-11-20・#1909・設計席の決め・LSP 段 S2）: 言語ごとにサーバーを持ち、タブの切り替えで止めない
+
+調べ（`lsp-gap-survey.md` §2 の穴 1・6）の手当て。決定 1 の「同時に起こすのは 1 言語まで（2 つ目の言語の文書を開いたら前のを `shutdown`）」を改める。port の形は ADR 0160 の同じ日の追補。
+
+- **つながりは席ごと**: controller は席（`LanguageServerSlot`・上限 4）ごとに `LanguageServerLink` を 1 つ持つ（`LanguageServers`）。文書を開いた・アクティブになったとき、その言語の命令があり、その文書を受ける席（`serving_slot`）が無ければ、空いた席で起こす。受ける席は「子が居て止めに向かっていない同じ言語の席」で、設定に `root` があれば起こしたときの設定の `root` が同じ席だけ（無ければ最初の文書のフォルダで起きた同じ言語の席が受ける・root の決め方は決定 1 のまま・印で探すのは段 S3）。同じ言語の席が 2 つあれば最後に使った席。
+- **止めない**: 言語の違うタブ・命令の無い言語のタブへ移っても、どの席も止めない。`didOpen` した文書の `didClose` は、タブを閉じる・言語が変わる（`:set ft=`・その席が受けなくなる）・URI や大きさが変わる・席を譲るときだけ。診断は文書の値のまま残る。
+- **席が満ちたら譲る**: 空いた席が無ければ、アクティブな文書で最後に使った順（`LanguageServerLink.used`・reconcile が受ける席に印を打つ）で最も前の席を `shutdown` して譲らせ（その席の文書は `didClose`）、`shutdown` の答えの後の reconcile が空いた席で起こす。止めに向かっている席があれば、その終わりを待つ。
+- **失敗は言語ごと**: 続けた失敗の数（3 回）と `given_up` は言語ごとの控え `LanguageServerTrouble`。自動の再起動は同じ席・同じ root で起こす。ある言語の命令の誤りでほかの言語の席を止めない。`:set lsp`（と設定の面でオンにすること）は全部の言語の控えを消す。
+- **要求の振り分け**: 補完・hover・定義・`didChange`・`didSave` は、アクティブな文書を開いた席（`holding_slot`）へ。答えを待つ要求の表は席ごとで、id は席をまたいで一意の通し番号。答えはそれを出した席の表だけで引く（ほかの席から届いた同じ id の答えは捨てる）。能力・位置の単位はアクティブな文書を受ける席のもの（`active_language_server`）。
+- **オフの道**: `LanguageServers.awake`（idle でない席の印・立てるのは起こす 1 か所・消すのは止める 1 か所）が 0 なら、reconcile・collect・編集・保存の道は欄を 1 つ読むだけで抜ける（決定 9 の費用は変わらない）。
+- **契約**: `--language-server` の `verify_language_follow`（命令の無い言語のタブへ移っても止めず、診断が残り、戻っても起こし直さない・前の「止める」契約を置き換えた）・`verify_two_languages_at_once`・`verify_answers_by_slot`・`verify_failures_by_language`・`verify_slot_yield`・`verify_filetype_change`（`tests/unit/LanguageServerSlotTests.cpp`）。
