@@ -125,6 +125,7 @@ class VisualTextView final
     grid_point(core::TextCaret caret) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
     grid_rows(core::LineNumber number) const;
+    [[nodiscard]] bool unbroken(core::LineNumber number) const;
     [[nodiscard]] std::expected<core::TextLocation, TextLayoutFailure>
     grid_location(core::TextCaret caret) const;
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure>
