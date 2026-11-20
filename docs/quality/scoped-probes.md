@@ -194,13 +194,17 @@ OperationChoiceWorkload閉enum10値、旧138条件の定義/順を保持し登�
 
 ```powershell
 . ./eng/toolchain.ps1
-cmake --build build-release --target nib_scroll_probe -j 6
+cmake --build build-release --target nib_scroll_probe -j 4
 build-release/nib_scroll_probe.exe nowrap-long-wheel3 300 out/scroll/nowrap-long-wheel3.json
 ```
 
 道は `wrap-wheel3`（10,000 行の .cpp・ScrollLines 3）・`nowrap-long-wheel3`（15,000 字 × 300 行・nowrap）・`page-down`（通常モードの PgDn）・`page-wheel`（WHEEL_PAGESCROLL）・`vim-page`（Vim の `<C-f>`）・`grid-ascii-wheel3`（16.8 MB の ASCII の 1 行・格子）・`grid-mixed-wheel3`（16 MB の日本語と ASCII の混じった 1 行・格子・1 刻みが数百 ms なので刻みを少なく）。
 
-最初の値（2026-11-20・main `092e703f` に probe だけを足した Release・負荷 6〜45%・ほかの席が動いている機械で、桁を読む値）:
+道を開いた後に設定（nowrap・格子）が道の名前どおりか確かめ、違えば測らずに終了コード 1 で終わる。
+
+下の表は**基準値ではない**。比較の基準に使わず、別の機械や負荷の値と比べない（前後の比較は同じ機械で続けて測る）。
+
+最初の値（2026-11-20・測った commit は main `092e703f` に probe だけを足した Release＝#1905 の枝の `b77e3cfc` と同じ製品・負荷 6〜45%・ほかの席が動いている機械で、桁を読む値）:
 
 | 道 | 刻み | 合計の中央値 / 最大 (ms) | apply | frame | draw |
 |---|---|---|---|---|---|
@@ -213,3 +217,5 @@ build-release/nib_scroll_probe.exe nowrap-long-wheel3 300 out/scroll/nowrap-long
 | grid-mixed-wheel3 | 20 | 324.683 / 358.317 | 260.300 | 63.690 | 0.003 |
 
 （区間の列は中央値。）調べの席 A の probe（`D:\NeNeNib\outputs\20261120\scroll-audit.md`）は `frame()` を `begin_frame` の前に作っていたので、PgDn と WHEEL_PAGESCROLL で layout を 2 回組む形に見えた。製品の順では frame の layout は描画の保持に入り、2 回組むのは apply が layout を問う道（Vim の `<C-f>` `<C-d>` の画面行の問い）だけ。
+
+#1902（描く前に作った layout を行ごとに残す・`fix/1902-pending-layouts-per-line` の `52f0743e`）の後の `vim-page` は 1.963 / 2.965（apply 1.848・frame 0.070・draw 0.045・負荷 9/7/12）。ほかの道は変わらない。
