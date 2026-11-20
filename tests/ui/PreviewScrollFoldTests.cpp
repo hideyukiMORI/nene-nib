@@ -10,6 +10,7 @@
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
 #include "Offset.hpp"
+#include "PreviewAnchoredBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewBlockTops.hpp"
 #include "PreviewCodeColors.hpp"
@@ -39,6 +40,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 #include <wincodec.h>
@@ -156,8 +158,12 @@ wic_target(Microsoft::WRL::ComPtr<IWICBitmap> &bitmap)
 }
 
 // 刻みごとの位置（文書の最初からの物理画素）と、枠の上端の囲みのコードの行（文書の通しの番号・
-// 囲みの外は 0）。
+// 囲みの外は 0）。先頭は歩き始める前の位置。
 using Walked = std::vector<std::pair<float, std::size_t>>;
+// 刻みの間で application が持つ位置の写し（錨・要素の番号・nudge）。
+using Place = std::tuple<core::Offset, std::optional<std::size_t>, float>;
+// 描く枠と描く先。
+using Painter = std::pair<win32::PreviewPane *, ID2D1RenderTarget *>;
 
 // 文書の最初からの位置（物理画素）。block 0 は置き始める位置が 0、ほかは文書の全体を測った上端。
 [[nodiscard]] float absolute_of(const win32::PreviewBlockTops &whole, std::size_t block,
@@ -166,71 +172,81 @@ using Walked = std::vector<std::pair<float, std::size_t>>;
     return (block == 0 ? 0.0F : whole.top(block)) + win32::preview_pixels(nudge, 96);
 }
 
-// 答えの囲みのコードの行の通しの番号（切れは 128 行ずつ・最初の切れは要素 1）。
+// 答えの囲みのコードの行の通しの番号（切れは preview_code_piece_lines 行ずつ・最初の切れは要素
+// 1）。
 [[nodiscard]] std::size_t code_line_of(const core::MarkdownDocument &document,
                                        const application::PreviewScrollSettled &settled)
 {
-    const auto block = core::preview_anchor_block(document, settled.anchor);
-    return document.blocks.at(block).kind == core::PreviewBlockKind::code
-               ? ((block - 1U) * core::preview_code_piece_lines) + settled.lines + 1U
+    return document.blocks.at(settled.block).kind == core::PreviewBlockKind::code
+               ? ((settled.block - 1U) * core::preview_code_piece_lines) + settled.lines + 1U
                : 0U;
 }
 
-// steps 回、送り sent の frame を描いて答えを写し（application の写し）、刻みごとの位置を返す。
-// 描けなければ空。
-[[nodiscard]] Walked walk(win32::PreviewPane &pane, ID2D1RenderTarget &target,
+// place から steps.first 回、送り steps.second の frame を描いて答えを写し（application の写し・
+// 要素の番号も運ぶ）、刻みごとの位置を返す。place は歩いた後の位置になる。描けなければ空。
+[[nodiscard]] Walked walk(Painter painter,
                           const std::shared_ptr<const core::MarkdownDocument> &document,
-                          std::pair<int, std::int64_t> steps)
+                          std::pair<int, std::int64_t> steps, Place &place)
 {
     win32::PreviewTextLayouts layouts;
     const auto whole = win32::PreviewBlockTops::measure(
         *document, layouts, style_of(),
         win32::PreviewViewport{0, 400.0F, std::numeric_limits<float>::max()});
-    Walked positions;
-    core::Offset anchor{0};
-    float nudge = 0.0F;
-    std::size_t line = 0;
-    for (int step = 0; step < steps.first && whole; ++step)
+    if (!whole)
     {
-        target.BeginDraw();
-        const auto painted = pane.paint(
-            target,
+        return {};
+    }
+    auto &[anchor, block, nudge] = place;
+    const auto here = [&]
+    {
+        return absolute_of(whole.value(),
+                           application::preview_anchored_block(*document, anchor, block), nudge);
+    };
+    Walked positions{{here(), 0U}};
+    auto &[pane, target] = painter;
+    for (int step = 0; step < steps.first; ++step)
+    {
+        target->BeginDraw();
+        const auto painted = pane->paint(
+            *target,
             application::PreviewFrame{
-                document, anchor, {}, {}, nullptr, {}, std::nullopt, nudge, steps.second},
+                document, anchor, {}, {}, nullptr, {}, std::nullopt, nudge, steps.second, block},
             style_of(), area);
-        if (FAILED(target.EndDraw()) || !painted)
+        if (FAILED(target->EndDraw()) || !painted)
         {
             return {};
         }
-        if (const auto &settled = pane.settled(); settled.has_value())
+        std::size_t line = positions.back().second;
+        if (const auto &settled = pane->settled(); settled.has_value())
         {
             anchor = settled.value().anchor;
+            block = settled.value().block;
             nudge = settled.value().nudge;
             line = code_line_of(*document, settled.value());
         }
-        positions.emplace_back(
-            absolute_of(whole.value(), core::preview_anchor_block(*document, anchor), nudge), line);
+        positions.emplace_back(here(), line);
     }
     return positions;
 }
 
-// 位置が刻みごとに advance ずつ進み、最後に端で止まったか（止まる刻みは advance 未満だけ進む）。
+// 位置が刻みごとに advance（負なら上へ）ずつ動き、最後に端で止まったか（止まる刻みは advance
+// より少なく同じ向きに動く）。
 [[nodiscard]] bool steady(const Walked &positions, float advance)
 {
-    const auto moved = [&positions](std::size_t at)
-    { return positions.at(at).first - positions.at(at - 1U).first; };
+    const auto ratio = [&positions, advance](std::size_t at)
+    { return (positions.at(at).first - positions.at(at - 1U).first) / advance; };
     std::size_t at = 1;
-    while (at < positions.size() && std::fabs(moved(at) - advance) <= 0.01F)
+    while (at < positions.size() && std::fabs(ratio(at) - 1.0F) <= 0.001F)
     {
         ++at;
     }
-    if (at == positions.size() || moved(at) < -0.01F || moved(at) > advance)
+    if (at == positions.size() || ratio(at) < -0.001F || ratio(at) > 1.0F)
     {
         return false;
     }
     for (++at; at < positions.size(); ++at)
     {
-        if (std::fabs(moved(at)) > 0.01F)
+        if (std::fabs(ratio(at)) > 0.001F)
         {
             return false;
         }
@@ -238,25 +254,45 @@ using Walked = std::vector<std::pair<float, std::size_t>>;
     return true;
 }
 
-// 囲みの中の刻みで、枠の上端の行が 3 行ずつ進んだ刻みの数と、囲みの中の刻みの数。
-[[nodiscard]] std::pair<std::size_t, std::size_t> code_steps(const Walked &positions)
+// 囲みの中の刻みで、枠の上端の行が lines 行ずつ動いた刻みの数と、囲みの中の刻みの数。
+[[nodiscard]] std::pair<std::size_t, std::size_t> code_steps(const Walked &positions,
+                                                             std::int64_t lines)
 {
-    std::size_t three = 0;
+    std::size_t matched = 0;
     std::size_t inside = 0;
-    for (std::size_t at = 1; at < positions.size(); ++at)
+    for (std::size_t at = 2; at < positions.size(); ++at)
     {
-        const auto before = positions.at(at - 1U).second;
-        const auto after = positions.at(at).second;
+        const auto before = static_cast<std::int64_t>(positions.at(at - 1U).second);
+        const auto after = static_cast<std::int64_t>(positions.at(at).second);
         if (before > 0 && after > 0)
         {
             ++inside;
-            three += after == before + 3U ? 1U : 0U;
+            matched += after == before + lines ? 1U : 0U;
         }
     }
-    return {three, inside};
+    return {matched, inside};
 }
 
-// 2. 400 行の囲みと長い 1 行の段落: 1 刻みごとに行の送り × 3 だけ進み、端で止まる。戻りも同じ。
+// 下りで端まで歩き、そこから上りで先頭まで戻る。どちらも刻みごとに同じ量だけ動いて端で止まり、
+// 端で止まった後の逆向きの最初の 1 刻みはすぐ動くか。
+[[nodiscard]] bool round_trip(Painter painter,
+                              const std::shared_ptr<const core::MarkdownDocument> &document,
+                              int steps, float advance)
+{
+    Place place{core::Offset{0}, std::nullopt, 0.0F};
+    const auto down = walk(painter, document, {steps, 3}, place);
+    const auto up = walk(painter, document, {steps, -3}, place);
+    const auto back = walk(painter, document, {1, 1}, place);
+    const auto fine = walk(painter, document, {steps * 3, -1}, place);
+    return down.size() == static_cast<std::size_t>(steps) + 1U && steady(down, advance) &&
+           up.size() == down.size() && steady(up, -advance) &&
+           std::fabs(up.at(1).first - up.at(0).first + advance) <= 0.01F && back.size() == 2U &&
+           std::fabs(back.at(1).first - back.at(0).first - (advance / 3.0F)) <= 0.01F &&
+           steady(fine, -advance / 3.0F);
+}
+
+// 2. 400 行の囲み・長い 1 行の段落・空の項目の並び（同じ source_begin の要素・レビュー M1）:
+// 1 刻みごとに行の送り × 3 だけ動き、端で止まる。上りも同じで、端の後の逆向きはすぐ動く。
 void check_walks()
 {
     Microsoft::WRL::ComPtr<IWICBitmap> bitmap;
@@ -269,23 +305,32 @@ void check_walks()
         expect(false, "the preview pane prepares for the walks");
         return;
     }
+    const Painter painter{&pane, target.Get()};
     const auto advance = 3.0F * win32::preview_line_pixels(style_of());
     const auto fence = parsed(long_fence());
     const auto paragraphs = parsed(long_paragraphs(40));
-    if (fence == nullptr || paragraphs == nullptr)
+    const auto items =
+        parsed(long_paragraphs(2) + "-\n-\n-\n-\n\n***\n\n***\n\n" + long_paragraphs(2));
+    if (fence == nullptr || paragraphs == nullptr || items == nullptr)
     {
         expect(false, "the walk documents parse");
         return;
     }
-    const auto down = walk(pane, *target.Get(), fence, {200, 3});
-    const auto [three, inside] = code_steps(down);
-    expect(down.size() == 200U && steady(down, advance),
+    Place place{core::Offset{0}, std::nullopt, 0.0F};
+    const auto down = walk(painter, fence, {200, 3}, place);
+    const auto [three, inside] = code_steps(down, 3);
+    expect(down.size() == 201U && steady(down, advance),
            "every wheel step moves the fence by three lines until the end");
     expect(inside > 120U && three == inside,
            "the line at the top of the frame moves three lines a step through every piece");
-    const auto prose = walk(pane, *target.Get(), paragraphs, {400, 3});
-    expect(prose.size() == 400U && steady(prose, advance),
-           "every wheel step moves long one-line paragraphs by three lines until the end");
+    const auto up = walk(painter, fence, {200, -3}, place);
+    const auto [back, inside_up] = code_steps(up, -3);
+    expect(steady(up, -advance) && inside_up > 120U && back == inside_up,
+           "going up moves the fence back three lines a step through every piece");
+    expect(round_trip(painter, paragraphs, 400, advance),
+           "long one-line paragraphs move steadily both ways and turn at once at the ends");
+    expect(round_trip(painter, items, 120, advance),
+           "elements sharing one source position never move the wrong way nor jump");
 }
 
 constexpr std::int32_t shift = 12;

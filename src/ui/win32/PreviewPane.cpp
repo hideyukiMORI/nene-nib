@@ -1,7 +1,7 @@
 #include "PreviewPane.hpp"
 
-#include "DevicePixels.hpp"
 #include "MarkdownImage.hpp"
+#include "PreviewAnchoredBlock.hpp"
 #include "PreviewBlock.hpp"
 #include "PreviewBlockKind.hpp"
 #include "PreviewHitMode.hpp"
@@ -49,12 +49,6 @@ namespace
            left.nudge == right.nudge && left.through == right.through;
 }
 
-// 物理画素 → DIP（application と絵の鍵は nudge を DIP で持つ・#1894）。
-[[nodiscard]] float dips_from(float pixels, std::uint32_t dpi) noexcept
-{
-    return dpi == 0 ? pixels
-                    : pixels * static_cast<float>(core::reference_dpi) / static_cast<float>(dpi);
-}
 } // namespace
 
 std::expected<const PreviewBlockTops *, RenderFailure>
@@ -239,7 +233,8 @@ std::expected<void, RenderFailure> PreviewPane::paint(ID2D1RenderTarget &target,
     const auto width = core::width_of(area);
     const auto height = core::height_of(area);
     table_scrolls_ = frame.table_scrolls;
-    const auto block = core::preview_anchor_block(*document, frame.anchor);
+    const auto block =
+        application::preview_anchored_block(*document, frame.anchor, frame.anchor_block);
     PreviewPictureKey key{
         &target,         document,   block,           width,        height,
         style,           theme_,     frame.selection, frame.images, frame.table_scrolls,
@@ -321,7 +316,7 @@ std::expected<void, RenderFailure> PreviewPane::fold(const application::PreviewF
     if (frame.pending != 0 || !(spot.value() == from))
     {
         key.anchor = spot.value().block;
-        key.nudge = dips_from(spot.value().nudge, key.style.dpi);
+        key.nudge = preview_dips(spot.value().nudge, key.style.dpi);
     }
     return {};
 }
@@ -330,16 +325,17 @@ std::expected<float, RenderFailure> PreviewPane::span_of(const PreviewPictureKey
                                                          std::size_t index)
 {
     const auto images = key.images.lock();
-    // 高さ 0 の枠で、index と次の要素だけを置く（through）。
+    // 高さ 0 の枠で index だけを置き（through）、次の要素の上端は間だけを足す（まだ見えない次の
+    // 要素の layout を作らない・レビュー R4）。
     const PreviewViewport viewport{
-        index, static_cast<float>(key.width), 0.0F, images.get(), 0.0F, index + 2U};
-    const auto tops = PreviewBlockTops::measure(*key.document, layouts_, key.style, viewport);
+        index, static_cast<float>(key.width), 0.0F, images.get(), 0.0F, index + 1U};
+    auto tops = PreviewBlockTops::measure(*key.document, layouts_, key.style, viewport);
     if (!tops)
     {
         return std::unexpected(tops.error());
     }
-    const auto &measured = tops.value();
-    return measured.size() > index + 1U ? measured.top(index + 1U) : measured.bottom(index);
+    auto &measured = tops.value();
+    return measured.next_top(*key.document, key.style).value_or(measured.bottom(index));
 }
 
 void PreviewPane::settle(const application::PreviewFrame &frame, std::size_t block, float nudge)
@@ -348,7 +344,7 @@ void PreviewPane::settle(const application::PreviewFrame &frame, std::size_t blo
     {
         return;
     }
-    settled_ = application::PreviewScrollSettled{measured_->blocks.at(block).source_begin,
+    settled_ = application::PreviewScrollSettled{block, measured_->blocks.at(block).source_begin,
                                                  code_line_at_top(block), nudge, frame.pending};
 }
 

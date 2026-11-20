@@ -25,6 +25,7 @@ namespace nenenib::application
 // はつまみを明るく描く表（つかんでいる表か、 マウスを載せた棒の表）。nudge と pending は
 // PreviewView の写しで、ui は錨の要素の上端を -(nudge + pending × 行の送り) に置いて正規化し、
 // 変わったら PreviewScrollSettled を送る（ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。
+// anchor_block は PreviewView の写しで、錨の要素は preview_anchored_block の 1 本で引く。
 struct PreviewFrame
 {
     std::shared_ptr<const core::MarkdownDocument> document;
@@ -36,5 +37,6 @@ struct PreviewFrame
     std::optional<std::size_t> table_lit{};
     float nudge = 0.0F;
     std::int64_t pending = 0;
+    std::optional<std::size_t> anchor_block{};
 };
 } // namespace nenenib::application

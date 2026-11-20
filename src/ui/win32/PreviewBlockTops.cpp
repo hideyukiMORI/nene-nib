@@ -436,6 +436,17 @@ std::size_t PreviewBlockTops::size() const noexcept
     return first_ + tops_.size();
 }
 
+std::optional<float> PreviewBlockTops::next_top(const core::MarkdownDocument &document,
+                                                const PreviewTextStyle &style)
+{
+    const auto next = size();
+    if (bottoms_.empty() || next >= document.blocks.size())
+    {
+        return std::nullopt;
+    }
+    return bottoms_.back() + gap_before(document, next, style);
+}
+
 std::size_t PreviewBlockTops::scanned() const noexcept
 {
     return starts_.size() + (first_ > 0 ? 1U : 0U);

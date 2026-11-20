@@ -52,6 +52,10 @@ class PreviewBlockTops final
     [[nodiscard]] const std::optional<PreviewTaskBox> &task_box(std::size_t index) const;
     // 測った最後の要素の次の番号。
     [[nodiscard]] std::size_t size() const noexcept;
+    // 測った最後の要素の次の要素を置く上端（その要素の高さは測らない・間だけを足す）。次の要素が
+    // 無い・何も測っていなければ nullopt（送りを畳むときの要素の長さ・#1894 のレビュー R4）。
+    [[nodiscard]] std::optional<float> next_top(const core::MarkdownDocument &document,
+                                                const PreviewTextStyle &style);
     // measure が読んだ要素の数（錨の 1 つ前・置こうとした要素・測る範囲に入ったリストの残りの
     // 項目・#813 の契約）。
     [[nodiscard]] std::size_t scanned() const noexcept;

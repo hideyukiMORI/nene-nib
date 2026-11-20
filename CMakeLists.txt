@@ -94,7 +94,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp src/application/EditorControllerFinderPreview.cpp src/application/PreviewLines.cpp
-    src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
+    src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/PreviewAnchoredBlock.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerLinkCard.cpp src/application/EditorControllerSettings.cpp src/application/EditorControllerCompletion.cpp src/application/EditorControllerTabMenu.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
