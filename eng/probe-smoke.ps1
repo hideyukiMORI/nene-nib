@@ -35,5 +35,14 @@ if (Test-Path -LiteralPath $previewProbe) {
         Write-Host "Probe smoke failed: nib_preview_probe (exit $LASTEXITCODE) $($output -join ' ')"
     }
 }
+# #1905: nib_scroll_probe も表の外の exe。軽い道を 1 刻みだけ流して exit 0 を見る（ビルドしてあるときだけ）。
+$scrollProbe = Join-Path $buildPath 'nib_scroll_probe.exe'
+if (Test-Path -LiteralPath $scrollProbe) {
+    $output = & $scrollProbe wrap-wheel3 1 (Join-Path $outDir 'nib_scroll_probe.json') 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $failed += 'nib_scroll_probe'
+        Write-Host "Probe smoke failed: nib_scroll_probe (exit $LASTEXITCODE) $($output -join ' ')"
+    }
+}
 Write-Host "Probe smoke: $($names.Count - $failed.Count) / $($names.Count) workloads passed."
 if ($failed.Count -ne 0) { throw "Probe smoke: $($failed.Count) probe workloads failed: $($failed -join ', ')" }

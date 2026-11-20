@@ -185,3 +185,35 @@ OperationChoiceWorkload閉enum10値、旧138条件の定義/順を保持し登�
 3項目の生成・破棄1024回という各局所区間は行123/桁456で約30.48%、size_t最大値同士で約41.69%、行123456/桁654321で約29.29%短縮。encoding/endingも各入力の一部であり、数値長だけの単因子比較ではない。費用4条件と全数値は[gate-proofs 5-ea](../quality/history/5-ea-status-position-numbers-local.md)。局所率の加算/UI全体への換算はしない。共通status callerの正式key-to-frame-singleを初回5試料[0.609, 0.673, 0.551, 0.519, 0.652]msで新取得し、中央値0.609ms/基準0.906ms/上限2.906ms、欠測0。元基準内の確認であり変更前後のUI改善率ではない。他7正式指標は未測。
 
 既存148登録を保持、追加probe/enum/runner0。既存7条件を固定3利益/4費用へ分類し84runs/1680durations/3360marks/840pairsを原raw再計算。3構成21oracleと新16境界assertion、正式single5試料は別の証拠。
+
+## 本文のスクロールの 1 刻み（#1905・ADR 0082 の範囲）
+
+`nib_scroll_probe`（`tests/preview/ScrollProbe.cpp`）は窓を出さず、製品の `BodyTextLayouts`（DirectWrite）を controller の `TextLayoutPort` に結んで、本文のスクロールの 1 刻みを測る。`nib_perf_probes` は `performance_tests` が `ui_win32` に依存できない（`eng/architecture.json`）ので、`nib_preview_probe` と同じ `preview_tests` の土台に置く。正式な速さのゲート（QLT-014）と `eng/compare-probes.py` の表には入れない。CTest にも載せず、`eng/probe-smoke.ps1` が `wrap-wheel3` を 1 刻みだけ流して終了コードを見る。
+
+1 刻み = `apply(意図)`・`begin_frame` と `frame()`（製品の `draw_frame` と同じ順）・frame の各行の `get` と `glyphs_of` と `end_frame`。D2D の描画呼出しと Present は含まない。窓は 1400×1000 px・96 DPI（本文 31 行）、暖機 5 刻みの後に指定の刻みを測り、3 区間（apply・frame・draw）と合計の中央値と最大を JSON に書く。時刻は `Win32TimingAdapter` の節目だけ（ARC-007）。
+
+```powershell
+. ./eng/toolchain.ps1
+cmake --build build-release --target nib_scroll_probe -j 4
+build-release/nib_scroll_probe.exe nowrap-long-wheel3 300 out/scroll/nowrap-long-wheel3.json
+```
+
+道は `wrap-wheel3`（10,000 行の .cpp・ScrollLines 3）・`nowrap-long-wheel3`（15,000 字 × 300 行・nowrap）・`page-down`（通常モードの PgDn）・`page-wheel`（WHEEL_PAGESCROLL）・`vim-page`（Vim の `<C-f>`）・`grid-ascii-wheel3`（16.8 MB の ASCII の 1 行・格子）・`grid-mixed-wheel3`（16 MB の日本語と ASCII の混じった 1 行・格子・1 刻みが数百 ms なので刻みを少なく）。
+
+道を開いた後に設定（nowrap・格子）が道の名前どおりか確かめ、違えば測らずに終了コード 1 で終わる。
+
+下の表は**基準値ではない**。比較の基準に使わず、別の機械や負荷の値と比べない（前後の比較は同じ機械で続けて測る）。
+
+最初の値（2026-11-20・測った commit は main `092e703f` に probe だけを足した Release＝#1905 の枝の `b77e3cfc` と同じ製品・負荷 6〜45%・ほかの席が動いている機械で、桁を読む値）:
+
+| 道 | 刻み | 合計の中央値 / 最大 (ms) | apply | frame | draw |
+|---|---|---|---|---|---|
+| wrap-wheel3 | 300 | 0.247 / 0.783 | 0.011 | 0.225 | 0.010 |
+| nowrap-long-wheel3 | 300 | 6.616 / 15.780 | 3.285 | 3.304 | 0.058 |
+| page-down | 200 | 1.696 / 2.720 | 0.098 | 1.543 | 0.050 |
+| page-wheel | 200 | 1.686 / 3.020 | 0.094 | 1.541 | 0.048 |
+| vim-page | 200 | 3.529 / 6.706 | 1.917 | 1.535 | 0.053 |
+| grid-ascii-wheel3 | 300 | 0.239 / 0.580 | 0.024 | 0.210 | 0.001 |
+| grid-mixed-wheel3 | 20 | 324.683 / 358.317 | 260.300 | 63.690 | 0.003 |
+
+（区間の列は中央値。）調べの席 A の probe（`D:\NeNeNib\outputs\20261120\scroll-audit.md`）は `frame()` を `begin_frame` の前に作っていたので、PgDn と WHEEL_PAGESCROLL で layout を 2 回組む形に見えた。製品の順では frame の layout は描画の保持に入り、2 回組むのは apply が layout を問う道（Vim の `<C-f>` `<C-d>` の画面行の問い）だけ。
