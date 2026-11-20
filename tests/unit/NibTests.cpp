@@ -157,6 +157,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 136> contracts{{
     {"--finder-layout", verify_finder_layout_contracts},
     {"--finder-preview", verify_finder_preview_contracts},
     {"--preview-table", verify_preview_table_scope},
+    {"--preview-scroll", verify_preview_scroll_scope},
 }};
 
 void verify_vim_scope_contracts()
@@ -337,6 +338,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 162> scopes{{
     {"--finder-layout", verify_finder_layout_contracts},
     {"--finder-preview", verify_finder_preview_contracts},
     {"--preview-table", verify_preview_table_scope},
+    {"--preview-scroll", verify_preview_scroll_scope},
 }};
 
 // 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。

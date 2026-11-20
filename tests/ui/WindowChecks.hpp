@@ -28,6 +28,8 @@ void verify_device_warmup();
 void verify_window_timers();
 void verify_wheel_turns();
 void verify_preview_layouts();
+// PreviewScrollFoldTests.cpp（#1894・プレビューの縦の送りを要素の中まで画素で畳む）
+void verify_preview_scroll_fold();
 void verify_status_demand();
 void verify_syntax_render();
 void verify_palette_layouts();

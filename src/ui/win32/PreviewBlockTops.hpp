@@ -18,8 +18,10 @@
 namespace nenenib::ui::win32
 {
 // プレビューの見えている要素の縦の位置と字下げ（ADR 0151 の決定 16・17・ADR 0155 の決定 7）。
-// 縦は枠の上端からの物理画素で、要素の間を含む。枠の上端は錨の要素（viewport.first）の上端で、
-// 最初の要素のときだけ上の余白を空ける。錨の要素から順に高さ（layout の GetMetrics().height）を
+// 縦は枠の上端からの物理画素で、要素の間を含む。錨の要素（viewport.first）の上端は枠の上端から
+// viewport.nudge だけ上（負の位置・#1894）で、最初の要素のときだけ上の余白を空ける。描く所と
+// hit test は同じ値を読むので、要素の中の送りのずらしはここの 1
+// か所にある。錨の要素から順に高さ（layout の GetMetrics().height）を
 // 足し、枠の高さを超えたら止める（錨より前と枠の下の要素は測らない・#811 のレビュー R1）。
 // 字下げは枠の左端からの物理画素で、リストの中の要素は同じリストの深さごとの記号の列
 // （最長の記号の幅＋8 DIP と 24 DIP の大きい方・記号は深さと文字の長さごとに 1 つだけ測る）を足す。
@@ -50,6 +52,10 @@ class PreviewBlockTops final
     [[nodiscard]] const std::optional<PreviewTaskBox> &task_box(std::size_t index) const;
     // 測った最後の要素の次の番号。
     [[nodiscard]] std::size_t size() const noexcept;
+    // 測った最後の要素の次の要素を置く上端（その要素の高さは測らない・間だけを足す）。次の要素が
+    // 無い・何も測っていなければ nullopt（送りを畳むときの要素の長さ・#1894 のレビュー R4）。
+    [[nodiscard]] std::optional<float> next_top(const core::MarkdownDocument &document,
+                                                const PreviewTextStyle &style);
     // measure が読んだ要素の数（錨の 1 つ前・置こうとした要素・測る範囲に入ったリストの残りの
     // 項目・#813 の契約）。
     [[nodiscard]] std::size_t scanned() const noexcept;
