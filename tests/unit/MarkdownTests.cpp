@@ -489,6 +489,12 @@ void verify_code_blocks()
                block.code_colors.value().end();
 }
 
+// 切れ 3 つ（first・middle・last）になる囲みの行の数（切れの行の数の 2 倍と 44 行・128 なら 300）。
+[[nodiscard]] std::size_t three_piece_lines() noexcept
+{
+    return (2U * core::preview_code_piece_lines) + 44U;
+}
+
 [[nodiscard]] std::string fenced_lines(std::string_view language, std::size_t lines,
                                        std::string_view row = "x = 1")
 {
@@ -524,7 +530,9 @@ void verify_code_color_count()
            "a piece with more colours than the limit keeps one colour");
     const auto parsed = core::parse_markdown(fenced_lines("json", 1000U, "[1,2,3,4,5,6,7,8,9]"),
                                              MarkdownStop::never());
-    expect(parsed.has_value() && parsed.value().blocks.size() == 8U &&
+    expect(parsed.has_value() &&
+               parsed.value().blocks.size() ==
+                   (1000U + core::preview_code_piece_lines - 1U) / core::preview_code_piece_lines &&
                std::ranges::all_of(parsed.value().blocks, [](const PreviewBlock &block)
                                    { return block.code_colors.has_value(); }),
            "a dense JSON fence over the colour limit keeps its colours piece by piece");
@@ -650,10 +658,10 @@ void verify_code_pieces()
                over.back().text == "x = 1\n" && over.front().source_begin == Offset{6U} &&
                over.back().source_begin == Offset{6U + (lines * 6U)},
            "a fence one line over is two pieces and the second begins on its first line");
-    const auto three = blocks_of(fenced_lines("py", 300U));
+    const auto three = blocks_of(fenced_lines("py", three_piece_lines()));
     expect(pieces_are(three, {first, middle, last}) &&
-               three.at(2).text == repeated("x = 1\n", 300U - (2U * lines)),
-           "a 300 line fence is a first, a middle and a last piece");
+               three.at(2).text == repeated("x = 1\n", three_piece_lines() - (2U * lines)),
+           "a fence of two pieces and some is a first, a middle and a last piece");
     const auto starts = [](const std::string &text)
     { return core::preview_code_piece_starts(text); };
     const std::vector<std::size_t> one{0U};
@@ -699,29 +707,34 @@ void verify_code_piece_places()
 // 切れの列の写しは元の囲みと同じ文字列で、本文の位置は行を持つ切れへ写る。
 void verify_code_piece_copy()
 {
-    auto parsed = core::parse_markdown(fenced_lines("py", 300U), MarkdownStop::never());
+    auto parsed =
+        core::parse_markdown(fenced_lines("py", three_piece_lines()), MarkdownStop::never());
     if (!parsed.has_value())
     {
-        expect(false, "the 300 line fence parses");
+        expect(false, "the three piece fence parses");
         return;
     }
     const auto &document = parsed.value();
     const auto all = core::preview_selection_all(document);
-    auto whole = repeated("x = 1\n", 300U);
+    auto whole = repeated("x = 1\n", three_piece_lines());
     whole.pop_back();
     expect(all.has_value() && core::preview_selection_text(document, all.value()) == whole,
            "copying every piece gives the fence text with one newline between pieces");
-    expect(core::preview_anchor_block(document, Offset{6U + (200U * 6U)}) == 1U &&
-               core::preview_anchor_block(document, Offset{6U + (127U * 6U)}) == 0U,
-           "a body position maps to the piece that holds its line");
+    expect(
+        core::preview_anchor_block(document, Offset{6U + ((core::preview_code_piece_lines +
+                                                           (core::preview_code_piece_lines / 2U)) *
+                                                          6U)}) == 1U &&
+            core::preview_anchor_block(
+                document, Offset{6U + ((core::preview_code_piece_lines - 1U) * 6U)}) == 0U,
+        "a body position maps to the piece that holds its line");
 }
 
 // Shift+上下と Home / End は切れの列を 1 つの囲みとして動く（#1877 のレビュー R2）。文書は段落 a・
-// 300 行の囲み（切れ 1〜3）・段落 b。
+// 切れ 3 つの囲み（切れ 1〜3）・段落 b。
 void verify_code_piece_motion()
 {
-    auto parsed =
-        core::parse_markdown("a\n\n" + fenced_lines("py", 300U) + "\nb\n", MarkdownStop::never());
+    auto parsed = core::parse_markdown("a\n\n" + fenced_lines("py", three_piece_lines()) + "\nb\n",
+                                       MarkdownStop::never());
     if (!parsed.has_value() || parsed.value().blocks.size() != 5U)
     {
         expect(false, "the fence between two paragraphs parses into five elements");
@@ -754,8 +767,8 @@ void verify_code_piece_motion()
 void verify_code_piece_colors()
 {
     const auto lines = core::preview_code_piece_lines;
-    const auto three = blocks_of(fenced_lines("py", 300U, "x = 1  # c"));
-    const auto rows = repeated("x = 1  # c\n", 300U);
+    const auto three = blocks_of(fenced_lines("py", three_piece_lines(), "x = 1  # c"));
+    const auto rows = repeated("x = 1  # c\n", three_piece_lines());
     const auto expected = core::preview_code_piece_colors(core::Language::python, rows,
                                                           core::preview_code_piece_starts(rows));
     expect(three.size() == 3U && expected.size() == 3U &&

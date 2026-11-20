@@ -172,7 +172,8 @@ using Painter = std::pair<win32::PreviewPane *, ID2D1RenderTarget *>;
     return (block == 0 ? 0.0F : whole.top(block)) + win32::preview_pixels(nudge, 96);
 }
 
-// 答えの囲みのコードの行の通しの番号（切れは 128 行ずつ・最初の切れは要素 1）。
+// 答えの囲みのコードの行の通しの番号（切れは preview_code_piece_lines 行ずつ・最初の切れは要素
+// 1）。
 [[nodiscard]] std::size_t code_line_of(const core::MarkdownDocument &document,
                                        const application::PreviewScrollSettled &settled)
 {
