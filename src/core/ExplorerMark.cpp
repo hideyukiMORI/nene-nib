@@ -44,6 +44,22 @@ std::optional<SyntaxRole> explorer_mark_role(std::string_view name) noexcept
     case Language::sql:
     case Language::lua:
     case Language::dockerfile:
+    case Language::java:
+    case Language::kotlin:
+    case Language::dart:
+    case Language::zig:
+    case Language::terraform:
+    case Language::make:
+    case Language::batch:
+    case Language::ruby:
+    case Language::swift:
+    case Language::scala:
+    case Language::haskell:
+    case Language::elixir:
+    case Language::r:
+    case Language::perl:
+    case Language::vue:
+    case Language::svelte:
         return std::nullopt;
     }
     std::unreachable();

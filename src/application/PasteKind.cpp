@@ -17,6 +17,8 @@ PasteKind paste_kind_of(core::Language language, bool has_html) noexcept
     case core::Language::html:
     case core::Language::javascript:
     case core::Language::typescript:
+    case core::Language::vue:
+    case core::Language::svelte:
         return PasteKind::html_as_is;
     case core::Language::plain:
     case core::Language::c:
@@ -40,6 +42,20 @@ PasteKind paste_kind_of(core::Language language, bool has_html) noexcept
     case core::Language::sql:
     case core::Language::lua:
     case core::Language::dockerfile:
+    case core::Language::java:
+    case core::Language::kotlin:
+    case core::Language::dart:
+    case core::Language::zig:
+    case core::Language::terraform:
+    case core::Language::make:
+    case core::Language::batch:
+    case core::Language::ruby:
+    case core::Language::swift:
+    case core::Language::scala:
+    case core::Language::haskell:
+    case core::Language::elixir:
+    case core::Language::r:
+    case core::Language::perl:
         return PasteKind::text;
     }
     std::unreachable();

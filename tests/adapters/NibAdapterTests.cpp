@@ -932,22 +932,29 @@ void verify_settings_lsp_commands()
            "a second line for the same language is refused");
     // 表に無い名前の行（後の版が足す言語）は v5 では形だけ見て持ち、書き戻す（ADR 0170 の
     // 2026-11-20 の追補・#1897）。v4 は 1.0.0 と同じく拒む（D91）。
-    const std::string later = plain + "lsp.java.command=C:\\jdtls\\jdtls.exe\n"
+    const std::string later = plain + "lsp.nim.command=C:\\nim\\nimlangserver.exe\n"
                                       "lsp.c++_x-1.command=y\n"
                                       "lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n";
     const auto kept = decode_settings(later, SettingsVersion::v5);
-    expect(kept && kept.value().lsp_commands.size() == 3 &&
-               encode_settings(kept.value())
-                   .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
-                              "lsp.c++_x-1.command=y\nlsp.java.command=C:\\jdtls\\jdtls.exe\n"),
-           "v5 keeps command rows for languages it does not know and writes them back");
     expect(
-        !decode_settings(plain + "lsp.java.command=x\nlsp.java.command=y\n", SettingsVersion::v5),
-        "a second row for an unknown name is refused too");
-    const auto v4 = decode_settings(std::string(released_v4_settings) + "lsp.java.command=x\n",
-                                    SettingsVersion::v4);
-    expect(!v4 && v4.error() == SettingsFailure::malformed,
-           "v4 still refuses a command row for a language 1.0.0 does not know");
+        kept && kept.value().lsp_commands.size() == 3 &&
+            encode_settings(kept.value())
+                .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
+                           "lsp.c++_x-1.command=y\nlsp.nim.command=C:\\nim\\nimlangserver.exe\n"),
+        "v5 keeps command rows for languages it does not know and writes them back");
+    expect(!decode_settings(plain + "lsp.nim.command=x\nlsp.nim.command=y\n", SettingsVersion::v5),
+           "a second row for an unknown name is refused too");
+    // Java と Svelte は 1.0.0 の後に表へ足した言語（ADR 0154 の 2026-11-20 の追補）。v4 の読みは
+    // 1.0.0 の 26 言語のまま緩めない。
+    for (const std::string_view name : {"nim", "java", "svelte"})
+    {
+        const auto v4 = decode_settings(
+            std::format("{}lsp.{}.command=x\n", released_v4_settings, name), SettingsVersion::v4);
+        expect(!v4 && v4.error() == SettingsFailure::malformed,
+               "v4 still refuses a command row for a language 1.0.0 does not know");
+    }
+    expect(decode_settings(plain + "lsp.java.command=x\n", SettingsVersion::v5).has_value(),
+           "v5 reads a command row for a language added after 1.0.0");
     const auto old =
         decode_settings(std::string(v3_settings) + "lsp.cpp.command=x\n", SettingsVersion::v3);
     expect(!old && old.error() == SettingsFailure::malformed, "v3 rejects command lines");

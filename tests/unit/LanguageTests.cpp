@@ -274,9 +274,56 @@ void verify_extension_additions()
 }
 
 // 名前の表と逆引き（決定 3）。26 本の往復と、小文字だけを受けること。
+// 2026-11-20（ADR 0154 の追補）: Java から Svelte までの 16 言語の拡張子と名前の行（Vim の
+// filetype.vim に寄せる・`Makefile` `GNUmakefile` `Gemfile` などは名前の行・大小を問わない）。
+void verify_language_additions()
+{
+    using Row = std::pair<std::string_view, Language>;
+    constexpr std::array<Row, 33> rows{{
+        {"Main.java", Language::java},
+        {"Build.kt", Language::kotlin},
+        {"build.gradle.kts", Language::kotlin},
+        {"main.dart", Language::dart},
+        {"src\\main.zig", Language::zig},
+        {"build.zig.zon", Language::zig},
+        {"main.tf", Language::terraform},
+        {"prod.TFVARS", Language::terraform},
+        {"Makefile", Language::make},
+        {"makefile", Language::make},
+        {"GNUmakefile", Language::make},
+        {"rules.mk", Language::make},
+        {"build.bat", Language::batch},
+        {"setup.CMD", Language::batch},
+        {"app.rb", Language::ruby},
+        {"nib.gemspec", Language::ruby},
+        {"Gemfile", Language::ruby},
+        {"Rakefile", Language::ruby},
+        {"config.ru", Language::ruby},
+        {"main.swift", Language::swift},
+        {"App.scala", Language::scala},
+        {"Main.hs", Language::haskell},
+        {"app.ex", Language::elixir},
+        {"mix.exs", Language::elixir},
+        {"mix.lock", Language::elixir},
+        {"plot.R", Language::r},
+        {".Rprofile", Language::r},
+        {"tool.pl", Language::perl},
+        {"Module.pm", Language::perl},
+        {"App.vue", Language::vue},
+        {"Page.svelte", Language::svelte},
+        {"Makefile.am", Language::plain},
+        {"GemfileX", Language::plain},
+    }};
+    for (const auto &[path, language] : rows)
+    {
+        expect(core::language_of_path(path) == language,
+               "language_of_path maps the languages added on 2026-11-20");
+    }
+}
+
 void verify_names()
 {
-    constexpr std::array<std::pair<Language, std::string_view>, 26> names{{
+    constexpr std::array<std::pair<Language, std::string_view>, 42> names{{
         {Language::plain, "text"},
         {Language::markdown, "markdown"},
         {Language::html, "html"},
@@ -303,6 +350,22 @@ void verify_names()
         {Language::sql, "sql"},
         {Language::lua, "lua"},
         {Language::dockerfile, "dockerfile"},
+        {Language::java, "java"},
+        {Language::kotlin, "kotlin"},
+        {Language::dart, "dart"},
+        {Language::zig, "zig"},
+        {Language::terraform, "terraform"},
+        {Language::make, "make"},
+        {Language::batch, "dosbatch"},
+        {Language::ruby, "ruby"},
+        {Language::swift, "swift"},
+        {Language::scala, "scala"},
+        {Language::haskell, "haskell"},
+        {Language::elixir, "elixir"},
+        {Language::r, "r"},
+        {Language::perl, "perl"},
+        {Language::vue, "vue"},
+        {Language::svelte, "svelte"},
     }};
     for (const auto &[language, name] : names)
     {
@@ -316,14 +379,14 @@ void verify_names()
     expect(!core::language_of_name("Markdown").has_value() &&
                !core::language_of_name("plain").has_value() &&
                !core::language_of_name("").has_value() &&
-               !core::language_of_name("zig").has_value(),
+               !core::language_of_name("nim").has_value(),
            "language_of_name accepts only the lower-case names of the closed list");
 }
 
 // 呼び名（#1858）。名前・拡張子・別名の順に引き、小文字だけを受ける。
 void verify_language_labels()
 {
-    const std::array<std::pair<std::string_view, Language>, 12> labels{{
+    const std::array<std::pair<std::string_view, Language>, 18> labels{{
         {"cpp", Language::cpp},
         {"cxx", Language::cpp},
         {"c++", Language::cpp},
@@ -336,6 +399,12 @@ void verify_language_labels()
         {"yml", Language::yaml},
         {"c#", Language::cs},
         {"text", Language::plain},
+        {"java", Language::java},
+        {"kt", Language::kotlin},
+        {"rb", Language::ruby},
+        {"makefile", Language::make},
+        {"batch", Language::batch},
+        {"hcl", Language::terraform},
     }};
     for (const auto &[label, language] : labels)
     {
@@ -343,7 +412,7 @@ void verify_language_labels()
                "language_of_label reads names, extensions and aliases");
     }
     expect(!core::language_of_label("C++").has_value() &&
-               !core::language_of_label("zig").has_value() &&
+               !core::language_of_label("nim").has_value() &&
                !core::language_of_label("").has_value(),
            "language_of_label accepts only lower-case labels it knows");
     expect(!core::language_of_name("c++").has_value() && !core::language_of_name("py").has_value(),
@@ -372,7 +441,7 @@ void verify_ex_evaluation()
                ":set filetype? asks for the current language");
     }
     for (const std::string_view command :
-         {"set filetype=zig", "set ft=Markdown", "set ft=", "set ft=c++", "set filetype=py"})
+         {"set filetype=nim", "set ft=Markdown", "set ft=", "set ft=c++", "set filetype=py"})
     {
         expect(fails_with(command, core::ExFailure::invalid_argument),
                "a name outside the closed list is E474");
@@ -418,7 +487,7 @@ void verify_document_value()
     expect(message(run_ex(controller, "set ft=python")) == "filetype=python",
            ":set ft= answers the chosen language");
     expect(asked_language(controller) == "filetype=python", ":set ft= changes the document value");
-    expect(message(run_ex(controller, "set ft=zig")) == "E474: Invalid argument" &&
+    expect(message(run_ex(controller, "set ft=nim")) == "E474: Invalid argument" &&
                asked_language(controller) == "filetype=python",
            "E474 leaves the language as it was");
     applied(controller, app::NewTab{});
@@ -625,6 +694,7 @@ void verify_language_scope()
     verify_c_family_extensions();
     verify_batch4_extensions();
     verify_extension_additions();
+    verify_language_additions();
     verify_names();
     verify_language_labels();
     verify_dialog_pattern();
