@@ -30,8 +30,8 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > (Ctrl+,), completion (Ctrl+Space, Vim INSERT Ctrl-n) and language-server hover and go-to-definition,
 > Markdown tables, alerts, colored code blocks and links that are confirmed before they open, right-click menus
 > in the text and on tabs, easymotion jumps with small labels, the full path of a tab shown on hover,
-> `:set autoindent`, more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`)
-> and fixes.
+> `:set autoindent`, more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`),
+> preview wheel scrolling by pixels, lighter scrolling of long unwrapped lines, and fixes.
 
 <p>
   <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
@@ -196,7 +196,7 @@ records in `docs/quality/`.
   the horizontal wheel over the table (D107, [look](docs/design/2026-11-19-markdown-wide-table-scroll.md)).
   Fenced code blocks are drawn in the editor's syntax colors, chosen by the first word of the info string
   (a language name, a file extension such as `py` or `ts`, or an alias such as `c++`); long blocks are colored in
-  pieces of 128 lines, and unknown languages and blocks without an info string stay in one color (`:syntax off`
+  pieces of 64 lines, and unknown languages and blocks without an info string stay in one color (`:syntax off`
   does not apply to the preview, D105). A click on a link opens a small card under it with the real destination
   (host in bold): Enter opens `http` / `https` in the default browser, `mailto:` in the default mail app and a
   text file in a new tab, Esc cancels and Ctrl+C copies the destination; programs and unknown kinds are not
@@ -207,6 +207,9 @@ records in `docs/quality/`.
   shrunk to the pane width but never enlarged; web images and images that cannot be read stay as
   `[画像: alt]` (`[Image: alt]` in English, `[图片：alt]` in Simplified Chinese). A retained paragraph is laid out once and redrawn without changing its formatting, so scrolling
   with the preview open does not stall; the first display of a very long paragraph still takes a moment.
+  *New in 1.1.0*: the wheel moves the preview by pixels on every notch, also inside a long element such as a long
+  code block, a paragraph written as one line, an image or a table (1.0.0 moved the picture only when the element
+  at the top of the pane changed; [ADR 0155](docs/adr/0155-markdown-preview-sits-in-the-other-pane-with-ticketed-port-and-tick.md)).
 - **FR-008 encodings and line endings** — UTF-8, UTF-8 BOM, Shift_JIS and UTF-16 LE / BE with BOM
   ([ADR 0149](docs/adr/0149-utf16-with-bom-is-read-and-written-back.md)); UTF-32 is refused. CRLF / LF are kept as
   read. The encoding and line ending for saving can be chosen by clicking them in the status bar, with
@@ -274,7 +277,9 @@ records in `docs/quality/`.
   without inserting newlines. Ordinary Up/Down, Home/End and pages follow screen rows; Vim `j/k` and `0/$` keep
   logical-line meaning, `gj gk g0 g$` follow screen rows, and H/M/L and page motions use the wrapped viewport.
   Selection, IME composition and hit testing share the body layout. Per-tab wrapped scroll positions are saved
-  in `session.v2`; an existing v1 is read and preserved.
+  in `session.v2`; an existing v1 is read and preserved. *New in 1.1.0*: with `nowrap`, a wheel notch over long
+  lines no longer rebuilds each line's display text, and Vim page motions such as `<C-f>` lay out each line once
+  instead of twice.
 - **FR-020 file drop** — drop one or more files from Explorer onto the window to open them in tabs, in either editing mode. Unsaved tabs are kept; a file already open selects its existing tab. A file that cannot be read reports the existing error and the remaining files are still opened. Directories are not opened as documents.
 - **FR-021 language server** — off by default (D60). With `lsp=on` and a `lsp.<language>.command=` line in
   `settings.v5`, the editor starts that server (tried with clangd) and shows its diagnostics: wavy underlines, an
@@ -289,6 +294,13 @@ records in `docs/quality/`.
   In Vim INSERT mode Ctrl-n / Ctrl-p complete from the words of the open documents and the server, with Ctrl-e to
   cancel and Ctrl-y to accept; Ctrl+P is the completion key only while the list is shown
   ([ADR 0169](docs/adr/0169-insert-completion-is-a-per-document-word-table-shown-in-the-palette-face.md)).
+  *New in 1.1.0*, the editor follows the protocol more closely: documents are opened with the protocol's
+  language names (`csharp`, `powershell`, `shellscript` and so on), changes are sent in the form the server asks
+  for, a server that asks for saves is told after each save so its diagnostics update, and diagnostics are
+  matched to the file even when the drive letter or the percent-encoding of the URI differs. A command whose
+  executable is missing or not written as an absolute path, or a `.cmd` / `.bat` (write `node.exe` and the script
+  instead), is reported in one line and not started. In `settings.v5`, a `lsp.<name>.command` line for a language
+  this version does not know is kept when the settings are written back.
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
