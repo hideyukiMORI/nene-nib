@@ -333,6 +333,22 @@ void verify_answers_survive_other_slots()
     server.serve(Slot::first, app::ServerExited{1});
     const auto own = editing.controller().apply_frame(app::WorkCompleted{});
     expect(!own.hover.has_value(), "the active document's own server ending drops its hover");
+    // 起こし直した子に答えを待つ hover を残したまま、その子も落ちて同じ席で起こし直される。文書・
+    // 版・キャレットは同じ（文脈の照合は通る）ので、古い id の答えを捨てるのは席の待ちの表を消す
+    // こと（#1916 の再確認 R1'）。
+    server.serve(Slot::first, app::ServerStarted{});
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    server.answer(Slot::first, initialize_id(server, Slot::first), running_answer);
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    applied(editing.controller(), app::QueryLanguage{core::LanguageQueryKind::hover});
+    const std::int64_t stale = server.requests("textDocument/hover").back();
+    server.serve(Slot::first, app::ServerExited{1});
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    server.answer(Slot::first, stale, R"({"contents":"stale"})");
+    const auto late = editing.controller().apply_frame(app::WorkCompleted{});
+    expect(server.started_slots().back() == Slot::first && !late.hover.has_value(),
+           "an answer to a request of the ended server is dropped even though its context "
+           "still matches");
 }
 
 // 定義の着地は答えた席の位置の単位で写す（#1916 のレビュー R2）。utf-8 を選んだ C++ の席が
