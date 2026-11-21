@@ -144,7 +144,8 @@ std::expected<std::uint64_t, ProbeFailure> edited_history_keys(EditedHistoryWork
     timing.mark(core::Milestone::probe_finished);
     const auto frame = controller.frame();
     const std::size_t units = edits_of(workload) + (erases(workload) ? timed_keys : 0U);
-    if (frame.caret.position.line.value != 1U || frame.total_lines != 3U ||
+    // 本文は改行で終わる 2 行。Vim のモードは最後の空の行を数えない（#1741）ので total_lines は 2。
+    if (frame.caret.position.line.value != 1U || frame.total_lines != 2U ||
         checksum != expected_checksum(workload) || !holds_units(controller, units))
     {
         return std::unexpected(ProbeFailure::wrong_result);

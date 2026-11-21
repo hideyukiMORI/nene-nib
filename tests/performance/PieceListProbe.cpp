@@ -294,8 +294,9 @@ run_frame(PieceListWorkload workload, const std::string &input, application::Tim
     }
     timing.mark(core::Milestone::probe_finished);
     const auto frame = controller.frame();
+    // 改行で終わる本文は Vim のモードで最後の空の行を数えない（#1741）。行の数は document_lines。
     if (checksum != timed_pairs * 3U || frame.caret.position.line.value != rounds + 1U ||
-        frame.total_lines != document_lines + 1U)
+        frame.total_lines != document_lines)
     {
         return std::unexpected(ProbeFailure::wrong_result);
     }
