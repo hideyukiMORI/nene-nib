@@ -205,14 +205,21 @@ void EditorController::sync_language_server_documents(LanguageServerSlot slot, b
 std::optional<std::string> EditorController::language_server_uri(LanguageServerSlot slot) const
 {
     const auto &path = state_.document().path;
-    if (!path.has_value() ||
+    if (!path.has_value() || !language_server_sendable() ||
         language_servers_.links.at(slot_index(slot)).language !=
-            std::optional<core::Language>{state_.language()} ||
-        state_.text().size_bytes() > language_server_document_limit)
+            std::optional<core::Language>{state_.language()})
     {
         return std::nullopt;
     }
     return document_uri(path.value());
+}
+
+// 送れる形の規則の 1 本（パスがあり本文が上限以下）。席を譲らせる前にも読む（#1916 のレビュー
+// R3）。
+bool EditorController::language_server_sendable() const
+{
+    return state_.document().path.has_value() &&
+           state_.text().size_bytes() <= language_server_document_limit;
 }
 
 void EditorController::open_language_server_document(LanguageServerSlot slot, AutosaveId tab,

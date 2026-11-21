@@ -3,6 +3,7 @@
 #include "CommandChoice.hpp"
 #include "CommandPalette.hpp"
 #include "FileFolder.hpp"
+#include "LspLanding.hpp"
 #include "PaletteMarks.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteQuery.hpp"
@@ -314,10 +315,11 @@ core::TextPosition EditorController::landed_position(const core::TextPosition &p
 }
 
 // 言語サーバーの Position は開いた後の本文で lsp_offset_of の 1 本が写し、行が本文の外なら末尾。
-core::TextPosition EditorController::landed_position(const core::LspPosition &position) const
+// 位置の単位は答えた席のもの（着地先の文書の言語の席から引かない・#1916 のレビュー R2）。
+core::TextPosition EditorController::landed_position(const LspLanding &landing) const
 {
     const core::TextBuffer &text = state_.text();
-    const auto at = core::lsp_offset_of(text, position, active_language_server().encoding);
+    const auto at = core::lsp_offset_of(text, landing.at, landing.encoding);
     return text.position_of(at.value_or(core::Offset{text.size_bytes()}));
 }
 

@@ -42,6 +42,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -340,8 +341,10 @@ void EditorController::reconcile_language_server()
 }
 
 // language の文書を受ける席（段 S2 の root の鍵）。子が居て止めに向かっていない同じ言語の席で、
-// 設定に root があれば起こしたときの設定の root が同じ席だけ（無ければ最初の文書のフォルダで
-// 起きた同じ言語の席・ADR 0161 の決定 1）。2 つ以上なら最後に使った席。
+// 設定に root があれば実際に起きた root がそれと同じ席だけ（今の文書に対していま決まる root と
+// 比べる・`:set root=.` が同じフォルダなら同じ席が受け続ける・#1916 のレビュー M1）。設定に root
+// が無ければ最初の文書のフォルダで起きた同じ言語の席が受ける（ADR 0161 の決定 1）。2 つ以上なら
+// 最後に使った席。
 std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language language) const
 {
     const auto &root = state_.settings().root;
@@ -351,7 +354,7 @@ std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language 
     {
         const LanguageServerLink &link = links.at(slot_index(slot));
         if (!serving_phase(link.phase) || link.language != std::optional{language} ||
-            (root.has_value() && link.configured_root != root))
+            (root.has_value() && link.root != root))
         {
             continue;
         }
@@ -407,14 +410,20 @@ void EditorController::resume_language_servers()
     language_servers_.considered.reset();
 }
 
-// 受ける席が無いとき、この（言語・パス）でまだ決めていなければ起こすかを決める（同じ文書では
-// 打鍵ごとに設定を引き直さない）。空いた席が無ければ最も前に使った席を譲らせ、空けば起こす
-// （running の席は `shutdown` の答えの後の reconcile で起こす）。
+// 受ける席が無いとき、この（言語・パス・設定の root）でまだ決めていなければ起こすかを決める（同じ
+// 文書では打鍵ごとに設定を引き直さない・root が変われば決め直す・#1916 のレビュー M1）。空いた席が
+// 無ければ最も前に使った席を譲らせ、空けば起こす（running の席は `shutdown` の答えの後の reconcile
+// で起こす）。送れない文書（無題・上限を超えた本文）のためには譲らせず、決めたことにもしない
+// （送れる形になった打鍵で決め直す・#1916 のレビュー R3）。
 void EditorController::consider_language_server(core::Language language)
 {
     auto &servers = language_servers_;
-    auto key = std::pair{language, state_.document().path};
+    auto key = std::tuple{language, state_.document().path, state_.settings().root};
     if (servers.considered == key)
+    {
+        return;
+    }
+    if (!free_slot().has_value() && !language_server_sendable())
     {
         return;
     }
@@ -436,8 +445,7 @@ void EditorController::consider_language_server(core::Language language)
     }
     if (slot.has_value())
     {
-        start_language_server(slot.value(), language, std::move(launch).value(),
-                              state_.settings().root);
+        start_language_server(slot.value(), language, std::move(launch).value());
     }
 }
 
@@ -498,11 +506,10 @@ EditorController::language_server_launch(core::Language language, const core::Fi
 }
 
 // 起こしてすぐ戻る（決定 1）。起こせなければ 1 行知らせてその言語だけ止まる（設定の誤りは何度
-// 起こしても同じなので自動では起こし直さない・`:set lsp` で再開）。configured_root は起こした
-// ときの設定の root（受ける席の鍵）。
+// 起こしても同じなので自動では起こし直さない・`:set lsp` で再開）。root は起こした作業フォルダ
+// （受ける席の鍵）。
 void EditorController::start_language_server(LanguageServerSlot slot, core::Language language,
-                                             ServerLaunch launch,
-                                             std::optional<core::FilePath> configured_root)
+                                             ServerLaunch launch)
 {
     auto &servers = language_servers_;
     auto &link = link_of(slot);
@@ -520,9 +527,25 @@ void EditorController::start_language_server(LanguageServerSlot slot, core::Lang
     link.language = language;
     link.pending.clear();
     link.root = root;
-    link.configured_root = std::move(configured_root);
     link.used = ++servers.uses;
     servers.awake = static_cast<std::uint8_t>(servers.awake | slot_bit(slot));
+}
+
+// 前の子の答えは残さない（落ちた・再起動の道も止める道を通る・#1825 のレビュー R4）。消すのは
+// アクティブな文書を受ける・開いた席のときだけで、ほかの言語の席が落ちても答えは残す（R1）。
+void EditorController::drop_language_answers_of(LanguageServerSlot slot)
+{
+    if (serving_slot(state_.language()) != std::optional{slot} &&
+        holding_slot() != std::optional{slot})
+    {
+        return;
+    }
+    const auto &answers = state_.language_answers();
+    if (answers.completion.has_value() || answers.hover.has_value() ||
+        answers.definition.has_value())
+    {
+        state_ = state_.with_language_answers({});
+    }
 }
 
 // 子を待たずに止める（追補）。stop はその席の出来事の列も捨てるので、同じ集めの残りは読まない。
@@ -530,19 +553,13 @@ void EditorController::stop_language_server(LanguageServerSlot slot)
 {
     auto &servers = language_servers_;
     auto &link = link_of(slot);
+    drop_language_answers_of(slot);
     close_language_server_documents(slot, false);
     ports_.language_server.stop(slot);
     link.phase = LanguageServerPhase::idle;
     link.language.reset();
     link.pending.clear();
     link.abilities = {};
-    // 前の子の答えは残さない（落ちた・再起動の道もここを通る・#1825 のレビュー R4）。
-    const auto &answers = state_.language_answers();
-    if (answers.completion.has_value() || answers.hover.has_value() ||
-        answers.definition.has_value())
-    {
-        state_ = state_.with_language_answers({});
-    }
     servers.considered.reset();
     servers.retired = true;
     servers.awake = static_cast<std::uint8_t>(servers.awake & ~slot_bit(slot));
@@ -564,6 +581,7 @@ void EditorController::shut_language_server(LanguageServerSlot slot)
         stop_language_server(slot);
         return;
     case LanguageServerPhase::running:
+        drop_language_answers_of(slot);
         link.pending.clear();
         close_language_server_documents(slot, true);
         send_lsp_request(slot, LspRequestKind::shutdown, core::JsonValue{core::JsonNull{}});
@@ -596,7 +614,6 @@ void EditorController::language_server_failed(LanguageServerSlot slot, core::UiM
     const auto &link = link_of(slot);
     const core::Language language = link.language.value_or(state_.language());
     const auto root = link.root;
-    const auto configured_root = link.configured_root;
     stop_language_server(slot);
     auto &trouble = trouble_of(language);
     ++trouble.failures;
@@ -612,7 +629,7 @@ void EditorController::language_server_failed(LanguageServerSlot slot, core::UiM
     auto launch = root.has_value() ? language_server_launch(language, root.value()) : std::nullopt;
     if (launch.has_value())
     {
-        start_language_server(slot, language, std::move(launch).value(), configured_root);
+        start_language_server(slot, language, std::move(launch).value());
     }
 }
 
@@ -734,7 +751,7 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::completion:
     case LspRequestKind::hover:
     case LspRequestKind::definition:
-        receive_answer(request, response);
+        receive_answer(slot, request, response);
         settle_language_answers(request.kind);
         return;
     }

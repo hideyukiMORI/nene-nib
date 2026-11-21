@@ -9,6 +9,7 @@
 #include "LanguageDefinition.hpp"
 #include "LanguageHover.hpp"
 #include "LanguageQueryKind.hpp"
+#include "LspLanding.hpp"
 #include "LspLocation.hpp"
 #include "LspRequestKind.hpp"
 #include "OpenedAs.hpp"
@@ -198,7 +199,7 @@ void EditorController::settle_definition_answer()
     {
         return;
     }
-    const std::vector<core::LspLocation> locations = definition.value().locations;
+    const LanguageDefinition answered = definition.value();
     LanguageAnswers answers = state_.language_answers();
     answers.definition.reset();
     state_ = state_.with_language_answers(std::move(answers));
@@ -206,15 +207,17 @@ void EditorController::settle_definition_answer()
     definition_anchor_.reset();
     if (usable)
     {
-        land_definition(locations);
+        land_definition(answered);
     }
 }
 
 // 定義へ（決定 7）。最初の場所へ跳ぶ。同じ文書なら `''` を置いてキャレットを移し、別のファイルなら
 // 開いてから着地する。どちらも全文検索の当たりと同じ着地の 1 本（land_project_hit）。場所が 2 つ
-// 以上なら「1 / N」、無ければ・`file:` でなければ 1 行知らせる。
-void EditorController::land_definition(const std::vector<core::LspLocation> &locations)
+// 以上なら「1 / N」、無ければ・`file:` でなければ 1 行知らせる。着地の位置の単位は答えた席のもの
+// （#1916 のレビュー R2）。
+void EditorController::land_definition(const LanguageDefinition &definition)
 {
+    const auto &locations = definition.locations;
     if (locations.empty())
     {
         state_ =
@@ -235,7 +238,9 @@ void EditorController::land_definition(const std::vector<core::LspLocation> &loc
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_definition_first_of,
                                                        {std::to_string(locations.size())}));
     }
-    project_landing_ = ProjectHitLanding{file.value(), locations.front().range.start};
+    project_landing_ =
+        ProjectHitLanding{file.value(), LspLanding{.at = locations.front().range.start,
+                                                   .encoding = definition.encoding}};
     const auto &path = state_.document().path;
     if (!path.has_value() || !ports_.files.same_file(path.value(), file.value()))
     {

@@ -685,7 +685,7 @@ class EditorController final
     // サーバーの Position は lsp_offset_of の 1 本）。
     [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
     [[nodiscard]] core::TextPosition landed_position(const core::TextPosition &position) const;
-    [[nodiscard]] core::TextPosition landed_position(const core::LspPosition &position) const;
+    [[nodiscard]] core::TextPosition landed_position(const LspLanding &landing) const;
     // 進み具合の表示値（面が `!` の出どころのときだけ）。
     [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
     // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
@@ -923,7 +923,10 @@ class EditorController final
     [[nodiscard]] std::optional<ServerLaunch>
     language_server_launch(core::Language language, const core::FilePath &root) const;
     void start_language_server(LanguageServerSlot slot, core::Language language,
-                               ServerLaunch launch, std::optional<core::FilePath> configured_root);
+                               ServerLaunch launch);
+    // 席 slot がアクティブな文書を受ける・開いているなら、補完・hover・定義の答えを消す（止める・
+    // 譲る道の入口で呼ぶ・ほかの席を止めてもアクティブな文書の答えは残す・#1916 のレビュー R1）。
+    void drop_language_answers_of(LanguageServerSlot slot);
     void stop_language_server(LanguageServerSlot slot);
     void shut_language_server(LanguageServerSlot slot);
     void send_lsp_request(LanguageServerSlot slot, LspRequestKind kind,
@@ -962,6 +965,8 @@ class EditorController final
     void open_language_server_document(LanguageServerSlot slot, AutosaveId tab, std::string uri);
     void flush_language_server_changes(LanguageServerSlot slot, LanguageServerDocument &document);
     [[nodiscard]] std::optional<std::string> language_server_uri(LanguageServerSlot slot) const;
+    // アクティブな文書を言語サーバーへ送れる形か（パスがあり本文が上限以下・言語は問わない）。
+    [[nodiscard]] bool language_server_sendable() const;
     void language_server_edit(const core::Edit &edit);
     // 保存の成功の後（ADR 0161 の 2026-11-20 の追補）。サーバーが `save` を求め、アクティブな文書を
     // 保存したパスの URI のまま開いていれば、積んだ変更を流してから `didSave` を 1 通送る。
@@ -983,7 +988,8 @@ class EditorController final
     void cancel_lsp_requests(LanguageServerSlot slot, LspRequestKind kind);
     [[nodiscard]] core::LspPosition request_position(LanguageServerSlot slot) const;
     [[nodiscard]] LspRequestContext request_context() const;
-    void receive_answer(const PendingLspRequest &request, const core::LspResponse &response);
+    void receive_answer(LanguageServerSlot slot, const PendingLspRequest &request,
+                        const core::LspResponse &response);
     // 問いと答えの使い方（ADR 0190 の決定 6〜8）。本体は EditorControllerLanguageQueries.cpp。
     // query_language は操作（F12・情報を表示）と Vim の `gd` `K` の効果が入る 1 本で、出せたら真。
     // settle_language_answers は答えが届く合図の道の中で、空の hover を知らせ、定義の答えを 1 回
@@ -1030,7 +1036,7 @@ class EditorController final
     void settle_language_answers(LspRequestKind kind);
     void settle_hover_answer();
     void settle_definition_answer();
-    void land_definition(const std::vector<core::LspLocation> &locations);
+    void land_definition(const LanguageDefinition &definition);
     // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
     // メニュー・IME の変換・補完の面が開いていない。awaits_nothing
     // は問いを出したときと同じ「何も待って いない」状態（Vim は NORMAL

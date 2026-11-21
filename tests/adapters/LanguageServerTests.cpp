@@ -35,6 +35,7 @@ namespace
 {
 namespace core = nenenib::core;
 namespace adapters = nenenib::adapters::win32;
+namespace application = nenenib::application;
 using nenenib::application::LanguageServerEvent;
 using nenenib::application::LanguageServerSlot;
 using nenenib::application::ServerEvent;
@@ -470,6 +471,43 @@ void verify_stop_cancels_a_pending_write()
     CloseHandle(child);
 }
 
+// 退く子は 8 本まで。9 本目を退かせると最も古い退く子を Job Object ごと殺す（#1916 のレビュー
+// R4）。4 席が起きていても、待ちの配列は 4×3＋8 を超えない。
+void verify_retired_limit()
+{
+    constexpr std::size_t limit = adapters::language_server_retired_limit;
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(first, launch_of({"--hang"})).has_value(),
+           "the oldest lingering server starts");
+    const HANDLE oldest = open_fake_child();
+    server.stop(first);
+    for (std::size_t round = 1; round < limit; ++round)
+    {
+        expect(server.start(first, launch_of({"--hang"})).has_value(), "a lingering server starts");
+        server.stop(first);
+    }
+    expect(running(oldest) && server.waitable_handles().size() == limit,
+           "eight retired children are kept on the wait list");
+    expect(server.start(first, launch_of({"--hang"})).has_value(), "the ninth server starts");
+    server.stop(first);
+    expect(ended(oldest) && server.waitable_handles().size() == limit,
+           "the ninth retired child ends the oldest one");
+    for (const LanguageServerSlot slot : application::language_server_slots)
+    {
+        expect(server.start(slot, launch_of({"--hang"})).has_value(), "every slot starts");
+    }
+    expect(server.waitable_handles().size() <=
+               (application::language_server_slot_limit * 3) + limit,
+           "four running slots and eight retired children fit in the wait list");
+    for (const LanguageServerSlot slot : application::language_server_slots)
+    {
+        server.stop(slot);
+    }
+    server.expire_retired();
+    expect(server.waitable_handles().empty(), "expire_retired leaves nothing to wait on");
+    CloseHandle(oldest);
+}
+
 // 2 つの席に替え玉を 1 本ずつ同時に起こす（2026-11-20 の追補・LSP 段 S2）。本文は送った席の子だけが
 // 返し、出来事は出した席を添えて届く。片方を止めてももう片方は答え続け、止めた席からは何も
 // 届かない。
@@ -628,6 +666,7 @@ int main(int argc, char **argv)
     verify_header_too_long();
     verify_stop_does_not_wait();
     verify_stop_cancels_a_pending_write();
+    verify_retired_limit();
     verify_restart();
     verify_two_slots();
     verify_capabilities_answer();

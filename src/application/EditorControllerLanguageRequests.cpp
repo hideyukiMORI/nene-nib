@@ -19,6 +19,7 @@
 #include "LspError.hpp"
 #include "LspLocation.hpp"
 #include "LspPosition.hpp"
+#include "LspPositionEncoding.hpp"
 #include "LspPositionJson.hpp"
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
@@ -122,16 +123,18 @@ locations_of(const std::expected<core::JsonValue, core::LspError> &result)
                                      : std::nullopt};
 }
 
-[[nodiscard]] std::optional<LanguageDefinition> definition_answer(const PendingLspRequest &request,
-                                                                  const core::LspResponse &response,
-                                                                  const LspRequestContext &current)
+// encoding は答えた席の位置の単位（着地の写しまで運ぶ・#1916 のレビュー R2）。
+[[nodiscard]] std::optional<LanguageDefinition>
+definition_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                  const LspRequestContext &current, core::LspPositionEncoding encoding)
 {
     const auto *context = std::get_if<LspRequestContext>(&request.context);
     if (context == nullptr || !(*context == current))
     {
         return std::nullopt;
     }
-    return LanguageDefinition{.context = *context, .locations = locations_of(response.result)};
+    return LanguageDefinition{
+        .context = *context, .locations = locations_of(response.result), .encoding = encoding};
 }
 } // namespace
 
@@ -261,7 +264,7 @@ LspRequestContext EditorController::request_context() const
 
 // 文脈を照合して答えを状態に置く（決定 1）。合わなければ捨て、その種類の前の答えも消す（古い答えが
 // 後から使われる筋を無くす・#1825 のレビュー R4）。知らせは出さない。
-void EditorController::receive_answer(const PendingLspRequest &request,
+void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspRequest &request,
                                       const core::LspResponse &response)
 {
     LanguageAnswers answers = state_.language_answers();
@@ -279,7 +282,7 @@ void EditorController::receive_answer(const PendingLspRequest &request,
         answers.hover = hover_answer(request, response, current);
         break;
     case LspRequestKind::definition:
-        answers.definition = definition_answer(request, response, current);
+        answers.definition = definition_answer(request, response, current, link_of(slot).encoding);
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));
