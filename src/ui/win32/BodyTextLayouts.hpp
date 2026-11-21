@@ -85,8 +85,10 @@ class BodyTextLayouts final : public application::TextLayoutPort
     std::optional<BodyTextStyle> style_;
     std::vector<BodyTextLayout> current_;
     std::vector<BodyTextLayout> previous_;
-    // 描画前の連続入力は最後の1行だけ。途中の変更行を蓄積しない。
-    std::optional<BodyTextLayout> pending_;
+    // 描画前に作った layout（ADR 0114 の 2026-11-20 の追補・#1902）。論理行の名札ごとに最後の 1 本
+    // （名札の無い問いは全体で 1 本）で、本数の上限は直前の描画の本数（見えている行数）。打鍵の
+    // 連打で同じ行の途中の文字列を溜めない。
+    std::vector<BodyTextLayout> pending_;
     // 書式ごとに 1 回だけ測る 1 升（添字は DisplayForm）。書式が変われば prepare が消す。
     std::array<std::optional<application::TextCell>, 2> cells_{};
     bool collecting_ = false;

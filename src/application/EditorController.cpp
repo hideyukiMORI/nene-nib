@@ -1127,8 +1127,13 @@ EditorController::screen_rows_of(const LineView &shown) const
     {
         return 1;
     }
-    return ports_.text_layouts.rows(
-        TextLayoutRequest{presented_text(shown), state_.settings(), view_geometry_});
+    return ports_.text_layouts.rows(TextLayoutRequest{presented_text(shown),
+                                                      state_.settings(),
+                                                      view_geometry_,
+                                                      core::DisplayForm::text,
+                                                      {},
+                                                      {},
+                                                      shown.number});
 }
 
 GridLineMarks EditorController::grid_marks(const PaneSource &source, core::LineNumber line,
@@ -1465,9 +1470,11 @@ void EditorController::add_other_pane(EditorFrame &result, const core::VimPatter
         const core::Offset anchor =
             full->follows ? state_.text().line_start(result.first_visible) : full->anchor;
         result.full_preview =
-            PreviewFrame{full->document,     anchor,       full->notice,
-                         full->selection,    full->images, state_.table_scrolls().offsets,
-                         preview_table_lit()};
+            PreviewFrame{full->document,      anchor,
+                         full->notice,        full->selection,
+                         full->images,        state_.table_scrolls().offsets,
+                         preview_table_lit(), full->nudge,
+                         full->pending,       full->follows ? std::nullopt : full->anchor_block};
         return;
     }
     const auto &other = state_.split().other;
@@ -1486,9 +1493,12 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 {
     const core::Offset anchor =
         view.follows ? state_.text().line_start(result.first_visible) : view.anchor;
-    result.other = PreviewFrame{view.document,      anchor,      view.notice,
-                                std::nullopt,       view.images, state_.table_scrolls().offsets,
-                                preview_table_lit()};
+    result.other =
+        PreviewFrame{view.document,       anchor,
+                     view.notice,         std::nullopt,
+                     view.images,         state_.table_scrolls().offsets,
+                     preview_table_lit(), view.nudge,
+                     view.pending,        view.follows ? std::nullopt : view.anchor_block};
 }
 
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,

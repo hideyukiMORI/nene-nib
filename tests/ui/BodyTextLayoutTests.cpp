@@ -144,6 +144,56 @@ void check_input_retention(BodyTextLayouts &layouts, const core::EditorSettings 
            "a line absent from the next frame is released from the cache");
 }
 
+// #1902: 論理行の名札のある問いは、描く前に作った layout を行ごとに最後の 1 本だけ、直前の描画の
+// 本数まで残す（1 画面の送りで同じ行を 2 回組まない・打鍵の連打で同じ行の途中を溜めない）。
+[[nodiscard]] app::TextLayoutRequest tagged(std::string_view text,
+                                            const core::EditorSettings &settings, std::size_t line)
+{
+    return app::TextLayoutRequest{
+        text, settings, narrow, core::DisplayForm::text, {}, {}, core::LineNumber{line}};
+}
+
+void check_line_retention(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    layouts.begin_frame();
+    for (const auto text : {"drawn one", "drawn two", "drawn three"})
+    {
+        static_cast<void>(layouts.get(app::TextLayoutRequest{text, settings, narrow}));
+    }
+    layouts.end_frame();
+    const auto typed = layouts.get(tagged("typed a", settings, 1));
+    const auto retyped = layouts.get(tagged("typed ab", settings, 1));
+    const auto second = layouts.get(tagged("second line", settings, 2));
+    const auto third = layouts.get(tagged("third line", settings, 3));
+    layouts.begin_frame();
+    const auto typed_again = layouts.get(tagged("typed a", settings, 1));
+    const auto retyped_drawn = layouts.get(tagged("typed ab", settings, 1));
+    const auto second_drawn = layouts.get(tagged("second line", settings, 2));
+    const auto third_drawn = layouts.get(tagged("third line", settings, 3));
+    layouts.end_frame();
+    expect(typed && typed_again && typed.value() != typed_again.value(),
+           "a later input on the same line replaces its pending layout");
+    expect(retyped && retyped_drawn && retyped.value() == retyped_drawn.value() && second &&
+               second_drawn && second.value() == second_drawn.value() && third && third_drawn &&
+               third.value() == third_drawn.value(),
+           "layouts made before drawing are kept per line for the next frame");
+    std::vector<app::TextLayoutRequest> many;
+    for (const auto text : {"page one", "page two", "page three", "page four", "page five"})
+    {
+        many.push_back(tagged(text, settings, many.size() + 1));
+    }
+    const auto oldest = layouts.get(many.front());
+    for (std::size_t at = 1; at < many.size(); ++at)
+    {
+        static_cast<void>(layouts.get(many.at(at)));
+    }
+    layouts.begin_frame();
+    const auto oldest_drawn = layouts.get(many.front());
+    layouts.end_frame();
+    expect(oldest && oldest_drawn && oldest.value() != oldest_drawn.value(),
+           "pending layouts are bounded by the lines the previous frame drew");
+}
+
 // #664: 段の末尾に空白がぶら下がる 222 文字の行（Issue の実測の文書の 110 行目と同じ形）。
 [[nodiscard]] std::string hanging_line()
 {
@@ -706,6 +756,7 @@ void verify_body_text_layouts()
     check_unicode(layouts, settings);
     check_resources(layouts, settings);
     check_input_retention(layouts, settings);
+    check_line_retention(layouts, settings);
     check_wrapped_pixels(layouts, settings);
     check_horizontal_pixels(layouts, settings);
     check_cell(layouts, settings);

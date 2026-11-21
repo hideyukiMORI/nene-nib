@@ -3,9 +3,11 @@
 #include "BodyGlyphRun.hpp"
 #include "DisplayForm.hpp"
 #include "LayoutRect.hpp"
+#include "LineNumber.hpp"
 
 #include <dwrite.h>
 #include <limits>
+#include <optional>
 #include <string>
 #include <wrl/client.h>
 
@@ -32,5 +34,7 @@ struct BodyTextLayout
     // 字形を集めた縦の範囲（layout の座標）。範囲が変われば集め直す（#528）。
     float glyph_top = std::numeric_limits<float>::lowest();
     float glyph_bottom = std::numeric_limits<float>::max();
+    // 描く前に作ったときの問いの論理行の名札（ADR 0114 の 2026-11-20 の追補・#1902）。鍵ではない。
+    std::optional<core::LineNumber> line{};
 };
 } // namespace nenenib::ui::win32

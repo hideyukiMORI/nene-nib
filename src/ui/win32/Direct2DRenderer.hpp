@@ -42,6 +42,7 @@
 #include "PreviewPanePainter.hpp"
 #include "PreviewPaneText.hpp"
 #include "PreviewPoint.hpp"
+#include "PreviewScrollSettled.hpp"
 #include "PreviewTableHit.hpp"
 #include "ProjectHitRow.hpp"
 #include "ProjectHitText.hpp"
@@ -163,6 +164,10 @@ class Direct2DRenderer final
     [[nodiscard]] std::optional<PreviewTableHit> preview_table_at(std::int32_t x, std::int32_t y);
     [[nodiscard]] std::optional<PreviewTableHit> preview_table_bar(std::size_t table,
                                                                    std::int32_t x);
+    // 最後の frame でプレビューの縦の送りを畳んで位置が変わったときの答え（#1894・
+    // PreviewPane::settled）。ui は描いた後に読んで 1 回だけ送る。
+    [[nodiscard]] const std::optional<application::PreviewScrollSettled> &
+    preview_settled() const noexcept;
     // 最後に描いたリンクの札の点の下の部品（札を描いていなければ outside・#1869 の段 L2）。
     [[nodiscard]] LinkCardTarget link_card_target_at(std::int32_t x, std::int32_t y) const;
     // 最後に描いた hover の札が点（クライアントの物理画素）を覆うか（描いていなければ偽・#1884 の

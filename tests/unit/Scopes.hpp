@@ -235,6 +235,8 @@ void verify_preview_task_scope();
 void verify_link_card_scope();
 // PreviewTableScrollTests.cpp（#1883・施主決定 D107・広い表の横の送り）
 void verify_preview_table_scope();
+// PreviewScrollTests.cpp（#1894・プレビューの縦の送りを要素の中まで画素で）
+void verify_preview_scroll_scope();
 
 // PointerTests.cpp（#1250・本文のダブルクリックの語とトリプルクリックの行・通常の選択と Vim の
 // VISUAL）

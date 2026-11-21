@@ -94,7 +94,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
     src/application/EditorControllerTabs.cpp src/application/EditorControllerCommand.cpp src/application/EditorControllerPalette.cpp src/application/EditorControllerProjectSearch.cpp src/application/EditorControllerFinderPreview.cpp src/application/PreviewLines.cpp
-    src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/EditorControllerDetail.cpp
+    src/application/EditorControllerAutosave.cpp src/application/EditorControllerPreview.cpp src/application/PreviewAnchoredBlock.cpp src/application/EditorControllerDetail.cpp
     src/application/PreviewImages.cpp
     src/application/EditorControllerExplorer.cpp src/application/EditorControllerShell.cpp src/application/EditorControllerContextMenu.cpp src/application/EditorControllerLinkCard.cpp src/application/EditorControllerSettings.cpp src/application/EditorControllerCompletion.cpp src/application/EditorControllerTabMenu.cpp src/application/EditorControllerStartScreen.cpp src/application/EditorControllerEasyMotion.cpp src/application/EasyMotionLabels.cpp
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
@@ -222,7 +222,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LexerPropertyTests.cpp
     tests/unit/PreviewTests.cpp
     tests/unit/PreviewImageTests.cpp
-    tests/unit/PreviewTaskTests.cpp tests/unit/LinkCardTests.cpp tests/unit/PreviewTableScrollTests.cpp
+    tests/unit/PreviewTaskTests.cpp tests/unit/LinkCardTests.cpp tests/unit/PreviewTableScrollTests.cpp tests/unit/PreviewScrollTests.cpp
     tests/unit/PointerTests.cpp
     tests/unit/PreviewFullTests.cpp
     tests/unit/StartScreenTests.cpp
@@ -509,7 +509,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/SettingsPanelPainter.cpp src/ui/win32/SettingsPanelFormats.cpp src/ui/win32/CompletionPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
-    src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp src/ui/win32/PreviewTableMetrics.cpp
+    src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewScrollFold.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp src/ui/win32/PreviewTableMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
     src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
     src/ui/win32/ProjectHitPainter.cpp src/ui/win32/PreviewPanePainter.cpp)
@@ -535,7 +535,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/WheelTurnTests.cpp
     tests/ui/GlyphCollectorTests.cpp tests/ui/GlyphPixelTests.cpp tests/ui/BodyTextLayoutTests.cpp
     tests/ui/GridRenderTests.cpp tests/ui/PresentedMilestoneTests.cpp
-    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp
+    tests/ui/ReplacedTintTests.cpp tests/ui/FallbackRangeTests.cpp tests/ui/PreviewLayoutTests.cpp tests/ui/PreviewScrollFoldTests.cpp
     tests/ui/FallbackSegmentMemoTests.cpp
     tests/ui/ForwardingFont.cpp
     tests/ui/StatusDemandTests.cpp tests/ui/SyntaxRenderTests.cpp tests/ui/DiagnosticWaveTests.cpp
@@ -663,5 +663,22 @@ foreach(library IN ITEMS ole32 d2d1 dwrite windowscodecs)
     nenenib_system_link(nib_preview_probe ${library})
 endforeach()
 target_compile_definitions(nib_preview_probe PRIVATE
+    NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
+    NIB_PROBE_CONFIGURATION="$<CONFIG>")
+
+# #1905: 本文のスクロールの 1 刻みの費用の probe（ADR 0082 の閉じた比較の範囲・正式なゲートの外）。
+# 製品の BodyTextLayouts を結ぶので nib_perf_probes（performance_tests は ui_win32 に依存できない）
+# ではなく nib_preview_probe と同じ土台に置く。替え玉のポートは tests/unit の inline の足場を借りる。
+# 時刻は adapters の Win32TimingAdapter の節目だけ（ARC-007）。CTest に登録しない。
+nenenib_target(nib_scroll_probe preview_tests EXECUTABLE tests/preview/ScrollProbe.cpp)
+nenenib_link(nib_scroll_probe nenenib_core)
+nenenib_link(nib_scroll_probe nenenib_application)
+nenenib_link(nib_scroll_probe nenenib_adapters)
+nenenib_link(nib_scroll_probe nenenib_window)
+foreach(library IN ITEMS ole32 d2d1 dwrite)
+    nenenib_system_link(nib_scroll_probe ${library})
+endforeach()
+target_include_directories(nib_scroll_probe PRIVATE "${CMAKE_SOURCE_DIR}/tests/unit")
+target_compile_definitions(nib_scroll_probe PRIVATE
     NIB_PROBE_COMMIT="${NIB_PROBE_COMMIT}" NIB_PROBE_DIRTY="$<BOOL:${NIB_PROBE_DIRTY}>"
     NIB_PROBE_CONFIGURATION="$<CONFIG>")

@@ -857,8 +857,14 @@ class EditorController final
     [[nodiscard]] bool route_full_preview(const EditorIntent &intent);
     void run_full_preview_route(PreviewFullRoute route, const EditorIntent &intent);
     void finish_vim_g(const VimKeyPress &press);
-    // 見せているプレビューの錨を本文の行で lines 動かす（ADR 0155 の決定 7・改訂 17）。端で止まる。
+    // 見せているプレビューの送りの量に lines（プレビューの行の単位）を足し、追従をやめる。畳むのは
+    // ui（ADR 0155 の決定 7 の 2026-11-20 の追補・#1894）。追従中なら本文の先頭行の行頭から始める。
     void scroll_preview(std::int64_t lines);
+    // 錨を本文の行 line の行頭へ置き直し、追従をやめる（`gg` `G` のような絶対の行き先・nudge と
+    // pending は 0）。
+    void anchor_preview_at(core::LineNumber line);
+    // ui が畳んだ送り（#1894）。合図で、使う人の操作ではない（is_signal）。
+    void accept(const PreviewScrollSettled &intent);
     // 全面で通常モードの Space（追補 25）。キャレットの行のタスクを切り替え、無ければ知らせる。
     void toggle_caret_task();
     // 全面の選択とコピー（改訂 18）。select_preview は preview_full_route が select と決めた意図

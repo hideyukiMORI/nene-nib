@@ -16,6 +16,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -75,6 +76,10 @@ namespace
     return span.start.value <= at.value &&
            (at.value < span.end.value || (span.row + 1 >= span.rows && at.value <= span.end.value));
 }
+
+// 段の区切りの UTF-8（DirectWrite は折り返さない書式でもここで段を分ける）。
+constexpr std::string_view line_separator = "\xE2\x80\xA8";
+constexpr std::string_view paragraph_separator = "\xE2\x80\xA9";
 
 // 見えている行数に足す保持の余り（画面の上下に半分かかる行と、キャレットの行）。
 constexpr std::size_t shown_margin = 4;
@@ -287,7 +292,7 @@ TextLayoutRequest VisualTextView::request(const LineView &line) const
 {
     return TextLayoutRequest{
         presented_text(line), state_.settings(), geometry_, core::DisplayForm::text, {},
-        line.window};
+        line.window,          line.number};
 }
 
 // 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。行の全体を読まない。
@@ -302,12 +307,36 @@ std::expected<std::size_t, TextLayoutFailure> VisualTextView::rows(core::LineNum
         return grid_rows(number);
     }
     number.value = std::clamp<std::size_t>(number.value, 1, state_.vim_text().line_count());
-    if (giant_line_index(state_.vim_text(), number) != nullptr)
+    if (giant_line_index(state_.vim_text(), number) != nullptr || unbroken(number))
     {
         return 1;
     }
     const auto made = shown(number);
     return layouts_.rows(request(*made));
+}
+
+// 折り返さない設定の行は、表示文字列に段の区切り（U+2028 / U+2029・表示でも素のまま残る）が
+// 無ければ 1 画面行。行の全体の表示文字列を作らずに答える（#1899）。IME の差し込みのある行と
+// 区切りのある行は今までどおり layout に問う。
+bool VisualTextView::unbroken(core::LineNumber number) const
+{
+    if (state_.settings().wrapping != core::LineWrapping::no_wrap ||
+        (number == caret_.line && state_.composition().has_value()))
+    {
+        return false;
+    }
+    const auto text = state_.vim_text().line_text(number);
+    // 区切りの先頭のバイトだけを 1 バイトの探索で拾い、続く 3 バイトを比べる。
+    for (auto at = text.find(line_separator.front()); at != std::string::npos;
+         at = text.find(line_separator.front(), at + 1))
+    {
+        const auto here = std::string_view(text).substr(at, line_separator.size());
+        if (here == line_separator || here == paragraph_separator)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::expected<core::TextLocation, TextLayoutFailure> VisualTextView::location(core::TextCaret caret)
