@@ -77,6 +77,7 @@
 #include "RestoreAutosave.hpp"
 #include "RevealTab.hpp"
 #include "RevertSettings.hpp"
+#include "RunDiagnosticCommand.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollCompletion.hpp"
 #include "ScrollExplorer.hpp"
@@ -145,5 +146,5 @@ using EditorIntent = std::variant<
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
     RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
-    PreviewScrollSettled>;
+    PreviewScrollSettled, RunDiagnosticCommand>;
 } // namespace nenenib::application

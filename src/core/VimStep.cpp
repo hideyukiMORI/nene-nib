@@ -1,6 +1,7 @@
 #include "VimStep.hpp"
 #include "VimStepDetail.hpp"
 
+#include "DiagnosticCommand.hpp"
 #include "ScrollBounds.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
@@ -1125,7 +1126,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 // nullopt（`\` は回数と名指しも捨てる leader_started・ADR 0163）。
 [[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
 {
-    constexpr std::array<std::pair<VimAction, VimPrefix>, 8> prefixes{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 9> prefixes{
         {{VimAction::prefix_g, VimPrefix::g},
          {VimAction::prefix_z, VimPrefix::z},
          {VimAction::replay_macro, VimPrefix::at},
@@ -1133,7 +1134,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
          {VimAction::set_mark, VimPrefix::mark},
          {VimAction::prefix_mark_line, VimPrefix::mark_line},
          {VimAction::prefix_mark_exact, VimPrefix::mark_exact},
-         {VimAction::prefix_bracket, VimPrefix::bracket}}};
+         {VimAction::prefix_bracket_back, VimPrefix::bracket_back},
+         {VimAction::prefix_bracket_forward, VimPrefix::bracket_forward}}};
     for (const auto &[from, prefix] : prefixes)
     {
         if (from == action)
@@ -1455,7 +1457,7 @@ namespace
     // と同じに オペレータを打ち消す（下の移動にならない鍵の道）。
     if (action == VimAction::prefix_g || action == VimAction::prefix_z ||
         action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact ||
-        action == VimAction::prefix_bracket)
+        action == VimAction::prefix_bracket_back || action == VimAction::prefix_bracket_forward)
     {
         return started_prefix(state, prefix_of(action).value_or(VimPrefix::g));
     }
@@ -2052,6 +2054,12 @@ namespace
     {
         return detail::language_queried(state, query.value(), escaped_or_refused(state, key));
     }
+    // `gl`（#1939）。同じく表に行が無かったときの歩に、札を出す効果だけを添える。
+    if (action.value() == VimAction::language_diagnostic)
+    {
+        return detail::diagnostic_commanded(state, DiagnosticCommand::show,
+                                            escaped_or_refused(state, key));
+    }
     return completed_prefix(state, view, action.value());
 }
 
@@ -2194,10 +2202,21 @@ namespace
 
 // `[` `]` の後ろの 1 鍵。族は未実装なので、どの鍵でも何も動かさずに失敗する（`[{` の `{` を
 // 段落の移動として流さない・保留中のオペレータも打ち消す・#1334）。Esc は鳴らさずに打ち消すだけで
-// 後ろの鍵が効く（`[<Esc>x` `d[<Esc>x` は x が消す・`z<Esc>` と同じ・実測・#1344）。
-[[nodiscard]] VimStep bracket_step(const VimState &state, const VimKey &key)
+// 後ろの鍵が効く（`[<Esc>x` `d[<Esc>x` は x が消す・`z<Esc>` と同じ・実測・#1344）。`[d` `]d`
+// は同じ失敗の歩に、診断の跳びの効果を回数つきで添える（#1939・Vim の `[d` は定義を表示するだけで
+// 本文もキャレットも変えない）。
+[[nodiscard]] VimStep bracket_step(const VimState &state, VimPrefix prefix, const VimKey &key)
 {
-    return escaped_or_refused(state, key);
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr || character->code != U'd')
+    {
+        return escaped_or_refused(state, key);
+    }
+    return detail::diagnostic_commanded(state,
+                                        prefix == VimPrefix::bracket_forward
+                                            ? DiagnosticCommand::next
+                                            : DiagnosticCommand::previous,
+                                        escaped_or_refused(state, key));
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
@@ -2226,8 +2245,9 @@ namespace
         return mark_jump_step(state, view, prefix, key);
     case VimPrefix::insert_register:
         return insert_register_step(state, view, key);
-    case VimPrefix::bracket:
-        return bracket_step(state, key);
+    case VimPrefix::bracket_back:
+    case VimPrefix::bracket_forward:
+        return bracket_step(state, prefix, key);
     case VimPrefix::leader:
         return detail::leader_step(state, view, key);
     case VimPrefix::leader_leader:
@@ -2809,6 +2829,10 @@ namespace
     return false;
 }
 [[nodiscard]] bool replaces(const VimLanguageQuery &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimDiagnosticCommand &) noexcept
 {
     return false;
 }

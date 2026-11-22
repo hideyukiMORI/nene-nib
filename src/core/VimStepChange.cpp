@@ -136,6 +136,10 @@ namespace
 {
     return caret_position(view);
 }
+[[nodiscard]] TextPosition change_position(const VimEditorView &view, const VimDiagnosticCommand &)
+{
+    return caret_position(view);
+}
 // `:s///c` の答えは置いた当たりの行頭を印に書いて返す（VimStepSubstituteConfirm.cpp）。
 [[nodiscard]] TextPosition change_position(const VimEditorView &view,
                                            const VimConfirmSubstitute &effect)

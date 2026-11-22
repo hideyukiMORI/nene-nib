@@ -373,5 +373,17 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_language_server_not_absolute, "语言服务器的命令须使用绝对路径：{0}"},
     {UiMessage::notice_language_server_script,
      "语言服务器不能使用 .cmd / .bat（请写成 node.exe 和脚本）：{0}"},
+    {UiMessage::operation_next_diagnostic_name, "下一个诊断"},
+    {UiMessage::operation_next_diagnostic_description, "移到下一个错误或警告（语言服务器诊断）"},
+    {UiMessage::operation_previous_diagnostic_name, "上一个诊断"},
+    {UiMessage::operation_previous_diagnostic_description,
+     "移到上一个错误或警告（语言服务器诊断）"},
+    {UiMessage::operation_show_diagnostic_name, "显示诊断"},
+    {UiMessage::operation_show_diagnostic_description, "在提示框中显示光标处诊断的全部内容"},
+    {UiMessage::operation_list_diagnostics_name, "诊断列表"},
+    {UiMessage::operation_list_diagnostics_description, "在 Ctrl+P 列表中查看已打开标签页的诊断"},
+    {UiMessage::palette_mark_diagnostics, "诊断"},
+    {UiMessage::notice_no_diagnostics, "没有诊断"},
+    {UiMessage::notice_no_diagnostic_here, "光标处没有诊断"},
 }};
 } // namespace nenenib::core

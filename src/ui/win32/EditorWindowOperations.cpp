@@ -14,6 +14,7 @@
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
 #include "DeleteUnit.hpp"
+#include "DiagnosticCommand.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "ExplorerRootChosen.hpp"
@@ -37,6 +38,7 @@
 #include "QueryLanguage.hpp"
 #include "RegisterShell.hpp"
 #include "RevealTab.hpp"
+#include "RunDiagnosticCommand.hpp"
 #include "SaveDocument.hpp"
 #include "SaveQuestion.hpp"
 #include "SaveState.hpp"
@@ -500,6 +502,10 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::copy_file_name, &EditorWindow::run_copy_file_name},
         {core::EditorOperation::close_other_tabs, &EditorWindow::run_close_other_tabs},
         {core::EditorOperation::close_right_tabs, &EditorWindow::run_close_right_tabs},
+        {core::EditorOperation::next_diagnostic, &EditorWindow::run_next_diagnostic},
+        {core::EditorOperation::previous_diagnostic, &EditorWindow::run_previous_diagnostic},
+        {core::EditorOperation::show_diagnostic, &EditorWindow::run_show_diagnostic},
+        {core::EditorOperation::list_diagnostics, &EditorWindow::run_list_diagnostics},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -768,6 +774,27 @@ void EditorWindow::run_close_right_tabs()
 {
     close_tabs_beside(application::TabSweep{controller_.tab_ids().at(controller_.active_tab()),
                                             application::TabSweepSide::right});
+}
+
+// 診断の 4 つ（#1939）。跳ぶ・札・一覧はどれも controller が文書の値の診断から決める。
+void EditorWindow::run_next_diagnostic()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::next});
+}
+
+void EditorWindow::run_previous_diagnostic()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::previous});
+}
+
+void EditorWindow::run_show_diagnostic()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::show});
+}
+
+void EditorWindow::run_list_diagnostics()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::list});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

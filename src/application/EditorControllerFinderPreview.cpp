@@ -4,6 +4,7 @@
 #include "CommandChoiceKind.hpp"
 #include "CommandPalette.hpp"
 #include "DisplayText.hpp"
+#include "EditorControllerDetail.hpp"
 #include "FilePath.hpp"
 #include "FinderPreview.hpp"
 #include "FinderPreviews.hpp"
@@ -179,6 +180,14 @@ EditorController::preview_target(const core::CommandChoice &choice) const
         return {};
     case core::CommandChoiceKind::execute:
         return {std::nullopt, untitled_position(choice.command)};
+    case core::CommandChoiceKind::land:
+        // 診断の候補は開いているタブの文書（手元の本文から窓を作る・#1939）。
+        if (const auto target = palette_diagnostic_of(choice); target.has_value())
+        {
+            const auto views = detail::tab_views(state_, active_document_view());
+            return {views.at(target.value().tab).path, target.value().tab};
+        }
+        return {};
     case core::CommandChoiceKind::fill:
     case core::CommandChoiceKind::operate:
         return {};
@@ -186,11 +195,16 @@ EditorController::preview_target(const core::CommandChoice &choice) const
     std::unreachable();
 }
 
-// 全文検索の当たりは面の index 番目の当たり（open_project_hit と同じ対応）。ほかの候補は無し。
+// 全文検索の当たりは面の index 番目の当たり（open_project_hit と同じ対応）、診断は控えた候補の
+// 印（#1939）。ほかの候補は無し。
 std::optional<PreviewAnchor>
 EditorController::preview_anchor_of(const core::CommandPalette &palette,
                                     const core::CommandChoice &choice) const
 {
+    if (const auto target = palette_diagnostic_of(choice); target.has_value())
+    {
+        return target.value().anchor;
+    }
     if (choice.origin != core::PaletteOrigin::project_hit ||
         palette.selected() >= project_search_.hits.size())
     {

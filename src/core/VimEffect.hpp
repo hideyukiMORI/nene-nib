@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VimConfirmSubstitute.hpp"
+#include "VimDiagnosticCommand.hpp"
 #include "VimInsertAt.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimInsertString.hpp"
@@ -35,5 +36,5 @@ using VimEffect =
                  VimInsertString, VimNewLine, VimInsertAt, VimReplaceRange, VimRemoveBlock,
                  VimReplaceBlock, VimInsertBlock, VimUndo, VimRedo, VimOpenCommandLine,
                  VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand, VimConfirmSubstitute,
-                 VimLanguageQuery>;
+                 VimLanguageQuery, VimDiagnosticCommand>;
 } // namespace nenenib::core
