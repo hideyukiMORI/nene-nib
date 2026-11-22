@@ -81,7 +81,8 @@ nenenib_target(nenenib_core core STATIC
     src/core/KnownLanguageServers.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
     src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
-    src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/DiagnosticJump.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
+    src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/DiagnosticJump.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp
+    src/core/LspProgress.cpp src/core/ServerLogLine.cpp)
 # 版を core へ渡すのはこの 1 行だけ（AppIdentity.cpp の翻訳単位だけ・D90・#1677・CNF-007 が照合する）。
 set_source_files_properties(src/core/AppIdentity.cpp PROPERTIES
     COMPILE_DEFINITIONS "NENENIB_APP_VERSION=\"${PROJECT_VERSION}\"")
@@ -102,6 +103,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
     src/application/EditorControllerLanguageServer.cpp src/application/EditorControllerLanguageRoots.cpp src/application/ServerCommand.cpp
+    src/application/LanguageServerLog.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
     src/application/EditorControllerLanguageRequests.cpp src/application/InsertCompletion.cpp
     src/application/EditorControllerLanguageQueries.cpp
@@ -254,6 +256,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LanguageServerSlotTests.cpp
     tests/unit/LanguageRootTests.cpp
     tests/unit/LanguageServerCandidateTests.cpp
+    tests/unit/LanguageServerLogTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp
     tests/unit/UtfPropertyTests.cpp

@@ -1435,6 +1435,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.explorer = explorer_view();
     add_minimap(result);
     add_diagnostics(result);
+    add_language_server_status(result);
     result.start_screen = start_screen_view();
     result.context_menu = context_menu_view();
     result.completion = completion_view();

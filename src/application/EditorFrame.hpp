@@ -154,6 +154,15 @@ struct EditorFrame
     // キャレットの上の診断の文（決定 4・core::diagnostic_notice）。command_message があれば値なし
     // （ほかの知らせが勝つ）で、renderer は知らせの欄に同じ描き方で書く。状態に積まない。
     std::optional<core::DisplayText> diagnostic_message{};
+    // アクティブな文書を受ける言語サーバーの進み具合か起動中の 1 行
+    // （ADR 0160 の 2026-11-22 の追補・EditorController::language_server_status と
+    // 同じ値）。renderer は core::status_server_text で件数の後ろに並べて右端の欄へ書く
+    // （#1950 のレビュー R2）。
+    std::optional<core::DisplayText> language_server_status{};
+    // 言語サーバーがアクティブな文書を受けているか（EditorController::language_server_served と
+    // 同じ値・#1950 のレビュー R3）。真なら右端の欄は進み具合の有無を問わず一定の幅
+    // （core::status_server_item が server）。
+    bool language_server_served = false;
     // 起動画面（ADR 0172 の決定 1・2）。出る条件（start_screen_shown）が真のときだけ値を持つ。
     // renderer は値があれば本文の案内の代わりにこれを操作中の枠に描く（段 2・#1018）。
     std::optional<StartScreenView> start_screen{};

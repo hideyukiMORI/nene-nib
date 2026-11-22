@@ -149,6 +149,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_narrow_pane_description, "缩小当前窗格，扩大另一个窗格"},
     {UiMessage::operation_even_panes_name, "均分窗格"},
     {UiMessage::operation_even_panes_description, "将两个窗格恢复为相同大小"},
+    {UiMessage::operation_open_language_server_log_name, "打开语言服务器日志"},
+    {UiMessage::operation_open_language_server_log_description,
+     "在无标题标签页中打开语言服务器的错误输出和消息"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -403,5 +406,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
      "安装 {0} 后重新打开设置即可显示在这里（修改了 PATH 时请重新启动 Nib）"},
     {UiMessage::settings_lsp_stopped_reason, "多次启动失败后已停止。:set lsp 可重新启动"},
     {UiMessage::settings_lsp_more, "查看其他 {0} 种语言"},
+    {UiMessage::notice_language_server_log_empty, "还没有语言服务器日志"},
+    {UiMessage::status_language_server_starting, "{0}：正在启动"},
 }};
 } // namespace nenenib::core

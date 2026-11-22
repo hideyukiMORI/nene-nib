@@ -170,6 +170,9 @@ inline constexpr UiTextColumn ui_texts_english{{
      "Make the current pane smaller and the other pane larger"},
     {UiMessage::operation_even_panes_name, "Equalize Panes"},
     {UiMessage::operation_even_panes_description, "Make the two panes the same size again"},
+    {UiMessage::operation_open_language_server_log_name, "Open Language Server Log"},
+    {UiMessage::operation_open_language_server_log_description,
+     "Open the language servers' error output and messages in an untitled tab"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -460,5 +463,7 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::settings_lsp_stopped_reason,
      "Stopped after repeated failures. :set lsp starts it again"},
     {UiMessage::settings_lsp_more, "Show {0} more languages"},
+    {UiMessage::notice_language_server_log_empty, "No language server log yet"},
+    {UiMessage::status_language_server_starting, "{0}: starting"},
 }};
 } // namespace nenenib::core

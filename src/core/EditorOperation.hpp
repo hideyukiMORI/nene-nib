@@ -106,6 +106,9 @@ enum class EditorOperation : std::uint8_t
     // 鍵が無い・D82）、両方のモードの F1 の一覧から。広げる・狭めるは分割の向きに 5 升。
     widen_pane,
     narrow_pane,
-    even_panes
+    even_panes,
+    // 言語サーバーの記録（標準エラーと知らせ）を無題のタブに写して開く（ADR 0160 の 2026-11-22 の
+    // 追補・LSP 段 S8・Ex の `:LspLog` と同じ）。鍵は無く、両方のモードの F1 の一覧に載る。
+    open_language_server_log
 };
 } // namespace nenenib::core
