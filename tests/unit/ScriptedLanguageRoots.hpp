@@ -25,9 +25,9 @@ class ScriptedLanguageRoots final : public nenenib::application::LanguageRootPor
   public:
     void find(nenenib::application::LanguageRootRequest request) override
     {
-        auto found = nenenib::core::lsp_root_found(request.folder, request.language,
-                                                   [this](const nenenib::core::FilePath &candidate)
-                                                   { return present(candidate.text()); });
+        auto found = nenenib::core::lsp_root_found(
+            request.folder, request.ceiling, request.language,
+            [this](const nenenib::core::FilePath &candidate) { return present(candidate.text()); });
         requests_.push_back(request);
         auto &queue = held_ ? held_answers_ : answers_;
         queue.push_back(

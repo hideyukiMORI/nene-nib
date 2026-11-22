@@ -3,8 +3,10 @@
 #include "AsciiCase.hpp"
 #include "FileFolder.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -257,10 +259,29 @@ std::span<const LspRootTier> lsp_root_markers(Language language) noexcept
     return language_roots.at(std::to_underlying(language)).second;
 }
 
-std::vector<FilePath> lsp_root_folders(const FilePath &folder)
+namespace
+{
+// 上れる下限の長さに、folder を含む ceiling の長さ（folder_spelling: 末尾の区切り 1 つを除く・根は
+// 根のまま）を重ねる（#1960・#1963 のレビュー M1）。ceiling は folder の前の部分で区切りの境目に
+// ある（folder_contains と同じ畳み方）ので、上る列は ceiling のフォルダで止まる。根の下限より短く
+// ならない。
+[[nodiscard]] std::size_t ceiling_floor(const FilePath &folder,
+                                        const std::optional<FilePath> &ceiling) noexcept
+{
+    const std::size_t floor = climb_floor(folder.text());
+    if (!ceiling.has_value() || !folder_contains(ceiling.value(), folder))
+    {
+        return floor;
+    }
+    return std::max(floor, folder_spelling(ceiling.value()).size());
+}
+} // namespace
+
+std::vector<FilePath> lsp_root_folders(const FilePath &folder,
+                                       const std::optional<FilePath> &ceiling)
 {
     std::vector<FilePath> folders{folder};
-    const std::size_t floor = climb_floor(folder.text());
+    const std::size_t floor = ceiling_floor(folder, ceiling);
     while (folders.size() < lsp_root_search_depth)
     {
         const std::string_view here = folders.back().text();
