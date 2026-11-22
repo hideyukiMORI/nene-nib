@@ -8,6 +8,8 @@
 
 namespace nenenib::adapters::win32
 {
+using application::LanguageServerEvent;
+using application::LanguageServerSlot;
 using application::ServerExited;
 using application::ServerFailed;
 using application::ServerFailure;
@@ -16,6 +18,14 @@ using application::ServerStarted;
 
 namespace
 {
+// 席ごとに待つ handle の数（出ている読み・出ている書き・起きている子）。
+constexpr std::size_t handles_per_child = 3;
+// MsgWaitForMultipleObjectsEx が待てる数は MAXIMUM_WAIT_OBJECTS - 1（ADR 0160 の決定 2）。
+static_assert(application::language_server_slot_limit * handles_per_child +
+                      language_server_retired_limit <
+                  MAXIMUM_WAIT_OBJECTS,
+              "the pump waits on every slot's handles and the retired children together");
+
 // 枠の閉じた失敗を port の失敗へ写す（ADR 0160 の決定 3・6）。見出しの誤りは read_failed。
 ServerFailure failure_of(core::LspFrameFailure failure) noexcept
 {
@@ -42,58 +52,79 @@ Win32LanguageServer::Win32LanguageServer(std::function<void()> arrived, std::siz
 // 待たない。子と退く子の job を閉じると、KILL_ON_JOB_CLOSE が残っている子と子孫を殺す。
 Win32LanguageServer::~Win32LanguageServer()
 {
-    child_.reset();
+    for (auto &child : children_)
+    {
+        child.reset();
+    }
     retired_.clear();
 }
 
-std::expected<void, ServerFailure> Win32LanguageServer::start(application::ServerLaunch launch)
+std::expected<void, ServerFailure> Win32LanguageServer::start(LanguageServerSlot slot,
+                                                              application::ServerLaunch launch)
 {
-    stop();
+    stop(slot);
+    const std::size_t index = application::slot_index(slot);
     auto child = std::make_unique<ServerChild>(read_bytes_);
     const auto spawned = child->spawn(launch);
     if (!spawned.has_value())
     {
         return std::unexpected(spawned.error());
     }
-    child_ = std::move(child);
-    pending_.clear();
-    writable_ = true;
-    post(ServerStarted{});
-    issue_read();
+    children_.at(index) = std::move(child);
+    pending_.at(index).clear();
+    writable_.at(index) = true;
+    post(index, ServerStarted{});
+    issue_read(index);
     refresh();
     return {};
 }
 
-void Win32LanguageServer::send(std::string body)
+void Win32LanguageServer::send(LanguageServerSlot slot, std::string body)
 {
-    if (!child_ || !writable_)
+    const std::size_t index = application::slot_index(slot);
+    const auto &child = children_.at(index);
+    if (!child || !writable_.at(index))
     {
-        post(ServerFailed{ServerFailure::write_failed});
+        post(index, ServerFailed{ServerFailure::write_failed});
         return;
     }
-    const auto pushed = child_->writer().push(core::lsp_framed(body));
+    const auto pushed = child->writer().push(core::lsp_framed(body));
     if (!pushed.has_value())
     {
-        write_failed();
+        write_failed(index);
     }
     refresh();
 }
 
 // shutdown は送らない（呼ぶ側の役）。パイプを閉じた子は退く子の枠へ移し、待たずに戻る（ADR 0160
-// の追補）。たまっていた出来事は捨てる（古い子の本文を次の子の前に混ぜない）。
-void Win32LanguageServer::stop()
+// の追補）。その席のたまっていた出来事は捨てる（古い子の本文を次の子の前に混ぜない・ほかの席の
+// 出来事は残す）。
+void Win32LanguageServer::stop(LanguageServerSlot slot)
 {
-    events_.clear();
-    if (child_)
+    std::erase_if(events_, [slot](const LanguageServerEvent &event) { return event.slot == slot; });
+    const std::size_t index = application::slot_index(slot);
+    auto &child = children_.at(index);
+    if (child)
     {
-        child_->close_pipes();
-        retired_.push_back(std::move(child_));
+        child->close_pipes();
+        retire(std::move(child));
     }
-    writable_ = false;
+    writable_.at(index) = false;
     refresh();
 }
 
-std::vector<application::ServerEvent> Win32LanguageServer::collect()
+// 退く子の枠へ移す。上限に達していれば最も古い退く子を先に殺して片付ける（待たない）。
+void Win32LanguageServer::retire(std::unique_ptr<ServerChild> child)
+{
+    if (retired_.size() >= language_server_retired_limit)
+    {
+        retired_.front()->terminate();
+        retired_.erase(retired_.begin());
+    }
+    retired_.push_back(std::move(child));
+}
+
+std::vector<LanguageServerEvent> Win32LanguageServer::collect()
 {
     return std::exchange(events_, {});
 }
@@ -120,9 +151,9 @@ void Win32LanguageServer::completed(HANDLE handle)
     {
         return;
     }
-    if (!retire_finished(handle) && child_)
+    if (!retire_finished(handle))
     {
-        child_completed(handle);
+        children_completed(handle);
     }
     refresh();
 }
@@ -150,150 +181,172 @@ bool Win32LanguageServer::retire_finished(HANDLE handle)
     return true;
 }
 
-void Win32LanguageServer::child_completed(HANDLE handle)
+// 起きている子のうち handle を持つ席の I/O を回収する。
+void Win32LanguageServer::children_completed(HANDLE handle)
 {
-    if (handle == child_->reader().event() && child_->reader().pending())
+    for (std::size_t index = 0; index < children_.size(); ++index)
     {
-        read_completed();
-    }
-    else if (handle == child_->writer().event() && child_->writer().pending())
-    {
-        write_completed();
-    }
-    else if (handle == child_->process())
-    {
-        process_completed();
+        if (children_.at(index))
+        {
+            child_completed(index, handle);
+        }
     }
 }
 
-void Win32LanguageServer::post(application::ServerEvent event)
+// 席 index の子の handle なら回収する（ほかの席の handle なら何もしない）。
+void Win32LanguageServer::child_completed(std::size_t index, HANDLE handle)
+{
+    auto &child = *children_.at(index);
+    if (handle == child.reader().event() && child.reader().pending())
+    {
+        read_completed(index);
+    }
+    else if (handle == child.writer().event() && child.writer().pending())
+    {
+        write_completed(index);
+    }
+    else if (handle == child.process())
+    {
+        process_completed(index);
+    }
+}
+
+void Win32LanguageServer::post(std::size_t index, application::ServerEvent event)
 {
     const bool was_empty = events_.empty();
-    events_.push_back(std::move(event));
+    events_.push_back(LanguageServerEvent{.slot = application::language_server_slots.at(index),
+                                          .event = std::move(event)});
     if (was_empty && arrived_)
     {
         arrived_();
     }
 }
 
-void Win32LanguageServer::issue_read()
+void Win32LanguageServer::issue_read(std::size_t index)
 {
-    const auto issued = child_->reader().issue();
+    const auto issued = children_.at(index)->reader().issue();
     if (!issued.has_value())
     {
-        read_ended(issued.error());
+        read_ended(index, issued.error());
     }
 }
 
 // 受けたバイト列は次の ReadFile の前に枠へ写す（buffer は次の issue で上書きされる）。
-void Win32LanguageServer::read_completed()
+void Win32LanguageServer::read_completed(std::size_t index)
 {
-    const auto bytes = child_->reader().finish();
+    const auto bytes = children_.at(index)->reader().finish();
     if (!bytes.has_value())
     {
-        read_ended(bytes.error());
+        read_ended(index, bytes.error());
         return;
     }
-    if (deliver(bytes.value()))
+    if (deliver(index, bytes.value()))
     {
-        issue_read();
+        issue_read(index);
     }
 }
 
 // 繋いだバイト列を core の lsp_frames で切り、揃った本文を積んで consumed だけ捨てる。枠が
 // 壊れたら知らせて false（流れの区切りを失ったので以後は読まない・同じ読みの中で壊れた枠の前に
 // あった本文も積まない）。
-bool Win32LanguageServer::deliver(std::string_view bytes)
+bool Win32LanguageServer::deliver(std::size_t index, std::string_view bytes)
 {
-    pending_.append(bytes);
-    const auto frames = core::lsp_frames(pending_);
+    auto &pending = pending_.at(index);
+    pending.append(bytes);
+    const auto frames = core::lsp_frames(pending);
     if (!frames.has_value())
     {
-        pending_.clear();
-        post(ServerFailed{failure_of(frames.error())});
+        pending.clear();
+        post(index, ServerFailed{failure_of(frames.error())});
         return false;
     }
     for (const std::string_view body : frames.value().bodies)
     {
-        post(ServerMessage{std::string(body)});
+        post(index, ServerMessage{std::string(body)});
     }
-    pending_.erase(0, frames.value().consumed);
+    pending.erase(0, frames.value().consumed);
     return true;
 }
 
 // 相手が閉じた（ERROR_BROKEN_PIPE / ERROR_HANDLE_EOF）のは終わりで、失敗ではない。
 // 未完は何もしない。
-void Win32LanguageServer::read_ended(DWORD error)
+void Win32LanguageServer::read_ended(std::size_t index, DWORD error)
 {
     if (error != ERROR_IO_INCOMPLETE && error != ERROR_BROKEN_PIPE && error != ERROR_HANDLE_EOF)
     {
-        post(ServerFailed{ServerFailure::read_failed});
+        post(index, ServerFailed{ServerFailure::read_failed});
     }
 }
 
-void Win32LanguageServer::write_completed()
+void Win32LanguageServer::write_completed(std::size_t index)
 {
-    const auto finished = child_->writer().finish();
+    const auto finished = children_.at(index)->writer().finish();
     if (!finished.has_value() && finished.error() != ERROR_IO_INCOMPLETE)
     {
-        write_failed();
+        write_failed(index);
     }
 }
 
-// 送れなかった枠と行列の残りは捨て、以後の send は write_failed にする。
-void Win32LanguageServer::write_failed()
+// 送れなかった枠と行列の残りは捨て、以後のその席の send は write_failed にする。
+void Win32LanguageServer::write_failed(std::size_t index)
 {
-    child_->writer().drain();
-    writable_ = false;
-    post(ServerFailed{ServerFailure::write_failed});
+    children_.at(index)->writer().drain();
+    writable_.at(index) = false;
+    post(index, ServerFailed{ServerFailure::write_failed});
 }
 
 // 子が終わったら子孫を Job Object で片付け、出力の EOF を待たずに ServerExited へ進む（ADR 0160
 // の追補）。終わる前に書かれた本文はパイプに残っているので、待たずに読める分を先に渡す。
-void Win32LanguageServer::process_completed()
+void Win32LanguageServer::process_completed(std::size_t index)
 {
-    child_->terminate();
-    drain_output();
+    auto &child = children_.at(index);
+    child->terminate();
+    drain_output(index);
     DWORD code = 0;
-    GetExitCodeProcess(child_->process(), &code);
-    child_.reset();
-    writable_ = false;
-    post(ServerExited{static_cast<std::int32_t>(code)});
+    GetExitCodeProcess(child->process(), &code);
+    child.reset();
+    writable_.at(index) = false;
+    post(index, ServerExited{static_cast<std::int32_t>(code)});
 }
 
 // 出ている読みが完了していれば回収して次を出す。パイプが空なら読みは未完のまま止まる。
-void Win32LanguageServer::drain_output()
+void Win32LanguageServer::drain_output(std::size_t index)
 {
-    while (child_->reader().pending())
+    auto &reader = children_.at(index)->reader();
+    while (reader.pending())
     {
-        const auto bytes = child_->reader().finish();
+        const auto bytes = reader.finish();
         if (!bytes.has_value())
         {
-            read_ended(bytes.error());
+            read_ended(index, bytes.error());
             return;
         }
-        if (!deliver(bytes.value()))
+        if (!deliver(index, bytes.value()))
         {
             return;
         }
-        issue_read();
+        issue_read(index);
     }
 }
 
 void Win32LanguageServer::refresh()
 {
     waitable_.clear();
-    if (child_)
+    for (const auto &child : children_)
     {
-        if (child_->reader().pending())
+        if (!child)
         {
-            waitable_.push_back(child_->reader().event());
+            continue;
         }
-        if (child_->writer().pending())
+        if (child->reader().pending())
         {
-            waitable_.push_back(child_->writer().event());
+            waitable_.push_back(child->reader().event());
         }
-        waitable_.push_back(child_->process());
+        if (child->writer().pending())
+        {
+            waitable_.push_back(child->writer().event());
+        }
+        waitable_.push_back(child->process());
     }
     for (const auto &retired : retired_)
     {

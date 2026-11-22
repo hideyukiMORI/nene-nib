@@ -76,3 +76,12 @@ LSP 3.17 は子プロセスと stdio で JSON-RPC 2.0 を話す（`Content-Lengt
 - **決定 6 の失敗の値**: `ServerFailure` に `not_absolute`（実行ファイルが絶対パスでない）と `script_refused`（`.cmd` / `.bat`・大小を問わない）を足す。2026-10-28 の追補の「絶対パスでなければ `not_found`」は `not_absolute` に改める。adapter の `ServerChild::spawn` は起こす前に「絶対パスか → `.cmd` / `.bat` でないか（在るかを見ずに断る）→ 在るか」の順に見る。`.cmd` / `.bat` は `CreateProcessW` が暗黙に `cmd.exe` を挟み、引数の引用の規則が変わる（BatBadBut の種類の問題）ので起こさない。npm の言語サーバーは `node.exe` とスクリプトの形で書く。判定の前に実行ファイルの綴りの末尾の `.` と空白を落とし、`CreateProcessW` にも落とした綴りを渡す（Win32 の経路の正規化がそれらを落とすので、`server.cmd.` や `server.cmd ` も cmd.exe を起こす・#1907 のレビュー M1）。
 - **知らせ**: controller の `start_failure_message` の 1 本が `not_found`・`not_absolute`・`script_refused` を `UiMessage` の 3 値（`notice_language_server_not_found` `_not_absolute` `_script`・3 列）に、ほかを今までの「言語サーバーを起こせませんでした」に写す。PATH の探索と設定の面の候補は段 S4。
 - **契約**: `nib_language_server_tests`（相対は `not_absolute`・`.cmd` `.BAT` は `script_refused`）・`nib_tests --language-server`（4 種の文）。
+
+## 追補（2026-11-20・#1909・設計席の決め・LSP 段 S2）: port は 1 本のまま、席の番号で子を指す
+
+決定 1 の「子 1 本」と決定 10 の限界「同時は 1 本まで」を改める（文書の側は ADR 0161 の同じ日の追補）。
+
+- **決定 1**: port は `LanguageServerPort` の 1 本のまま、閉じた値 `LanguageServerSlot`（`first`〜`fourth`・上限は `language_server_slot_limit` の 1 つ＝4・`language_server_slots` の並びと static_assert）で子を指す。`start(slot, launch)`（その席の前の子は先に stop）・`send(slot, body)`・`stop(slot)`（その席のまだ collect していない出来事だけを捨て、ほかの席の出来事は残す）・`expire_retired()`（全部の席の退く子）・`collect() -> std::vector<LanguageServerEvent{slot, event}>`（全部の席の出来事を届いた順に 1 回で）。合図は今の `work_message` のまま（新しい合図は足さない・ADR 0062 の決定 7）。controller は止めた席の同じ集めの残りを席ごとの `generation` で、子の居ない席の出来事を段で捨てる。
+- **決定 2 の待ちの配列**: adapter `Win32LanguageServer` は席ごとに子・パイプ・Job Object を 1 組持つ。待つ handle は席ごとに最大 3 本（出ている読み・出ている書き・子）と退く子。退く子は `language_server_retired_limit`（8）までで、超えたら最も古い退く子を Job Object ごと殺して片付ける（待たない）。最大 4 × 3 ＋ 8 ＝ 20 本で、`MsgWaitForMultipleObjectsEx` の上限（`MAXIMUM_WAIT_OBJECTS` − 1 ＝ 63）の内（`Win32LanguageServer.cpp` の static_assert）。pump（`Main.cpp`）は変えない。
+- **決定 6 の失敗**: 自動の再起動の回数と `given_up` は言語ごと（ADR 0161 の同じ日の追補）。
+- **契約**: adapters `nib_language_server_tests` の `verify_two_slots`（替え玉を 2 席に同時に起こし、本文は送った席の子だけが返し・出来事は席を添えて届き・片方を止めてももう片方は答え続ける）。application は替え玉 `ScriptedLanguageServer` が席を覚える（`started_slots` `stopped_slots` `sent_to`・席を名指さずに仕込んだ出来事は最後に起こした席）。

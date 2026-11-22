@@ -89,6 +89,9 @@
 #include "LanguageQueryKind.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerSlot.hpp"
+#include "LanguageServerTrouble.hpp"
+#include "LanguageServers.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
@@ -373,11 +376,11 @@ class EditorController final
     [[nodiscard]] bool request_definition();
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
-    // `initialize` の答えから読んだサーバーの能力（決定 3）。段 B の `triggerCharacters` の照合と
-    // 試験が読む口で、子が居なければ空。
-    [[nodiscard]] const ServerAbilities &language_server_abilities() const noexcept
+    // アクティブな文書を受ける席の、`initialize` の答えから読んだサーバーの能力（決定 3）。段 B の
+    // `triggerCharacters` の照合と試験が読む口で、受ける席が無ければ空。
+    [[nodiscard]] const ServerAbilities &language_server_abilities() const
     {
-        return language_server_.abilities;
+        return active_language_server().abilities;
     }
 
   private:
@@ -682,7 +685,7 @@ class EditorController final
     // サーバーの Position は lsp_offset_of の 1 本）。
     [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
     [[nodiscard]] core::TextPosition landed_position(const core::TextPosition &position) const;
-    [[nodiscard]] core::TextPosition landed_position(const core::LspPosition &position) const;
+    [[nodiscard]] core::TextPosition landed_position(const LspLanding &landing) const;
     // 進み具合の表示値（面が `!` の出どころのときだけ）。
     [[nodiscard]] std::optional<ProjectSearchView> project_search_view() const;
     // 見えている当たりの行の表示値（面が `!` の出どころのときだけ・rows と同じ窓）。
@@ -907,27 +910,47 @@ class EditorController final
     // 言語サーバー（ADR 0160 の決定 1・5〜7・9・追補）。本体は EditorControllerLanguageServer.cpp。
     // reconcile は apply と起動の終わりで、設定とアクティブな文書の言語から起きているべき子に
     // 合わせる（オフで子が居なければ分岐 1 つ）。tick は古さの合図で使う人の操作ではない。
+    // 席（2026-11-20 の追補・段 S2）: serving はその言語の文書を受ける席、active_language_server
+    // はアクティブな文書を受ける席のつながり（無ければ空）、holding はアクティブな文書を開いた席。
+    // 失敗の数と given_up は言語ごと（trouble_of）。席が満ちたら yield
+    // が最も前に使った席を譲らせる。
     void reconcile_language_server();
+    [[nodiscard]] std::optional<LanguageServerSlot> serving_slot(core::Language language) const;
+    [[nodiscard]] const LanguageServerLink &active_language_server() const;
+    [[nodiscard]] std::optional<LanguageServerSlot> holding_slot() const;
+    [[nodiscard]] std::optional<LanguageServerSlot> free_slot() const;
+    [[nodiscard]] LanguageServerLink &link_of(LanguageServerSlot slot);
+    [[nodiscard]] LanguageServerTrouble &trouble_of(core::Language language);
+    [[nodiscard]] bool language_server_given_up(core::Language language) const;
+    void resume_language_servers();
     void consider_language_server(core::Language language);
+    void yield_language_server();
     [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language) const;
-    void start_language_server(core::Language language, ServerLaunch launch);
-    void stop_language_server();
-    void shut_language_server();
-    void send_lsp_request(LspRequestKind kind, std::string_view method,
+    [[nodiscard]] std::optional<ServerLaunch>
+    language_server_launch(core::Language language, const core::FilePath &root) const;
+    void start_language_server(LanguageServerSlot slot, core::Language language,
+                               ServerLaunch launch);
+    // 席 slot がアクティブな文書を受ける・開いているなら、補完・hover・定義の答えを消す（止める・
+    // 譲る道の入口で呼ぶ・ほかの席を止めてもアクティブな文書の答えは残す・#1916 のレビュー R1）。
+    void drop_language_answers_of(LanguageServerSlot slot);
+    void stop_language_server(LanguageServerSlot slot);
+    void shut_language_server(LanguageServerSlot slot);
+    void send_lsp_request(LanguageServerSlot slot, LspRequestKind kind,
                           const core::JsonValue &params, PendingLspContext context = {});
-    void send_lsp_cancel(std::int64_t id);
-    void language_server_failed(core::UiMessage message);
+    void send_lsp_cancel(LanguageServerSlot slot, std::int64_t id);
+    void language_server_failed(LanguageServerSlot slot, core::UiMessage message);
     void collect_language_server();
-    void receive_server(const ServerStarted &started);
-    void receive_server(const ServerMessage &message);
-    void receive_server(const ServerExited &exited);
-    void receive_server(const ServerFailed &failed);
-    void end_language_server();
-    void receive_lsp(const core::LspResponse &response);
-    void receive_lsp(const core::LspNotification &notification);
-    void receive_lsp(const core::LspRequest &request);
+    void receive_server(LanguageServerSlot slot, const ServerStarted &started);
+    void receive_server(LanguageServerSlot slot, const ServerMessage &message);
+    void receive_server(LanguageServerSlot slot, const ServerExited &exited);
+    void receive_server(LanguageServerSlot slot, const ServerFailed &failed);
+    void end_language_server(LanguageServerSlot slot);
+    void receive_lsp(LanguageServerSlot slot, const core::LspResponse &response);
+    void receive_lsp(LanguageServerSlot slot, const core::LspNotification &notification);
+    void receive_lsp(LanguageServerSlot slot, const core::LspRequest &request);
     void accept(const LanguageServerTick &);
-    void expire_lsp_request(const PendingLspRequest &request);
+    void age_lsp_requests(LanguageServerSlot slot);
+    void expire_lsp_request(LanguageServerSlot slot, const PendingLspRequest &request);
     void answer_lsp(core::ExLspRequest request);
     // `:set language=` `:set language?`（ADR 0123 の追補 2026-11-13 の決定 8）。
     void answer_display_language(const core::ExDisplayLanguageRequest &request);
@@ -941,18 +964,21 @@ class EditorController final
     // ごとに 1 通の `didChange` に束ね、送っていないアクティブな文書を `didOpen` する。close_all は
     // `shutdown` の前（notify）と stop（送らない）で全部を閉じて診断を片付ける。edit は編集の
     // 1 本（replace・undo・redo）が本文を置く前に呼び、診断をずらし、開いた文書なら変更を積む。
-    void sync_language_server_documents();
-    void close_language_server_documents(bool notify);
-    void close_language_server_document(const LanguageServerDocument &document, bool notify);
-    void open_language_server_document(AutosaveId tab, std::string uri);
-    void flush_language_server_changes(LanguageServerDocument &document);
-    [[nodiscard]] std::optional<std::string> language_server_uri() const;
+    void sync_language_server_documents(LanguageServerSlot slot, bool serves);
+    void close_language_server_documents(LanguageServerSlot slot, bool notify);
+    void close_language_server_document(LanguageServerSlot slot,
+                                        const LanguageServerDocument &document, bool notify);
+    void open_language_server_document(LanguageServerSlot slot, AutosaveId tab, std::string uri);
+    void flush_language_server_changes(LanguageServerSlot slot, LanguageServerDocument &document);
+    [[nodiscard]] std::optional<std::string> language_server_uri(LanguageServerSlot slot) const;
+    // アクティブな文書を言語サーバーへ送れる形か（パスがあり本文が上限以下・言語は問わない）。
+    [[nodiscard]] bool language_server_sendable() const;
     void language_server_edit(const core::Edit &edit);
     // 保存の成功の後（ADR 0161 の 2026-11-20 の追補）。サーバーが `save` を求め、アクティブな文書を
     // 保存したパスの URI のまま開いていれば、積んだ変更を流してから `didSave` を 1 通送る。
     void language_server_saved(const core::FilePath &path);
     [[nodiscard]] bool same_document_uri(std::string_view sent, std::string_view answered) const;
-    void receive_diagnostics(const core::LspNotification &notification);
+    void receive_diagnostics(LanguageServerSlot slot, const core::LspNotification &notification);
     void place_diagnostics(AutosaveId tab, std::vector<core::Diagnostic> diagnostics,
                            std::uint64_t version, core::DiagnosticsCount count);
     // 文脈つきの要求と答え（ADR 0190 の決定 1〜3）。本体は EditorControllerLanguageRequests.cpp。
@@ -960,13 +986,16 @@ class EditorController final
     // まま）で、未送信の変更を流してから返す。send_language_request は同じ種類の古い要求を
     // 取り消して送る。receive_answer は文脈を照合して答えを状態に置く（合わなければ捨てる・
     // 知らせない）。
-    [[nodiscard]] LanguageServerDocument *requestable_document(bool ability);
-    void send_language_request(LspRequestKind kind, std::string_view method, core::JsonValue params,
+    [[nodiscard]] std::optional<LanguageServerSlot>
+    requestable_slot(bool ServerAbilities::*ability);
+    [[nodiscard]] LanguageServerDocument &active_document_of(LanguageServerSlot slot);
+    void send_language_request(LanguageServerSlot slot, LspRequestKind kind, core::JsonValue params,
                                PendingLspContext context);
-    void cancel_lsp_requests(LspRequestKind kind);
-    [[nodiscard]] core::LspPosition request_position() const;
+    void cancel_lsp_requests(LanguageServerSlot slot, LspRequestKind kind);
+    [[nodiscard]] core::LspPosition request_position(LanguageServerSlot slot) const;
     [[nodiscard]] LspRequestContext request_context() const;
-    void receive_answer(const PendingLspRequest &request, const core::LspResponse &response);
+    void receive_answer(LanguageServerSlot slot, const PendingLspRequest &request,
+                        const core::LspResponse &response);
     // 問いと答えの使い方（ADR 0190 の決定 6〜8）。本体は EditorControllerLanguageQueries.cpp。
     // query_language は操作（F12・情報を表示）と Vim の `gd` `K` の効果が入る 1 本で、出せたら真。
     // settle_language_answers は答えが届く合図の道の中で、空の hover を知らせ、定義の答えを 1 回
@@ -1013,7 +1042,7 @@ class EditorController final
     void settle_language_answers(LspRequestKind kind);
     void settle_hover_answer();
     void settle_definition_answer();
-    void land_definition(const std::vector<core::LspLocation> &locations);
+    void land_definition(const LanguageDefinition &definition);
     // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
     // メニュー・IME の変換・補完の面が開いていない。awaits_nothing
     // は問いを出したときと同じ「何も待って いない」状態（Vim は NORMAL
@@ -1863,9 +1892,9 @@ class EditorController final
     // 押したタブと、最後に面が送った位置（先頭の行と画面行・レビュー V-1476 の M-2 と L-6）。
     std::optional<AutosaveId> minimap_grab_tab_;
     std::optional<MinimapAt> minimap_sent_;
-    // 言語サーバーとのつながり（ADR 0160 の決定 5・6）。EditorControllerLanguageServer.cpp の群
-    // だけが読み書きする。
-    LanguageServerLink language_server_;
+    // 言語サーバーの席ごとのつながり（ADR 0160 の決定 5・6・2026-11-20 の追補）。
+    // EditorControllerLanguage*.cpp の群だけが読み書きする。
+    LanguageServers language_servers_;
     // Vim の `map` の表（ADR 0176 の決定 2）。設定から refresh_key_map だけが作る。
     core::KeyMap key_map_;
     // この意図が頼む待ちのタイマー（EditorDelivery.map_timer）。apply の入口で空に戻し、待ちを
