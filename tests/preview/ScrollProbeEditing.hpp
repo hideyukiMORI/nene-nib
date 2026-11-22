@@ -18,6 +18,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageRoots.hpp"
 #include "ScriptedLanguageServer.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
@@ -61,13 +62,12 @@ class ScrollProbeEditing final
     [[nodiscard]] application::EditorPorts ports()
     {
         return application::EditorPorts{
-            appearance_,      clipboard_,   files_,       code_pages_,
-            settings_,        themes_,      session_,     history_,
-            folders_,         bookmarks_,   layouts_,     autosave_,
-            fonts_,           bell_,        markdown_,    reads_,
-            language_server_, wall_clock_,  printer_,     shell_registration_,
-            images_,          start_lists_, ui_language_, project_search_,
-            previews_,        reveal_,      links_};
+            appearance_, clipboard_,       files_,         code_pages_,     settings_,
+            themes_,     session_,         history_,       folders_,        bookmarks_,
+            layouts_,    autosave_,        fonts_,         bell_,           markdown_,
+            reads_,      language_server_, wall_clock_,    printer_,        shell_registration_,
+            images_,     start_lists_,     ui_language_,   project_search_, previews_,
+            reveal_,     links_,           language_roots_};
     }
 
     ScriptedAppearance appearance_{Reading{core::Appearance::dark}};
@@ -97,6 +97,7 @@ class ScrollProbeEditing final
     ScriptedPreview previews_;
     ScriptedReveal reveal_;
     ScriptedLinkOpen links_;
+    ScriptedLanguageRoots language_roots_;
     application::EditorController controller_;
 };
 } // namespace nenenib::tests::preview

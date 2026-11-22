@@ -78,6 +78,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageRoots.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -419,13 +420,12 @@ class AppearanceFakes final
     ports(const nenenib::application::AppearancePort &appearance)
     {
         return nenenib::application::EditorPorts{
-            appearance,      board,       files,        code_pages,
-            settings,        themes,      session,      history,
-            folders,         bookmarks,   text_layouts, autosave,
-            fonts,           bell,        markdown,     reads,
-            language_server, wall_clock,  printer,      shell_registration,
-            images,          start_lists, ui_language,  project_search,
-            previews,        reveal,      links};
+            appearance,   board,           files,         code_pages,     settings,
+            themes,       session,         history,       folders,        bookmarks,
+            text_layouts, autosave,        fonts,         bell,           markdown,
+            reads,        language_server, wall_clock,    printer,        shell_registration,
+            images,       start_lists,     ui_language,   project_search, previews,
+            reveal,       links,           language_roots};
     }
 
   private:
@@ -450,6 +450,7 @@ class AppearanceFakes final
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageRoots language_roots;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;

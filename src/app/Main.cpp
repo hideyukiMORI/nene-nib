@@ -29,6 +29,7 @@
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
 #include "Win32ImageAdapter.hpp"
+#include "Win32LanguageRootAdapter.hpp"
 #include "Win32LanguageServer.hpp"
 #include "Win32LinkOpenAdapter.hpp"
 #include "Win32MarkdownAdapter.hpp"
@@ -350,15 +351,15 @@ int run(HINSTANCE instance)
     nib_adapters::Win32PreviewAdapter previews(worker, code_pages);
     nib_adapters::Win32RevealAdapter reveal(worker);
     nib_adapters::Win32LinkOpenAdapter links(worker);
+    nib_adapters::Win32LanguageRootAdapter language_roots(worker);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
-            appearance,      clipboard,   files,        code_pages,
-            settings,        themes,      session,      history,
-            folders,         bookmarks,   text_layouts, autosave,
-            fonts,           bell,        markdown,     reads,
-            language_server, wall_clock,  printer,      shell_registration,
-            images,          start_lists, ui_language,  project_search,
-            previews,        reveal,      links},
+            appearance,   clipboard,       files,         code_pages,     settings,
+            themes,       session,         history,       folders,        bookmarks,
+            text_layouts, autosave,        fonts,         bell,           markdown,
+            reads,        language_server, wall_clock,    printer,        shell_registration,
+            images,       start_lists,     ui_language,   project_search, previews,
+            reveal,       links,           language_roots},
         nib_adapters::current_distribution(), initial_documents(given));
     const auto last_resort = last_resort_for(controller);
     timing.mark(nenenib::core::Milestone::document_opened);
@@ -370,7 +371,7 @@ int run(HINSTANCE instance)
     }
     bind_window_handle(*window.value(), clipboard, language_server);
     bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists,
-                     project_search, previews, reveal, links);
+                     project_search, previews, reveal, links, language_roots);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

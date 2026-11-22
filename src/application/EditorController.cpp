@@ -877,6 +877,9 @@ void EditorController::accept(const WorkCompleted &)
     // プレビューの画像は解析の結果の後（新しい結果が引き継いだ entry の券で採る・ADR 0155 の追補 50
     // ）。
     collect_preview_images();
+    // 言語サーバーの root を探した答え（ADR 0161 の 2026-11-22 の追補・段 S3）。頼んでいなければ
+    // 呼ばない。答えで起きた子の出来事を同じ合図で読むよう、言語サーバーの集めより前。
+    collect_language_roots();
     // 言語サーバー（ADR 0160 の決定 1）。子が居なければ呼ばない。
     collect_language_server();
     // 起動画面の履歴とブックマーク（ADR 0172 の決定 3）。頼んでいなければ呼ばない。
