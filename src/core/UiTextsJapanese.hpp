@@ -143,6 +143,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_close_other_tabs_description, "このタブを残して、ほかのタブを閉じます"},
     {UiMessage::operation_close_right_tabs_name, "右のタブを閉じる"},
     {UiMessage::operation_close_right_tabs_description, "このタブより右のタブを閉じます"},
+    {UiMessage::operation_open_language_server_log_name, "言語サーバーの記録を開く"},
+    {UiMessage::operation_open_language_server_log_description,
+     "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -401,5 +404,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_language_server_not_absolute, "言語サーバーの命令は絶対パスで書きます: {0}"},
     {UiMessage::notice_language_server_script,
      "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: {0}"},
+    {UiMessage::notice_language_server_log_empty, "言語サーバーの記録はまだありません"},
+    {UiMessage::status_language_server_starting, "{0}: 起動中"},
 }};
 } // namespace nenenib::core

@@ -100,6 +100,7 @@
 #include "LspLocation.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
+#include "LspProgressValue.hpp"
 #include "LspRequest.hpp"
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
@@ -109,6 +110,7 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenFailureReply.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenRequest.hpp"
 #include "OpenedAs.hpp"
 #include "OpenedDocument.hpp"
@@ -134,6 +136,7 @@
 #include "ReplayRounds.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "ServerErrorOutput.hpp"
 #include "ServerEvent.hpp"
 #include "ServerExited.hpp"
 #include "ServerFailed.hpp"
@@ -306,6 +309,12 @@ class EditorController final
     // 知らせの欄にキャレットの上の診断の文が出ているか（frame の diagnostic_message の有無と同じ
     // 値・ADR 0161 の決定 4 の追補）。窓がステータスバーのクリックを決める口で、frame を作らない。
     [[nodiscard]] bool diagnostic_message_shown() const;
+    // アクティブな文書を受ける言語サーバーの席の 1 行（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
+    // `initialize` の答えを待つ間は「<言語>: 起動中」、running で `$/progress` の動いている
+    // token があれば最後に動いたものの「<言語>: <題> <文> <百分率>%」、ほかは値なし。frame の
+    // language_server_status と窓のステータスバーの hit test（status_server_item）が同じ値を
+    // 引く。lsp がオフで子が居なければ欄を 1 つ読むだけで値なし。frame を作らない。
+    [[nodiscard]] std::optional<core::DisplayText> language_server_status() const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -944,10 +953,23 @@ class EditorController final
     void receive_server(LanguageServerSlot slot, const ServerMessage &message);
     void receive_server(LanguageServerSlot slot, const ServerExited &exited);
     void receive_server(LanguageServerSlot slot, const ServerFailed &failed);
+    // 標準エラーの塊は記録へ（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
+    void receive_server(LanguageServerSlot slot, const ServerErrorOutput &output);
     void end_language_server(LanguageServerSlot slot);
     void receive_lsp(LanguageServerSlot slot, const core::LspResponse &response);
     void receive_lsp(LanguageServerSlot slot, const core::LspNotification &notification);
     void receive_lsp(LanguageServerSlot slot, const core::LspRequest &request);
+    // `$/progress` の 1 通を席の token ごとの今の値へ写す（追補）。
+    void receive_progress(LanguageServerSlot slot, core::LspProgressValue value);
+    // 席 slot の言語（記録の行の頭・止めた後の残りは今の文書の言語）。
+    [[nodiscard]] core::Language slot_language(LanguageServerSlot slot) const;
+    // 記録を無題のタブに写して開く（追補・F1 の一覧と `:LspLog`）。先にたまった出来事を集め、
+    // 記録が空なら 1 行知らせて開かない。
+    void open_language_server_log();
+    void accept(const OpenLanguageServerLog &);
+    // アクティブな文書を受ける席の進み具合か起動中の 1 行（追補）。frame と hit test が同じ値を
+    // 引く（language_server_status）。
+    void add_language_server_status(EditorFrame &result) const;
     void accept(const LanguageServerTick &);
     void age_lsp_requests(LanguageServerSlot slot);
     void expire_lsp_request(LanguageServerSlot slot, const PendingLspRequest &request);

@@ -1,6 +1,7 @@
 #include "EditorController.hpp"
 
 #include "DisplayText.hpp"
+#include "Document.hpp"
 #include "DocumentSync.hpp"
 #include "DocumentUri.hpp"
 #include "FileFolder.hpp"
@@ -10,6 +11,8 @@
 #include "JsonValue.hpp"
 #include "LanguageServerEvent.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerLog.hpp"
+#include "LanguageServerLogKind.hpp"
 #include "LanguageServerPhase.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
@@ -18,9 +21,12 @@
 #include "LspDiagnostics.hpp"
 #include "LspIncoming.hpp"
 #include "LspJsonRead.hpp"
+#include "LspMessageType.hpp"
 #include "LspMessages.hpp"
 #include "LspNotification.hpp"
 #include "LspPositionEncoding.hpp"
+#include "LspProgress.hpp"
+#include "LspProgressValue.hpp"
 #include "LspRequest.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
@@ -30,7 +36,10 @@
 #include "SaveNotice.hpp"
 #include "ServerAbilities.hpp"
 #include "ServerCommand.hpp"
+#include "ServerErrorOutput.hpp"
 #include "ServerFailure.hpp"
+#include "TextBuffer.hpp"
+#include "TextEncoding.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 
@@ -83,14 +92,18 @@ namespace
 
 // `initialize` の params（決定 5）。位置の単位は utf-8 と utf-16 を申し出る。rootUri は起こす
 // 要求の root（設定の root か最初に開いた文書のフォルダ）の URI（ADR 0161 の決定 1）。能力は
-// ADR 0190 の決定 3。
+// ADR 0190 の決定 3 と、`window.workDoneProgress`（ADR 0160 の 2026-11-22 の追補）。
 [[nodiscard]] core::JsonValue initialize_params(const std::string &root_uri)
 {
     core::JsonObject general;
     general.emplace_back("positionEncodings", text_list({"utf-8", "utf-16"}));
+    // 進み具合の `$/progress` を受ける（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
+    core::JsonObject window;
+    window.emplace_back("workDoneProgress", core::JsonValue{true});
     core::JsonObject capabilities;
     capabilities.emplace_back("general", core::JsonValue{std::move(general)});
     capabilities.emplace_back("textDocument", text_document_capabilities());
+    capabilities.emplace_back("window", core::JsonValue{std::move(window)});
     core::JsonObject params;
     params.emplace_back("processId", core::JsonValue{core::JsonNull{}});
     params.emplace_back("rootUri", core::JsonValue{root_uri});
@@ -273,6 +286,39 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
         return "textDocument/definition";
     }
     return "initialize";
+}
+
+// 知らせの type → 記録の行の印（ADR 0160 の 2026-11-22 の追補）。
+[[nodiscard]] LanguageServerLogKind log_kind_of(core::LspMessageType type) noexcept
+{
+    switch (type)
+    {
+    case core::LspMessageType::error:
+        return LanguageServerLogKind::error;
+    case core::LspMessageType::warning:
+        return LanguageServerLogKind::warning;
+    case core::LspMessageType::info:
+        return LanguageServerLogKind::info;
+    case core::LspMessageType::log:
+        return LanguageServerLogKind::log;
+    }
+    return LanguageServerLogKind::log;
+}
+
+// 起動を待つ段（`initialize` の答えの前）。
+[[nodiscard]] constexpr bool starting_phase(LanguageServerPhase phase) noexcept
+{
+    switch (phase)
+    {
+    case LanguageServerPhase::starting:
+    case LanguageServerPhase::initializing:
+        return true;
+    case LanguageServerPhase::idle:
+    case LanguageServerPhase::running:
+    case LanguageServerPhase::shutting_down:
+        return false;
+    }
+    return false;
 }
 
 // 席の番号 → awake の印のビット。
@@ -556,10 +602,14 @@ void EditorController::stop_language_server(LanguageServerSlot slot)
     drop_language_answers_of(slot);
     close_language_server_documents(slot, false);
     ports_.language_server.stop(slot);
+    // 標準エラーの改行の無い最後の行（落ちる前の 1 行など）を閉じる
+    // （ADR 0160 の 2026-11-22 の追補）。
+    servers.log.end_output(slot, slot_language(slot));
     link.phase = LanguageServerPhase::idle;
     link.language.reset();
     link.pending.clear();
     link.abilities = {};
+    link.progress.clear();
     servers.considered.reset();
     servers.retired = true;
     servers.awake = static_cast<std::uint8_t>(servers.awake & ~slot_bit(slot));
@@ -696,6 +746,17 @@ void EditorController::receive_server(LanguageServerSlot slot, const ServerFaile
     end_language_server(slot);
 }
 
+// 標準エラーの塊は記録へ足すだけ（ADR 0160 の 2026-11-22 の追補）。
+void EditorController::receive_server(LanguageServerSlot slot, const ServerErrorOutput &output)
+{
+    language_servers_.log.add_output(slot, slot_language(slot), output.bytes);
+}
+
+core::Language EditorController::slot_language(LanguageServerSlot slot) const
+{
+    return language_servers_.links.at(slot_index(slot)).language.value_or(state_.language());
+}
+
 // 子の終わり（決定 6）。`shutdown` を送った後なら頼んだ終わりで、合わせ直す（譲った席ならここで
 // 次の言語が起きる）。ほかは失敗。
 void EditorController::end_language_server(LanguageServerSlot slot)
@@ -757,9 +818,10 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     }
 }
 
-// サーバーからの通知（ADR 0161 の決定 5）。診断はその席が開いた文書の値へ写す。
-// `window/showMessage` は Error と Warning だけ 1 行の知らせ（lsp_shown_notice）にし、Info・Log と
-// `window/logMessage` ほかの通知は捨てる。
+// サーバーからの通知（ADR 0161 の決定 5）。診断はその席が開いた文書の値へ写す。`$/progress` は
+// 席の進み具合へ（ADR 0160 の 2026-11-22 の追補）。`window/showMessage` と `window/logMessage` は
+// どの type も記録に置き（追補）、`window/showMessage` の Error と Warning だけ 1 行の知らせ
+// （lsp_shown_notice）にする。ほかの通知は捨てる。
 void EditorController::receive_lsp(LanguageServerSlot slot,
                                    const core::LspNotification &notification)
 {
@@ -768,6 +830,16 @@ void EditorController::receive_lsp(LanguageServerSlot slot,
         receive_diagnostics(slot, notification);
         return;
     }
+    if (auto progress = core::lsp_progress_of(notification))
+    {
+        receive_progress(slot, std::move(progress).value());
+        return;
+    }
+    if (const auto logged = core::lsp_logged_message(notification))
+    {
+        language_servers_.log.add_message(slot, slot_language(slot),
+                                          log_kind_of(logged.value().first), logged.value().second);
+    }
     auto notice = core::lsp_shown_notice(notification);
     if (notice.has_value())
     {
@@ -775,10 +847,124 @@ void EditorController::receive_lsp(LanguageServerSlot slot,
     }
 }
 
-// サーバーからの要求は MethodNotFound で断る（決定 5）。
+// サーバーからの要求は MethodNotFound で断る（決定 5）。`window/workDoneProgress/create` だけは
+// result: null で受ける（ADR 0160 の 2026-11-22 の追補・token は最初の begin で覚える）。
 void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRequest &request)
 {
-    ports_.language_server.send(slot, core::lsp_method_not_found_body(request.id));
+    ports_.language_server.send(slot, request.method == core::lsp_progress_create_method
+                                          ? core::lsp_null_result_body(request.id)
+                                          : core::lsp_method_not_found_body(request.id));
+}
+
+namespace
+{
+// 1 通を受けた後の token の今の値（追補）。begin はそのまま、report は
+// 前の値（previous）の題を残して文と百分率だけを直す（前の値の無い report は
+// 値なし）、end は値なし（外す）。
+[[nodiscard]] std::optional<core::LspProgressValue>
+progress_after(const core::LspProgressValue *previous, core::LspProgressValue value)
+{
+    switch (value.kind)
+    {
+    case core::LspProgressKind::begin:
+        return value;
+    case core::LspProgressKind::report:
+        if (previous == nullptr)
+        {
+            return std::nullopt;
+        }
+        value.title = previous->title;
+        value.message = value.message.has_value() ? value.message : previous->message;
+        value.percentage = value.percentage.has_value() ? value.percentage : previous->percentage;
+        return value;
+    case core::LspProgressKind::end:
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+} // namespace
+
+// token ごとの今の値（追補）。begin は前の同じ token を置き換えて後ろへ、report は題を残して文と
+// 百分率だけを直して後ろへ（知らない token は捨てる）、end は外す。列は上限で最も前に動いたものを
+// 忘れる。
+void EditorController::receive_progress(LanguageServerSlot slot, core::LspProgressValue value)
+{
+    auto &progress = link_of(slot).progress;
+    const auto found = std::ranges::find_if(progress, [&value](const core::LspProgressValue &entry)
+                                            { return entry.token == value.token; });
+    const bool known = found != progress.end();
+    auto next = progress_after(known ? &*found : nullptr, std::move(value));
+    if (known)
+    {
+        progress.erase(found);
+    }
+    if (!next.has_value())
+    {
+        return;
+    }
+    progress.push_back(std::move(next).value());
+    if (progress.size() > language_server_progress_limit)
+    {
+        progress.erase(progress.begin());
+    }
+}
+
+std::optional<core::DisplayText> EditorController::language_server_status() const
+{
+    if (language_servers_.awake == 0)
+    {
+        return std::nullopt;
+    }
+    const auto slot = serving_slot(state_.language());
+    if (!slot.has_value())
+    {
+        return std::nullopt;
+    }
+    const LanguageServerLink &link = language_servers_.links.at(slot_index(slot.value()));
+    const std::string_view name = core::language_name(state_.language());
+    if (starting_phase(link.phase))
+    {
+        return ui_notice(core::UiMessage::status_language_server_starting, {name});
+    }
+    if (link.phase != LanguageServerPhase::running || link.progress.empty())
+    {
+        return std::nullopt;
+    }
+    return core::lsp_progress_text(name, link.progress.back());
+}
+
+void EditorController::add_language_server_status(EditorFrame &result) const
+{
+    result.language_server_status = language_server_status();
+}
+
+// 記録の写しを無題のタブに開く（追補）。たまった出来事を先に集める（標準エラーは
+// 合図を出さずにたまる）。開いたタブは無題で未変更なので、閉じても「保存しますか」を
+// 聞かず、自動退避も書かない（save_state_of が saved・autosave_plan が keep）。
+// 無題は言語が plain なので言語サーバーも起こさない。
+void EditorController::open_language_server_log()
+{
+    collect_language_server();
+    if (language_servers_.log.empty())
+    {
+        state_ = state_.with_command_message(
+            ui_notice(core::UiMessage::notice_language_server_log_empty));
+        return;
+    }
+    auto text = core::TextBuffer::from_utf8(language_servers_.log.text());
+    if (!text)
+    {
+        return;
+    }
+    leave_document();
+    state_ = state_.with_new_tab().with_opened(
+        std::move(text).value(), Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}});
+    enter_document();
+}
+
+void EditorController::accept(const OpenLanguageServerLog &)
+{
+    open_language_server_log();
 }
 
 // 古さの合図（決定 6・追補）。子が居ないときは port を呼ばない。2 回の tick を越えた要求は
@@ -850,6 +1036,10 @@ void EditorController::answer_lsp(core::ExLspRequest request)
     auto settings = state_.settings();
     switch (request)
     {
+    case core::ExLspRequest::log:
+        // `:LspLog` は設定を変えない（ADR 0160 の 2026-11-22 の追補）。
+        open_language_server_log();
+        return;
     case core::ExLspRequest::enable:
         settings.lsp = true;
         resume_language_servers();

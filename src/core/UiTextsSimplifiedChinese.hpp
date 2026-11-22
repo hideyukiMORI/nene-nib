@@ -134,6 +134,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_close_other_tabs_description, "关闭除此标签页以外的所有标签页"},
     {UiMessage::operation_close_right_tabs_name, "关闭右侧的标签页"},
     {UiMessage::operation_close_right_tabs_description, "关闭此标签页右侧的标签页"},
+    {UiMessage::operation_open_language_server_log_name, "打开语言服务器日志"},
+    {UiMessage::operation_open_language_server_log_description,
+     "在无标题标签页中打开语言服务器的错误输出和消息"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -373,5 +376,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_language_server_not_absolute, "语言服务器的命令须使用绝对路径：{0}"},
     {UiMessage::notice_language_server_script,
      "语言服务器不能使用 .cmd / .bat（请写成 node.exe 和脚本）：{0}"},
+    {UiMessage::notice_language_server_log_empty, "还没有语言服务器日志"},
+    {UiMessage::status_language_server_starting, "{0}：正在启动"},
 }};
 } // namespace nenenib::core

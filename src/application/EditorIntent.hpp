@@ -53,6 +53,7 @@
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OpenSettings.hpp"
@@ -145,5 +146,5 @@ using EditorIntent = std::variant<
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
     RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
-    PreviewScrollSettled>;
+    PreviewScrollSettled, OpenLanguageServerLog>;
 } // namespace nenenib::application

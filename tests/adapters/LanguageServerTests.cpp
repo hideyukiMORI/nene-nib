@@ -38,6 +38,7 @@ namespace adapters = nenenib::adapters::win32;
 namespace application = nenenib::application;
 using nenenib::application::LanguageServerEvent;
 using nenenib::application::LanguageServerSlot;
+using nenenib::application::ServerErrorOutput;
 using nenenib::application::ServerEvent;
 using nenenib::application::ServerExited;
 using nenenib::application::ServerFailed;
@@ -463,7 +464,8 @@ void verify_stop_cancels_a_pending_write()
     expect(server.start(first, launch_of({"--deaf"})).has_value(), "the deaf server starts");
     const HANDLE child = open_fake_child();
     server.send(first, std::string(std::size_t{1} << 20U, 'w'));
-    expect(server.waitable_handles().size() == 3, "the large write is pending");
+    expect(server.waitable_handles().size() == 4,
+           "the large write is pending beside the two reads and the process");
     server.stop(first);
     expect(running(child), "stop returns with the pending write cancelled");
     server.expire_retired();
@@ -472,7 +474,8 @@ void verify_stop_cancels_a_pending_write()
 }
 
 // 退く子は 8 本まで。9 本目を退かせると最も古い退く子を Job Object ごと殺す（#1916 のレビュー
-// R4）。4 席が起きていても、待ちの配列は 4×3＋8 を超えない。
+// R4）。4 席が起きていても、待ちの配列は 4×4＋8 を超えない（標準エラーの読みは 2026-11-22
+// の追補）。
 void verify_retired_limit()
 {
     constexpr std::size_t limit = adapters::language_server_retired_limit;
@@ -497,7 +500,7 @@ void verify_retired_limit()
         expect(server.start(slot, launch_of({"--hang"})).has_value(), "every slot starts");
     }
     expect(server.waitable_handles().size() <=
-               (application::language_server_slot_limit * 3) + limit,
+               (application::language_server_slot_limit * 4) + limit,
            "four running slots and eight retired children fit in the wait list");
     for (const LanguageServerSlot slot : application::language_server_slots)
     {
@@ -517,8 +520,8 @@ void verify_two_slots()
     expect(server.start(first, launch_of({"--echo"})).has_value() &&
                server.start(second, launch_of({"--echo"})).has_value(),
            "two fake servers start in two slots");
-    expect(server.waitable_handles().size() == 4,
-           "the pump waits on one read and one process per running slot");
+    expect(server.waitable_handles().size() == 6,
+           "the pump waits on the output read, the error read and the process per running slot");
     server.send(first, "to-first");
     server.send(second, "to-second");
     auto slotted = pump_until_slot(server, first);
@@ -583,6 +586,78 @@ void verify_bind_after_start()
            "the pending start is collected");
     server.bind([&arrivals] { ++arrivals; });
     expect(arrivals == 1, "binding with nothing pending does not signal");
+    server.stop(first);
+}
+
+// 席が出した標準エラーの塊を繋いだもの。
+std::string error_output(const Events &events)
+{
+    std::string joined;
+    for (const auto &event : events)
+    {
+        if (std::holds_alternative<ServerErrorOutput>(event))
+        {
+            joined += std::get<ServerErrorOutput>(event).bytes;
+        }
+    }
+    return joined;
+}
+
+// 標準エラーは 3 本目のパイプで読み、合図を出さずに次の出来事と一緒に届く（#1942・ADR 0160 の
+// 2026-11-22 の追補）。子が終わるときは終わる前に書かれた分を ServerExited の前に渡す。
+void verify_error_output()
+{
+    std::size_t arrivals = 0;
+    adapters::Win32LanguageServer server([&arrivals] { ++arrivals; });
+    expect(server.start(first, launch_of({"--stderr", "fake stderr line"})).has_value(),
+           "the server writing to stderr starts");
+    static_cast<void>(server.collect());
+    arrivals = 0;
+    expect(server.waitable_handles().size() == 3,
+           "a started server waits on its output read, its error read and its process");
+    server.send(first, R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    Events events;
+    while ((error_output(events).find('\n') == std::string::npos || bodies(events).empty()) &&
+           pump_once(server))
+    {
+        for (auto &event : events_of(server.collect()))
+        {
+            events.push_back(std::move(event));
+        }
+    }
+    expect(error_output(events) == "fake stderr line\n" && bodies(events).size() == 1,
+           "the stderr line and the answer both arrive");
+    expect(arrivals == 1, "only the answer signals and the stderr output rides along");
+    server.stop(first);
+    pump_all(server);
+
+    adapters::Win32LanguageServer dying([] {});
+    expect(
+        dying.start(first, launch_of({"--stderr", "last words", "--die-after", "1"})).has_value(),
+        "the dying server writing to stderr starts");
+    dying.send(first, R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    const auto ended = pump_until(dying, exited);
+    const auto exit_at =
+        std::ranges::find_if(ended, [](const ServerEvent &event)
+                             { return std::holds_alternative<ServerExited>(event); });
+    expect(error_output(Events(ended.begin(), exit_at)) == "last words\n",
+           "what the server wrote to stderr arrives before ServerExited");
+}
+
+// --progress の 3 通は本文として届く（#1942）。controller が create に答え、`$/progress` と
+// logMessage を読む。
+void verify_progress_messages()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(first, launch_of({"--progress"})).has_value(),
+           "the progress server starts");
+    server.send(first, R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    const auto answers = bodies(pump_until(server, messages(4)));
+    expect(answers.size() == 4 &&
+               answers.at(1).find("window/workDoneProgress/create") != std::string::npos &&
+               answers.at(2).find(R"("method":"$/progress")") != std::string::npos &&
+               answers.at(3).find("window/logMessage") != std::string::npos,
+           "initialize is followed by the create request, a begin and a log message");
     server.stop(first);
 }
 
@@ -673,6 +748,8 @@ int main(int argc, char **argv)
     verify_completion_answer();
     verify_hover_answer();
     verify_definition_answer();
+    verify_error_output();
+    verify_progress_messages();
     std::printf("Language server adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
 }

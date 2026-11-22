@@ -3,6 +3,7 @@
 #include "FilePath.hpp"
 #include "Language.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerLog.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
 
@@ -22,7 +23,8 @@ namespace nenenib::application
 // ときに起こすかを決めた（言語・パス・設定の root）（同じ文書では打鍵ごとに設定を引き直さない・
 // 設定の root が変われば決め直す・どの席を止めても空に戻る）、retired は stop した子が
 // adapter に残っているかもしれないこと（次の tick で expire_retired を呼ぶ）、uses は used の
-// 印の通し番号、idle は受ける席が無いときに読む空のつながり（能力も文書も無い）。公開
+// 印の通し番号、idle は受ける席が無いときに読む空のつながり（能力も文書も無い）、log は席ごとの
+// 標準エラーと知らせの記録（`:LspLog`・席を止めても残す・ADR 0160 の 2026-11-22 の追補）。公開
 // aggregate（CPP-003）。
 struct LanguageServers
 {
@@ -36,5 +38,6 @@ struct LanguageServers
     bool retired = false;
     std::uint64_t uses = 0;
     LanguageServerLink idle = {};
+    LanguageServerLog log = {};
 };
 } // namespace nenenib::application

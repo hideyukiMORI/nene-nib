@@ -246,7 +246,7 @@ void verify_lifecycle()
     static_cast<void>(delivered(
         editing,
         app::ServerMessage{
-            R"({"jsonrpc":"2.0","id":"w1","method":"window/workDoneProgress/create","params":{}})"}));
+            R"({"jsonrpc":"2.0","id":"w1","method":"workspace/configuration","params":{}})"}));
     expect(contains(last_sent(editing), "-32601") && contains(last_sent(editing), R"("id":"w1")"),
            "a request from the server is refused with MethodNotFound");
 }
@@ -2020,6 +2020,7 @@ void verify_language_server_contracts()
     verify_diagnostics_uri_forms();
     verify_start_failure_notices();
     verify_unknown_command_rows_unused();
+    verify_language_server_log();
 }
 
 void verify_language_server_scope()

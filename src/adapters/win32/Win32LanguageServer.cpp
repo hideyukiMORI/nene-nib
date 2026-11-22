@@ -4,12 +4,16 @@
 #include "LspFrames.hpp"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <variant>
 
 namespace nenenib::adapters::win32
 {
 using application::LanguageServerEvent;
 using application::LanguageServerSlot;
+using application::ServerErrorOutput;
 using application::ServerExited;
 using application::ServerFailed;
 using application::ServerFailure;
@@ -18,8 +22,9 @@ using application::ServerStarted;
 
 namespace
 {
-// 席ごとに待つ handle の数（出ている読み・出ている書き・起きている子）。
-constexpr std::size_t handles_per_child = 3;
+// 席ごとに待つ handle の数（出ている読み・出ている標準エラーの読み・出ている書き・起きている子・
+// 2026-11-22 の追補）。
+constexpr std::size_t handles_per_child = 4;
 // MsgWaitForMultipleObjectsEx が待てる数は MAXIMUM_WAIT_OBJECTS - 1（ADR 0160 の決定 2）。
 static_assert(application::language_server_slot_limit * handles_per_child +
                       language_server_retired_limit <
@@ -75,6 +80,7 @@ std::expected<void, ServerFailure> Win32LanguageServer::start(LanguageServerSlot
     writable_.at(index) = true;
     post(index, ServerStarted{});
     issue_read(index);
+    issue_error_read(index);
     refresh();
     return {};
 }
@@ -102,6 +108,9 @@ void Win32LanguageServer::send(LanguageServerSlot slot, std::string body)
 void Win32LanguageServer::stop(LanguageServerSlot slot)
 {
     std::erase_if(events_, [slot](const LanguageServerEvent &event) { return event.slot == slot; });
+    // 列が空になったら合図の印も戻す（controller は子が居なければ collect を呼ばないので、出した
+    // 合図が回収されないまま次の start の合図を止めない・2026-11-22 の追補）。
+    signalled_ = signalled_ && !events_.empty();
     const std::size_t index = application::slot_index(slot);
     auto &child = children_.at(index);
     if (child)
@@ -126,6 +135,7 @@ void Win32LanguageServer::retire(std::unique_ptr<ServerChild> child)
 
 std::vector<LanguageServerEvent> Win32LanguageServer::collect()
 {
+    signalled_ = false;
     return std::exchange(events_, {});
 }
 
@@ -133,9 +143,10 @@ void Win32LanguageServer::bind(std::function<void()> arrived)
 {
     arrived_ = std::move(arrived);
     // 結ぶ前（窓の前・controller の構築の中の start）に溜まった出来事は合図が出ていないので、
-    // ここで 1 回知らせる（post は列が空から増えたときしか知らせない）。
+    // ここで 1 回知らせる（post は合図が出ていないときしか知らせない）。
     if (!events_.empty() && arrived_)
     {
+        signalled_ = true;
         arrived_();
     }
 }
@@ -201,6 +212,10 @@ void Win32LanguageServer::child_completed(std::size_t index, HANDLE handle)
     {
         read_completed(index);
     }
+    else if (handle == child.error_reader().event() && child.error_reader().pending())
+    {
+        error_read_completed(index);
+    }
     else if (handle == child.writer().event() && child.writer().pending())
     {
         write_completed(index);
@@ -211,13 +226,15 @@ void Win32LanguageServer::child_completed(std::size_t index, HANDLE handle)
     }
 }
 
+// 合図はまだ collect されていない合図が無いときだけ出す（列に合図を出さない標準エラーの塊が
+// 残っていても出す・2026-11-22 の追補）。
 void Win32LanguageServer::post(std::size_t index, application::ServerEvent event)
 {
-    const bool was_empty = events_.empty();
     events_.push_back(LanguageServerEvent{.slot = application::language_server_slots.at(index),
                                           .event = std::move(event)});
-    if (was_empty && arrived_)
+    if (!signalled_ && arrived_)
     {
+        signalled_ = true;
         arrived_();
     }
 }
@@ -268,6 +285,65 @@ bool Win32LanguageServer::deliver(std::size_t index, std::string_view bytes)
     return true;
 }
 
+// 標準エラーの読みを 1 本出す（2026-11-22 の追補）。出せなければ・終わりなら以後は読まない
+// （標準エラーを失ってもサーバーは止めない）。
+void Win32LanguageServer::issue_error_read(std::size_t index)
+{
+    static_cast<void>(children_.at(index)->error_reader().issue());
+}
+
+void Win32LanguageServer::error_read_completed(std::size_t index)
+{
+    const auto bytes = children_.at(index)->error_reader().finish();
+    if (!bytes.has_value())
+    {
+        return;
+    }
+    post_error_output(index, bytes.value());
+    issue_error_read(index);
+}
+
+// 合図を出さずに積む（2026-11-22 の追補）。列の最後が同じ席の塊なら繋ぎ、上限を超えた分は古い
+// バイトから捨てる。列が空でも合図は出さない（次の本文か子の終わりと一緒に集められる）。
+void Win32LanguageServer::post_error_output(std::size_t index, std::string_view bytes)
+{
+    if (bytes.empty())
+    {
+        return;
+    }
+    const LanguageServerSlot slot = application::language_server_slots.at(index);
+    auto *last = events_.empty() || events_.back().slot != slot
+                     ? nullptr
+                     : std::get_if<ServerErrorOutput>(&events_.back().event);
+    if (last == nullptr)
+    {
+        events_.push_back(LanguageServerEvent{.slot = slot, .event = ServerErrorOutput{}});
+        last = &std::get<ServerErrorOutput>(events_.back().event);
+    }
+    last->bytes.append(bytes);
+    if (last->bytes.size() > language_server_error_queue_bytes)
+    {
+        last->bytes.erase(0, last->bytes.size() - language_server_error_queue_bytes);
+    }
+}
+
+// 出ている標準エラーの読みが完了していれば回収して次を出す（子の終わりで、終わる前に書かれた分を
+// 渡す）。パイプが空なら読みは未完のまま止まる。
+void Win32LanguageServer::drain_errors(std::size_t index)
+{
+    auto &reader = children_.at(index)->error_reader();
+    while (reader.pending())
+    {
+        const auto bytes = reader.finish();
+        if (!bytes.has_value())
+        {
+            return;
+        }
+        post_error_output(index, bytes.value());
+        issue_error_read(index);
+    }
+}
+
 // 相手が閉じた（ERROR_BROKEN_PIPE / ERROR_HANDLE_EOF）のは終わりで、失敗ではない。
 // 未完は何もしない。
 void Win32LanguageServer::read_ended(std::size_t index, DWORD error)
@@ -301,6 +377,7 @@ void Win32LanguageServer::process_completed(std::size_t index)
 {
     auto &child = children_.at(index);
     child->terminate();
+    drain_errors(index);
     drain_output(index);
     DWORD code = 0;
     GetExitCodeProcess(child->process(), &code);
@@ -341,6 +418,10 @@ void Win32LanguageServer::refresh()
         if (child->reader().pending())
         {
             waitable_.push_back(child->reader().event());
+        }
+        if (child->error_reader().pending())
+        {
+            waitable_.push_back(child->error_reader().event());
         }
         if (child->writer().pending())
         {

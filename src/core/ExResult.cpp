@@ -1849,6 +1849,31 @@ print_command(std::string_view text)
     return result;
 }
 
+// `:LspLog`（ADR 0160 の 2026-11-22 の追補・LSP 段 S8・Neovim と同じ名前）。言語サーバーの記録を
+// 無題のタブに写して開く要求で、設定は変えない。名前は大小を区別し、略さない（Neovim の利用者の
+// 命令は名前の全部で打つ）。引数・`!`・範囲の形は unsupported_argument。名前が当たらなければ
+// 値なし（ほかの命令として扱う）。
+constexpr std::string_view lsp_log_name = "LspLog";
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+lsp_log_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    const std::size_t letters = leading(text.substr(range), is_letter);
+    if (text.substr(range, letters) != lsp_log_name)
+    {
+        return std::nullopt;
+    }
+    if (range > 0 || !trimmed(text.substr(range + letters)).empty())
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse(lsp_log_name).value()};
+    result.lsp = ExLspRequest::log;
+    return result;
+}
+
 // `:ve[rsion]`（施主決定 D90・最短は Vim と同じ `ve`）。Vim は版と機能の一覧を
 // 複数行で出すが、Nib は F1 の操作「バージョン情報」と同じ 1 行
 // （core::app_about_line）を答えの文にして知らせるだけで、設定も窓も変えない
@@ -2185,10 +2210,10 @@ nohlsearch_command(std::string_view text)
 // ここに 1 行足す（無名名前空間の関数を書き忘れると -Wunused-function で落ちる）。
 using ExCommandParser =
     std::optional<std::expected<ExResult, ExEvaluationFailure>> (*)(std::string_view);
-constexpr std::array<ExCommandParser, 12> command_parsers{
-    line_command,    nohlsearch_command, map_command,     syntax_command,
-    preview_command, tab_command,        window_command,  palette_command,
-    grep_command,    print_command,      version_command, document_command};
+constexpr std::array<ExCommandParser, 13> command_parsers{
+    line_command,    nohlsearch_command, map_command,     syntax_command, preview_command,
+    tab_command,     window_command,     palette_command, grep_command,   print_command,
+    version_command, lsp_log_command,    document_command};
 
 // 表のどの行にも当たらなければ unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> remaining_command(std::string_view text)
@@ -2395,7 +2420,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 58> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 59> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2452,7 +2477,8 @@ constexpr std::array<std::string_view, 58> fixed_candidates{"colorscheme",
                                                             "preview side",
                                                             "preview off",
                                                             hardcopy_name,
-                                                            version_name};
+                                                            version_name,
+                                                            lsp_log_name};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

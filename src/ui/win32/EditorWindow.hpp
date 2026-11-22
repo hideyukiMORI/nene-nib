@@ -534,6 +534,7 @@ class EditorWindow final
     void run_copy_file_name();
     void run_close_other_tabs();
     void run_close_right_tabs();
+    void run_open_language_server_log();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 55> expected_2{
+constexpr std::array<OperationChoiceExpected, 56> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -160,8 +160,11 @@ constexpr std::array<OperationChoiceExpected, 55> expected_2{
       std::nullopt},
      {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
       "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 52> expected_3{
+      std::nullopt},
+     {core::EditorOperation::open_language_server_log, 55U, "言語サーバーの記録を開く", 12U,
+      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます", 30U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 53> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -298,8 +301,11 @@ constexpr std::array<OperationChoiceExpected, 52> expected_3{
       std::nullopt},
      {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
       "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
-      std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 55> expected_4{
+      std::nullopt},
+     {core::EditorOperation::open_language_server_log, 55U, "言語サーバーの記録を開く", 12U,
+      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます", 30U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 56> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -346,6 +352,9 @@ constexpr std::array<OperationChoiceExpected, 55> expected_4{
      {core::EditorOperation::close_right_tabs, 54U, "右のタブを閉じる", 8U,
       "このタブより右のタブを閉じます", 15U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
+     {core::EditorOperation::open_language_server_log, 55U, "言語サーバーの記録を開く", 12U,
+      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます", 30U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
@@ -520,14 +529,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 2039296U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 2096896U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 1932288U, expected_3,
+     {"", core::EditMode::vim, 256U, 1989888U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 2039296U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 2096896U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,

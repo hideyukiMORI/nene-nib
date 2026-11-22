@@ -114,6 +114,7 @@ constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme"
                                                                    "preview off",
                                                                    "hardcopy",
                                                                    "version",
+                                                                   "LspLog",
                                                                    "edit",
                                                                    "buffer",
                                                                    "ls",

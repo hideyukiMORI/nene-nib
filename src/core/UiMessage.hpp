@@ -135,6 +135,8 @@ enum class UiMessage : std::uint16_t
     operation_close_other_tabs_description,
     operation_close_right_tabs_name,
     operation_close_right_tabs_description,
+    operation_open_language_server_log_name,
+    operation_open_language_server_log_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -373,10 +375,12 @@ enum class UiMessage : std::uint16_t
     notice_language_server_not_found,
     notice_language_server_not_absolute,
     notice_language_server_script,
+    notice_language_server_log_empty,
+    status_language_server_starting,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_language_server_script) + 1U;
+    std::to_underlying(UiMessage::status_language_server_starting) + 1U;
 } // namespace nenenib::core

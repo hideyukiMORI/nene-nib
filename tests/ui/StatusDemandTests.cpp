@@ -17,6 +17,7 @@
 #include "StatusGuideLayout.hpp"
 #include "StatusLayoutDemand.hpp"
 #include "StatusLeftState.hpp"
+#include "StatusServerItem.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -73,6 +74,14 @@ void verify_status_demand()
             counted_demand_at(900, dpi, StatusLeftState::mode, core::GuideContext::other);
         expect(most == 12 && most == win32::status_layout_capacity,
                "the diagnostic count adds the 12th retained layout (ADR 0161)");
+        // 言語サーバーの進み具合は件数と同じ欄（ADR 0160 の 2026-11-22 の追補）。枠は増えない。
+        const auto progress =
+            core::status_bar_layout(core::to_pixels(900, dpi), core::to_pixels(450, dpi), dpi,
+                                    core::StatusServerItem::progress);
+        const auto with_progress =
+            demand_in(progress, dpi, StatusLeftState::mode, core::GuideContext::other);
+        expect(with_progress <= win32::status_layout_capacity,
+               "the language server progress uses the count's layout and adds none");
         expect(demand_at(900, dpi, StatusLeftState::recording, core::GuideContext::hidden) == 8 &&
                    counted_demand_at(900, dpi, StatusLeftState::recording,
                                      core::GuideContext::hidden) == 9,

@@ -168,6 +168,9 @@ void verify_lsp_sync_property_scope();
 void verify_language_server_contracts();
 // 席の部分（LanguageServerSlotTests.cpp・LSP 段 S2）。verify_language_server_contracts から呼ぶ。
 void verify_language_server_slots();
+// 記録と進み具合の部分（LanguageServerLogTests.cpp・LSP 段 S8）。verify_language_server_contracts
+// から呼ぶ。
+void verify_language_server_log();
 void verify_language_server_scope();
 
 // UtfPropertyTests.cpp / PrintPagesPropertyTests.cpp / ShellRegistrationPropertyTests.cpp（#1289・

@@ -150,6 +150,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_close_other_tabs_description, "Close every tab except this one"},
     {UiMessage::operation_close_right_tabs_name, "Close Tabs to the Right"},
     {UiMessage::operation_close_right_tabs_description, "Close the tabs to the right of this one"},
+    {UiMessage::operation_open_language_server_log_name, "Open Language Server Log"},
+    {UiMessage::operation_open_language_server_log_description,
+     "Open the language servers' error output and messages in an untitled tab"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -424,5 +427,7 @@ inline constexpr UiTextColumn ui_texts_english{{
      "Write the language server command with an absolute path: {0}"},
     {UiMessage::notice_language_server_script,
      "A .cmd or .bat cannot be a language server (write node.exe and the script): {0}"},
+    {UiMessage::notice_language_server_log_empty, "No language server log yet"},
+    {UiMessage::status_language_server_starting, "{0}: starting"},
 }};
 } // namespace nenenib::core
