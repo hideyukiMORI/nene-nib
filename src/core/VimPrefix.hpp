@@ -23,8 +23,10 @@ enum class VimPrefix : std::uint8_t
     mark_exact,
     // INSERT の `Ctrl-r`。次の鍵が挿し込むレジスタの名前（#1040）。
     insert_register,
-    // `[` `]`。次の 1 鍵を取って失敗する（族は未実装・#1334）。
-    bracket,
+    // `[` と `]`（#1939 で分けた）。次の 1 鍵を取って失敗する（族は未実装・#1334）。`[d` `]d` は
+    // 失敗のまま診断の跳びの効果を添える。
+    bracket_back,
+    bracket_forward,
     // `\` の 1 回目と 2 回目。2 回目の次の鍵がイージーモーションの動作（ADR 0163 の決定 1）。
     leader,
     leader_leader

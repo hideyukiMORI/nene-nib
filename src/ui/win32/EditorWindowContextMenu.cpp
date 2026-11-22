@@ -61,7 +61,7 @@ bool EditorWindow::in_other_text_body(POINT point) const
     {
         return false;
     }
-    const auto other = core::other_pane_layout(body_panes(controller_.delivery().settings),
+    const auto other = core::other_pane_layout(body_panes(controller_.font_size()),
                                                controller_.split().active_side);
     return other.has_value() && core::contains(other.value().content, point.x, point.y);
 }

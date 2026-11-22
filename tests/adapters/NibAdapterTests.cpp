@@ -26,6 +26,7 @@
 #include "RevealFailure.hpp"
 #include "RevealShelf.hpp"
 #include "SettingsCodec.hpp"
+#include "SettingsLspCommandTests.hpp"
 #include "SettingsVersionSixTests.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationStatus.hpp"
@@ -904,66 +905,6 @@ void verify_older_settings_versions()
     nenenib::tests::adapters::verify_settings_v6_codec(expect);
 }
 
-// `lsp.<language>.command` の行（ADR 0170 の決定 3・#1044）。0
-// 行以上・言語は表の名前だけ・同じ言語は 1 行・値は空でない。書くときは features
-// と検索の大小の後ろに言語の名前の順。
-void verify_settings_lsp_commands()
-{
-    auto settings = default_editor_settings();
-    settings.lsp_commands = {{"python", "C:\\py\\pylsp.exe"},
-                             {"cpp", "C:\\llvm\\clangd.exe --log=error"}};
-    const auto bytes = encode_settings(settings);
-    expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
-                           "scrolloff=0\nexplorer_width=\nautoindent=off\n"
-                           "finder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n"
-                           "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
-                           "lsp.python.command=C:\\py\\pylsp.exe\n"),
-           "commands follow the fixed keys in language name order");
-    const auto decoded = decode_settings(bytes, SettingsVersion::v6);
-    expect(decoded && decoded.value().lsp_commands.size() == 2 &&
-               decoded.value().lsp_commands.front().first == "cpp" &&
-               encode_settings(decoded.value()) == bytes,
-           "commands round trip in language name order");
-    const auto plain = encode_settings(default_editor_settings());
-    const auto none = decode_settings(plain, SettingsVersion::v6);
-    expect(none && none.value().lsp_commands.empty(), "zero command lines are accepted");
-    for (const auto line :
-         {"lsp.cpp.command=\n", "lsp..command=x\n", "lsp.CPP.command=x\n", "lsp.cpp.args=x\n",
-          "lsp.a b.command=x\n", "lsp.j\xc3\xa1va.command=x\n",
-          "lsp.abcdefghijklmnopqrstuvwxyz0123456.command=x\n"})
-    {
-        const auto result = decode_settings(plain + line, SettingsVersion::v6);
-        expect(!result && result.error() == SettingsFailure::malformed,
-               "misshapen names, empty values and other lsp keys are refused");
-    }
-    expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v6),
-           "a second line for the same language is refused");
-    // 表に無い名前の行（後の版が足す言語）は v5 では形だけ見て持ち、書き戻す（ADR 0170 の
-    // 2026-11-20 の追補・#1897）。v4 は 1.0.0 と同じく拒む（D91）。
-    const std::string later = plain + "lsp.java.command=C:\\jdtls\\jdtls.exe\n"
-                                      "lsp.c++_x-1.command=y\n"
-                                      "lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n";
-    const auto kept = decode_settings(later, SettingsVersion::v6);
-    expect(kept && kept.value().lsp_commands.size() == 3 &&
-               encode_settings(kept.value())
-                   .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
-                              "lsp.c++_x-1.command=y\nlsp.java.command=C:\\jdtls\\jdtls.exe\n"),
-           "v5 keeps command rows for languages it does not know and writes them back");
-    expect(
-        !decode_settings(plain + "lsp.java.command=x\nlsp.java.command=y\n", SettingsVersion::v6),
-        "a second row for an unknown name is refused too");
-    const auto v4 = decode_settings(std::string(released_v4_settings) + "lsp.java.command=x\n",
-                                    SettingsVersion::v4);
-    expect(!v4 && v4.error() == SettingsFailure::malformed,
-           "v4 still refuses a command row for a language 1.0.0 does not know");
-    const auto old =
-        decode_settings(std::string(v3_settings) + "lsp.cpp.command=x\n", SettingsVersion::v3);
-    expect(!old && old.error() == SettingsFailure::malformed, "v3 rejects command lines");
-    auto other = settings;
-    other.lsp_commands.pop_back();
-    expect(!same_settings(other, settings), "commands take part in the settings comparison");
-}
-
 // Vim の `map.<modes>.<lhs>=<rhs>` の行と `mapleader=`（ADR 0176 の決定 1・#1081）。0 行以上・
 // 書くときは lsp の行の後ろに持っている順・読むときはファイルの順・壊れた行は全体の拒否。
 void verify_settings_maps()
@@ -1025,7 +966,8 @@ void verify_settings_maps()
 // 接頭辞の族の行（`lsp.<language>.command` と `map.<modes>.<lhs>`）。
 void verify_settings_lines()
 {
-    verify_settings_lsp_commands();
+    nenenib::tests::adapters::verify_settings_lsp_commands(expect, released_v4_settings,
+                                                           v3_settings);
     verify_settings_maps();
 }
 
@@ -1682,6 +1624,38 @@ void verify_v4_migration(Win32FileAdapter &files)
            "with v5 and v4 both present v5 wins");
 }
 
+// 旧版だけの profile で設定の「言語サーバー」の節の「使う」を押して閉じた（#1945 のレビュー）:
+// 「使う」 は c と cpp の命令の行を置くだけなので、保存は旧版 → v6 の移行の道に乗り、v6 だけを
+// 書いて旧版を bytes のまま残す。v6 は置いた命令の行（空白のパスは `"` で囲んだ形）をそのまま持つ。
+void verify_language_server_use_on_earlier(Win32FileAdapter &files,
+                                           const nenenib::core::FilePath &earlier,
+                                           std::string_view bytes)
+{
+    reset_settings(files, std::nullopt);
+    expect(files.write(earlier, bytes).has_value(), "prepare a profile with only the earlier file");
+    Win32SettingsAdapter store(files, settings_paths());
+    const auto reading = store.read();
+    auto used = reading.value_or(std::nullopt).value_or(default_editor_settings());
+    const std::string clangd = R"("C:\Program Files\LLVM\bin\clangd.exe")";
+    used.lsp_commands = {{"c", clangd}, {"cpp", clangd}};
+    expect(reading && reading.value().has_value() && store.write(used).has_value(),
+           "Use on an earlier-only profile saves on close");
+    const auto saved = decode_settings(
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v6);
+    expect(saved && same_settings(saved.value(), used) &&
+               saved.value().lsp_commands == used.lsp_commands &&
+               read_text(files, earlier, 4096).value_or("") == bytes,
+           "the Use lines go to v6 and the earlier file stays byte for byte");
+}
+
+// v4 だけの profile（1.0.0）と v5 だけの profile（1.1.0）の両方で確かめる（ADR 0192 の決定 1）。
+void verify_language_server_use_migration(Win32FileAdapter &files)
+{
+    verify_language_server_use_on_earlier(files, settings_paths().released, released_v4_settings);
+    verify_language_server_use_on_earlier(files, settings_paths().shipped,
+                                          nenenib::tests::adapters::released_v5_settings);
+}
+
 // v4 に v5 の鍵が在れば拒否し、1.0.0 が読込の後に v4 を変えたら古い写しで書かず、v4 の lock は
 // 待たずに断り、壊れた v5 は v4 へ戻らない（ADR 0170 の 2026-11-16 の追補の 2・3・6）。
 void verify_v4_conflicts(Win32FileAdapter &files)
@@ -1801,6 +1775,7 @@ void verify_oversized_settings(Win32FileAdapter &files)
 void verify_settings_migration(Win32FileAdapter &files)
 {
     verify_v4_migration(files);
+    verify_language_server_use_migration(files);
     verify_v4_conflicts(files);
     verify_v5_migration(files);
     verify_v3_migration(files);

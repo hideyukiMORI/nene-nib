@@ -17,6 +17,7 @@
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "PaneSizing.hpp"
 #include "QuantityText.hpp"
 #include "ReplayLevel.hpp"
 #include "ScopedValue.hpp"
@@ -440,6 +441,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     return std::holds_alternative<core::VimSwitchTab>(step.effect) ||
            std::holds_alternative<core::VimWindowCommand>(step.effect) ||
+           std::holds_alternative<core::PaneSizing>(step.effect) ||
            std::holds_alternative<core::VimReplay>(step.effect);
 }
 
@@ -984,7 +986,10 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     // Vim が changed_* に渡した位置は engine の印が持つ（ADR 0181 の追補 #1374）。u と Ctrl-r は
     // 効果を写すときに戻した行を足す（note_vim_undone）。
     vim_changed_from_ = changed_position_of(step);
+    const bool outer_landed = std::exchange(vim_effect_landed_, false);
     applied_vim_step(step, before);
+    // 診断の鍵は跳べたら成功の歩（engine の失敗を読み替える・#1939 のレビュー R3 の推奨 3）。
+    const bool landed = std::exchange(vim_effect_landed_, outer_landed);
     const core::Offset command_caret = settle_vim_step(
         step, before,
         held.has_value() && !requests_window(step, held.value().second) ? held : std::nullopt);
@@ -992,7 +997,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     check_vim_marks();
     restart_due_vim_insert(command_caret);
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
-    return step_failure(step.failure, replay_failure_);
+    return step_failure(landed ? std::nullopt : step.failure, replay_failure_);
 }
 
 // INSERT の `Ctrl-o` の命令が終わった鍵の後に始め直す（ADR 0182 の決定 2）。効果を写して NORMAL の
@@ -2186,6 +2191,12 @@ void EditorController::perform(const core::VimWindowCommand &command)
         return;
     }
     std::unreachable();
+}
+
+// 枠の大きさの鍵（ADR 0148 の 2026-11-22 の追補の決定 4）。1 枠では何もしない。
+void EditorController::perform(const core::PaneSizing &sizing)
+{
+    resize_pane(sizing);
 }
 
 std::expected<core::VimStep, TextLayoutFailure>

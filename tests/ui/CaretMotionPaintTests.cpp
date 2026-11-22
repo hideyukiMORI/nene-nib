@@ -8,6 +8,7 @@
 #include "CaretMotionPainter.hpp"
 #include "CaretMotionStart.hpp"
 #include "CaretQuad.hpp"
+#include "PaneSide.hpp"
 #include "SoftwareTarget.hpp"
 #include "WindowChecks.hpp"
 
@@ -15,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 namespace nenenib::tests::ui
 {
@@ -94,20 +96,56 @@ void verify_caret_motion_paint()
 
 namespace
 {
-[[nodiscard]] win32::CaretMotionStart started(core::CaretMotionClock progress, bool wanted = true)
+const core::CaretQuad whole_body = core::caret_quad_of(0.0F, 0.0F, 640.0F, 480.0F);
+
+// 本文の領域と操作中の枠の側（既定は 1 枠の本文全体）。
+using PaneArea = std::pair<core::CaretQuad, core::PaneSide>;
+const PaneArea whole_area{whole_body, core::PaneSide::first};
+
+[[nodiscard]] win32::CaretMotionStart started(core::CaretMotionClock progress, bool wanted = true,
+                                              const PaneArea &area = whole_area)
 {
-    return win32::CaretMotionStart{wanted, 0, progress, duration,
-                                   core::caret_quad_of(0.0F, 0.0F, 640.0F, 480.0F)};
+    return win32::CaretMotionStart{wanted, 0, progress, duration, area.first, area.second};
 }
 
 // 描く側の 1 frame（入口 → キャレットが見えれば行き先 → 出口）。まだ動いているかを返す。
 bool framed(win32::CaretMotionFollower &follower, core::CaretMotionClock progress,
-            const std::optional<core::CaretQuad> &caret)
+            const std::optional<core::CaretQuad> &caret, const PaneArea &area = whole_area)
 {
-    follower.begin(started(progress));
+    follower.begin(started(progress, true, area));
     const bool moving = caret.has_value() && follower.moves(caret.value());
     follower.end();
     return moving;
+}
+
+// 操作中の枠の側が同じまま本文の領域が変わった frame は跳ぶ（split の境界線のドラッグ・#1941 と
+// #1956 の取り込み）。右の枠が操作中で境界線を左へ動かすと、本文の左端とキャレットの画面の位置が
+// 一緒に動く。動きの途中でも跳んで止まり、領域が変わらない次の動きは今までどおり尾を引く。操作中の
+// 枠が替わった frame は、領域が変わっても尾を引く（決定 5）。
+void verify_caret_motion_layout_jump()
+{
+    const auto from = core::caret_quad_of(340.0F, 30.0F, 350.0F, 50.0F);
+    const auto shifted = core::caret_quad_of(240.0F, 30.0F, 250.0F, 50.0F);
+    const auto left_caret = core::caret_quad_of(20.0F, 30.0F, 30.0F, 50.0F);
+    const PaneArea right_pane{core::caret_quad_of(320.0F, 0.0F, 640.0F, 480.0F),
+                              core::PaneSide::second};
+    const PaneArea wider_pane{core::caret_quad_of(220.0F, 0.0F, 640.0F, 480.0F),
+                              core::PaneSide::second};
+    const PaneArea left_pane{core::caret_quad_of(0.0F, 0.0F, 220.0F, 480.0F),
+                             core::PaneSide::first};
+    const core::CaretMotionClock idle{};
+    win32::CaretMotionFollower follower;
+    follower.allow(true, 0);
+    static_cast<void>(framed(follower, idle, from, right_pane));
+    static_cast<void>(framed(follower, idle, from, right_pane));
+    expect(!framed(follower, idle, shifted, wider_pane) && !follower.generation().has_value(),
+           "a frame whose body area moved jumps to the shifted caret");
+    expect(framed(follower, idle, from, wider_pane) && follower.generation().has_value(),
+           "a move inside an unchanged body area still trails");
+    expect(!framed(follower, idle, from, right_pane) && !follower.generation().has_value(),
+           "resizing the pane in the middle of a motion settles it");
+    expect(framed(follower, idle, left_caret, left_pane) && follower.generation().has_value(),
+           "switching to the other pane still trails across the split");
 }
 } // namespace
 
@@ -159,5 +197,6 @@ void verify_caret_motion_follow()
            "a rebuilt follower numbers its motion above the window's last one");
     expect(framed(rebuilt, stale, to) && rebuilt.track().shown == rebuilt.track().from,
            "the stale progress does not advance the rebuilt follower's motion");
+    verify_caret_motion_layout_jump();
 }
 } // namespace nenenib::tests::ui

@@ -54,6 +54,7 @@
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OpenSettings.hpp"
@@ -75,9 +76,12 @@
 #include "RefreshAppearance.hpp"
 #include "RegisterShell.hpp"
 #include "ResizeExplorer.hpp"
+#include "ResizePane.hpp"
+#include "ResizeSplit.hpp"
 #include "RestoreAutosave.hpp"
 #include "RevealTab.hpp"
 #include "RevertSettings.hpp"
+#include "RunDiagnosticCommand.hpp"
 #include "SaveDocument.hpp"
 #include "ScrollCompletion.hpp"
 #include "ScrollExplorer.hpp"
@@ -146,5 +150,6 @@ using EditorIntent = std::variant<
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
     RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
-    PreviewScrollSettled, CaretMotionTick>;
+    PreviewScrollSettled, RunDiagnosticCommand, ResizeSplit, ResizePane, OpenLanguageServerLog,
+    CaretMotionTick>;
 } // namespace nenenib::application

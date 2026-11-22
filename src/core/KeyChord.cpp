@@ -11,7 +11,7 @@ namespace
 {
 // 鍵 → 表示名の表（CPP-012・#1051 で 31 鍵になり switch が関数長を越えた）。OperationKey
 // の順に全値を 1 回ずつ持つ（下の static_assert が守る）。
-constexpr std::array<std::pair<OperationKey, std::string_view>, 34> operation_key_names{{
+constexpr std::array<std::pair<OperationKey, std::string_view>, 35> operation_key_names{{
     {OperationKey::o, "O"},
     {OperationKey::s, "S"},
     {OperationKey::t, "T"},
@@ -46,6 +46,7 @@ constexpr std::array<std::pair<OperationKey, std::string_view>, 34> operation_ke
     {OperationKey::f12, "F12"},
     {OperationKey::comma, ","},
     {OperationKey::i, "I"},
+    {OperationKey::f8, "F8"},
 }};
 
 // OperationKey の値か。値を足すとこの switch がコンパイルで落ち（CPP-002）、足した後は表の行の数と
@@ -88,6 +89,7 @@ constexpr std::array<std::pair<OperationKey, std::string_view>, 34> operation_ke
     case OperationKey::f12:
     case OperationKey::comma:
     case OperationKey::i:
+    case OperationKey::f8:
         return true;
     }
     return false;

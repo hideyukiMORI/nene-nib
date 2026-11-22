@@ -94,6 +94,21 @@ enum class EditorOperation : std::uint8_t
     copy_path,
     copy_file_name,
     close_other_tabs,
-    close_right_tabs
+    close_right_tabs,
+    // 診断の 4 つ（#1939・ADR 0161 の決定 9 の追補）。次・前の診断へは F8 / Shift+F8 で両モード
+    // （Vim の NORMAL の `]d` `[d` と同じ跳び）、診断を表示は鍵なしで F1 の一覧から（Vim の NORMAL
+    // の `gl` と同じ札）、診断の一覧は鍵なしで Ctrl+P の一覧を診断の記号で開く。
+    next_diagnostic,
+    previous_diagnostic,
+    show_diagnostic,
+    list_diagnostics,
+    // 2 枠の操作中の枠の大きさ（ADR 0148 の 2026-11-22 の追補の決定 4）。鍵は無く（Windows に標準の
+    // 鍵が無い・D82）、両方のモードの F1 の一覧から。広げる・狭めるは分割の向きに 5 升。
+    widen_pane,
+    narrow_pane,
+    even_panes,
+    // 言語サーバーの記録（標準エラーと知らせ）を無題のタブに写して開く（ADR 0160 の 2026-11-22 の
+    // 追補・LSP 段 S8・Ex の `:LspLog` と同じ）。鍵は無く、両方のモードの F1 の一覧に載る。
+    open_language_server_log
 };
 } // namespace nenenib::core

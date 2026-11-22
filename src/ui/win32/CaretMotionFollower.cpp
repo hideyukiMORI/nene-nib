@@ -24,8 +24,12 @@ void CaretMotionFollower::begin(const CaretMotionStart &start) noexcept
         settle();
         return;
     }
-    jump_ = start.tab != tab_;
+    // 操作中の枠が同じまま本文の領域が変わった frame（split の境界線のドラッグ・窓の大きさ・
+    // エクスプローラーの開閉）も跳ぶ。枠の配置で動いた画面の位置は、キャレットが動いたのではない。
+    // 操作中の枠が替わった frame は動く（決定 5）。
+    jump_ = start.tab != tab_ || (start.side == side_ && start.bounds != track_.bounds);
     tab_ = start.tab;
+    side_ = start.side;
     progress_ = start.progress;
     duration_ = start.duration;
     track_.bounds = start.bounds;

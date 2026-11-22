@@ -40,7 +40,6 @@ constexpr std::int32_t summary_note_height_dips = 16;
 constexpr std::int32_t summary_padding_dips = 11;
 constexpr std::int32_t preset_height_dips = 30;
 constexpr std::int32_t preset_padding_dips = 12;
-constexpr std::int32_t command_height_dips = 28;
 constexpr std::int32_t empty_height_dips = 96;
 constexpr std::int32_t footer_height_dips = 58;
 constexpr std::int32_t footer_padding_dips = 12;
@@ -198,26 +197,6 @@ void push_heading(SettingsLayout &layout, std::int32_t &y, SettingsSection secti
     y += to_pixels(summary_bottom_dips, dpi);
 }
 
-// 言語サーバーの節（見出しと、言語ごとの命令の行か「行がありません」の 1 行）。
-void push_commands(SettingsLayout &layout, std::int32_t &y, std::size_t commands)
-{
-    push_heading(layout, y, SettingsSection::language_server, 0);
-    if (commands == 0)
-    {
-        push_item(
-            layout, y,
-            SettingsLayoutItem{SettingsItemKind::no_commands, nowhere, 0, SettingsControl::fixed},
-            command_height_dips);
-    }
-    for (std::size_t index = 0; index < commands; ++index)
-    {
-        push_item(layout, y,
-                  SettingsLayoutItem{SettingsItemKind::command, nowhere, index,
-                                     SettingsControl::readonly},
-                  command_height_dips);
-    }
-}
-
 // 送る前の位置で全部を積み、内容の下端を返す。
 [[nodiscard]] std::int32_t stacked(SettingsLayout &layout, const SettingsLayoutRequest &request)
 {
@@ -230,11 +209,8 @@ void push_commands(SettingsLayout &layout, std::int32_t &y, std::size_t commands
             push_heading(layout, y, row.section, request.widths.estimate);
         }
         push_item(layout, y, SettingsLayoutItem{SettingsItemKind::row, nowhere, index, row.control},
-                  settings_row_height_dips);
-    }
-    if (request.commands.has_value())
-    {
-        push_commands(layout, y, request.commands.value());
+                  row.control == SettingsControl::fold ? settings_fold_height_dips
+                                                       : settings_row_height_dips);
     }
     if (layout.items.empty())
     {
@@ -298,6 +274,7 @@ void place_items(SettingsLayout &layout, const SettingsLayoutRequest &request)
         }
         break;
     case SettingsControl::choice:
+    case SettingsControl::action:
         if (contains(box, x, y))
         {
             return SettingsTarget{SettingsPart::row_value, item.index};
@@ -306,6 +283,8 @@ void place_items(SettingsLayout &layout, const SettingsLayoutRequest &request)
     case SettingsControl::toggle:
     case SettingsControl::fixed:
     case SettingsControl::readonly:
+    case SettingsControl::blank:
+    case SettingsControl::fold:
         break;
     }
     return SettingsTarget{SettingsPart::row, item.index};
@@ -393,6 +372,11 @@ void place_items(SettingsLayout &layout, const SettingsLayoutRequest &request)
     case SettingsControl::stepper:
     case SettingsControl::readonly:
         return {settings_value_width_dips, settings_value_height_dips};
+    case SettingsControl::action:
+        return {settings_action_width_dips, settings_action_height_dips};
+    case SettingsControl::blank:
+    case SettingsControl::fold:
+        return {0, 0};
     }
     std::unreachable();
 }

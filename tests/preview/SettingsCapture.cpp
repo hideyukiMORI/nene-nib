@@ -11,6 +11,8 @@
 #include "EditorFeature.hpp"
 #include "EditorSettings.hpp"
 #include "FeatureCosts.hpp"
+#include "LanguageServerRowAction.hpp"
+#include "LanguageServerRowState.hpp"
 #include "LayoutRect.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "SettingsPanel.hpp"
@@ -18,6 +20,7 @@
 #include "SettingsPanelPainter.hpp"
 #include "SettingsRowView.hpp"
 #include "SettingsRows.hpp"
+#include "SettingsSection.hpp"
 #include "SettingsSectionTab.hpp"
 #include "SettingsSubject.hpp"
 #include "SettingsValue.hpp"
@@ -104,13 +107,31 @@ constexpr float full_channel = 255.0F;
     {
         view.rows.push_back(row_view(row, settings));
     }
-    if (focused >= 0 && static_cast<std::size_t>(focused) < view.rows.size())
+    // 「言語サーバー」の節の見本（案 A の絵と同じ 5 行と畳みの 1 行・#1945）。
+    using State = app::LanguageServerRowState;
+    using Action = app::LanguageServerRowAction;
+    view.servers = {
+        {"C / C++", "clangd", State::running,
+         R"(C:\Program Files\LLVM\bin\clangd.exe --background-index)", true, Action::remove, "cpp"},
+        {"Python", "pyright-langserver", State::found,
+         R"(C:\Users\nib\AppData\Roaming\npm\node_modules\pyright\langserver.index.js)", true,
+         Action::use, "python"},
+        {"TypeScript / JavaScript", "typescript-language-server", State::missing,
+         "npm i -g typescript-language-server typescript", true, Action::none, "typescript"},
+        {"Rust", "rust-analyzer", State::found, R"(C:\Users\nib\.cargo\bin\rust-analyzer.exe)",
+         true, Action::use, "rust"},
+        {"Go", "gopls", State::missing, "go install golang.org/x/tools/gopls@latest", true,
+         Action::none, "go"}};
+    view.servers_hidden = 10;
+    const std::size_t shown = view.rows.size() + view.servers.size() + 1;
+    if (focused >= 0 && static_cast<std::size_t>(focused) < shown)
     {
         view.focused = static_cast<std::size_t>(focused);
-        view.section = view.rows.at(view.focused.value_or(0)).row.section;
+        view.section = view.focused.value_or(0) < view.rows.size()
+                           ? view.rows.at(view.focused.value_or(0)).row.section
+                           : core::SettingsSection::language_server;
     }
     view.summary = core::speed_summary(settings);
-    view.lsp_commands = settings.lsp_commands;
     view.scroll = scroll;
     return view;
 }

@@ -14,7 +14,7 @@ namespace nenenib::core
 // 文は文の表の名前で持ち、画面の言語の文は ui_text が引く。EditorOperation の順に全値を 1 回ずつ
 // 持つ（OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で
 // 作る。読み（ひらがな）は画面に出ない検索の鍵なので operation_readings（OperationReadings.hpp）。
-inline constexpr std::array<OperationText, 55> operation_texts{{
+inline constexpr std::array<OperationText, 63> operation_texts{{
     {EditorOperation::open_file, UiMessage::operation_open_file_name,
      UiMessage::operation_open_file_description},
     // 保存・名前を付けて保存・タブを閉じるはタブのメニューにも載る（列 tab_menu・追補 #1790）。
@@ -142,6 +142,23 @@ inline constexpr std::array<OperationText, 55> operation_texts{{
     {EditorOperation::close_right_tabs, UiMessage::operation_close_right_tabs_name,
      UiMessage::operation_close_right_tabs_description, std::nullopt, std::nullopt, "", "",
      ContextMenuSlot{2, 2, ContextMenuNeed::right_tabs}},
+    // 診断の 4 つ（#1939）。
+    {EditorOperation::next_diagnostic, UiMessage::operation_next_diagnostic_name,
+     UiMessage::operation_next_diagnostic_description},
+    {EditorOperation::previous_diagnostic, UiMessage::operation_previous_diagnostic_name,
+     UiMessage::operation_previous_diagnostic_description},
+    {EditorOperation::show_diagnostic, UiMessage::operation_show_diagnostic_name,
+     UiMessage::operation_show_diagnostic_description},
+    {EditorOperation::list_diagnostics, UiMessage::operation_list_diagnostics_name,
+     UiMessage::operation_list_diagnostics_description},
+    {EditorOperation::widen_pane, UiMessage::operation_widen_pane_name,
+     UiMessage::operation_widen_pane_description},
+    {EditorOperation::narrow_pane, UiMessage::operation_narrow_pane_name,
+     UiMessage::operation_narrow_pane_description},
+    {EditorOperation::even_panes, UiMessage::operation_even_panes_name,
+     UiMessage::operation_even_panes_description},
+    {EditorOperation::open_language_server_log, UiMessage::operation_open_language_server_log_name,
+     UiMessage::operation_open_language_server_log_description},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

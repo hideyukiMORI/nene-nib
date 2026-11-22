@@ -1,5 +1,8 @@
 #pragma once
 
+#include "LanguageServerRowAction.hpp"
+#include "LanguageServerRowState.hpp"
+#include "LanguageServerRowView.hpp"
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
@@ -16,6 +19,7 @@
 #include <d2d1.h>
 #include <dwrite.h>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::ui::win32
 {
@@ -33,14 +37,17 @@ namespace nenenib::ui::win32
 class SettingsPanelPainter final
 {
   public:
-    // 保持の上限。行ごとに名前・説明・`:set` の名前・値・段の語と、札・組・見出し・ボタン。
-    static constexpr std::size_t retained = 192;
+    // 保持の上限。行ごとに名前・説明・`:set` の名前・値・段の語と、札・組・見出し・ボタン。言語
+    // サーバーの節の行（表の 15 行と表に無い言語の行）は 1 行に名前・サーバー・状態・2
+    // 行目・ボタン。
+    static constexpr std::size_t retained = 320;
 
     SettingsPanelPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,
                          const SettingsPanelText &text, PaletteRowLayouts &layouts) noexcept;
     // 文字の幅を測って配置を作る。area は面を置ける帯（タイトルバーの下からステータスバーの上）。
     [[nodiscard]] core::SettingsLayout arranged(const application::SettingsView &view,
                                                 const core::LayoutRect &area) const;
+    // heavy は本文の構文の色の error（段の印の「重い」と言語サーバーの節の「止めました」）。
     void paint(const application::SettingsView &view, const core::SettingsLayout &layout,
                const core::Palette &palette, core::RgbColor heavy);
 
@@ -62,8 +69,16 @@ class SettingsPanelPainter final
     void paint_value(std::string_view value, const core::LayoutRect &box, bool chosen);
     void paint_stepper(std::string_view value, const core::SettingsLayout &layout,
                        const core::LayoutRect &box);
-    void paint_command(const application::SettingsView &view, const core::LayoutRect &box,
-                       std::size_t index);
+    void paint_any_row(const application::SettingsView &view, const core::SettingsLayout &layout,
+                       const core::SettingsLayoutItem &item);
+    [[nodiscard]] std::pair<core::UiMessage, core::RgbColor>
+    server_state(application::LanguageServerRowState state) const noexcept;
+    void paint_server(const application::LanguageServerRowView &row,
+                      const core::SettingsLayout &layout, const core::SettingsLayoutItem &item);
+    void paint_server_button(application::LanguageServerRowAction action,
+                             const core::LayoutRect &box);
+    [[nodiscard]] static bool tail_matters(application::LanguageServerRowState state) noexcept;
+    void paint_fold(const application::SettingsView &view, const core::LayoutRect &box);
     void paint_note(core::UiMessage message, const core::LayoutRect &box);
     void paint_footer(const application::SettingsView &view, const core::SettingsLayout &layout);
     void paint_button(std::string_view label, const core::LayoutRect &box, bool filled,
@@ -91,6 +106,9 @@ class SettingsPanelPainter final
     // area の幅で折り返して描く（2 行まで・縦は area の中央）。
     void write_wrapped(std::string_view text, IDWriteTextFormat *format,
                        const core::LayoutRect &area, core::RgbColor color);
+    // area に入り切らなければ先頭側を「…」で省いて末尾を残す（パスの実行ファイルの名前・#1945）。
+    void write_tail(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
+                    core::RgbColor color);
     void write_centered(std::string_view text, IDWriteTextFormat *format,
                         const core::LayoutRect &area, core::RgbColor color);
     void write_trailing(std::string_view text, IDWriteTextFormat *format,

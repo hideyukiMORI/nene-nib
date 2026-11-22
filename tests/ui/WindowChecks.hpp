@@ -92,4 +92,7 @@ void verify_window_corners();
 void verify_question_backdrop();
 // 表示言語の ui の文・画面の文字の locale・固定の枠の幅（ADR 0123 の追補 2026-11-13・#1594）。
 void verify_language_texts();
+// 2 枠の境界の押し・ドラッグ・Esc・ダブルクリック・全面プレビューの間の押し（ADR 0148 の
+// 2026-11-22 の追補の決定 3・#1941）。窓は作らない。
+void verify_split_presses();
 } // namespace nenenib::tests::ui

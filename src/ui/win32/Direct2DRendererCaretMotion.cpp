@@ -38,7 +38,8 @@ void Direct2DRenderer::settle_caret_motion() noexcept
 }
 
 // 動かさないとき（決定 6）: 設定がオフ・Windows の「アニメーション効果」がオフ・IME の変換中。
-// 覚えは空にする（次にオンになった最初の frame は跳ぶ）。タブが変わった frame は跳ぶ（決定 5）。
+// 覚えは空にする（次にオンになった最初の frame は跳ぶ）。タブが変わった frame と、操作中の枠の側が
+// 同じまま本文の領域が変わった frame（split の境界線のドラッグなど）は跳ぶ（決定 5）。
 void Direct2DRenderer::begin_caret_motion(const application::EditorFrame &frame,
                                           const core::BodyLayout &body)
 {
@@ -47,7 +48,8 @@ void Direct2DRenderer::begin_caret_motion(const application::EditorFrame &frame,
         frame.caret_motion, frame.settings.caret_motion_time,
         core::caret_quad_of(
             static_cast<float>(body.content.left), static_cast<float>(body.content.top),
-            static_cast<float>(body.content.right), static_cast<float>(body.content.bottom))});
+            static_cast<float>(body.content.right), static_cast<float>(body.content.bottom)),
+        frame.active_side});
 }
 
 bool Direct2DRenderer::caret_moves(std::optional<D2D1_RECT_F> box)

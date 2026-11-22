@@ -4,6 +4,7 @@
 #include "CaretMotionStart.hpp"
 #include "CaretMotionTrack.hpp"
 #include "CaretQuad.hpp"
+#include "PaneSide.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +25,7 @@ class CaretMotionFollower final
     // の採用）controller に残った古い進みと次の動きの番号が当たらない（#1956 の R2）。
     void allow(bool allowed, std::uint32_t floor) noexcept;
     // frame の入口。動かさない frame（オフ・アニメーション効果がオフ・変換中）は覚えを空にする。
+    // タブが前の frame と違うか、操作中の枠の側が同じまま本文の領域（bounds）が違えば、跳ぶ。
     void begin(const CaretMotionStart &start) noexcept;
     // この frame で動かすか（オフの道はこの真偽 1 つを読むだけ・決定 3）。
     [[nodiscard]] bool on() const noexcept;
@@ -47,6 +49,7 @@ class CaretMotionFollower final
     bool seen_ = false;
     bool jump_ = false;
     std::size_t tab_ = 0;
+    core::PaneSide side_ = core::PaneSide::first;
     core::CaretMotionClock progress_{};
     std::uint32_t duration_ = 0;
 };

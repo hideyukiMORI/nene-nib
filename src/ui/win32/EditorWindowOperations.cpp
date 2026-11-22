@@ -1,5 +1,10 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
+#include "PaneDimension.hpp"
+#include "PaneLayouts.hpp"
+#include "PaneResize.hpp"
+#include "PaneSizing.hpp"
+#include "ResizePane.hpp"
 
 #include "AutosaveId.hpp"
 #include "BeginFind.hpp"
@@ -14,6 +19,7 @@
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
 #include "DeleteUnit.hpp"
+#include "DiagnosticCommand.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
 #include "ExplorerRootChosen.hpp"
@@ -29,6 +35,7 @@
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OperationTexts.hpp"
@@ -37,6 +44,7 @@
 #include "QueryLanguage.hpp"
 #include "RegisterShell.hpp"
 #include "RevealTab.hpp"
+#include "RunDiagnosticCommand.hpp"
 #include "SaveDocument.hpp"
 #include "SaveQuestion.hpp"
 #include "SaveState.hpp"
@@ -500,6 +508,15 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::copy_file_name, &EditorWindow::run_copy_file_name},
         {core::EditorOperation::close_other_tabs, &EditorWindow::run_close_other_tabs},
         {core::EditorOperation::close_right_tabs, &EditorWindow::run_close_right_tabs},
+        {core::EditorOperation::next_diagnostic, &EditorWindow::run_next_diagnostic},
+        {core::EditorOperation::previous_diagnostic, &EditorWindow::run_previous_diagnostic},
+        {core::EditorOperation::show_diagnostic, &EditorWindow::run_show_diagnostic},
+        {core::EditorOperation::list_diagnostics, &EditorWindow::run_list_diagnostics},
+        {core::EditorOperation::widen_pane, &EditorWindow::run_widen_pane},
+        {core::EditorOperation::narrow_pane, &EditorWindow::run_narrow_pane},
+        {core::EditorOperation::even_panes, &EditorWindow::run_even_panes},
+        {core::EditorOperation::open_language_server_log,
+         &EditorWindow::run_open_language_server_log},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -648,6 +665,31 @@ void EditorWindow::run_close_pane()
     send(application::ClosePane{});
 }
 
+// 枠の大きさ（ADR 0148 の 2026-11-22 の追補の決定 4）。分割の向きに 5 升。1 枠では controller が何
+// もしない。
+void EditorWindow::run_widen_pane()
+{
+    resize_operated_pane(core::PaneResize::grow);
+}
+
+void EditorWindow::run_narrow_pane()
+{
+    resize_operated_pane(core::PaneResize::shrink);
+}
+
+void EditorWindow::run_even_panes()
+{
+    resize_operated_pane(core::PaneResize::even);
+}
+
+void EditorWindow::resize_operated_pane(core::PaneResize resize)
+{
+    constexpr std::int32_t operation_cells = 5;
+    const auto dimension = core::split_dimension(controller_.split().layout);
+    send(application::ResizePane{
+        core::PaneSizing{resize, dimension.value_or(core::PaneDimension::width), operation_cells}});
+}
+
 void EditorWindow::run_toggle_preview()
 {
     send(application::TogglePreview{});
@@ -768,6 +810,34 @@ void EditorWindow::run_close_right_tabs()
 {
     close_tabs_beside(application::TabSweep{controller_.tab_ids().at(controller_.active_tab()),
                                             application::TabSweepSide::right});
+}
+
+// 診断の 4 つ（#1939）。跳ぶ・札・一覧はどれも controller が文書の値の診断から決める。
+void EditorWindow::run_next_diagnostic()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::next});
+}
+
+void EditorWindow::run_previous_diagnostic()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::previous});
+}
+
+void EditorWindow::run_show_diagnostic()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::show});
+}
+
+void EditorWindow::run_list_diagnostics()
+{
+    send(application::RunDiagnosticCommand{core::DiagnosticCommand::list});
+}
+
+// 言語サーバーの記録（ADR 0160 の 2026-11-22 の追補・`:LspLog` と同じ）。開くかは controller
+// が決める。
+void EditorWindow::run_open_language_server_log()
+{
+    send(application::OpenLanguageServerLog{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

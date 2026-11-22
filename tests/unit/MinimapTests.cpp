@@ -209,7 +209,7 @@ void verify_panel_press_outside_body()
     for (const auto layout :
          {core::SplitLayout::none, core::SplitLayout::vertical, core::SplitLayout::horizontal})
     {
-        const auto panes = core::pane_layouts(shown.body, 96, font, layout);
+        const auto panes = core::pane_layouts(shown.body, 96, font, core::PaneSplit{layout});
         for (const auto side : {core::PaneSide::first, core::PaneSide::second})
         {
             outside = outside && outside_band(core::active_pane_layout(panes, side).band, points);

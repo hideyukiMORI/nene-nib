@@ -1,6 +1,9 @@
 #include "VimStep.hpp"
+#include "PaneSizing.hpp"
 #include "VimStepDetail.hpp"
+#include "VimWindowResizeBinding.hpp"
 
+#include "DiagnosticCommand.hpp"
 #include "ScrollBounds.hpp"
 #include "TabDestination.hpp"
 #include "TabJump.hpp"
@@ -1125,7 +1128,7 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
 // nullopt（`\` は回数と名指しも捨てる leader_started・ADR 0163）。
 [[nodiscard]] std::optional<VimPrefix> prefix_of(VimAction action) noexcept
 {
-    constexpr std::array<std::pair<VimAction, VimPrefix>, 8> prefixes{
+    constexpr std::array<std::pair<VimAction, VimPrefix>, 9> prefixes{
         {{VimAction::prefix_g, VimPrefix::g},
          {VimAction::prefix_z, VimPrefix::z},
          {VimAction::replay_macro, VimPrefix::at},
@@ -1133,7 +1136,8 @@ character_search_action(const VimState &state, const VimEditorView &view, VimAct
          {VimAction::set_mark, VimPrefix::mark},
          {VimAction::prefix_mark_line, VimPrefix::mark_line},
          {VimAction::prefix_mark_exact, VimPrefix::mark_exact},
-         {VimAction::prefix_bracket, VimPrefix::bracket}}};
+         {VimAction::prefix_bracket_back, VimPrefix::bracket_back},
+         {VimAction::prefix_bracket_forward, VimPrefix::bracket_forward}}};
     for (const auto &[from, prefix] : prefixes)
     {
         if (from == action)
@@ -1455,7 +1459,7 @@ namespace
     // と同じに オペレータを打ち消す（下の移動にならない鍵の道）。
     if (action == VimAction::prefix_g || action == VimAction::prefix_z ||
         action == VimAction::prefix_mark_line || action == VimAction::prefix_mark_exact ||
-        action == VimAction::prefix_bracket)
+        action == VimAction::prefix_bracket_back || action == VimAction::prefix_bracket_forward)
     {
         return started_prefix(state, prefix_of(action).value_or(VimPrefix::g));
     }
@@ -2052,6 +2056,12 @@ namespace
     {
         return detail::language_queried(state, query.value(), escaped_or_refused(state, key));
     }
+    // `gl`（#1939）。同じく表に行が無かったときの歩に、札を出す効果だけを添える。
+    if (action.value() == VimAction::language_diagnostic)
+    {
+        return detail::diagnostic_commanded(state, DiagnosticCommand::show,
+                                            escaped_or_refused(state, key));
+    }
     return completed_prefix(state, view, action.value());
 }
 
@@ -2096,15 +2106,76 @@ namespace
     return special != nullptr ? vim_window_command_for(*special) : std::nullopt;
 }
 
+// `Ctrl-w` の後ろの大きさの鍵（ADR 0148 の 2026-11-22 の追補の決定 4）→ 枠の大きさの変え方。回数は
+// 升の数（既定 1）で、`_` `|` は回数があればその数ちょうど。大きさの鍵でなければ値なし。
+[[nodiscard]] std::optional<PaneSizing> window_resize_of(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    const auto binding = character != nullptr ? vim_window_resize_for(character->code)
+                                              : std::optional<VimWindowResizeBinding>{};
+    if (!binding.has_value())
+    {
+        return std::nullopt;
+    }
+    const bool counted = state.count.has_value();
+    return PaneSizing{counted ? binding.value().counted : binding.value().uncounted,
+                      binding.value().dimension,
+                      static_cast<std::int32_t>(std::min<std::size_t>(
+                          count_of(state.count), std::numeric_limits<std::int32_t>::max()))};
+}
+// `Ctrl-w` の後ろの桁（Vim の normal_cmd は `Ctrl-w` の後で count0 を opcount へ移して 0 から数え
+// 直し、命令の前に掛ける・`2<C-w>3>` は 6・実測 2026-11-22）。`0` は後ろの桁を打っている間だけ桁。
+// 桁でなければ値なし。
+[[nodiscard]] std::optional<std::size_t> window_digit_of(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr || character->code < U'0' || character->code > U'9')
+    {
+        return std::nullopt;
+    }
+    const bool typing =
+        state.register_count.has_value() && state.register_count.value().typed.has_value();
+    if (character->code == U'0' && !typing)
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(character->code - U'0');
+}
+
+// `Ctrl-w` の後ろの桁を足す。待ちは `Ctrl-w` のまま。前の回数（無ければ 1）と打ち直した桁は
+// `"{name}` の後と同じ register_count に置き、回数は積（#1319 と同じ Vim の opcount）。
+[[nodiscard]] VimStep window_counted(const VimState &state, std::size_t digit)
+{
+    const VimCount before = state.register_count.has_value() ? state.register_count.value().before
+                                                             : state.count.value_or(VimCount{1});
+    const VimCount typed = digit_appended(
+        state.register_count.has_value() ? state.register_count.value().typed : std::nullopt,
+        digit);
+    VimState next = state;
+    next.register_count = VimRegisterCount{before, typed};
+    next.count = register_multiplied(before, typed);
+    return VimStep{std::move(next), VimNoEffect{}};
+}
+
 // `Ctrl-w` の後ろの鍵（ADR 0148 の決定 7）。窓の命令を効果として返すだけで、モードと選択は
-// 変えない（VISUAL のままで、枠を移るときに畳むのは controller）。回数は捨てる。Esc は待ちを
-// 消すだけ。表に無い鍵は失敗して後ろを打ち切る。
+// 変えない（VISUAL のままで、枠を移るときに畳むのは controller）。回数は `Ctrl-w`
+// の前と後ろの積で、 大きさの鍵（2026-11-22 の追補の決定
+// 4）だけが升の数として読み、移る・分ける・閉じるは捨てる。 Esc
+// は待ちを消すだけ。表に無い鍵は失敗して後ろを打ち切る。
 [[nodiscard]] VimStep window_step(const VimState &state, VimKey key)
 {
     if (const auto *const special = std::get_if<VimSpecialKey>(&key);
         special != nullptr && *special == VimSpecialKey::escape)
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    if (const auto digit = window_digit_of(state, key); digit.has_value())
+    {
+        return window_counted(state, digit.value());
+    }
+    if (const auto resize = window_resize_of(state, key); resize.has_value())
+    {
+        return VimStep{finished_input_wait(state), resize.value()};
     }
     const std::optional<VimWindowCommand> command = window_command_of(key);
     if (!command.has_value())
@@ -2194,10 +2265,21 @@ namespace
 
 // `[` `]` の後ろの 1 鍵。族は未実装なので、どの鍵でも何も動かさずに失敗する（`[{` の `{` を
 // 段落の移動として流さない・保留中のオペレータも打ち消す・#1334）。Esc は鳴らさずに打ち消すだけで
-// 後ろの鍵が効く（`[<Esc>x` `d[<Esc>x` は x が消す・`z<Esc>` と同じ・実測・#1344）。
-[[nodiscard]] VimStep bracket_step(const VimState &state, const VimKey &key)
+// 後ろの鍵が効く（`[<Esc>x` `d[<Esc>x` は x が消す・`z<Esc>` と同じ・実測・#1344）。`[d` `]d`
+// は同じ失敗の歩に、診断の跳びの効果を回数つきで添える（#1939・Vim の `[d` は定義を表示するだけで
+// 本文もキャレットも変えない）。
+[[nodiscard]] VimStep bracket_step(const VimState &state, VimPrefix prefix, const VimKey &key)
 {
-    return escaped_or_refused(state, key);
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr || character->code != U'd')
+    {
+        return escaped_or_refused(state, key);
+    }
+    return detail::diagnostic_commanded(state,
+                                        prefix == VimPrefix::bracket_forward
+                                            ? DiagnosticCommand::next
+                                            : DiagnosticCommand::previous,
+                                        escaped_or_refused(state, key));
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
@@ -2226,8 +2308,9 @@ namespace
         return mark_jump_step(state, view, prefix, key);
     case VimPrefix::insert_register:
         return insert_register_step(state, view, key);
-    case VimPrefix::bracket:
-        return bracket_step(state, key);
+    case VimPrefix::bracket_back:
+    case VimPrefix::bracket_forward:
+        return bracket_step(state, prefix, key);
     case VimPrefix::leader:
         return detail::leader_step(state, view, key);
     case VimPrefix::leader_leader:
@@ -2641,9 +2724,15 @@ namespace
 
 // `"{name}` の前の回数は、回数と選んだレジスタが両方残るあいだだけ持つ（#1319）。オペレータへ
 // 移った回数は pending が持ち、移動や命令で回数を使い終えれば Vim の opcount も 0 に戻る。
+// `Ctrl-w` の後ろの桁（window_counted）も、`Ctrl-w` の待ちが残るあいだは同じ形で持つ。
 [[nodiscard]] VimStep register_count_kept(VimStep step)
 {
-    if (!step.next.count.has_value() || !step.next.selected_register.has_value())
+    const auto *const prefix = step.next.input_wait.has_value()
+                                   ? std::get_if<VimPrefix>(&step.next.input_wait.value())
+                                   : nullptr;
+    const bool window_waiting = prefix != nullptr && *prefix == VimPrefix::window_command;
+    if (!step.next.count.has_value() ||
+        (!step.next.selected_register.has_value() && !window_waiting))
     {
         step.next.register_count = std::nullopt;
     }
@@ -2808,7 +2897,15 @@ namespace
 {
     return false;
 }
+[[nodiscard]] bool replaces(const PaneSizing &) noexcept
+{
+    return false;
+}
 [[nodiscard]] bool replaces(const VimLanguageQuery &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const VimDiagnosticCommand &) noexcept
 {
     return false;
 }

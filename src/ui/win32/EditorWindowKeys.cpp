@@ -224,7 +224,8 @@ LRESULT EditorWindow::key_message(UINT message, WPARAM word, LPARAM data)
 // ドラッグ中の Esc（面の幅とミニマップ）を受けたか。
 bool EditorWindow::take_drag_escape(WPARAM word, LPARAM data)
 {
-    return word == VK_ESCAPE && (take_explorer_escape(data) || take_minimap_escape(data));
+    return word == VK_ESCAPE &&
+           (take_explorer_escape(data) || take_minimap_escape(data) || take_split_escape(data));
 }
 
 // 歩いていないときは意図を送らない（Ctrl+C などのたびに描き直さない・決定 4）。

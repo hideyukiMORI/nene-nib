@@ -264,7 +264,7 @@ void verify_round_trips()
 void verify_language_ids()
 {
     using core::Language;
-    constexpr std::array<std::pair<Language, std::string_view>, 12> named{{
+    constexpr std::array<std::pair<Language, std::string_view>, 17> named{{
         {Language::plain, "plaintext"},
         {Language::cs, "csharp"},
         {Language::powershell, "powershell"},
@@ -277,6 +277,11 @@ void verify_language_ids()
         {Language::dockerfile, "dockerfile"},
         {Language::javascript, "javascript"},
         {Language::typescript, "typescript"},
+        {Language::make, "makefile"},
+        {Language::batch, "bat"},
+        {Language::java, "java"},
+        {Language::terraform, "terraform"},
+        {Language::svelte, "svelte"},
     }};
     for (const auto &[language, id] : named)
     {

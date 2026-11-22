@@ -59,6 +59,9 @@ enum class OperationKey : std::uint8_t
     comma,
     // 通常モードの Ctrl+I の補完（2 つ目の鍵・施主決定 D104・IME が Ctrl+Space を取る環境の
     // 逃げ道）。Vim では表に行を置かない（Vim の Ctrl-I は Tab とジャンプ）。
-    i
+    i,
+    // 修飾なしの F8 と Shift+F8 の次・前の診断へ（#1939・VS Code と Visual Studio
+    // の「次の問題へ」）。両モード。
+    f8
 };
 } // namespace nenenib::core

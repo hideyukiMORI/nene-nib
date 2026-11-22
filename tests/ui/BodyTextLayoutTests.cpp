@@ -123,6 +123,26 @@ void check_resources(BodyTextLayouts &layouts, const core::EditorSettings &setti
     }
 }
 
+// #1941: 2 枠の幅が違っても、同じ frame に両方の幅の layout を持ち、次の frame でも両方を使う（幅は
+// entry の鍵で、書式の鍵ではない・ADR 0148 の 2026-11-22 の追補の決定 6）。
+void check_two_widths(BodyTextLayouts &layouts, const core::EditorSettings &settings)
+{
+    const app::TextLayoutRequest left{"the same line in two panes", settings, {300, 29, 96}};
+    const app::TextLayoutRequest right{left.text, settings, {500, 29, 96}};
+    layouts.begin_frame();
+    const auto first_left = layouts.get(left);
+    const auto first_right = layouts.get(right);
+    layouts.end_frame();
+    layouts.begin_frame();
+    const auto next_left = layouts.get(left);
+    const auto next_right = layouts.get(right);
+    layouts.end_frame();
+    expect(first_left && first_right && next_left && next_right &&
+               first_left.value() != first_right.value() &&
+               next_left.value() == first_left.value() && next_right.value() == first_right.value(),
+           "two pane widths keep their own layouts across frames");
+}
+
 void check_input_retention(BodyTextLayouts &layouts, const core::EditorSettings &settings)
 {
     const auto request = app::TextLayoutRequest{"one retained input", settings, narrow};
@@ -756,6 +776,7 @@ void verify_body_text_layouts()
     check_unicode(layouts, settings);
     check_resources(layouts, settings);
     check_input_retention(layouts, settings);
+    check_two_widths(layouts, settings);
     check_line_retention(layouts, settings);
     check_wrapped_pixels(layouts, settings);
     check_horizontal_pixels(layouts, settings);

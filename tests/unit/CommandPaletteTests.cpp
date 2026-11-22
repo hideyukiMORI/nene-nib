@@ -524,7 +524,8 @@ void verify_palette_marks()
            "the exclamation mark selects the project search and a colon keeps its own bang");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
     expect(core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese).text() ==
-               "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定　? 操作　! 全文",
+               "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定　? 操作　! "
+               "全文　^ 診断",
            "the hint is built from the table");
     expect(core::palette_origin_label(core::PaletteOrigin::tab,
                                       nenenib::core::DisplayLanguage::japanese) == "開いているタブ",
@@ -1907,7 +1908,7 @@ void verify_operation_list_opens()
     auto frame = controller.apply_frame(app::OpenOperationList{});
     expect(frame.command_line.value_or(core::InputLineView{}).text == "?" &&
                frame.command_palette.value_or(app::CommandPaletteView{}).selected == 0 &&
-               frame.command_palette.value_or(app::CommandPaletteView{}).total == 55 &&
+               frame.command_palette.value_or(app::CommandPaletteView{}).total == 63 &&
                operation_row(frame, 0) == core::EditorOperation::open_file,
            "the operation list opens behind the question mark on the first row");
     expect(!frame.command_message.has_value(), "the operation list clears the one-line message");
@@ -1932,7 +1933,7 @@ void verify_operation_list_opens()
     frame = controller.apply_frame(app::OpenOperationList{});
     const auto vim_list = frame.command_palette.value_or(app::CommandPaletteView{});
     const auto &vim_rows = vim_list.rows;
-    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 50 &&
+    expect(frame.command_line.value_or(core::InputLineView{}).text == "?" && vim_list.total == 58 &&
                std::ranges::none_of(vim_rows, [](const core::CommandChoice &row)
                                     { return row.operation == core::EditorOperation::undo; }),
            "the Ex line gives way to the vim operation list without undo");

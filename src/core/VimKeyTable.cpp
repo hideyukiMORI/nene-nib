@@ -18,6 +18,7 @@
 #include "VimTextObjectBinding.hpp"
 #include "VimWindowBinding.hpp"
 #include "VimWindowCommand.hpp"
+#include "VimWindowResizeBinding.hpp"
 #include "VimWordClass.hpp"
 
 #include <array>
@@ -131,8 +132,8 @@ constexpr std::array<VimBinding, 85> normal_bindings{
      {U'}', VimAction::move_paragraph_forward},
      {U'(', VimAction::move_sentence_backward},
      {U')', VimAction::move_sentence_forward},
-     {U'[', VimAction::prefix_bracket},
-     {U']', VimAction::prefix_bracket},
+     {U'[', VimAction::prefix_bracket_back},
+     {U']', VimAction::prefix_bracket_forward},
      {U's', VimAction::substitute},
      {U'R', VimAction::replace_mode},
      {U'&', VimAction::repeat_substitute},
@@ -278,11 +279,13 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::move_paragraph_forward, VimActionGroup::motion},
      {VimAction::move_sentence_backward, VimActionGroup::motion},
      {VimAction::move_sentence_forward, VimActionGroup::motion},
-     {VimAction::prefix_bracket, VimActionGroup::input_wait},
+     {VimAction::prefix_bracket_back, VimActionGroup::input_wait},
      {VimAction::substitute_line, VimActionGroup::edit_line},
      {VimAction::prefix_leader, VimActionGroup::input_wait},
      {VimAction::language_definition, VimActionGroup::language},
-     {VimAction::language_hover, VimActionGroup::language}}};
+     {VimAction::language_hover, VimActionGroup::language},
+     {VimAction::prefix_bracket_forward, VimActionGroup::input_wait},
+     {VimAction::language_diagnostic, VimActionGroup::language}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 42> motion_bindings{
@@ -332,10 +335,10 @@ constexpr std::array<VimMotionBinding, 42> motion_bindings{
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
 // ADR 0028 の追補 #1032 の gI / #1617 の gn gN と表示だけの ga g8 g<C-g> g< gV gs /
-// ADR 0190 の決定 8 の gd）。
+// ADR 0190 の決定 8 の gd / #1939 の gl）。
 // ここに無い鍵は g を打ち消して失敗する（Vim の nv_g_cmd の clearopbeep と、Nib に無い命令で本文か
 // キャレットを変える鍵・一覧は #1617 の out/1617-fix/g-keys.md）。
-constexpr std::array<VimBinding, 34> g_bindings{
+constexpr std::array<VimBinding, 35> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -369,7 +372,8 @@ constexpr std::array<VimBinding, 34> g_bindings{
      {U'V', VimAction::show_information},
      {U's', VimAction::show_information},
      {U'8', VimAction::show_character_bytes},
-     {U'd', VimAction::language_definition}}};
+     {U'd', VimAction::language_definition},
+     {U'l', VimAction::language_diagnostic}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。
@@ -425,6 +429,17 @@ constexpr std::array<VimWindowBinding, 15> window_bindings{
      {U'c', VimWindowCommand::close},
      {U'q', VimWindowCommand::close},
      {U'o', VimWindowCommand::only}}};
+
+// `Ctrl-w` の後ろの鍵 → 枠の大きさの変え方（ADR 0148 の 2026-11-22 の追補の決定 4・本物の Vim
+// の実測の表）。`=` は向きを問わない（even）。
+constexpr std::array<VimWindowResizeBinding, 7> window_resize_bindings{
+    {{U'>', PaneDimension::width, PaneResize::grow, PaneResize::grow},
+     {U'<', PaneDimension::width, PaneResize::shrink, PaneResize::shrink},
+     {U'+', PaneDimension::height, PaneResize::grow, PaneResize::grow},
+     {U'-', PaneDimension::height, PaneResize::shrink, PaneResize::shrink},
+     {U'=', PaneDimension::width, PaneResize::even, PaneResize::even},
+     {U'_', PaneDimension::height, PaneResize::maximize, PaneResize::set},
+     {U'|', PaneDimension::width, PaneResize::maximize, PaneResize::set}}};
 
 // 縦の位置合わせの動作 → 置く所・最初の非空白へ動かすか・行の選び方（ADR 0146 の決定 2・9・
 // CPP-012）。
@@ -638,6 +653,18 @@ static_assert(
         if (binding.key == key)
         {
             return binding.command;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimWindowResizeBinding> vim_window_resize_for(char32_t key) noexcept
+{
+    for (const VimWindowResizeBinding binding : window_resize_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding;
         }
     }
     return std::nullopt;
