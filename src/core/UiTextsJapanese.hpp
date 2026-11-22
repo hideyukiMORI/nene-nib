@@ -440,5 +440,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::settings_lsp_more, "ほかの {0} 言語を見る"},
     {UiMessage::notice_language_server_log_empty, "言語サーバーの記録はまだありません"},
     {UiMessage::status_language_server_starting, "{0}: 起動中"},
+    {UiMessage::settings_caret_motion_name, "キャレットの動き"},
+    {UiMessage::settings_caret_motion_description, "キャレットが動くとき、尾を引いて滑らかに移る"},
+    {UiMessage::settings_caret_motion_time_name, "キャレットの動きの時間"},
+    {UiMessage::settings_caret_motion_time_description, "動きにかける時間（40〜300 ms）"},
 }};
 } // namespace nenenib::core

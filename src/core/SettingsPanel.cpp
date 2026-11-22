@@ -62,6 +62,7 @@ constexpr LayoutRect nowhere{0, 0, 0, 0};
     case SettingsValue::finder_preview:
         return SettingsControl::choice;
     case SettingsValue::font_size:
+    case SettingsValue::caret_motion_time:
         return SettingsControl::stepper;
     case SettingsValue::font_family:
         return SettingsControl::readonly;

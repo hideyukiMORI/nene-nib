@@ -223,9 +223,9 @@ bool untouched_untitled(const EditorState &state) noexcept
 
 // 合図（ADR 0062 の決定 7・ADR 0137 の決定 1・ADR 0155 の決定 8・ADR 0160 の決定 6・ADR 0176 の
 // 決定 4・#1789 のタブの札の待ち TabTipTick・ui がプレビューの送りを畳んだ答え
-// PreviewScrollSettled・#1894）。「合図か」を決めるのはここの 1 か所（ADR 0062
-// の追補・#1296）。題名のダブルクリックの PinTab は使う人の操作なので合図ではない（ADR 0179 の決定
-// 4-4）。
+// PreviewScrollSettled・#1894・キャレットの動きの合図 CaretMotionTick・ADR 0192 の決定
+// 3）。「合図か」を決めるのはここの 1 か所（ADR 0062 の追補・#1296）。題名のダブルクリックの PinTab
+// は使う人の操作なので合図ではない（ADR 0179 の決定 4-4）。
 bool is_signal(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<WorkCompleted>(intent) ||
@@ -235,7 +235,8 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<MapTimeout>(intent) ||
            std::holds_alternative<TabTipTick>(intent) ||
            std::holds_alternative<FirstFramePresented>(intent) ||
-           std::holds_alternative<PreviewScrollSettled>(intent);
+           std::holds_alternative<PreviewScrollSettled>(intent) ||
+           std::holds_alternative<CaretMotionTick>(intent);
 }
 
 // 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの

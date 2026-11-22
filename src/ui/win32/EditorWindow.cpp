@@ -44,6 +44,7 @@ LRESULT EditorWindow::frame_message(UINT message, WPARAM word, LPARAM data)
     case WM_SETTINGCHANGE:
         read_wheel_setting();
         read_hover_setting();
+        read_animation_setting();
         refresh_appearance();
         return 0;
     case WM_SIZE:
@@ -208,6 +209,9 @@ void EditorWindow::receive_timer(WPARAM word)
     case WindowTimer::tab_tip:
         KillTimer(window_, word);
         send(application::TabTipTick{GetActiveWindow() == window_});
+        return;
+    case WindowTimer::caret_motion:
+        send_caret_motion();
         return;
     }
 }
