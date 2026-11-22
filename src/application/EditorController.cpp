@@ -150,7 +150,9 @@ visual_block_of(const core::TextBuffer &text, const core::Selection &selection, 
     return PaneSource{state,
                       core::vim_visual_range(state.text(), selection.value(), visual.mode).range,
                       visual_block_of(state.text(), selection.value(), visual.mode, visual.wanted),
-                      current.pattern, current.tab};
+                      current.pattern,
+                      current.tab,
+                      current.geometry};
 }
 
 // 描く範囲。矩形のあいだだけ行ごとの範囲へ差し替わる（ADR 0035 の決定 8）。短い行の右側
@@ -221,7 +223,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
 // ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。面の幅の
-// ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。
+// ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。2 枠の
+// 境界のドラッグ（ResizeSplit）と鍵（ResizePane・ADR 0148 の 2026-11-22 の追補）も同じ側。
 // 面の上のマウスを載せた行（HoverExplorer・#1390）は帯の hover と同じく使う人の操作ではなく、
 // not_user_operation の 1 本を経て歩きを続け、報せを消さない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
@@ -823,7 +826,7 @@ std::optional<core::VimBlockRange> EditorController::block_selection() const
 PaneSource EditorController::framed_source(const core::VimPattern *pattern) const
 {
     return drawn_source(PaneSource{state_, highlighted_range(), block_selection(), pattern,
-                                   state_.autosave_ids().at(state_.active_tab())});
+                                   state_.autosave_ids().at(state_.active_tab()), view_geometry_});
 }
 
 const std::optional<core::WordTable> &EditorController::word_table() const noexcept
@@ -876,15 +879,16 @@ void EditorController::accept(const WorkCompleted &)
     request_explorer_folder();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();
-    // プレビューの画像は解析の結果の後（新しい結果が引き継いだ entry の券で採る・ADR 0155 の追補 50
-    // ）。
+    // プレビューの画像は解析の結果の後（ADR 0155 の追補 50・新しい結果が引き継いだ券で採る）。
     collect_preview_images();
+    // 言語サーバーの root を探した答え（ADR 0161 の 2026-11-22 の追補・段 S3）。頼んでいなければ
+    // 呼ばない。答えで起きた子の出来事を同じ合図で読むよう、言語サーバーの集めより前。
+    collect_language_roots();
     // 言語サーバー（ADR 0160 の決定 1）。子が居なければ呼ばない。
     collect_language_server();
     // 起動画面の履歴とブックマーク（ADR 0172 の決定 3）。頼んでいなければ呼ばない。
     collect_start_lists();
-    // 全文検索（ADR 0167 の決定 4）。頼んでいなければ呼ばない。面の当たりを足すので、下の面を読む
-    // 前に呼ぶ。
+    // 全文検索（ADR 0167 の決定 4）。面の当たりを足すので、下の面を読む前に呼ぶ。
     collect_project_search();
     // プレビュー欄の窓（ADR 0189 の決定 4）。頼んでいなければ呼ばない。
     collect_finder_preview();
@@ -892,6 +896,8 @@ void EditorController::accept(const WorkCompleted &)
     collect_reveals();
     // リンクを OS に渡す頼みの失敗（#1869 の段 L2）。頼んでいなければ呼ばない。
     collect_link_opens();
+    // 設定の面の言語サーバーの探し（#1945）。頼んでいなければ呼ばない。
+    collect_language_server_search();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
@@ -1098,7 +1104,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
                    ? syntax_begin(state.text(), key, cache, lexed)
                    : std::nullopt;
     // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
-    const VisualTextView visual(state, ports_.text_layouts, view_geometry_);
+    const VisualTextView visual(state, ports_.text_layouts, source.geometry);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
     for (std::size_t number = first;
          number <= last && row < static_cast<std::int64_t>(scroll.visible_lines); ++number)
@@ -1108,7 +1114,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
                                block_row(source.block, line, source.range), caret);
         lex = colored_line(key.language, lex, shown, lexed);
         diagnosed_line(state, shown);
-        const auto count = screen_rows_of(shown);
+        const auto count = screen_rows_of(shown, source.geometry);
         if (!count)
         {
             return std::unexpected(count.error());
@@ -1123,15 +1129,16 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
 
 // 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。
 std::expected<std::size_t, TextLayoutFailure>
-EditorController::screen_rows_of(const LineView &shown) const
+EditorController::screen_rows_of(const LineView &shown,
+                                 const core::TextViewGeometry &geometry) const
 {
-    if (view_geometry_.width <= 0 || shown.window.active)
+    if (geometry.width <= 0 || shown.window.active)
     {
         return 1;
     }
     return ports_.text_layouts.rows(TextLayoutRequest{presented_text(shown),
                                                       state_.settings(),
-                                                      view_geometry_,
+                                                      geometry,
                                                       core::DisplayForm::text,
                                                       {},
                                                       {},
@@ -1190,7 +1197,7 @@ EditorController::grid_visible_rows(const PaneSource &source,
                                     std::vector<GridRowView> &grid, GridTally &tally) const
 {
     const EditorState &state = source.state;
-    const VisualTextView view(state, ports_.text_layouts, view_geometry_);
+    const VisualTextView view(state, ports_.text_layouts, source.geometry);
     auto cells = view.grid_cells();
     if (!cells)
     {
@@ -1428,6 +1435,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.explorer = explorer_view();
     add_minimap(result);
     add_diagnostics(result);
+    add_language_server_status(result);
     result.start_screen = start_screen_view();
     result.context_menu = context_menu_view();
     result.completion = completion_view();
@@ -1464,6 +1472,7 @@ std::optional<SyntaxStateCache> &EditorController::passive_syntax_cache() noexce
 void EditorController::add_other_pane(EditorFrame &result, const core::VimPattern *pattern)
 {
     result.layout = state_.split().layout;
+    result.share = state_.split().share;
     result.active_side = state_.split().active_side;
     // 全面の間は本文の枠ももう 1 つの枠も描かない（隠した枠は状態に保つ・ADR 0155 の改訂 15）。
     // 錨の写し方は側の枠と同じ（決定 7・11）。
@@ -1506,7 +1515,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,
                                       const PaneView &view)
 {
-    const auto pane = state_.other_pane_state();
+    const auto pane = other_pane_viewed();
     if (!pane.has_value())
     {
         return;
@@ -1519,8 +1528,9 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     }
     const auto position = static_cast<std::size_t>(std::distance(ids.begin(), found));
     const EditorState &state = pane.value();
-    const PaneSource source{state, core::selection_range(state.selection()), std::nullopt, pattern,
-                            view.tab};
+    const PaneSource source{state,        core::selection_range(state.selection()),
+                            std::nullopt, pattern,
+                            view.tab,     other_geometry()};
     PaneFrame other{{},
                     CaretView{state.text().position_of(state.selection().caret), result.caret.shape,
                               state.caret_affinity()},
@@ -1533,7 +1543,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     // 問いの答えを待つ文書は本文を読まない（操作中の枠と同じ・ADR 0140 の決定 2）。
     const bool pending = display_pending(state.display_inquiry());
     std::optional<TextLayoutFailure> failure;
-    if (!pending && state.display() == core::DisplayForm::grid && view_geometry_.width > 0)
+    if (!pending && state.display() == core::DisplayForm::grid && other_geometry().width > 0)
     {
         GridTally tally;
         failure = grid_visible_rows(source, passive_syntax_cache(), other.grid, tally);

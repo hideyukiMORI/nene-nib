@@ -20,6 +20,7 @@
 #include "FilterSettings.hpp"
 #include "FocusSettingsRow.hpp"
 #include "JumpSettingsSection.hpp"
+#include "LanguageServerRowView.hpp"
 #include "OpenSettings.hpp"
 #include "PointMinimap.hpp"
 #include "ResolvedLanguage.hpp"
@@ -169,6 +170,8 @@ void EditorController::accept(const OpenSettings &)
     close_completion();
     drop_hover();
     settings_ = SettingsOpen{state_.settings(), {}, 0};
+    // PC の中の言語サーバーを探すのは面を開いたときだけ（#1945・結果は合図の道で採る）。
+    request_language_server_search();
 }
 
 void EditorController::accept(const CloseSettings &)
@@ -217,6 +220,12 @@ void EditorController::accept(const ChangeSetting &intent)
     {
         return;
     }
+    // 「言語サーバー」の節の行は「使う」「外す」と畳みの 1 行（#1945）。
+    if (focused.value() >= core::settings_rows.size())
+    {
+        act_on_language_server_row(focused.value() - core::settings_rows.size());
+        return;
+    }
     const auto &row = core::settings_rows.at(focused.value());
     auto changed =
         changed_settings(row, state_.settings(), intent.forward, settings_.value().opened.theme);
@@ -258,7 +267,7 @@ void EditorController::accept(const JumpSettingsSection &intent)
     }
     for (const std::size_t index : visible_settings_rows())
     {
-        if (core::settings_rows.at(index).section == intent.section)
+        if (settings_section_of(index) == intent.section)
         {
             settings_.value().focus = index;
             return;
@@ -354,6 +363,8 @@ void EditorController::preview_settings(core::EditorSettings settings)
 {
     const auto &before = state_.settings();
     const bool language_changed = settings.ui_language != before.ui_language;
+    // 命令の行（「使う」「外す」「元に戻す」・#1945）が変わった言語は、写した後に席を合わせる。
+    const auto commands_before = before.lsp_commands;
     if (settings.lsp && !before.lsp)
     {
         resume_language_servers();
@@ -365,6 +376,7 @@ void EditorController::preview_settings(core::EditorSettings settings)
         follow_window_setting();
     }
     adopt_settings(std::move(settings));
+    follow_language_server_commands(commands_before, state_.settings().lsp_commands);
     if (language_changed)
     {
         const auto choice = state_.settings().ui_language;
@@ -391,7 +403,29 @@ std::vector<std::size_t> EditorController::visible_settings_rows() const
             visible.push_back(index);
         }
     }
+    // 「言語サーバー」の節は絞っていない間だけ（行の鍵は表の行の後ろ・畳んだ行があれば畳みの
+    // 1 行が最後・#1945）。
+    if (!query.empty())
+    {
+        return visible;
+    }
+    const auto rows = language_server_rows();
+    const auto shown = shown_language_server_rows(rows);
+    for (const std::size_t index : shown)
+    {
+        visible.push_back(core::settings_rows.size() + index);
+    }
+    if (shown.size() < rows.size())
+    {
+        visible.push_back(core::settings_rows.size() + rows.size());
+    }
     return visible;
+}
+
+core::SettingsSection EditorController::settings_section_of(std::size_t key) const noexcept
+{
+    return key < core::settings_rows.size() ? core::settings_rows.at(key).section
+                                            : core::SettingsSection::language_server;
 }
 
 // 焦点の行（見えている行のときだけ）。
@@ -425,31 +459,40 @@ std::optional<SettingsView> EditorController::settings_view() const
                       std::nullopt,
                       settings_.value().query,
                       core::speed_summary(settings),
-                      settings.lsp_commands,
+                      {},
                       !core::same_settings(settings_.value().opened, settings),
                       settings_.value().scroll,
                       settings_.value().query.empty()};
     for (std::size_t tab = 0; tab < section_order.size(); ++tab)
     {
         const auto section = section_order.at(tab);
-        // 言語サーバーの節は行を持たない（命令の行だけ・絞っていない間は出ている）。
-        const bool listed = section == core::SettingsSection::language_server && view.lsp_listed;
         view.tabs.at(tab) = SettingsSectionTab{
             section, core::settings_section_title(section),
-            listed ||
-                std::ranges::any_of(visible, [section](std::size_t index)
-                                    { return core::settings_rows.at(index).section == section; })};
+            std::ranges::any_of(visible, [this, section](std::size_t index)
+                                { return settings_section_of(index) == section; })};
     }
-    for (const std::size_t index : visible)
+    const auto servers =
+        view.lsp_listed ? language_server_rows() : std::vector<LanguageServerRowView>{};
+    const std::size_t table = core::settings_rows.size();
+    for (std::size_t position = 0; position < visible.size(); ++position)
     {
+        const std::size_t index = visible.at(position);
         if (focused == std::optional<std::size_t>{index})
         {
-            view.focused = view.rows.size();
-            view.section = core::settings_rows.at(index).section;
+            view.focused = position;
+            view.section = settings_section_of(index);
         }
-        view.rows.push_back(
-            row_view(core::settings_rows.at(index), settings, state_.display_language()));
+        if (index < table)
+        {
+            view.rows.push_back(
+                row_view(core::settings_rows.at(index), settings, state_.display_language()));
+        }
+        else if (index - table < servers.size())
+        {
+            view.servers.push_back(servers.at(index - table));
+        }
     }
+    view.servers_hidden = servers.size() - view.servers.size();
     return view;
 }
 } // namespace nenenib::application

@@ -75,14 +75,15 @@ namespace
 [[nodiscard]] bool settings_only(const ExResult &result) noexcept
 {
     [[maybe_unused]] const auto &[settings, highlight, incsearch, message, tab, palette, document,
-                                  display, window, language, syntax, line, clipboard, root, lsp,
-                                  map, format, preview, print, rechecks_window, relative_line,
+                                  display, window, resize, language, syntax, line, clipboard, root,
+                                  lsp, map, format, preview, print, rechecks_window, relative_line,
                                   substitute, lines, global, display_language, wrapscan, stopped] =
         result;
     return !tab.has_value() && !palette.has_value() && !document.has_value() &&
-           !window.has_value() && !line.has_value() && !map.has_value() && !preview.has_value() &&
-           !print.has_value() && !relative_line.has_value() && !substitute.has_value() &&
-           !lines.has_value() && !global.has_value() && !stopped.has_value();
+           !window.has_value() && !resize.has_value() && !line.has_value() && !map.has_value() &&
+           !preview.has_value() && !print.has_value() && !relative_line.has_value() &&
+           !substitute.has_value() && !lines.has_value() && !global.has_value() &&
+           !stopped.has_value();
 }
 
 // 面が打った行を候補として出すか（#1527）。Ex の入力行と同じ評価が受け、答えが設定の族だけのとき。

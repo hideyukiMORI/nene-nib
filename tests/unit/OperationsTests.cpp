@@ -158,7 +158,7 @@ constexpr std::array<ChordRow, 67> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 61> shown_rows{{
+constexpr std::array<ShownRow, 65> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -237,6 +237,12 @@ constexpr std::array<ShownRow, 61> shown_rows{{
     {EditorOperation::previous_diagnostic, "Shift+F8", "Shift+F8", true, true},
     {EditorOperation::show_diagnostic, "", "", true, true},
     {EditorOperation::list_diagnostics, "", "", true, true},
+    // 枠の大きさの 3 つは鍵なしで両方のモード（ADR 0148 の 2026-11-22 の追補）。
+    {EditorOperation::widen_pane, "", "", true, true},
+    {EditorOperation::narrow_pane, "", "", true, true},
+    {EditorOperation::even_panes, "", "", true, true},
+    // 鍵なし。両方のモードの F1 の一覧から（ADR 0160 の 2026-11-22 の追補・`:LspLog`）。
+    {EditorOperation::open_language_server_log, "", "", true, true},
     // 参照の一覧（#1947）。Shift+F12 で両モード。
     {EditorOperation::list_references, "Shift+F12", "Shift+F12", true, true},
     // 記号の一覧（#1955）。鍵なし。
@@ -429,7 +435,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 61 && vim.size() == 58,
+    expect(ordinary.size() == 65 && vim.size() == 62,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -507,8 +513,8 @@ void verify_packaged_operation_choices()
         }
         return counted;
     };
-    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{61, 58, 56, 58} &&
-               sizes(Distribution::packaged) == std::vector<std::size_t>{59, 56, 54, 56},
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{65, 62, 60, 62} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{63, 60, 58, 60},
            "the packaged list has two rows fewer than the zip list in every mode");
     const auto packaged = nenenib::core::operation_choices(
         "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},

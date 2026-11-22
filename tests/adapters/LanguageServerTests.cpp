@@ -38,6 +38,7 @@ namespace adapters = nenenib::adapters::win32;
 namespace application = nenenib::application;
 using nenenib::application::LanguageServerEvent;
 using nenenib::application::LanguageServerSlot;
+using nenenib::application::ServerErrorOutput;
 using nenenib::application::ServerEvent;
 using nenenib::application::ServerExited;
 using nenenib::application::ServerFailed;
@@ -331,7 +332,7 @@ void verify_echo_across_reads()
     const auto events = pump_until(server, messages(1));
     expect(bodies(events) == std::vector<std::string>{body},
            "a body larger than one read and the pipe buffer comes back as one message");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
 }
 
 void verify_two_messages_in_one_write()
@@ -343,7 +344,7 @@ void verify_two_messages_in_one_write()
     const auto events = pump_until(server, messages(2));
     expect(bodies(events) == std::vector<std::string>{"first", "first"},
            "two frames in one write are two messages");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
 }
 
 void verify_crash()
@@ -418,7 +419,7 @@ void verify_too_long()
     expect(bodies(events).empty(), "the too long body is not delivered");
     const HANDLE child = open_fake_child();
     expect(running(child), "the blocked fake server is still running");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
     pump_all(server);
     expect(ended(child),
            "closing the pipes ends a blocked writer and the retired child is collected");
@@ -436,7 +437,7 @@ void verify_header_too_long()
     expect(failed_with(events, ServerFailure::header_too_long),
            "a header over 8 KiB without its blank line is header_too_long");
     expect(bodies(events).empty(), "nothing is delivered from the endless header");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
 }
 
 // stop は止まらない子を待たずに戻り、expire_retired が Job Object ごと殺す（ADR 0160 の追補）。
@@ -446,7 +447,7 @@ void verify_stop_does_not_wait()
     expect(server.start(first, launch_of({"--hang"})).has_value(), "the lingering server starts");
     const HANDLE child = open_fake_child();
     expect(running(child), "the lingering server is running");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
     expect(running(child) && server.waitable_handles().size() == 1,
            "stop returns at once and the retired child stays on the wait list");
     expect(events_of(server.collect()).empty(), "stop discards the events collected so far");
@@ -463,8 +464,9 @@ void verify_stop_cancels_a_pending_write()
     expect(server.start(first, launch_of({"--deaf"})).has_value(), "the deaf server starts");
     const HANDLE child = open_fake_child();
     server.send(first, std::string(std::size_t{1} << 20U, 'w'));
-    expect(server.waitable_handles().size() == 3, "the large write is pending");
-    server.stop(first);
+    expect(server.waitable_handles().size() == 4,
+           "the large write is pending beside the two reads and the process");
+    static_cast<void>(server.stop(first));
     expect(running(child), "stop returns with the pending write cancelled");
     server.expire_retired();
     expect(ended(child), "the deaf child is not left behind");
@@ -472,7 +474,8 @@ void verify_stop_cancels_a_pending_write()
 }
 
 // 退く子は 8 本まで。9 本目を退かせると最も古い退く子を Job Object ごと殺す（#1916 のレビュー
-// R4）。4 席が起きていても、待ちの配列は 4×3＋8 を超えない。
+// R4）。4 席が起きていても、待ちの配列は 4×4＋8 を超えない（標準エラーの読みは 2026-11-22
+// の追補）。
 void verify_retired_limit()
 {
     constexpr std::size_t limit = adapters::language_server_retired_limit;
@@ -480,16 +483,16 @@ void verify_retired_limit()
     expect(server.start(first, launch_of({"--hang"})).has_value(),
            "the oldest lingering server starts");
     const HANDLE oldest = open_fake_child();
-    server.stop(first);
+    static_cast<void>(server.stop(first));
     for (std::size_t round = 1; round < limit; ++round)
     {
         expect(server.start(first, launch_of({"--hang"})).has_value(), "a lingering server starts");
-        server.stop(first);
+        static_cast<void>(server.stop(first));
     }
     expect(running(oldest) && server.waitable_handles().size() == limit,
            "eight retired children are kept on the wait list");
     expect(server.start(first, launch_of({"--hang"})).has_value(), "the ninth server starts");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
     expect(ended(oldest) && server.waitable_handles().size() == limit,
            "the ninth retired child ends the oldest one");
     for (const LanguageServerSlot slot : application::language_server_slots)
@@ -497,11 +500,11 @@ void verify_retired_limit()
         expect(server.start(slot, launch_of({"--hang"})).has_value(), "every slot starts");
     }
     expect(server.waitable_handles().size() <=
-               (application::language_server_slot_limit * 3) + limit,
+               (application::language_server_slot_limit * 4) + limit,
            "four running slots and eight retired children fit in the wait list");
     for (const LanguageServerSlot slot : application::language_server_slots)
     {
-        server.stop(slot);
+        static_cast<void>(server.stop(slot));
     }
     server.expire_retired();
     expect(server.waitable_handles().empty(), "expire_retired leaves nothing to wait on");
@@ -517,8 +520,8 @@ void verify_two_slots()
     expect(server.start(first, launch_of({"--echo"})).has_value() &&
                server.start(second, launch_of({"--echo"})).has_value(),
            "two fake servers start in two slots");
-    expect(server.waitable_handles().size() == 4,
-           "the pump waits on one read and one process per running slot");
+    expect(server.waitable_handles().size() == 6,
+           "the pump waits on the output read, the error read and the process per running slot");
     server.send(first, "to-first");
     server.send(second, "to-second");
     auto slotted = pump_until_slot(server, first);
@@ -532,13 +535,13 @@ void verify_two_slots()
     server.send(second, "kept");
     server.send(first, "dropped");
     static_cast<void>(pump_until_slot(server, second));
-    server.stop(first);
+    static_cast<void>(server.stop(first));
     server.send(second, "after");
     const auto rest = events_of(pump_until_slot(server, second));
     expect(bodies(rest) == std::vector<std::string>{"after"},
            "the other slot keeps answering after one slot stops and nothing comes from the stopped "
            "one");
-    server.stop(second);
+    static_cast<void>(server.stop(second));
     pump_all(server);
     expect(server.waitable_handles().empty(), "both stopped slots are cleaned up");
 }
@@ -583,7 +586,152 @@ void verify_bind_after_start()
            "the pending start is collected");
     server.bind([&arrivals] { ++arrivals; });
     expect(arrivals == 1, "binding with nothing pending does not signal");
-    server.stop(first);
+    static_cast<void>(server.stop(first));
+}
+
+// 席が出した標準エラーの塊を繋いだもの。
+std::string error_output(const Events &events)
+{
+    std::string joined;
+    for (const auto &event : events)
+    {
+        if (std::holds_alternative<ServerErrorOutput>(event))
+        {
+            joined += std::get<ServerErrorOutput>(event).bytes;
+        }
+    }
+    return joined;
+}
+
+// 標準エラーは 3 本目のパイプで読み、合図を出さずに次の出来事と一緒に届く（#1942・ADR 0160 の
+// 2026-11-22 の追補）。子が終わるときは終わる前に書かれた分を ServerExited の前に渡す。
+void verify_error_output()
+{
+    std::size_t arrivals = 0;
+    adapters::Win32LanguageServer server([&arrivals] { ++arrivals; });
+    expect(server.start(first, launch_of({"--stderr", "fake stderr line"})).has_value(),
+           "the server writing to stderr starts");
+    static_cast<void>(server.collect());
+    arrivals = 0;
+    expect(server.waitable_handles().size() == 3,
+           "a started server waits on its output read, its error read and its process");
+    server.send(first, R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    Events events;
+    while ((error_output(events).find('\n') == std::string::npos || bodies(events).empty()) &&
+           pump_once(server))
+    {
+        for (auto &event : events_of(server.collect()))
+        {
+            events.push_back(std::move(event));
+        }
+    }
+    expect(error_output(events) == "fake stderr line\n" && bodies(events).size() == 1,
+           "the stderr line and the answer both arrive");
+    expect(arrivals == 1, "only the answer signals and the stderr output rides along");
+    static_cast<void>(server.stop(first));
+    pump_all(server);
+
+    adapters::Win32LanguageServer dying([] {});
+    expect(
+        dying.start(first, launch_of({"--stderr", "last words", "--die-after", "1"})).has_value(),
+        "the dying server writing to stderr starts");
+    dying.send(first, R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    const auto ended = pump_until(dying, exited);
+    const auto exit_at =
+        std::ranges::find_if(ended, [](const ServerEvent &event)
+                             { return std::holds_alternative<ServerExited>(event); });
+    expect(error_output(Events(ended.begin(), exit_at)) == "last words\n",
+           "what the server wrote to stderr arrives before ServerExited");
+}
+
+// 席 slot の標準エラーの塊のバイトの和。
+std::size_t error_bytes(const std::vector<LanguageServerEvent> &events, LanguageServerSlot slot)
+{
+    std::size_t total = 0;
+    for (const auto &event : events)
+    {
+        if (event.slot == slot && std::holds_alternative<ServerErrorOutput>(event.event))
+        {
+            total += std::get<ServerErrorOutput>(event.event).bytes.size();
+        }
+    }
+    return total;
+}
+
+// 2 席が交互に標準エラーだけを書いても、列は席ごとに上限までしか伸びない（#1950 のレビュー R1）。
+void verify_error_queue_bound()
+{
+    constexpr std::size_t limit = adapters::language_server_error_queue_bytes;
+    constexpr std::size_t rounds = 600;
+    std::vector<LanguageServerEvent> events;
+    for (std::size_t round = 0; round < rounds; ++round)
+    {
+        adapters::queue_error_output(events, first, std::string(1024, 'a'));
+        adapters::queue_error_output(events, second, std::string(1024, 'b'));
+    }
+    expect(events.size() == 2 && error_bytes(events, first) == limit &&
+               error_bytes(events, second) == limit,
+           "two slots writing stderr in turn keep one chunk each within the limit");
+    events.push_back(LanguageServerEvent{.slot = first, .event = ServerMessage{"body"}});
+    adapters::queue_error_output(events, first, std::string(limit, 'c'));
+    const bool latest =
+        !events.empty() && events.back().slot == first &&
+        std::holds_alternative<ServerErrorOutput>(events.back().event) &&
+        std::get<ServerErrorOutput>(events.back().event).bytes == std::string(limit, 'c');
+    expect(events.size() == 3 && error_bytes(events, first) == limit && latest &&
+               std::holds_alternative<ServerMessage>(events.at(1).event),
+           "the limit spans the slot's chunks, the oldest bytes go first and the order with the "
+           "body is kept");
+    adapters::queue_error_output(events, second, "");
+    expect(events.size() == 3, "empty bytes queue nothing");
+}
+
+// 止める前に書かれた標準エラーは、collect されていなくても stop が返す（#1950 のレビュー M1）。
+// 標準入力を読まず本文も書かない子なので、最初に立つ handle は標準エラーの読み。
+void verify_stop_returns_unread_error_output()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(first, launch_of({"--deaf", "--stderr", "cannot read config"})).has_value(),
+           "the deaf server writing to stderr starts");
+    expect(pump_once(server), "the stderr read completes");
+    const auto unread = server.stop(first);
+    expect(error_output(unread) == "cannot read config\n" && count_of<ServerStarted>(unread) == 1,
+           "stop hands back the uncollected start and stderr of the slot");
+    expect(events_of(server.collect()).empty(), "nothing of the stopped slot is left to collect");
+    server.expire_retired();
+}
+
+// 合図を出した後に collect せずに全部の席を止めると印が戻り、次の start の合図が 1 回出る
+// （#1950 のレビュー R4・stop の印を戻す行を守る）。
+void verify_stop_resets_the_signal()
+{
+    std::size_t arrivals = 0;
+    adapters::Win32LanguageServer server([&arrivals] { ++arrivals; });
+    expect(server.start(first, launch_of({"--hang"})).has_value() && arrivals == 1,
+           "the first start is signalled");
+    static_cast<void>(server.stop(first));
+    arrivals = 0;
+    expect(server.start(first, launch_of({"--hang"})).has_value() && arrivals == 1,
+           "after stopping without a collect the next start is signalled once");
+    static_cast<void>(server.stop(first));
+    server.expire_retired();
+}
+
+// --progress の 3 通は本文として届く（#1942）。controller が create に答え、`$/progress` と
+// logMessage を読む。
+void verify_progress_messages()
+{
+    adapters::Win32LanguageServer server([] {});
+    expect(server.start(first, launch_of({"--progress"})).has_value(),
+           "the progress server starts");
+    server.send(first, R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})");
+    const auto answers = bodies(pump_until(server, messages(4)));
+    expect(answers.size() == 4 &&
+               answers.at(1).find("window/workDoneProgress/create") != std::string::npos &&
+               answers.at(2).find(R"("method":"$/progress")") != std::string::npos &&
+               answers.at(3).find("window/logMessage") != std::string::npos,
+           "initialize is followed by the create request, a begin and a log message");
+    static_cast<void>(server.stop(first));
 }
 
 // 替え玉に method の要求を 1 つ送り、届いた答えの本文（#1825・ADR 0190 の決定 11）。
@@ -595,7 +743,7 @@ std::string answer_to(Arguments arguments, std::string_view method)
     server.send(first, R"({"jsonrpc":"2.0","id":7,"method":")" + std::string(method) +
                            R"(","params":{}})");
     const auto answers = bodies(pump_until(server, messages(1)));
-    server.stop(first);
+    static_cast<void>(server.stop(first));
     return answers.size() == 1 ? answers.front() : std::string{};
 }
 
@@ -673,6 +821,11 @@ int main(int argc, char **argv)
     verify_completion_answer();
     verify_hover_answer();
     verify_definition_answer();
+    verify_error_output();
+    verify_error_queue_bound();
+    verify_stop_returns_unread_error_output();
+    verify_stop_resets_the_signal();
+    verify_progress_messages();
     std::printf("Language server adapter: %zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;
 }

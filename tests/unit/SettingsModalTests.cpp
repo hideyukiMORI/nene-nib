@@ -98,11 +98,12 @@ namespace core = nenenib::core;
 // 焦点を行 subject へ送る（見えている行を下へ歩く）。
 void focus_on(EditorController &controller, const core::SettingsSubject &subject)
 {
-    for (std::size_t step = 0; step < core::settings_rows.size(); ++step)
+    // 言語サーバーの節の行（#1945）も歩くので、設定の行の数より多く送れるようにする。
+    for (std::size_t step = 0; step < core::settings_rows.size() * 4; ++step)
     {
         const auto frame = controller.frame();
         const auto &panel = panel_of(frame);
-        if (panel.focused.has_value() &&
+        if (panel.focused.has_value() && panel.focused.value() < panel.rows.size() &&
             panel.rows.at(panel.focused.value()).row.subject == subject)
         {
             return;
@@ -213,14 +214,14 @@ void verify_filter_and_sections()
            "nothing matches and nothing is focused");
     static_cast<void>(controller.apply(app::ChangeSetting{true}));
     static_cast<void>(controller.apply(app::FilterSettings{""}));
-    // 言語サーバーの節は行を持たない（命令の行だけ）。札は出ていて、送っても焦点は動かない。
-    const auto before = controller.frame();
+    // 言語サーバーの節は言語ごとの行を持つ（#1945）。札は最初の行（C / C++）へ焦点を送る。
     const auto served =
         controller.apply_frame(app::JumpSettingsSection{core::SettingsSection::language_server});
     expect(panel_of(served).lsp_listed && panel_of(served).tabs.at(5).filled &&
-               panel_of(served).focused == panel_of(before).focused &&
-               panel_of(served).section != std::optional{core::SettingsSection::language_server},
-           "the language server section lists only commands and takes no focus");
+               panel_of(served).focused ==
+                   std::optional<std::size_t>{panel_of(served).rows.size()} &&
+               panel_of(served).section == std::optional{core::SettingsSection::language_server},
+           "the language server tab sends the focus to its first language row");
     const auto jumped =
         controller.apply_frame(app::JumpSettingsSection{core::SettingsSection::features});
     const auto &all = panel_of(jumped);
@@ -231,9 +232,13 @@ void verify_filter_and_sections()
     const auto wrapped = controller.apply_frame(app::StepSettings{false});
     static_cast<void>(controller.apply(app::JumpSettingsSection{core::SettingsSection::display}));
     const auto top = controller.apply_frame(app::StepSettings{false});
+    const auto &last = panel_of(top);
+    const std::size_t total =
+        last.rows.size() + last.servers.size() + (last.servers_hidden > 0 ? 1 : 0);
     expect(panel_of(wrapped).section == std::optional{core::SettingsSection::panes} &&
-               panel_of(top).focused == std::optional<std::size_t>{panel_of(top).rows.size() - 1},
-           "stepping goes back a row and wraps around at the top");
+               last.focused == std::optional<std::size_t>{total - 1} &&
+               last.section == std::optional{core::SettingsSection::language_server},
+           "stepping goes back a row and wraps around at the top to the last language row");
     static_cast<void>(controller.apply(app::CloseSettings{}));
     expect(editing.settings().writes() == 0, "searching and moving do not change settings");
 }
@@ -516,6 +521,8 @@ void verify_language_server_switch()
     static_cast<void>(controller.apply(app::OpenSettings{}));
     focus_on(controller, core::EditorFeature::lsp);
     static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    // root を探した答えの合図で起きる（ADR 0161 の 2026-11-22 の追補・段 S3）。
+    static_cast<void>(controller.apply(app::WorkCompleted{}));
     expect(server.launches().size() == 1 && editing.settings().writes() == 0,
            "turning the server on in the panel starts it without saving");
     static_cast<void>(controller.apply(app::RevertSettings{}));

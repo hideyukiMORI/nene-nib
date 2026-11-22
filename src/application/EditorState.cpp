@@ -1477,6 +1477,17 @@ EditorState EditorState::without_split() const
     return next;
 }
 
+EditorState EditorState::with_split_share(core::SplitShare share) const
+{
+    if (split_.layout == core::SplitLayout::none)
+    {
+        return *this;
+    }
+    EditorState next(*this);
+    next.split_.share = share;
+    return next;
+}
+
 EditorState EditorState::with_other_adjusted(const core::Edit &edit,
                                              const core::TextBuffer &after) const
 {

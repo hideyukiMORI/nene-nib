@@ -18,6 +18,7 @@
 #include "VimTextObjectBinding.hpp"
 #include "VimWindowBinding.hpp"
 #include "VimWindowCommand.hpp"
+#include "VimWindowResizeBinding.hpp"
 #include "VimWordClass.hpp"
 
 #include <array>
@@ -433,6 +434,17 @@ constexpr std::array<VimWindowBinding, 15> window_bindings{
      {U'q', VimWindowCommand::close},
      {U'o', VimWindowCommand::only}}};
 
+// `Ctrl-w` の後ろの鍵 → 枠の大きさの変え方（ADR 0148 の 2026-11-22 の追補の決定 4・本物の Vim
+// の実測の表）。`=` は向きを問わない（even）。
+constexpr std::array<VimWindowResizeBinding, 7> window_resize_bindings{
+    {{U'>', PaneDimension::width, PaneResize::grow, PaneResize::grow},
+     {U'<', PaneDimension::width, PaneResize::shrink, PaneResize::shrink},
+     {U'+', PaneDimension::height, PaneResize::grow, PaneResize::grow},
+     {U'-', PaneDimension::height, PaneResize::shrink, PaneResize::shrink},
+     {U'=', PaneDimension::width, PaneResize::even, PaneResize::even},
+     {U'_', PaneDimension::height, PaneResize::maximize, PaneResize::set},
+     {U'|', PaneDimension::width, PaneResize::maximize, PaneResize::set}}};
+
 // 縦の位置合わせの動作 → 置く所・最初の非空白へ動かすか・行の選び方（ADR 0146 の決定 2・9・
 // CPP-012）。
 constexpr std::array<VimScreenAlignmentBinding, 8> screen_alignment_bindings{
@@ -645,6 +657,18 @@ static_assert(
         if (binding.key == key)
         {
             return binding.command;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<VimWindowResizeBinding> vim_window_resize_for(char32_t key) noexcept
+{
+    for (const VimWindowResizeBinding binding : window_resize_bindings)
+    {
+        if (binding.key == key)
+        {
+            return binding;
         }
     }
     return std::nullopt;

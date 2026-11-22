@@ -13,60 +13,15 @@ namespace nenenib::core
 {
 namespace
 {
-// Language の値か。値を足すとこの switch がコンパイルで落ち（CPP-002）、足した後は下の数え上げが
-// 1 つ増えて、名前の表に行が無ければ static_assert が落ちる（OperationTexts.cpp と同じ形）。
-[[nodiscard]] consteval bool is_language(Language language) noexcept
-{
-    switch (language)
-    {
-    case Language::plain:
-    case Language::markdown:
-    case Language::html:
-    case Language::c:
-    case Language::cpp:
-    case Language::python:
-    case Language::json:
-    case Language::javascript:
-    case Language::typescript:
-    case Language::yaml:
-    case Language::toml:
-    case Language::xml:
-    case Language::css:
-    case Language::powershell:
-    case Language::shell:
-    case Language::cmake:
-    case Language::gdscript:
-    case Language::dosini:
-    case Language::gdresource:
-    case Language::cs:
-    case Language::rust:
-    case Language::go:
-    case Language::php:
-    case Language::sql:
-    case Language::lua:
-    case Language::dockerfile:
-        return true;
-    }
-    return false;
-}
-
-// 値は 0 から連続して並ぶので、最初に値でなくなる所までが値の数。
-[[nodiscard]] consteval std::size_t language_count() noexcept
-{
-    std::size_t count = 0;
-    while (is_language(static_cast<Language>(count)))
-    {
-        ++count;
-    }
-    return count;
-}
-
 // 名前の表（決定 3）。i 行目が i 番目の値の Vim の filetype 名で、language_name と
 // language_of_name の 2 本が同じこの配列を読む。
-constexpr std::array<std::string_view, 26> language_names{
-    "text",       "markdown", "html", "c",   "cpp", "python", "json",  "javascript", "typescript",
-    "yaml",       "toml",     "xml",  "css", "ps1", "sh",     "cmake", "gdscript",   "dosini",
-    "gdresource", "cs",       "rust", "go",  "php", "sql",    "lua",   "dockerfile"};
+constexpr std::array<std::string_view, 42> language_names{
+    "text",       "markdown",   "html",      "c",      "cpp",        "python", "json",
+    "javascript", "typescript", "yaml",      "toml",   "xml",        "css",    "ps1",
+    "sh",         "cmake",      "gdscript",  "dosini", "gdresource", "cs",     "rust",
+    "go",         "php",        "sql",       "lua",    "dockerfile", "java",   "kotlin",
+    "dart",       "zig",        "terraform", "make",   "dosbatch",   "ruby",   "swift",
+    "scala",      "haskell",    "elixir",    "r",      "perl",       "vue",    "svelte"};
 
 static_assert(language_names.size() == language_count(),
               "language_names has one row for every Language");
@@ -75,7 +30,7 @@ static_assert(language_names.size() == language_count(),
 // 表に無い拡張子と同じ plain だが、初版の表の 1 行として書いておく。
 using LanguageExtension = std::pair<std::string_view, Language>;
 
-constexpr std::array<LanguageExtension, 68> language_extensions{{
+constexpr std::array<LanguageExtension, 102> language_extensions{{
     {"md", Language::markdown},
     {"markdown", Language::markdown},
     {"html", Language::html},
@@ -143,12 +98,46 @@ constexpr std::array<LanguageExtension, 68> language_extensions{{
     {"lua", Language::lua},
     {"rockspec", Language::lua},
     {"dockerfile", Language::dockerfile},
+    {"java", Language::java},
+    {"jav", Language::java},
+    {"kt", Language::kotlin},
+    {"ktm", Language::kotlin},
+    {"kts", Language::kotlin},
+    {"dart", Language::dart},
+    {"drt", Language::dart},
+    {"zig", Language::zig},
+    {"zon", Language::zig},
+    {"tf", Language::terraform},
+    {"tfvars", Language::terraform},
+    {"mk", Language::make},
+    {"mak", Language::make},
+    {"bat", Language::batch},
+    {"cmd", Language::batch},
+    {"rb", Language::ruby},
+    {"rbw", Language::ruby},
+    {"gemspec", Language::ruby},
+    {"rake", Language::ruby},
+    {"ru", Language::ruby},
+    {"swift", Language::swift},
+    {"scala", Language::scala},
+    {"hs", Language::haskell},
+    {"hsc", Language::haskell},
+    {"hsig", Language::haskell},
+    {"ex", Language::elixir},
+    {"exs", Language::elixir},
+    {"r", Language::r},
+    {"pl", Language::perl},
+    {"pm", Language::perl},
+    {"plx", Language::perl},
+    {"psgi", Language::perl},
+    {"vue", Language::vue},
+    {"svelte", Language::svelte},
     {"txt", Language::plain},
 }};
 
 // 名前の表にも拡張子の表にも無い呼び名（#1858・Markdown の囲みのコードの info string で
 // よく書かれるもの）。language_of_label だけが読む。
-constexpr std::array<LanguageExtension, 8> language_aliases{{
+constexpr std::array<LanguageExtension, 11> language_aliases{{
     {"c++", Language::cpp},
     {"shell", Language::shell},
     {"powershell", Language::powershell},
@@ -157,6 +146,9 @@ constexpr std::array<LanguageExtension, 8> language_aliases{{
     {"csharp", Language::cs},
     {"c#", Language::cs},
     {"docker", Language::dockerfile},
+    {"makefile", Language::make},
+    {"batch", Language::batch},
+    {"hcl", Language::terraform},
 }};
 
 [[nodiscard]] consteval bool aliases_are_new() noexcept
@@ -197,10 +189,11 @@ static_assert(std::ranges::find(listed_extensions, std::string_view{"txt"}) !=
 // 拡張子ではなく名前で決まる行（決定 2）。照合は拡張子と同じく ASCII の大文字小文字を畳む。
 // Dockerfile と Containerfile（#860）と `.luacheckrc` と shell の設定の 6 つ（#864）は Vim の
 // filetype.vim の名前の行（Vim は `.bashrc` などを bash・`.zshrc` `.zprofile` を zsh にするが、
-// Nib は `.zsh` と同じく shell の 1 つに畳む）。
+// Nib は `.zsh` と同じく shell の 1 つに畳む）。`Makefile` `GNUmakefile`、Ruby の `Gemfile` など 5
+// つ、 Elixir の `mix.lock`、R の `.Rprofile` `Rprofile` も filetype.vim の名前の行（2026-11-20）。
 using LanguageName = std::pair<std::string_view, Language>;
 
-constexpr std::array<LanguageName, 10> language_file_names{{
+constexpr std::array<LanguageName, 20> language_file_names{{
     {"CMakeLists.txt", Language::cmake},
     {"Dockerfile", Language::dockerfile},
     {"Containerfile", Language::dockerfile},
@@ -211,6 +204,16 @@ constexpr std::array<LanguageName, 10> language_file_names{{
     {".profile", Language::shell},
     {".zshrc", Language::shell},
     {".zprofile", Language::shell},
+    {"Makefile", Language::make},
+    {"GNUmakefile", Language::make},
+    {"Gemfile", Language::ruby},
+    {"Rakefile", Language::ruby},
+    {"Vagrantfile", Language::ruby},
+    {"Podfile", Language::ruby},
+    {"Brewfile", Language::ruby},
+    {"mix.lock", Language::elixir},
+    {".Rprofile", Language::r},
+    {"Rprofile", Language::r},
 }};
 
 // 名前の末尾で決まる行（#864）。Vim の filetype.vim の `*.cmake.in`。拡張子の表を 2 段にせず、

@@ -33,4 +33,12 @@ inline constexpr std::size_t status_item_count = 4;
 // なら 値なし（項目を出さず幅も取らない・status_bar_layout）。文字列はこの 1 本で作り、renderer に
 // 書かない。
 [[nodiscard]] std::optional<DisplayText> diagnostic_count_item(const DiagnosticCounts &counts);
+
+// 言語サーバーの欄の文（ADR 0160 の 2026-11-22 の追補・#1950 のレビュー R2）。件数
+// （diagnostic_count_item）と言語サーバーの進み具合か起動中の 1 行（status）を「E2 W1 · cpp:
+// indexing 33%」の順に並べる。件数が前にあるので、欄に入らなければ renderer
+// が右（進み具合の側）で切る。 件数が無ければ status だけ、status
+// が無ければ件数だけ、どちらも無ければ値なし。
+[[nodiscard]] std::optional<DisplayText>
+status_server_text(const DiagnosticCounts &counts, const std::optional<DisplayText> &status);
 } // namespace nenenib::core

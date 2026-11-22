@@ -30,4 +30,8 @@ inline constexpr std::int64_t lsp_method_not_found_code = -32601;
 
 // サーバーからの要求を MethodNotFound（-32601）で断る答えの本文。
 [[nodiscard]] std::string lsp_method_not_found_body(const LspId &id);
+
+// サーバーからの要求に result: null で答える本文（`window/workDoneProgress/create`・ADR 0160 の
+// 2026-11-22 の追補）。
+[[nodiscard]] std::string lsp_null_result_body(const LspId &id);
 } // namespace nenenib::core

@@ -16,6 +16,9 @@
 //   vim-page            10,000 行の .cpp・折り返し・Vim のモードの <C-f>
 //   grid-ascii-wheel3   16.8 MB の ASCII の 1 行・格子・ScrollLines{3}
 //   grid-mixed-wheel3   16 MB の日本語と ASCII の混じった 1 行・格子・ScrollLines{3}
+//   split-type          10,000 行の .cpp・折り返し・左右の 2 枠（同じ文書・等分）・InsertText{x}
+//                       （draw は両枠の行・枠ごとの幅で問う・#1941）
+//   split-uneven-type   split-type と同じで、境界を 1 / 3 に動かした 2 枠（両枠の幅が違う・#1941）
 #include "ScrollProbeEditing.hpp"
 
 #include "BodyLayout.hpp"
@@ -25,13 +28,20 @@
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
 #include "FilePath.hpp"
+#include "InsertText.hpp"
 #include "Milestone.hpp"
 #include "MoveCaret.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
+#include "PaneFrame.hpp"
+#include "PaneLayouts.hpp"
+#include "ResizeSplit.hpp"
 #include "ScrollLines.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SplitLayout.hpp"
+#include "SplitPane.hpp"
+#include "SplitShare.hpp"
 #include "SubmitCommand.hpp"
 #include "TextLayoutRequest.hpp"
 #include "TextViewGeometry.hpp"
@@ -58,6 +68,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <variant>
 #include <vector>
 
 namespace
@@ -88,12 +99,14 @@ enum class ScrollPath : std::uint8_t
     page_wheel,
     vim_page,
     grid_ascii_wheel3,
-    grid_mixed_wheel3
+    grid_mixed_wheel3,
+    split_type,
+    split_uneven_type
 };
 
-constexpr std::array<std::string_view, 7> path_names{
-    "wrap-wheel3", "nowrap-long-wheel3", "page-down",        "page-wheel",
-    "vim-page",    "grid-ascii-wheel3",  "grid-mixed-wheel3"};
+constexpr std::array<std::string_view, 9> path_names{
+    "wrap-wheel3",       "nowrap-long-wheel3", "page-down",  "page-wheel",       "vim-page",
+    "grid-ascii-wheel3", "grid-mixed-wheel3",  "split-type", "split-uneven-type"};
 
 // 名前の表の i 番目は ScrollPath の i 番目（path_of
 // が添字で引く）。並びを崩したらコンパイルで落とす。
@@ -115,6 +128,10 @@ constexpr std::array<std::string_view, 7> path_names{
         return "grid-ascii-wheel3";
     case ScrollPath::grid_mixed_wheel3:
         return "grid-mixed-wheel3";
+    case ScrollPath::split_type:
+        return "split-type";
+    case ScrollPath::split_uneven_type:
+        return "split-uneven-type";
     }
     std::unreachable();
 }
@@ -128,7 +145,7 @@ constexpr std::array<std::string_view, 7> path_names{
             return false;
         }
     }
-    return static_cast<std::size_t>(ScrollPath::grid_mixed_wheel3) + 1 == path_names.size();
+    return static_cast<std::size_t>(ScrollPath::split_uneven_type) + 1 == path_names.size();
 }
 static_assert(names_follow_paths(), "path_names must follow the order of ScrollPath");
 
@@ -221,6 +238,8 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     case ScrollPath::page_down:
     case ScrollPath::page_wheel:
     case ScrollPath::vim_page:
+    case ScrollPath::split_type:
+    case ScrollPath::split_uneven_type:
         return code_text();
     case ScrollPath::nowrap_long_wheel3:
         return long_text();
@@ -240,6 +259,8 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     case ScrollPath::page_down:
     case ScrollPath::page_wheel:
     case ScrollPath::vim_page:
+    case ScrollPath::split_type:
+    case ScrollPath::split_uneven_type:
         return "C:\\nib-probe\\code.cpp";
     case ScrollPath::nowrap_long_wheel3:
         return "C:\\nib-probe\\long.txt";
@@ -251,10 +272,16 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     std::unreachable();
 }
 
+// 本文の枠（製品の body_panes と同じ pane_layouts の 1 本・1 枠なら body_layout と同じ値）。
+[[nodiscard]] core::PaneLayouts panes_of(const application::EditorController &controller)
+{
+    return core::pane_layouts(core::LayoutRect{0, 0, window_width, window_height}, window_dpi,
+                              controller.delivery().settings.font_size, controller.pane_split());
+}
+
 [[nodiscard]] core::BodyLayout body_of(const application::EditorController &controller)
 {
-    return core::body_layout(window_width, window_height, window_dpi,
-                             controller.delivery().settings.font_size);
+    return core::active_pane_layout(panes_of(controller), controller.split().active_side);
 }
 
 // WHEEL_PAGESCROLL は見えている行数ぶんの ScrollLines（製品の scroll_body と同じ量）。
@@ -271,6 +298,9 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
             static_cast<std::int32_t>(body_of(controller).visible_lines)};
     case ScrollPath::vim_page:
         return application::VimKeyPress{core::VimKey{core::VimSpecialKey::control_f}};
+    case ScrollPath::split_type:
+    case ScrollPath::split_uneven_type:
+        return application::InsertText{"x"};
     case ScrollPath::wrap_wheel3:
     case ScrollPath::nowrap_long_wheel3:
     case ScrollPath::grid_ascii_wheel3:
@@ -281,10 +311,10 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
 }
 
 // 本文の幅・行高・DPI と、本文の書式の字幅（製品の body_view と同じ値）。
-[[nodiscard]] core::TextViewGeometry geometry_of(ScrollProbeEditing &editing)
+[[nodiscard]] core::TextViewGeometry geometry_of(ScrollProbeEditing &editing,
+                                                 const core::BodyLayout &body)
 {
     const auto settings = editing.controller().delivery().settings;
-    const auto body = body_of(editing.controller());
     core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1), body.line_height,
                                     window_dpi};
     const auto advance = editing.layouts().cell(
@@ -293,29 +323,68 @@ static_assert(names_follow_paths(), "path_names must follow the order of ScrollP
     return geometry;
 }
 
-void send_view(ScrollProbeEditing &editing)
+[[nodiscard]] core::TextViewGeometry geometry_of(ScrollProbeEditing &editing)
 {
-    const auto body = body_of(editing.controller());
-    static_cast<void>(editing.controller().apply(
-        application::VisibleLines{body.visible_lines, geometry_of(editing), window_width,
-                                  window_height, body.visible_lines}));
+    return geometry_of(editing, body_of(editing.controller()));
 }
 
-// renderer の本文の文字組み（行ごとの get → glyphs_of・格子の画面行も同じ）の写し。
-void draw_lines(ScrollProbeEditing &editing, const application::EditorFrame &frame,
-                core::TextViewGeometry geometry)
+void send_view(ScrollProbeEditing &editing)
 {
+    auto &controller = editing.controller();
+    const auto body = body_of(controller);
+    application::VisibleLines view{body.visible_lines, geometry_of(editing), window_width,
+                                   window_height, body.visible_lines};
+    // 2 枠なら製品の body_view と同じく境界の寸法ともう 1 つの枠の寸法を添える（#1941）。
+    const auto other =
+        core::other_pane_layout(panes_of(controller), controller.split().active_side);
+    if (other.has_value())
+    {
+        view.split =
+            core::split_extent(core::LayoutRect{0, 0, window_width, window_height}, window_dpi,
+                               controller.delivery().settings.font_size, controller.pane_split());
+        view.other_geometry = geometry_of(editing, other.value());
+        view.other_lines = std::max<std::size_t>(other.value().visible_lines, 1);
+    }
+    static_cast<void>(controller.apply(view));
+}
+
+// 枠の寸法と横の送り（引数の数を tidy の上限に収める）。
+using PaneDraw = std::pair<core::TextViewGeometry, float>;
+
+void draw_text_lines(ScrollProbeEditing &editing, const application::EditorFrame &frame,
+                     std::span<const application::LineView> lines, PaneDraw pane)
+{
+    const auto &[geometry, horizontal] = pane;
     auto &layouts = editing.layouts();
     constexpr auto bottom = static_cast<float>(window_height);
-    for (const auto &line : frame.lines)
+    for (const auto &line : lines)
     {
         const auto made = layouts.get(application::TextLayoutRequest{
             line.display.text, frame.settings, geometry, core::DisplayForm::text, {}, line.window});
         if (made.has_value())
         {
-            static_cast<void>(
-                layouts.glyphs_of(made.value().Get(), -frame.horizontal, 0.0F, bottom));
+            static_cast<void>(layouts.glyphs_of(made.value().Get(), -horizontal, 0.0F, bottom));
         }
+    }
+}
+
+// renderer の本文の文字組み（行ごとの get → glyphs_of・格子の画面行も同じ）の写し。もう 1 つの
+// 本文の枠は renderer と同じく、その枠の配置の幅で問う。
+void draw_lines(ScrollProbeEditing &editing, const application::EditorFrame &frame,
+                core::TextViewGeometry geometry)
+{
+    auto &layouts = editing.layouts();
+    constexpr auto bottom = static_cast<float>(window_height);
+    draw_text_lines(editing, frame, frame.lines, PaneDraw{geometry, frame.horizontal});
+    const auto *const other = frame.other.has_value()
+                                  ? std::get_if<application::PaneFrame>(&frame.other.value())
+                                  : nullptr;
+    const auto other_body = core::other_pane_layout(panes_of(editing.controller()),
+                                                    editing.controller().split().active_side);
+    if (other != nullptr && other_body.has_value())
+    {
+        draw_text_lines(editing, frame, other->lines,
+                        PaneDraw{geometry_of(editing, other_body.value()), other->horizontal});
     }
     for (const auto &row : frame.grid)
     {
@@ -366,6 +435,14 @@ void open(ScrollProbeEditing &editing, ScrollPath path, std::string text)
     {
         static_cast<void>(controller.apply(application::SelectDisplay{core::DisplayForm::grid}));
     }
+    if (path == ScrollPath::split_type || path == ScrollPath::split_uneven_type)
+    {
+        static_cast<void>(controller.apply(application::SplitPane{core::SplitLayout::vertical}));
+    }
+    if (path == ScrollPath::split_uneven_type)
+    {
+        static_cast<void>(controller.apply(application::ResizeSplit{core::SplitShare{1, 3}}));
+    }
     send_view(editing);
 }
 
@@ -376,8 +453,10 @@ void open(ScrollProbeEditing &editing, ScrollPath path, std::string text)
     const bool unwrapped = path == ScrollPath::nowrap_long_wheel3;
     const bool gridded =
         path == ScrollPath::grid_ascii_wheel3 || path == ScrollPath::grid_mixed_wheel3;
+    const bool split = path == ScrollPath::split_type || path == ScrollPath::split_uneven_type;
     const auto frame = controller.frame();
-    return (frame.settings.wrapping == core::LineWrapping::no_wrap) == unwrapped &&
+    return frame.other.has_value() == split &&
+           (frame.settings.wrapping == core::LineWrapping::no_wrap) == unwrapped &&
            frame.grid.empty() != gridded && frame.lines.empty() == gridded;
 }
 

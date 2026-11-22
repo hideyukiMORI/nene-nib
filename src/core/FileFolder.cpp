@@ -1,5 +1,7 @@
 #include "FileFolder.hpp"
 
+#include "AsciiCase.hpp"
+
 #include <cstddef>
 #include <string_view>
 
@@ -7,6 +9,11 @@ namespace nenenib::core
 {
 namespace
 {
+[[nodiscard]] constexpr bool separator_of(char value) noexcept
+{
+    return value == '\\' || value == '/';
+}
+
 // 最後の区切りの位置。区切りが無ければ無し（区切りは 2 種類なので STL の検索は使わない）。
 [[nodiscard]] std::optional<std::size_t> last_separator(std::string_view text) noexcept
 {
@@ -39,5 +46,27 @@ std::optional<FilePath> folder_of(const FilePath &path)
     // 区切りは ASCII なので、前の部分も検証済みの UTF-8 で制御文字を含まない。
     return FilePath::parse(root_only(before) ? text.substr(0, separator.value() + 1) : before)
         .value();
+}
+
+bool folder_contains(const FilePath &folder, const FilePath &path) noexcept
+{
+    const std::string_view base = folder.text();
+    const std::string_view full = path.text();
+    if (base.empty() || full.size() < base.size())
+    {
+        return false;
+    }
+    for (std::size_t index = 0; index < base.size(); ++index)
+    {
+        const char left = base[index];
+        const char right = full[index];
+        const bool both_separators = separator_of(left) && separator_of(right);
+        if (!both_separators && ascii_folded(left) != ascii_folded(right))
+        {
+            return false;
+        }
+    }
+    return full.size() == base.size() || separator_of(base.back()) ||
+           separator_of(full[base.size()]);
 }
 } // namespace nenenib::core

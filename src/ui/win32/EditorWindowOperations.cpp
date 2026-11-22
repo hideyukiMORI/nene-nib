@@ -1,5 +1,10 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
+#include "PaneDimension.hpp"
+#include "PaneLayouts.hpp"
+#include "PaneResize.hpp"
+#include "PaneSizing.hpp"
+#include "ResizePane.hpp"
 
 #include "AutosaveId.hpp"
 #include "BeginFind.hpp"
@@ -30,6 +35,7 @@
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OperationTexts.hpp"
@@ -506,6 +512,11 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::previous_diagnostic, &EditorWindow::run_previous_diagnostic},
         {core::EditorOperation::show_diagnostic, &EditorWindow::run_show_diagnostic},
         {core::EditorOperation::list_diagnostics, &EditorWindow::run_list_diagnostics},
+        {core::EditorOperation::widen_pane, &EditorWindow::run_widen_pane},
+        {core::EditorOperation::narrow_pane, &EditorWindow::run_narrow_pane},
+        {core::EditorOperation::even_panes, &EditorWindow::run_even_panes},
+        {core::EditorOperation::open_language_server_log,
+         &EditorWindow::run_open_language_server_log},
         {core::EditorOperation::list_references, &EditorWindow::run_list_references},
         {core::EditorOperation::list_symbols, &EditorWindow::run_list_symbols},
     }};
@@ -656,6 +667,31 @@ void EditorWindow::run_close_pane()
     send(application::ClosePane{});
 }
 
+// 枠の大きさ（ADR 0148 の 2026-11-22 の追補の決定 4）。分割の向きに 5 升。1 枠では controller が何
+// もしない。
+void EditorWindow::run_widen_pane()
+{
+    resize_operated_pane(core::PaneResize::grow);
+}
+
+void EditorWindow::run_narrow_pane()
+{
+    resize_operated_pane(core::PaneResize::shrink);
+}
+
+void EditorWindow::run_even_panes()
+{
+    resize_operated_pane(core::PaneResize::even);
+}
+
+void EditorWindow::resize_operated_pane(core::PaneResize resize)
+{
+    constexpr std::int32_t operation_cells = 5;
+    const auto dimension = core::split_dimension(controller_.split().layout);
+    send(application::ResizePane{
+        core::PaneSizing{resize, dimension.value_or(core::PaneDimension::width), operation_cells}});
+}
+
 void EditorWindow::run_toggle_preview()
 {
     send(application::TogglePreview{});
@@ -797,6 +833,13 @@ void EditorWindow::run_show_diagnostic()
 void EditorWindow::run_list_diagnostics()
 {
     send(application::RunDiagnosticCommand{core::DiagnosticCommand::list});
+}
+
+// 言語サーバーの記録（ADR 0160 の 2026-11-22 の追補・`:LspLog` と同じ）。開くかは controller
+// が決める。
+void EditorWindow::run_open_language_server_log()
+{
+    send(application::OpenLanguageServerLog{});
 }
 
 // 参照の一覧（#1947・ADR 0191 の決定 4）。Vim の `grr` と同じ問い。

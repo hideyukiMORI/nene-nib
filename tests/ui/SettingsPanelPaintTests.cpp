@@ -8,12 +8,16 @@
 // 見たい行を bitmap に入れる。窓・device は作らない。字の画素は字体に依るので、Segoe UI と Consolas
 // が無い機械では測らない（QLT-013）。鍵の表（settings_key_action）は窓を作らずに確かめる。
 #include "Appearance.hpp"
+#include "BuiltinTheme.hpp"
+#include "BuiltinThemes.hpp"
 #include "CostTier.hpp"
 #include "DirectWriteFactory.hpp"
 #include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "EditorFeature.hpp"
 #include "EditorOperation.hpp"
+#include "LanguageServerRowAction.hpp"
+#include "LanguageServerRowState.hpp"
 #include "LayoutRect.hpp"
 #include "OperationBindings.hpp"
 #include "OperationShortcut.hpp"
@@ -290,6 +294,57 @@ void verify_tiers(const PanelStrip &strip, const core::Palette &palette)
            "a low tier draws a muted dot and an always-on row writes words instead of a switch");
 }
 
+// 「言語サーバー」の節の行（#1945）: 「使う」は主ボタンと同じ accent の地と on_accent
+// の字・「外す」 は accent を使わない・状態の語は色分けしない（構文の色を使わない・止めた物だけ
+// heavy）・押す物の 無い行はボタンを描かない・焦点の行は text の 1 DIP の枠（レビュー M1 / R4）。
+void verify_servers(const PanelStrip &strip, const core::Palette &palette)
+{
+    using State = app::LanguageServerRowState;
+    using Action = app::LanguageServerRowAction;
+    auto view = sample_view(std::nullopt);
+    view.servers = {{"C / C++", "clangd", State::running, R"(C:\LLVM\bin\clangd.exe)", true,
+                     Action::remove, "cpp"},
+                    {"Python", "pyright-langserver", State::found, R"(C:\npm\langserver.js)", true,
+                     Action::use, "python"},
+                    {"Go", "gopls", State::missing, "go install gopls", true, Action::none, "go"}};
+    view.servers_hidden = 2;
+    const std::size_t first = view.rows.size();
+    const auto top = strip.top_showing(view, wide_width, first);
+    const auto layout = strip.layout_of(view, wide_width, top);
+    const auto pixels = strip(view, wide_width, top);
+    const auto &running = PanelStrip::row_box(layout, first);
+    const auto remove = core::settings_control_box(layout, running);
+    expect(
+        painted_with(pixels, running.box, heavy) == 0 &&
+            painted_with(pixels, remove, palette.accent) == 0 &&
+            pixel_is(pixels, remove.left + 4, (remove.top + remove.bottom) / 2, palette.background),
+        "a running server writes its state without a state color and Remove has no accent");
+    const auto found_top = strip.top_showing(view, wide_width, first + 1);
+    const auto found_layout = strip.layout_of(view, wide_width, found_top);
+    const auto found = strip(view, wide_width, found_top);
+    const auto &usable = PanelStrip::row_box(found_layout, first + 1);
+    const auto button = core::settings_control_box(found_layout, usable);
+    expect(pixel_is(found, button.left + 4, (button.top + button.bottom) / 2, palette.accent) &&
+               painted_with(found, button, palette.on_accent) > 0,
+           "Use is the filled primary button: the accent face with an on_accent label");
+    const auto missing_top = strip.top_showing(view, wide_width, first + 2);
+    const auto missing_layout = strip.layout_of(view, wide_width, missing_top);
+    const auto &missing = PanelStrip::row_box(missing_layout, first + 2);
+    expect(core::width_of(core::settings_control_box(missing_layout, missing)) == 0 &&
+               painted_with(strip(view, wide_width, missing_top), missing.box, palette.accent) == 0,
+           "a missing server has no button");
+    auto focused = view;
+    focused.focused = first + 1;
+    const auto ringed = strip(focused, wide_width, found_top);
+    expect(pixel_is(ringed, usable.box.left + 20, usable.box.top, palette.text) &&
+               pixel_is(ringed, usable.box.left + 5, usable.box.top + 28, palette.current_line),
+           "the focused language row has the current line face inside a text frame");
+    auto stopped = view;
+    stopped.servers.at(0).state = State::stopped;
+    expect(painted_with(strip(stopped, wide_width, top), running.box, heavy) > 0,
+           "a stopped server writes its state in the heavy (error) color");
+}
+
 // 細い窓（700 DIP 未満）は全幅で、`:set` の名前を描かない。
 void verify_narrow(const PanelStrip &strip, const core::Palette &palette)
 {
@@ -409,6 +464,12 @@ void verify_settings_panel_paint()
         verify_rows(strip, palette);
         verify_tiers(strip, palette);
         verify_narrow(strip, palette);
+        verify_servers(strip, palette);
     }
+    // accent が背景に近いテーマ（synthwave-84 の accent は選択範囲の地の色）でも「使う」と焦点が
+    // 見える形のまま（レビュー M1）。
+    const auto &faint = core::theme_of(core::BuiltinTheme::synthwave_84).ui;
+    PaletteRowLayouts layouts{SettingsPanelPainter::retained};
+    verify_servers(PanelStrip(target, text, layouts, faint), faint);
 }
 } // namespace nenenib::tests::ui

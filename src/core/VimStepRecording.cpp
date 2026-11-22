@@ -470,6 +470,12 @@ namespace
     return false;
 }
 
+// 枠の大きさの鍵も本文を変えない（ADR 0148 の 2026-11-22 の追補）。
+[[nodiscard]] bool changes_text(const PaneSizing &) noexcept
+{
+    return false;
+}
+
 // `gd` `K` の問いは本文を変えない（ADR 0190 の決定 8）。
 [[nodiscard]] bool changes_text(const VimLanguageQuery &) noexcept
 {
