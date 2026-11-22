@@ -39,6 +39,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageRoots.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -266,6 +267,7 @@ void with_startup(ScriptedSettings &settings, ScriptedThemes &themes,
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageRoots language_roots;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -278,7 +280,7 @@ void with_startup(ScriptedSettings &settings, ScriptedThemes &themes,
                          fonts,           bell,        markdown,     reads,
                          language_server, wall_clock,  printer,      shell_registration,
                          images,          start_lists, ui_language,  project_search,
-                         previews,        reveal,      links},
+                         previews,        reveal,      links,        language_roots},
         nenenib::core::Distribution::unpackaged,
         {app::OpenDocument{FilePath::parse("initial.txt").value()}}};
     check(controller);

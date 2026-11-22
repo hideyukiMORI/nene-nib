@@ -52,7 +52,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/BookmarkKey.cpp src/core/BodyLayout.cpp src/core/PaneLayouts.cpp src/core/EditAdjust.cpp src/core/CaretMove.cpp src/core/ClipboardText.cpp src/core/CommandLayout.cpp
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/FeatureCosts.cpp src/core/SettingsRows.cpp src/core/SettingsPanel.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/ExLineCommand.cpp src/core/FontSize.cpp
-    src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
+    src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/LspRootMarkers.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
     src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp src/core/ContextMenu.cpp src/core/FinderPreview.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
     src/core/LiteralPattern.cpp src/core/ProjectSearchRules.cpp src/core/ProjectQuery.cpp src/core/ProjectHits.cpp src/core/ProjectHitRows.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/SubstituteReplacement.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
@@ -100,7 +100,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/DisplayQuestion.cpp src/application/GridCells.cpp src/application/GridLineRows.cpp
     src/application/AutosavePlan.cpp src/application/PasteKind.cpp src/application/VimEndOfLine.cpp
     src/application/AutosavePlan.cpp src/application/SyntaxLines.cpp src/application/DocumentDecoding.cpp
-    src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
+    src/application/EditorControllerLanguageServer.cpp src/application/EditorControllerLanguageRoots.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
     src/application/EditorControllerLanguageRequests.cpp src/application/InsertCompletion.cpp
     src/application/EditorControllerLanguageQueries.cpp
@@ -249,6 +249,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/LanguageServerSlotTests.cpp
+    tests/unit/LanguageRootTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp
     tests/unit/UtfPropertyTests.cpp
@@ -296,7 +297,7 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/ImageShelf.cpp src/adapters/win32/ImageFileRead.cpp
     src/adapters/win32/ImageDecode.cpp src/adapters/win32/Win32ImageAdapter.cpp
     src/adapters/win32/StartListShelf.cpp src/adapters/win32/RevealShelf.cpp src/adapters/win32/RevealCall.cpp src/adapters/win32/Win32RevealAdapter.cpp src/adapters/win32/Win32StartListAdapter.cpp
-    src/adapters/win32/LinkOpenShelf.cpp src/adapters/win32/LinkOpenCall.cpp src/adapters/win32/Win32LinkOpenAdapter.cpp
+    src/adapters/win32/LinkOpenShelf.cpp src/adapters/win32/LinkOpenCall.cpp src/adapters/win32/Win32LinkOpenAdapter.cpp src/adapters/win32/LanguageRootShelf.cpp src/adapters/win32/Win32LanguageRootAdapter.cpp
     src/adapters/win32/AutosaveCodec.cpp src/adapters/win32/AutosaveFolder.cpp
     src/adapters/win32/AutosaveShelf.cpp
     src/adapters/win32/Win32AutosaveAdapter.cpp
@@ -437,6 +438,17 @@ nenenib_link(nib_document_reader_tests nenenib_application)
 nenenib_link(nib_document_reader_tests nenenib_adapters)
 add_test(NAME nib_adapters_document_reader COMMAND nib_document_reader_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_adapters_document_reader PROPERTIES TIMEOUT 120)
+
+# Issue #1940: 言語サーバーの root を印で探す本物（Win32LanguageRootAdapter・ADR 0161 の 2026-11-22 の
+# 追補）を、一時フォルダの本物の印とワーカー 1 本で測る。待つのは合図の受け皿だけなので、止まらない
+# ときはこの制限時間で落ちる。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
+nenenib_target(nib_language_root_tests adapter_tests EXECUTABLE tests/adapters/LanguageRootAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_language_root_tests nenenib_core)
+nenenib_link(nib_language_root_tests nenenib_application)
+nenenib_link(nib_language_root_tests nenenib_adapters)
+add_test(NAME nib_adapters_language_root COMMAND nib_language_root_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_adapters_language_root PROPERTIES TIMEOUT 60)
 
 # Issue #1290: 開く道の塊の読みを、塊の境がどこに来ても一括の読みと同じかで見る性質の試験（ADR 0159）。
 # 本物のファイルとワーカー 1 本。名前は nib_adapters で始め、`ctest -R nib_adapters` に入る。
