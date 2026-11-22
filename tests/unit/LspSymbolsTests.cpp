@@ -2,8 +2,12 @@
 // 操作「記号の一覧」・Ctrl+P の一覧の記号 `%`。core の読みと表、engine の効果、controller の道を
 // 替え玉 ScriptedLanguageServer で確かめる。
 #include "ActivateCommandChoice.hpp"
+#include "CancelCommand.hpp"
+#include "CloseTab.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandPaletteView.hpp"
+#include "CommandText.hpp"
 #include "DisplayText.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -16,8 +20,11 @@
 #include "LanguageQueryKind.hpp"
 #include "LineNumber.hpp"
 #include "LspAnswerFailure.hpp"
+#include "LspSymbolList.hpp"
 #include "LspSymbols.hpp"
+#include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OperationBindings.hpp"
 #include "OperationTexts.hpp"
@@ -48,6 +55,7 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 #include "VisibleLines.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
@@ -154,7 +162,26 @@ app::EditorFrame answered(Editing &editing, std::string_view result)
     {
         return {};
     }
-    return core::lsp_document_symbols(parsed.value()).value_or(std::vector<core::LspSymbol>{});
+    return core::lsp_document_symbols(parsed.value())
+        .value_or(core::LspSymbolList{.symbols = {}, .total = 0})
+        .symbols;
+}
+
+[[nodiscard]] std::size_t read_total(std::string_view json)
+{
+    const auto parsed = core::parse_json(json);
+    return parsed.has_value() ? core::lsp_document_symbols(parsed.value())
+                                    .value_or(core::LspSymbolList{.symbols = {}, .total = 0})
+                                    .total
+                              : 0;
+}
+
+// 名前と位置だけの記号の JSON（子は children の JSON・空なら無し）。
+[[nodiscard]] std::string symbol_json(std::string_view name, std::string_view children)
+{
+    return std::string{R"({"name":")"} + std::string{name} +
+           R"(","kind":13,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}})" +
+           (children.empty() ? std::string{} : ",\"children\":" + std::string{children}) + "}";
 }
 
 // ---------------------------------------------------------------- core の表と読み
@@ -211,10 +238,21 @@ void verify_reading()
     const auto null = core::parse_json("null");
     const auto object = core::parse_json("{}");
     expect(null.has_value() && core::lsp_document_symbols(null.value()).has_value() &&
-               core::lsp_document_symbols(null.value()).value().empty() && object.has_value() &&
+               core::lsp_document_symbols(null.value()).value().symbols.empty() &&
+               object.has_value() &&
                core::lsp_document_symbols(object.value()).error() ==
                    core::LspAnswerFailure::invalid_result,
            "null is no symbols and another shape fails");
+    expect(core::lsp_symbol_kind_mark(12) == "function" &&
+               core::lsp_symbol_kind_mark(23) == "struct" &&
+               core::lsp_symbol_kind_mark(0) == "symbol" &&
+               core::lsp_symbol_kind_mark(27) == "symbol",
+           "the kind mark is the LSP kind name and unknown kinds are symbol");
+}
+
+// 上限で切る・階層の途中で切る・containerName が勝つ（#1958 のレビュー R3・L1・L5）。
+void verify_limits()
+{
     std::string many = "[";
     for (std::size_t index = 0; index < core::lsp_symbol_limit + 5; ++index)
     {
@@ -223,12 +261,31 @@ void verify_reading()
             R"({"name":"s","kind":13,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}})";
     }
     many += "]";
-    expect(read(many).size() == core::lsp_symbol_limit, "the symbols stop at the limit");
-    expect(core::lsp_symbol_kind_mark(12) == "function" &&
-               core::lsp_symbol_kind_mark(23) == "struct" &&
-               core::lsp_symbol_kind_mark(0) == "symbol" &&
-               core::lsp_symbol_kind_mark(27) == "symbol",
-           "the kind mark is the LSP kind name and unknown kinds are symbol");
+    expect(read(many).size() == core::lsp_symbol_limit &&
+               read_total(many) == core::lsp_symbol_limit + 5,
+           "the symbols stop at the limit and count the rest");
+    // 階層の途中で切る（#1958 のレビュー R3・L5）: 親 a の子 c0.. が上限を越える。親の直後に子が
+    // 文書の順に並び、上限の内側の子は親の名前を持ち、上限の後の兄弟 b は読まずに数える。
+    std::string children = "[";
+    for (std::size_t index = 0; index < core::lsp_symbol_limit + 2; ++index)
+    {
+        children +=
+            std::string{index == 0 ? "" : ","} + symbol_json("c" + std::to_string(index), "");
+    }
+    children += "]";
+    const std::string nested = "[" + symbol_json("a", children) + "," + symbol_json("b", "") + "]";
+    const auto cut = read(nested);
+    expect(cut.size() == core::lsp_symbol_limit && cut.front().name == "a" &&
+               cut.at(1).name == "c0" && cut.at(1).parent == "a" &&
+               cut.back().name == "c" + std::to_string(core::lsp_symbol_limit - 2) &&
+               cut.back().parent == "a" && read_total(nested) == core::lsp_symbol_limit + 4,
+           "a hierarchy cut at the limit keeps the document order and the parent names");
+    // 平らな答えで containerName と階層の親が両方あるときは containerName が勝つ。
+    const auto both = read(
+        R"([{"name":"Outer","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"children":[)"
+        R"({"name":"inner","kind":12,"containerName":"Named","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}]}])");
+    expect(both.size() == 2 && both.at(1).parent == "Named",
+           "containerName wins over the hierarchical parent");
 }
 
 // engine の `gO` は表に行が無かったときと同じ失敗の歩に、記号の問いの効果だけを添える。
@@ -326,15 +383,177 @@ void verify_vim_keys()
                caret_on(editing.controller().frame(), 2, 1),
            "gO asks for the symbols, leaves the text and lets the macro go on");
 }
+
+// 手で `%` を打った一覧（開いていなければ値なし）。
+[[nodiscard]] std::optional<app::CommandPaletteView> typed_percent(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    return editing.controller().apply_frame(app::CommandText{"%"}).command_palette;
+}
+
+// 窓が非アクティブの間に届いた答えは一覧を開かずに控え、答えを頼んだ文書を閉じたら捨てる
+// （#1958 のレビュー R3・参照と同じ）。
+void verify_inactive_and_closed()
+{
+    Editing editing(lsp_on());
+    listing(editing);
+    static_cast<void>(asked(editing));
+    static_cast<void>(editing.controller().apply(app::WindowDeactivated{}));
+    expect(!answered(editing, hierarchical).command_palette.has_value(),
+           "an answer that arrives while the window is inactive opens nothing");
+    const auto held = typed_percent(editing);
+    expect(held.has_value() && held.value().total == 3, "the held answer shows under %");
+    applied(editing.controller(), app::CancelCommand{});
+    applied(editing.controller(), app::NewTab{});
+    applied(editing.controller(), app::CloseTab{0});
+    expect(!editing.controller().language_answers().symbols.has_value(),
+           "no answer is left in the state");
+    const auto forgotten = typed_percent(editing);
+    expect(forgotten.has_value() && forgotten.value().total == 0,
+           "closing the asking document forgets its symbols");
+    applied(editing.controller(), app::CancelCommand{});
+}
+
+// 誤りの答え（`error` だけ）は「記号が見つかりません」、UTF-8
+// の席の記号も同じ名前に着地する、切った 答えは 1 行知らせる（#1958 のレビュー R3・L1）。
+void verify_error_bytes_and_cut()
+{
+    Editing failing(lsp_on());
+    listing(failing);
+    static_cast<void>(asked(failing));
+    const auto ids = failing.language_server().requests(symbols_method);
+    const auto failed = delivered(
+        failing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" +
+                                    std::to_string(ids.empty() ? -1 : ids.back()) +
+                                    R"(,"error":{"code":-32801,"message":"content modified"}})"});
+    expect(!failed.command_palette.has_value() &&
+               message_of(failed) == notice(failing, core::UiMessage::notice_symbols_not_found),
+           "an error answer is no symbols");
+
+    constexpr std::string_view wide = "/*\xE3\x81\x82*/ int box;\n";
+    Editing bytes(lsp_on());
+    bytes.files().hold_at(std::string(source_path), Bytes{std::string(wide)});
+    static_cast<void>(bytes.controller().apply(app::VisibleLines{6}));
+    applied(bytes.controller(), app::OpenDocument{core::FilePath::parse(source_path).value()});
+    static_cast<void>(delivered(bytes, app::ServerStarted{}));
+    static_cast<void>(delivered(
+        bytes,
+        app::ServerMessage{
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"documentSymbolProvider":true}}})"}));
+    static_cast<void>(asked(bytes));
+    static_cast<void>(answered(
+        bytes,
+        R"([{"name":"box","kind":13,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":16}},"selectionRange":{"start":{"line":0,"character":12},"end":{"line":0,"character":15}}}])"));
+    expect(caret_on(bytes.controller().apply_frame(app::ActivateCommandChoice{0}), 1, 11),
+           "a server that counts UTF-8 bytes lands on the name");
+
+    Editing many(lsp_on());
+    listing(many);
+    static_cast<void>(asked(many));
+    std::string answer = "[";
+    for (std::size_t index = 0; index < core::lsp_symbol_limit + 1; ++index)
+    {
+        answer += std::string{index == 0 ? "" : ","} + symbol_json("s", "");
+    }
+    answer += "]";
+    const auto cut = answered(many, answer);
+    expect(cut.command_palette.has_value() &&
+               cut.command_palette.value().total == core::lsp_symbol_limit &&
+               message_of(cut) == core::ui_text_filled(core::UiMessage::notice_symbols_first_of,
+                                                       many.controller().display_language(),
+                                                       {"1000", "1001"}),
+           "a cut answer says how many symbols it had");
+}
+
+// `%` は今の文書の今の改訂の記号だけ（#1958 の決め 4・レビュー R2）。別のタブの答えも、頼んだ後に
+// 変わった文書の答えも見せず、今の文書について頼み直す。届いた答えは開いている `%` の一覧に出る。
+void verify_percent_is_the_current_document()
+{
+    Editing editing(lsp_on());
+    editing.files().hold_at("C:\\work\\two.cpp", Bytes{std::string{"int two;\n"}});
+    listing(editing);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, hierarchical));
+    applied(editing.controller(), app::CancelCommand{});
+    applied(editing.controller(),
+            app::OpenDocument{core::FilePath::parse("C:\\work\\two.cpp").value()});
+    const std::size_t before = editing.language_server().requests(symbols_method).size();
+    const auto other = typed_percent(editing);
+    expect(other.has_value() && other.value().total == 0 &&
+               editing.language_server().requests(symbols_method).size() == before + 1,
+           "% on another tab shows none of the held symbols and asks again for this document");
+    const auto arrived = answered(
+        editing,
+        R"([{"name":"two","kind":13,"range":{"start":{"line":0,"character":4},"end":{"line":0,"character":7}}}])");
+    expect(arrived.command_palette.has_value() && arrived.command_palette.value().total == 1 &&
+               arrived.command_palette.value().rows.front().label.text() == "variable two",
+           "the answer for this document fills the open % list");
+    applied(editing.controller(), app::CancelCommand{});
+    applied(editing.controller(), app::InsertText{"x"});
+    const std::size_t edited = editing.language_server().requests(symbols_method).size();
+    const auto stale = typed_percent(editing);
+    expect(stale.has_value() && stale.value().total == 0 &&
+               editing.language_server().requests(symbols_method).size() == edited + 1,
+           "% after an edit asks again instead of showing the older symbols");
+    applied(editing.controller(), app::CancelCommand{});
+}
+
+// LSP がオフの `^` `&` `%` は一覧の中に「LSP はオフです」の 1 行。案内に `^` は出ない（#1958 の
+// 決め 1・2）。頼んでいない `%` は頼み方の 1 行。
+void verify_empty_lines()
+{
+    Editing off(
+        SettingsReading{std::optional<core::EditorSettings>{core::default_editor_settings()}});
+    for (const std::string_view mark : {"^", "&", "%"})
+    {
+        static_cast<void>(off.controller().apply(app::OpenCommandPalette{}));
+        const auto frame = off.controller().apply_frame(app::CommandText{std::string{mark}});
+        const auto line = frame.command_palette.has_value()
+                              ? frame.command_palette.value().empty_line
+                              : std::nullopt;
+        expect(line.has_value() &&
+                   line.value().text() ==
+                       notice(off, core::UiMessage::palette_empty_language_server_off),
+               "a language server source with LSP off says LSP is off");
+        applied(off.controller(), app::CancelCommand{});
+    }
+    static_cast<void>(off.controller().apply(app::OpenCommandPalette{}));
+    const auto hint = off.controller().frame().command_palette;
+    expect(hint.has_value() && hint.value().hint.has_value() &&
+               !contains(hint.value().hint.value().text(), "^ ") &&
+               hint.value().hint_starts.size() == 7,
+           "the hint with LSP off has seven groups and no diagnostics");
+    applied(off.controller(), app::CancelCommand{});
+
+    Editing plain(lsp_on());
+    started(plain, R"({"textDocumentSync":2})");
+    const auto unasked = typed_percent(plain);
+    const auto line = unasked.has_value() ? unasked.value().empty_line : std::nullopt;
+    expect(
+        line.has_value() &&
+            line.value().text() ==
+                core::ui_text_filled(
+                    core::UiMessage::palette_empty_symbols, plain.controller().display_language(),
+                    {"gO", "F1",
+                     core::ui_text(core::operation_text(core::EditorOperation::list_symbols).name,
+                                   plain.controller().display_language())}),
+        "% that cannot be asked says how to ask, with the keys from the tables");
+    applied(plain.controller(), app::CancelCommand{});
+}
 } // namespace
 
 void verify_lsp_symbols_scope()
 {
     verify_tables();
     verify_reading();
+    verify_limits();
     verify_engine_effects();
     verify_list_and_landing();
     verify_absent_and_stale();
     verify_vim_keys();
+    verify_inactive_and_closed();
+    verify_error_bytes_and_cut();
+    verify_percent_is_the_current_document();
+    verify_empty_lines();
 }
 } // namespace nenenib::tests

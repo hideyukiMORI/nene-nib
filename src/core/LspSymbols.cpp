@@ -58,8 +58,11 @@ constexpr std::string_view unknown_kind_mark = "symbol";
                      .at = range.value()};
 }
 
-// 子を逆の順に積む（次に取り出すのが最初の子・文書の順を保つ）。
-void push_children(std::vector<Pending> &pending, const JsonObject &object, const std::string &name)
+// 子を逆の順に積む（次に取り出すのが最初の子・文書の順を保つ）。親の名前を添えるのは文書の順で
+// 最初の room 個の子だけで、残りは名前を写さずに積む（上限の後は数えるだけなので・#1958 の
+// レビュー L5）。
+void push_children(std::vector<Pending> &pending, const JsonObject &object, const std::string &name,
+                   std::size_t room)
 {
     const auto children = json_member(object, "children");
     const auto *entries =
@@ -68,20 +71,45 @@ void push_children(std::vector<Pending> &pending, const JsonObject &object, cons
     {
         return;
     }
+    std::size_t index = entries->size();
     for (auto entry = entries->rbegin(); entry != entries->rend(); ++entry)
     {
-        pending.emplace_back(&*entry, name);
+        --index;
+        pending.emplace_back(&*entry, index < room ? name : std::string{});
     }
+}
+// 積みから取り出した 1 つを読む。上限までは記号を作って子に親の名前を添えて積み、上限の後は数える
+// だけ（名前を写さない・#1958 のレビュー L1・L5）。名前か位置の欠けた記号はその子ごと捨てる。
+void read_symbol(LspSymbolList &list, std::vector<Pending> &pending, const JsonObject &object,
+                 const std::string &parent)
+{
+    if (list.symbols.size() >= lsp_symbol_limit)
+    {
+        if (json_text_member(object, "name") != nullptr && symbol_range(object).has_value())
+        {
+            ++list.total;
+            push_children(pending, object, std::string{}, 0);
+        }
+        return;
+    }
+    auto symbol = symbol_of(object, parent);
+    if (!symbol.has_value())
+    {
+        return;
+    }
+    ++list.total;
+    list.symbols.push_back(std::move(symbol).value());
+    push_children(pending, object, list.symbols.back().name,
+                  lsp_symbol_limit - list.symbols.size());
 }
 } // namespace
 
-std::expected<std::vector<LspSymbol>, LspAnswerFailure>
-lsp_document_symbols(const JsonValue &result)
+std::expected<LspSymbolList, LspAnswerFailure> lsp_document_symbols(const JsonValue &result)
 {
-    std::vector<LspSymbol> symbols;
+    LspSymbolList list{.symbols = {}, .total = 0};
     if (std::holds_alternative<JsonNull>(result.value))
     {
-        return symbols;
+        return list;
     }
     const auto *entries = std::get_if<JsonArray>(&result.value);
     if (entries == nullptr)
@@ -93,20 +121,16 @@ lsp_document_symbols(const JsonValue &result)
     {
         pending.emplace_back(&*entry, std::string{});
     }
-    while (!pending.empty() && symbols.size() < lsp_symbol_limit)
+    while (!pending.empty())
     {
         Pending next = std::move(pending.back());
         pending.pop_back();
-        const JsonObject *object = json_object_of(*next.first);
-        auto symbol = object != nullptr ? symbol_of(*object, next.second) : std::nullopt;
-        if (!symbol.has_value())
+        if (const JsonObject *object = json_object_of(*next.first); object != nullptr)
         {
-            continue;
+            read_symbol(list, pending, *object, next.second);
         }
-        push_children(pending, *object, symbol.value().name);
-        symbols.push_back(std::move(symbol).value());
     }
-    return symbols;
+    return list;
 }
 
 std::string_view lsp_symbol_kind_mark(std::uint64_t kind) noexcept

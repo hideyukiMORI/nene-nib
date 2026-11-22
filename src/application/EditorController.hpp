@@ -387,6 +387,8 @@ class EditorController final
     [[nodiscard]] bool request_document_symbols();
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
+    // Ctrl+P の一覧のために参照と記号の当たりを作った数（#1958 のレビュー R1 の契約が読む）。
+    [[nodiscard]] std::size_t listed_hits_made() const noexcept;
     // アクティブな文書を受ける席の、`initialize` の答えから読んだサーバーの能力（決定 3）。段 B の
     // `triggerCharacters` の照合と試験が読む口で、受ける席が無ければ空。
     [[nodiscard]] const ServerAbilities &language_server_abilities() const
@@ -1056,6 +1058,23 @@ class EditorController final
     // palette_symbols_（選ぶ道と プレビュー欄は palette_reference_of が出どころで列を選ぶ 1 本）。
     void settle_symbols_answer();
     void append_symbol_choices(std::vector<core::CommandChoice> &entries);
+    // 参照と記号の候補は、その記号を見せるときにだけ作り、同じ一覧の間は 1 回だけ作って持つ
+    // （#1958 のレビュー R1）。`%` は今の文書の今の改訂の答えだけを見せ、違えば頼み直す（決め 4）。
+    void settle_listed_answers();
+    void show_held_symbols(bool listing);
+    void reset_listed_answers();
+    void extend_palette(const std::vector<core::CommandChoice> &more);
+    [[nodiscard]] bool palette_scope_is(core::PaletteScope scope) const;
+    [[nodiscard]] bool held_symbols_current() const;
+    [[nodiscard]] const std::vector<PaletteReference> *
+    listed_references_of(core::PaletteOrigin origin) const noexcept;
+    // 一覧の中の空の 1 行と、参照の一覧が何を頼んだ答えか（#1958 の決め 2・3）。
+    [[nodiscard]] std::optional<core::DisplayText>
+    palette_empty_line(core::PaletteScope scope) const;
+    [[nodiscard]] std::optional<core::DisplayText> requested_subject() const;
+    [[nodiscard]] std::optional<core::DisplayText>
+    held_references_subject(core::PaletteScope scope) const;
+    void fill_palette_hint(CommandPaletteView &view, const core::CommandPalette &palette) const;
     // 参照の答えを控えた文書を言語サーバーが閉じたら控えを捨てる（#1954 のレビュー R1）。
     void forget_listed_answers(AutosaveId document);
     // URI → ファイルと開いているタブの本文（URI が変わったときだけ引く）。
@@ -1867,6 +1886,14 @@ class EditorController final
     // 控えた記号の候補の指す所。
     std::optional<std::pair<core::FilePath, LanguageSymbols>> held_symbols_;
     std::vector<PaletteReference> palette_symbols_;
+    // 参照の答えを頼んだ所の 1 行（#1958 の決め 3）。参照の控えと一緒に置いて捨てる。
+    std::optional<core::DisplayText> held_references_subject_;
+    // 今の一覧で参照・記号の候補を作ったか・`%` で頼み直したか（一覧を開くたびに戻す・#1958）。
+    bool references_listed_ = false;
+    bool symbols_listed_ = false;
+    bool symbols_asked_ = false;
+    // 参照と記号の当たりを作った数（試験が読む・#1958 のレビュー R1 の契約）。
+    std::size_t listed_hits_made_ = 0;
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;

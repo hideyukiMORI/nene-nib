@@ -453,5 +453,10 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::palette_mark_symbols, "Symbols"},
     {UiMessage::notice_symbols_not_found, "No symbols found"},
     {UiMessage::notice_symbols_not_supported, "This language server does not answer symbols"},
+    {UiMessage::notice_symbols_first_of, "Showing {0} of {1} symbols"},
+    {UiMessage::palette_empty_language_server_off, "LSP is off (turn it on with :set lsp=on)"},
+    {UiMessage::palette_empty_references, "No references yet. Ask with {0} on a name (Vim: {1})"},
+    {UiMessage::palette_empty_symbols, "No symbols yet. Ask with {0} in Vim or \"{2}\" in {1}"},
+    {UiMessage::palette_references_subject, "References to {0}"},
 }};
 } // namespace nenenib::core

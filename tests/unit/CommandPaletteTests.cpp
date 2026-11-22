@@ -523,10 +523,15 @@ void verify_palette_marks()
                query_is(":!dir", core::PaletteScope::commands, "!dir"),
            "the exclamation mark selects the project search and a colon keeps its own bang");
     expect(query_is("a#", core::PaletteScope::files, "a#"), "only the first character is a mark");
-    expect(core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese).text() ==
+    expect(std::string(
+               core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese, false).text()) +
+                   "　^ 診断" ==
+               core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese, true).text(),
+           "LSP on adds the diagnostics group last");
+    expect(core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese, true).text() ==
                "# タブ\u3000* ブックマーク\u3000@ 履歴\u3000/ フォルダ\u3000: 設定　? 操作　! "
-               "全文　^ 診断　& 参照　% 記号",
-           "the hint is built from the table");
+               "全文　^ 診断",
+           "the hint is built from the hinted rows of the table");
     expect(core::palette_origin_label(core::PaletteOrigin::tab,
                                       nenenib::core::DisplayLanguage::japanese) == "開いているタブ",
            "the tab origin has its label");
@@ -972,28 +977,45 @@ void verify_palette_entries_controller()
            "a command behind the colon mark changes the theme as before");
 }
 
-// 記号の案内の組の境目（#1640）。各組は記号で始まり、前は表の区切り。3 言語とも。
+// 1 つの言語と LSP のオン・オフの案内の組の境目。頼んだ答えを見せる記号（参照 `&`・記号 `%`）は
+// 案内に出さず、診断 `^` は LSP がオンのときだけ（ADR 0060 の 2026-11-22 の追補）。
+void verify_palette_hint_groups(nenenib::core::DisplayLanguage language, bool language_server)
+{
+    const auto hint = core::palette_mark_hint(language, language_server);
+    const auto text = hint.text();
+    const auto starts = core::palette_mark_hint_starts(language, language_server);
+    const auto marks = core::palette_hinted_marks(language_server);
+    const auto separator = core::ui_text(core::UiMessage::palette_mark_separator, language);
+    bool marked = starts.size() == marks.size() && starts.front() == 0;
+    for (std::size_t index = 0; marked && index < starts.size(); ++index)
+    {
+        const auto at = starts.at(index);
+        marked = at + 1 < text.size() && text.at(at) == marks.at(index).mark &&
+                 text.at(at + 1) == ' ' &&
+                 (index == 0 || text.substr(at - separator.size(), separator.size()) == separator);
+    }
+    expect(marked, "every group of the mark hint starts at its mark after the separator");
+    expect(!text.contains("& ") && !text.contains("% ") && text.contains("^ ") == language_server &&
+               starts.size() == (language_server ? 8U : 7U),
+           "the mark hint shows 7 groups, and diagnostics only with LSP on");
+}
+
+// 記号の案内の組の境目（#1640）。各組は記号で始まり、前は表の区切り。3 言語 × LSP のオン・オフ。
 void verify_palette_hint_starts()
 {
-    for (const auto language :
-         {nenenib::core::DisplayLanguage::japanese, nenenib::core::DisplayLanguage::english,
-          nenenib::core::DisplayLanguage::simplified_chinese})
+    for (const bool language_server : {false, true})
     {
-        const auto hint = core::palette_mark_hint(language);
-        const auto text = hint.text();
-        const auto starts = core::palette_mark_hint_starts(language);
-        const auto separator = core::ui_text(core::UiMessage::palette_mark_separator, language);
-        bool marked = starts.front() == 0;
-        for (std::size_t index = 0; index < starts.size(); ++index)
+        for (const auto language :
+             {nenenib::core::DisplayLanguage::japanese, nenenib::core::DisplayLanguage::english,
+              nenenib::core::DisplayLanguage::simplified_chinese})
         {
-            const auto at = starts.at(index);
-            marked =
-                marked && at + 1 < text.size() &&
-                text.at(at) == core::palette_marks.at(index).mark && text.at(at + 1) == ' ' &&
-                (index == 0 || text.substr(at - separator.size(), separator.size()) == separator);
+            verify_palette_hint_groups(language, language_server);
         }
-        expect(marked, "every group of the mark hint starts at its mark after the separator");
     }
+    expect(core::palette_query_of("&x").scope == core::PaletteScope::references &&
+               core::palette_query_of("%x").scope == core::PaletteScope::symbols &&
+               core::palette_query_of("^x").scope == core::PaletteScope::diagnostics,
+           "a typed mark that the hint leaves out still selects its source");
 }
 
 // 記号の案内の置き場（#1640）。入る最も前の組から出し、組の途中で切らない。描画と同じ配置を読む。
@@ -1139,7 +1161,7 @@ void verify_palette_hint_view()
     const auto opened = hint_of(frame);
     expect(opened.has_value() &&
                opened.value().text() ==
-                   core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese).text(),
+                   core::palette_mark_hint(nenenib::core::DisplayLanguage::japanese, false).text(),
            "Ctrl+P opens with the mark hint");
     frame = controller.apply_frame(app::CommandText{"a"});
     expect(frame.command_palette.has_value() && !hint_of(frame).has_value(),

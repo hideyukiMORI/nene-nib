@@ -6,8 +6,10 @@
 #include "CloseTab.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandEdit.hpp"
 #include "CommandText.hpp"
 #include "DisplayText.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -35,6 +37,7 @@
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
+#include "ServerExited.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "SwitchTab.hpp"
@@ -486,6 +489,81 @@ void verify_forgotten_on_close()
     expect(!after.command_palette.has_value() || after.command_palette.value().total == 0,
            "closing the asking document forgets its references");
 }
+
+// `&` の一覧の候補の数（一覧が開いていなければ値なし）。
+[[nodiscard]] std::optional<std::size_t> listed_references(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto frame = editing.controller().apply_frame(app::CommandText{"&"});
+    applied(editing.controller(), app::CancelCommand{});
+    return frame.command_palette.has_value() ? std::optional{frame.command_palette.value().total}
+                                             : std::nullopt;
+}
+
+// 控えを捨てるほかの 3 つの道（#1958 のレビュー R3・a-L2）: 言語を変えた・名前を付けて保存した・
+// 言語サーバーが落ちた。どれも言語サーバーが文書を閉じる道から捨てる。
+void verify_forgotten_on_other_closes()
+{
+    const auto held = [](Editing &editing)
+    {
+        referencing(editing);
+        static_cast<void>(asked(editing));
+        static_cast<void>(answered(editing, three_references));
+        applied(editing.controller(), app::CancelCommand{});
+        return listed_references(editing) == std::optional<std::size_t>{3};
+    };
+    Editing language(lsp_on());
+    const bool language_held = held(language);
+    static_cast<void>(run_ex(language.controller(), "set ft=python"));
+    expect(language_held && listed_references(language) == std::optional<std::size_t>{0},
+           "changing the language forgets the references");
+
+    Editing renamed(lsp_on());
+    const bool renamed_held = held(renamed);
+    static_cast<void>(run_ex(renamed.controller(), "saveas C:\\work\\renamed.cpp"));
+    expect(renamed_held && listed_references(renamed) == std::optional<std::size_t>{0},
+           "saving under another name forgets the references");
+
+    Editing exited(lsp_on());
+    const bool exited_held = held(exited);
+    static_cast<void>(delivered(exited, app::ServerExited{1}));
+    expect(exited_held && listed_references(exited) == std::optional<std::size_t>{0},
+           "a server that stops forgets the references");
+}
+
+// 一覧の下の案内の欄に何を頼んだ答えかを出し、頼んでいない `&` は頼み方の 1 行（#1958 の決め
+// 2・3）。 当たりを作るのは `&` を見せるときだけ（レビュー R1 の契約）。
+void verify_subject_empty_line_and_lazy_hits()
+{
+    Editing editing(lsp_on());
+    referencing(editing);
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto empty = editing.controller().apply_frame(app::CommandText{"&"});
+    const auto line =
+        empty.command_palette.has_value() ? empty.command_palette.value().empty_line : std::nullopt;
+    expect(line.has_value() && line.value().text() ==
+                                   core::ui_text_filled(core::UiMessage::palette_empty_references,
+                                                        editing.controller().display_language(),
+                                                        {"Shift+F12", "grr"}),
+           "& before asking says how to ask, with the key from the operation table");
+    applied(editing.controller(), app::CancelCommand{});
+    static_cast<void>(asked(editing));
+    const std::size_t before = editing.controller().listed_hits_made();
+    const auto listed = answered(editing, three_references);
+    const auto subject =
+        listed.command_palette.has_value() ? listed.command_palette.value().subject : std::nullopt;
+    expect(subject.has_value() && contains(subject.value().text(), "main.cpp:1"),
+           "the references list says where they were asked");
+    expect(editing.controller().listed_hits_made() == before + 3, "showing & makes each hit once");
+    applied(editing.controller(), app::CancelCommand{});
+    const std::size_t shown = editing.controller().listed_hits_made();
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"#"}));
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    applied(editing.controller(), app::CancelCommand{});
+    expect(editing.controller().listed_hits_made() == shown,
+           "a Ctrl+P list under another mark makes no hit of the held references");
+}
 } // namespace
 
 void verify_lsp_references_scope()
@@ -502,5 +580,7 @@ void verify_lsp_references_scope()
     verify_reopen_after_edit();
     verify_inactive_window();
     verify_forgotten_on_close();
+    verify_forgotten_on_other_closes();
+    verify_subject_empty_line_and_lazy_hits();
 }
 } // namespace nenenib::tests

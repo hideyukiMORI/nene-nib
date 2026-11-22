@@ -170,13 +170,15 @@ references_answer(const PendingLspRequest &request, const core::LspResponse &res
     {
         return std::nullopt;
     }
-    auto symbols = response.result.has_value()
-                       ? core::lsp_document_symbols(response.result.value())
-                       : std::unexpected{core::LspAnswerFailure::invalid_result};
+    auto read = response.result.has_value()
+                    ? core::lsp_document_symbols(response.result.value())
+                    : std::unexpected{core::LspAnswerFailure::invalid_result};
+    core::LspSymbolList list =
+        read.has_value() ? std::move(read).value() : core::LspSymbolList{.symbols = {}, .total = 0};
     return LanguageSymbols{.context = *context,
-                           .symbols = symbols.has_value() ? std::move(symbols).value()
-                                                          : std::vector<core::LspSymbol>{},
-                           .encoding = encoding};
+                           .symbols = std::move(list.symbols),
+                           .encoding = encoding,
+                           .total = list.total};
 }
 } // namespace
 

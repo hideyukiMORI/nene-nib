@@ -2,9 +2,14 @@
 
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandPalette.hpp"
 #include "DisplayText.hpp"
+#include "EditMode.hpp"
+#include "EditorOperation.hpp"
 #include "ExPaletteRequest.hpp"
 #include "FileUri.hpp"
+#include "GiantLine.hpp"
+#include "KeyChord.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageSymbols.hpp"
@@ -12,8 +17,11 @@
 #include "LspLocation.hpp"
 #include "LspPosition.hpp"
 #include "LspRange.hpp"
+#include "LspRequestContext.hpp"
 #include "LspSymbol.hpp"
 #include "LspSymbols.hpp"
+#include "OperationBindings.hpp"
+#include "OperationTexts.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteReference.hpp"
 #include "PaletteScope.hpp"
@@ -23,16 +31,19 @@
 #include "ProjectHitRows.hpp"
 #include "ProjectSearchRules.hpp"
 #include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "Utf8.hpp"
 
 #include <algorithm>
 #include <charconv>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 // 言語サーバーの参照の一覧（#1947・ADR 0191 の決定 4）と記号の一覧（#1955・決定 5）。答えは
@@ -84,11 +95,34 @@ namespace
     return core::ProjectHit{core::LineNumber{at.start.line + 1}, core::Column{1}, {}, 0, 0, 0};
 }
 
+// 答えの行が巨大な行か（バイト数が giant_line_threshold を超える・#1958 のレビュー R1）。巨大な行
+// の当たりは行の文を出さず、位置の変換で行頭から行を写さない（行だけの当たり・着地は選んだときに
+// 1 回だけ写す）。バイト数はコードポイントの数以上なので、境目の近くの行も行だけの側に倒す。
+[[nodiscard]] bool giant_answer_line(const core::TextBuffer &text,
+                                     const core::LspRange &at) noexcept
+{
+    const core::LineNumber line{at.start.line + 1};
+    return line.value <= text.line_count() &&
+           text.line_end(line).value - text.line_start(line).value > core::giant_line_threshold;
+}
+
 // 当たり（text は開いているタブの本文・開いていなければ nullptr）。
 [[nodiscard]] core::ProjectHit listed_hit(const core::LspRange &at, const core::TextBuffer *text,
                                           core::LspPositionEncoding encoding)
 {
-    return text != nullptr ? opened_hit(*text, at, encoding) : unopened_hit(at);
+    return text != nullptr && !giant_answer_line(*text, at) ? opened_hit(*text, at, encoding)
+                                                            : unopened_hit(at);
+}
+
+// Vim の鍵（一覧の空の行の案内に差し込む・ADR 0191 の決定 4・5）。鍵の名前は訳さない。
+constexpr std::string_view vim_references_keys = "grr";
+constexpr std::string_view vim_symbols_keys = "gO";
+
+// 通常モードの操作の鍵の表示名（鍵が無ければ空）。
+[[nodiscard]] std::string chord_label_of(core::EditorOperation operation)
+{
+    const auto chord = core::shown_chord(operation, core::EditMode::ordinary);
+    return chord.has_value() ? core::key_chord_label(chord.value()) : std::string{};
 }
 
 // 参照の候補の題名。開いているタブは「相対パス:行:桁」、開いていないファイルは「相対パス:行」。
@@ -160,6 +194,7 @@ void EditorController::settle_references_answer()
     const std::size_t listed = answered.locations.size();
     const std::size_t total = answered.total;
     held_references_ = std::move(answered);
+    held_references_subject_ = requested_subject();
     if (window_inactive_)
     {
         return;
@@ -180,6 +215,7 @@ void EditorController::forget_listed_answers(AutosaveId document)
     if (held_references_.has_value() && held_references_.value().context.document == document)
     {
         held_references_.reset();
+        held_references_subject_.reset();
     }
     if (held_symbols_.has_value() && held_symbols_.value().second.context.document == document)
     {
@@ -208,6 +244,7 @@ void EditorController::append_reference_choices(std::vector<core::CommandChoice>
             continue;
         }
         const core::FilePath &file = listed.first.value();
+        ++listed_hits_made_;
         const core::ProjectHit hit = listed_hit(location.range, listed.second, encoding);
         core::CommandChoice choice = reference_choice(
             file, core::project_hit_row(root.value_or(file), file, hit), listed.second != nullptr);
@@ -246,7 +283,8 @@ EditorController::ListedFile EditorController::listed_file_of(const std::string 
 }
 
 // 記号の答え（決定 5）も 1 回使って消す。使える条件・窓が非アクティブのとき・知らせは参照と同じ。
-// 答えた文書を控え、一覧はその文書の記号だけ。
+// 答えた文書を控え、一覧はその文書の記号だけ。Ctrl+P の一覧が `%` で開いている間に届いた答え
+// （手で `%` を打って頼み直した答え・#1958）は、その一覧の候補にする。
 void EditorController::settle_symbols_answer()
 {
     auto answers = state_.language_answers();
@@ -257,7 +295,8 @@ void EditorController::settle_symbols_answer()
     LanguageSymbols answered = std::move(answers.symbols).value();
     answers.symbols.reset();
     state_ = state_.with_language_answers(std::move(answers));
-    const bool usable = faces_closed() && awaits_nothing();
+    const bool listing = palette_scope_is(core::PaletteScope::symbols);
+    const bool usable = listing || (faces_closed() && awaits_nothing());
     definition_anchor_.reset();
     const auto &path = state_.document().path;
     if (!usable || !path.has_value())
@@ -269,14 +308,190 @@ void EditorController::settle_symbols_answer()
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_symbols_not_found));
         return;
     }
+    const std::size_t listed = answered.symbols.size();
+    const std::size_t total = answered.total;
     held_symbols_ = std::pair{path.value(), std::move(answered)};
-    if (!window_inactive_)
+    if (!listing && window_inactive_)
     {
-        run_palette_request(core::ExPaletteRequest{core::PaletteScope::symbols, {}});
+        return;
+    }
+    show_held_symbols(listing);
+    if (total > listed)
+    {
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_symbols_first_of,
+                                                  {std::to_string(listed), std::to_string(total)}));
     }
 }
 
-// 面を開くときに 1 回だけ作る記号の候補（文書の順）。文書が開いていれば本文で行と印を写す。
+// 控えた記号を見せる。開いている `%` の一覧（listing）なら、前に見せていた記号の候補を捨ててから
+// 作り直す（CommandPalette::dropped の 1 本）。でなければ `%` の一覧を開く。
+void EditorController::show_held_symbols(bool listing)
+{
+    if (!listing)
+    {
+        run_palette_request(core::ExPaletteRequest{core::PaletteScope::symbols, {}});
+        return;
+    }
+    const auto &input = state_.command_input();
+    const auto *palette =
+        input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
+    if (palette != nullptr)
+    {
+        state_ = state_.with_command_input(palette->dropped(core::PaletteOrigin::symbol));
+    }
+    symbols_listed_ = false;
+    settle_listed_answers();
+}
+
+// 開いている Ctrl+P の一覧の出どころが scope か。
+bool EditorController::palette_scope_is(core::PaletteScope scope) const
+{
+    const auto &input = state_.command_input();
+    const auto *palette =
+        input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
+    return palette != nullptr && palette->scope() == scope;
+}
+
+// 参照と記号の候補は、その記号（`&` / `%`）を見せるときにだけ作り、同じ一覧の間は 1 回だけ作って
+// 持つ（#1958 のレビュー R1）。ほかの記号で開いた一覧・頼んでいない答えでは当たりを 1
+// 件も作らない。 意図の出口（settle_transient）と一覧を開いた後に通る。`%`
+// で控えた答えが今の文書の今の改訂の ものでなければ見せず、今の文書について頼み直す（gO
+// と同じ道・#1958 の決め 4）。
+void EditorController::settle_listed_answers()
+{
+    if (palette_scope_is(core::PaletteScope::references) && !references_listed_)
+    {
+        references_listed_ = true;
+        std::vector<core::CommandChoice> more;
+        append_reference_choices(more);
+        extend_palette(more);
+        return;
+    }
+    if (!palette_scope_is(core::PaletteScope::symbols) || symbols_listed_)
+    {
+        return;
+    }
+    if (held_symbols_current())
+    {
+        symbols_listed_ = true;
+        std::vector<core::CommandChoice> more;
+        append_symbol_choices(more);
+        extend_palette(more);
+        return;
+    }
+    if (!symbols_asked_)
+    {
+        symbols_asked_ = true;
+        static_cast<void>(request_document_symbols());
+    }
+}
+
+// 控えた記号の答えが今の文書の今の改訂のものか（改訂番号で比べる）。
+bool EditorController::held_symbols_current() const
+{
+    if (!held_symbols_.has_value())
+    {
+        return false;
+    }
+    const LspRequestContext &context = held_symbols_.value().second.context;
+    return context.document == state_.autosave_ids().at(state_.active_tab()) &&
+           context.revision == static_cast<std::uint64_t>(state_.history().revision());
+}
+
+// 開いている一覧の候補の列の後ろへ足す（CommandPalette::extended の 1 本）。
+void EditorController::extend_palette(const std::vector<core::CommandChoice> &more)
+{
+    const auto &input = state_.command_input();
+    const auto *palette =
+        input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;
+    if (palette == nullptr || more.empty())
+    {
+        return;
+    }
+    state_ = state_.with_command_input(palette->extended(more));
+}
+
+// 一覧を開くたびに、参照と記号の候補を作り直す印を戻す（open_palette の 1 か所）。
+void EditorController::reset_listed_answers()
+{
+    references_listed_ = false;
+    symbols_listed_ = false;
+    symbols_asked_ = false;
+    palette_references_.clear();
+    palette_symbols_.clear();
+}
+
+// 参照を頼んだ所（今の文書の root からの相対パス:行・#1958 の決め 3）。答えを使う時点の文脈は頼んだ
+// ときと同じ（文書・revision・キャレット）なので、今の文書とキャレットから作る。
+std::optional<core::DisplayText> EditorController::requested_subject() const
+{
+    const auto &path = state_.document().path;
+    if (!path.has_value())
+    {
+        return std::nullopt;
+    }
+    const core::LineNumber line = state_.text().position_of(state_.selection().caret).line;
+    const core::ProjectHit hit{line, core::Column{1}, {}, 0, 0, 0};
+    const auto row =
+        core::project_hit_row(project_search_root().value_or(path.value()), path.value(), hit);
+    auto place = core::clipped_display_text(row.path + ":" + std::to_string(line.value));
+    if (!place.has_value())
+    {
+        return std::nullopt;
+    }
+    return ui_notice(core::UiMessage::palette_references_subject, {place.value().text()});
+}
+
+// 参照の一覧（`&`）にだけ添える。
+std::optional<core::DisplayText>
+EditorController::held_references_subject(core::PaletteScope scope) const
+{
+    return scope == core::PaletteScope::references && held_references_.has_value()
+               ? held_references_subject_
+               : std::nullopt;
+}
+
+// 言語サーバーの出どころの候補が 0 のときの 1 行（#1958 の決め 2）。LSP がオフならそれを、参照と
+// 記号は頼み方を、診断は「診断はありません」。鍵は操作の表から引く（文に鍵を直書きしない）。
+std::optional<core::DisplayText>
+EditorController::palette_empty_line(core::PaletteScope scope) const
+{
+    const bool references = scope == core::PaletteScope::references;
+    const bool symbols = scope == core::PaletteScope::symbols;
+    const bool diagnostics = scope == core::PaletteScope::diagnostics;
+    if ((references && !palette_references_.empty()) || (symbols && !palette_symbols_.empty()) ||
+        (diagnostics && !palette_diagnostics_.empty()) || !(references || symbols || diagnostics))
+    {
+        return std::nullopt;
+    }
+    if (!state_.settings().lsp)
+    {
+        return ui_notice(core::UiMessage::palette_empty_language_server_off);
+    }
+    if (diagnostics)
+    {
+        return ui_notice(core::UiMessage::notice_no_diagnostics);
+    }
+    if (references)
+    {
+        return ui_notice(
+            core::UiMessage::palette_empty_references,
+            {chord_label_of(core::EditorOperation::list_references), vim_references_keys});
+    }
+    const std::string_view name = core::ui_text(
+        core::operation_text(core::EditorOperation::list_symbols).name, state_.display_language());
+    return ui_notice(
+        core::UiMessage::palette_empty_symbols,
+        {vim_symbols_keys, chord_label_of(core::EditorOperation::list_operations), name});
+}
+
+std::size_t EditorController::listed_hits_made() const noexcept
+{
+    return listed_hits_made_;
+}
+
+// 見せるときに 1 回だけ作る記号の候補（文書の順）。文書が開いていれば本文で行と印を写す。
 void EditorController::append_symbol_choices(std::vector<core::CommandChoice> &entries)
 {
     palette_symbols_.clear();
@@ -295,6 +510,7 @@ void EditorController::append_symbol_choices(std::vector<core::CommandChoice> &e
         {
             continue;
         }
+        ++listed_hits_made_;
         const core::ProjectHit hit = listed_hit(symbol.at, body, answer.encoding);
         entries.push_back(std::move(choice).value());
         palette_symbols_.push_back(
@@ -307,19 +523,11 @@ void EditorController::append_symbol_choices(std::vector<core::CommandChoice> &e
 std::optional<PaletteReference>
 EditorController::palette_reference_of(const core::CommandChoice &choice) const
 {
-    if (choice.kind != core::CommandChoiceKind::land)
+    if (choice.kind != core::CommandChoiceKind::land || !choice.origin.has_value())
     {
         return std::nullopt;
     }
-    const std::vector<PaletteReference> *listed = nullptr;
-    if (choice.origin == std::optional{core::PaletteOrigin::reference})
-    {
-        listed = &palette_references_;
-    }
-    else if (choice.origin == std::optional{core::PaletteOrigin::symbol})
-    {
-        listed = &palette_symbols_;
-    }
+    const std::vector<PaletteReference> *listed = listed_references_of(choice.origin.value());
     const auto index = listed_index(choice.command);
     if (listed == nullptr || !index.has_value() || index.value() >= listed->size())
     {
@@ -328,16 +536,55 @@ EditorController::palette_reference_of(const core::CommandChoice &choice) const
     return listed->at(index.value());
 }
 
-// 跳ぶ候補を選ぶ（CommandChoiceKind::land）。参照と記号はここ、ほかは診断（#1939）。
+// 出どころ → 控えた指す所の列（参照と記号・ほかは無し）。閉じた switch（#1958 のレビュー L4）。
+const std::vector<PaletteReference> *
+EditorController::listed_references_of(core::PaletteOrigin origin) const noexcept
+{
+    switch (origin)
+    {
+    case core::PaletteOrigin::reference:
+        return &palette_references_;
+    case core::PaletteOrigin::symbol:
+        return &palette_symbols_;
+    case core::PaletteOrigin::tab:
+    case core::PaletteOrigin::bookmarked_tab:
+    case core::PaletteOrigin::bookmark:
+    case core::PaletteOrigin::history:
+    case core::PaletteOrigin::folder:
+    case core::PaletteOrigin::document_format:
+    case core::PaletteOrigin::project_hit:
+    case core::PaletteOrigin::diagnostic:
+        return nullptr;
+    }
+    std::unreachable();
+}
+
+// 跳ぶ候補を選ぶ（CommandChoiceKind::land）。参照と記号はここ、診断（#1939）は診断の道。出どころは
+// 閉じた switch で分ける（#1958 のレビュー L4）。跳ばない出どころは何もしない。
 void EditorController::land_palette_choice(const core::CommandChoice &choice)
 {
-    if (choice.origin == std::optional{core::PaletteOrigin::reference} ||
-        choice.origin == std::optional{core::PaletteOrigin::symbol})
+    if (!choice.origin.has_value())
     {
-        land_palette_reference(choice);
         return;
     }
-    land_palette_diagnostic(choice);
+    switch (choice.origin.value())
+    {
+    case core::PaletteOrigin::reference:
+    case core::PaletteOrigin::symbol:
+        land_palette_reference(choice);
+        return;
+    case core::PaletteOrigin::diagnostic:
+        land_palette_diagnostic(choice);
+        return;
+    case core::PaletteOrigin::tab:
+    case core::PaletteOrigin::bookmarked_tab:
+    case core::PaletteOrigin::bookmark:
+    case core::PaletteOrigin::history:
+    case core::PaletteOrigin::folder:
+    case core::PaletteOrigin::document_format:
+    case core::PaletteOrigin::project_hit:
+        return;
+    }
 }
 
 // 候補を選ぶ（決定 4・5）。面を閉じ、定義と同じ着地の 1 本（開いていなければ開いてから・`''`

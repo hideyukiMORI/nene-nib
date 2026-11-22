@@ -429,5 +429,13 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::palette_mark_symbols, "記号"},
     {UiMessage::notice_symbols_not_found, "記号が見つかりません"},
     {UiMessage::notice_symbols_not_supported, "この言語サーバーは記号に答えません"},
+    {UiMessage::notice_symbols_first_of, "記号 {1} 件のうち {0} 件を出しています"},
+    {UiMessage::palette_empty_language_server_off,
+     "LSP はオフです（:set lsp=on でオンにできます）"},
+    {UiMessage::palette_empty_references,
+     "参照はまだありません。名前の上で {0}（Vim は {1}）で頼めます"},
+    {UiMessage::palette_empty_symbols,
+     "記号はまだありません。Vim の {0} か {1} の「{2}」で頼めます"},
+    {UiMessage::palette_references_subject, "{0} の参照"},
 }};
 } // namespace nenenib::core

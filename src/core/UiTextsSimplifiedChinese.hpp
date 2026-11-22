@@ -398,5 +398,10 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_mark_symbols, "符号"},
     {UiMessage::notice_symbols_not_found, "找不到符号"},
     {UiMessage::notice_symbols_not_supported, "此语言服务器不提供符号"},
+    {UiMessage::notice_symbols_first_of, "显示 {1} 个符号中的 {0} 个"},
+    {UiMessage::palette_empty_language_server_off, "LSP 已关闭（可用 :set lsp=on 打开）"},
+    {UiMessage::palette_empty_references, "还没有引用。在名称上按 {0}（Vim 为 {1}）即可请求"},
+    {UiMessage::palette_empty_symbols, "还没有符号。可在 Vim 中按 {0}，或在 {1} 中选择“{2}”"},
+    {UiMessage::palette_references_subject, "{0} 的引用"},
 }};
 } // namespace nenenib::core

@@ -50,6 +50,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <optional>
@@ -58,6 +59,7 @@
 #include <tuple>
 #include <utility>
 #include <variant>
+#include <vector>
 #include <wrl/client.h>
 #include <wrl/implements.h>
 
@@ -374,12 +376,12 @@ void verify_palette_texts(IDWriteFactory2 &factory, Face face)
 
 // 記号の案内の組 k から最後の組までの文の幅（物理画素・切り上げ）。製品は描く layout の組の境目で
 // 測り、試験は組 k からの文を別の layout で測る（同じ値になるはず）。
-[[nodiscard]] std::array<std::int32_t, core::palette_marks.size()>
-hint_widths(const Pen &pen, DisplayLanguage language)
+[[nodiscard]] std::vector<std::int32_t> hint_widths(const Pen &pen, DisplayLanguage language,
+                                                    bool language_server)
 {
-    const auto hint = core::palette_mark_hint(language);
-    const auto starts = core::palette_mark_hint_starts(language);
-    std::array<std::int32_t, core::palette_marks.size()> widths{};
+    const auto hint = core::palette_mark_hint(language, language_server);
+    const auto starts = core::palette_mark_hint_starts(language, language_server);
+    std::vector<std::int32_t> widths(starts.size(), 0);
     std::ranges::transform(starts, widths.begin(),
                            [&](std::size_t start)
                            {
@@ -397,14 +399,18 @@ void verify_palette_hint_at(const Pen &pen, const core::PaletteLayout &layout, s
 {
     const auto &input = layout.input;
     const auto room = core::width_of(input) - core::to_pixels(core::palette_hint_gap_dips, at);
-    for (const auto language : languages)
+    for (std::size_t round = 0; round < languages.size() * 2; ++round)
     {
-        const auto widths = hint_widths(pen, language);
+        const auto language = languages.at(round / 2);
+        const bool language_server = round % 2 == 1;
+        // LSP のオン・オフとも（オンは最後に `^ 診断` が足される・ADR 0060 の 2026-11-22 の追補）。
+        const auto widths = hint_widths(pen, language, language_server);
         const auto place = core::palette_input_hint(layout, at, widths);
         const bool shown = place.first < widths.size();
-        std::printf(
-            "  mark hint dpi %u window %d px [%s]: room %d px, whole %d px, from group %zu\n", at,
-            window, language_name(language), room, widths.front(), place.first);
+        std::printf("  mark hint dpi %u window %d px [%s lsp %s]: room %d px, whole %d px, from "
+                    "group %zu\n",
+                    at, window, language_name(language), language_server ? "on" : "off", room,
+                    widths.front(), place.first);
         expect(!shown || (place.area.right == input.right &&
                           core::width_of(place.area) == widths.at(place.first) &&
                           core::width_of(place.area) <= room),

@@ -402,10 +402,20 @@ enum class UiMessage : std::uint16_t
     palette_mark_symbols,
     notice_symbols_not_found,
     notice_symbols_not_supported,
+    // 記号の答えを上限で切った知らせ（#1958 のレビュー L1・{0} は出した件数・{1} は答えの件数）。
+    notice_symbols_first_of,
+    // 言語サーバーの出どころ（^ & %）の候補が 0 のときの一覧の中の 1 行（#1958・ADR 0060 の追補）。
+    // references は {0} 通常モードの鍵・{1} Vim の鍵、symbols は {0} Vim の鍵・{1} 操作の一覧の鍵・
+    // {2} 操作の名前。
+    palette_empty_language_server_off,
+    palette_empty_references,
+    palette_empty_symbols,
+    // 参照の一覧が何を頼んだ答えか（#1958・{0} は頼んだ名前か「相対パス:行」）。
+    palette_references_subject,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_symbols_not_supported) + 1U;
+    std::to_underlying(UiMessage::palette_references_subject) + 1U;
 } // namespace nenenib::core

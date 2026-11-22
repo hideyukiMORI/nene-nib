@@ -54,12 +54,6 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
     }
     if (const auto *palette = std::get_if<core::CommandPalette>(&input.value()))
     {
-        // 記号の案内は入力が空で、入力行が変換中でないときだけ（ADR 0060 の決定 9）。
-        // 1 文字でも打てば消え、変換を始めても消える（長い変換の文字列に重ねない）。
-        auto hint = palette->input().text().empty() && !command_composed().has_value()
-                        ? std::optional<core::DisplayText>{core::palette_mark_hint(
-                              state_.display_language())}
-                        : std::nullopt;
         // 載せるのは見えている行の窓だけ（ADR 0062 の決定 2）。全件は写さない。窓の先頭は面の
         // 状態（ADR 0150 の決定 1）。
         const auto first = palette->first();
@@ -70,18 +64,37 @@ std::optional<CommandPaletteView> EditorController::command_palette_view() const
             core::palette_placement(palette->scope(), state_.settings().finder_preview);
         auto hit_rows = project.has_value() ? project_hit_rows(first, palette->visible())
                                             : std::vector<core::ProjectHitRow>{};
-        return CommandPaletteView{palette->rows(first, palette->visible()),
-                                  first,
-                                  palette->selected(),
-                                  palette->count(),
-                                  std::move(hint),
-                                  std::move(project),
-                                  std::move(hit_rows),
-                                  placement,
-                                  preview_drawn(placement) ? preview_snippet(*palette)
-                                                           : std::nullopt};
+        CommandPaletteView view{palette->rows(first, palette->visible()),
+                                first,
+                                palette->selected(),
+                                palette->count(),
+                                std::nullopt,
+                                std::move(project),
+                                std::move(hit_rows),
+                                placement,
+                                preview_drawn(placement) ? preview_snippet(*palette) : std::nullopt,
+                                {},
+                                palette_empty_line(palette->scope()),
+                                held_references_subject(palette->scope())};
+        fill_palette_hint(view, *palette);
+        return view;
     }
     return std::nullopt;
+}
+
+// 記号の案内は入力が空で、入力行が変換中でないときだけ（ADR 0060 の決定 9）。1 文字でも打てば消え、
+// 変換を始めても消える（長い変換の文字列に重ねない）。診断の記号は LSP がオンのときだけで、文と組の
+// 境目は同じオン・オフで作る（ADR 0060 の 2026-11-22 の追補）。
+void EditorController::fill_palette_hint(CommandPaletteView &view,
+                                         const core::CommandPalette &palette) const
+{
+    if (!palette.input().text().empty() || command_composed().has_value())
+    {
+        return;
+    }
+    const bool language_server = state_.settings().lsp;
+    view.hint = core::palette_mark_hint(state_.display_language(), language_server);
+    view.hint_starts = core::palette_mark_hint_starts(state_.display_language(), language_server);
 }
 
 void EditorController::accept(const ScrollPaletteList &intent)
@@ -263,8 +276,8 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     const auto bookmarks = ports_.bookmarks.read();
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     append_diagnostic_choices(entries);
-    append_reference_choices(entries);
-    append_symbol_choices(entries);
+    // 参照と記号の候補は `&` `%` を見せるときにだけ作る（settle_listed_answers・#1958 の R1）。
+    reset_listed_answers();
     request_folder(entries);
     state_ = state_.with_command_input(
         core::CommandPalette::opened(
@@ -282,6 +295,8 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     // `:grep` と Ctrl+Shift+F は入力 `!` で開くので、開いた面の検索語をここで頼む（ADR 0167 の
     // 決定 1・意図の出口を通らない harness の道も同じ）。
     settle_project_search();
+    // `&` `%` で開いた一覧の候補も同じ（#1958）。
+    settle_listed_answers();
 }
 
 void EditorController::request_folder(const std::vector<core::CommandChoice> &entries)
