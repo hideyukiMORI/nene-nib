@@ -166,6 +166,8 @@ void verify_lsp_answers_scope();
 void verify_lsp_sync_property_scope();
 // LanguageServerTests.cpp（#994・controller の配線と寿命・`:set lsp`・替え玉のサーバー）
 void verify_language_server_contracts();
+// 席の部分（LanguageServerSlotTests.cpp・LSP 段 S2）。verify_language_server_contracts から呼ぶ。
+void verify_language_server_slots();
 void verify_language_server_scope();
 
 // UtfPropertyTests.cpp / PrintPagesPropertyTests.cpp / ShellRegistrationPropertyTests.cpp（#1289・

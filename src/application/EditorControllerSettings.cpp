@@ -356,9 +356,7 @@ void EditorController::preview_settings(core::EditorSettings settings)
     const bool language_changed = settings.ui_language != before.ui_language;
     if (settings.lsp && !before.lsp)
     {
-        language_server_.failures = 0;
-        language_server_.given_up = false;
-        language_server_.considered.reset();
+        resume_language_servers();
     }
     // Vim が窓を決め直す option（`wrap`・#1524）は、`:set wrap` と同じく設定を写す前に今の
     // キャレットの決め直しを頼む（レビュー L1・follow_window_setting の 1 本）。
