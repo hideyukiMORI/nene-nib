@@ -834,6 +834,11 @@ void EditorController::refresh_key_map()
 // 失敗しない。失敗を返すのは engine の鍵（入力行の確定が送る検索の鍵を含む）だけ。
 std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const core::VimKey &key)
 {
+    // 言語サーバーが running の窓で打った鍵の間だけ（#1962）。ほかは真偽 1 つの読み。
+    if (typed_watch_)
+    {
+        watched_vim_key(key);
+    }
     if (!state_.command_input().has_value())
     {
         // 再生の中で入力行を取り消した後の鍵も、engine へ流す前に同じ 1

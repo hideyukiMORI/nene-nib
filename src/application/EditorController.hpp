@@ -1423,8 +1423,8 @@ class EditorController final
     void open_triggered_completion(std::string_view typed);
     // 面を開く 1 か所。trigger が無ければ手で開いた面、あれば自動の面。
     void start_completion(std::optional<std::string_view> trigger);
-    // 面を開ける状態か。triggered は打鍵で自動に開く面（Vim の INSERT
-    // で開けるのはこれだけ・#1962）。
+    // 面を開ける状態か。triggered は打鍵で自動に開く面（Vim の INSERT で開けるのはこれだけ・
+    // #1962）。
     [[nodiscard]] bool completion_startable(bool triggered) const;
     [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
     void refresh_completion(CompletionSession &session);
@@ -1448,17 +1448,17 @@ class EditorController final
     // 自動で開いた面が出ている間の Ctrl-n / Ctrl-p で、面の候補を engine の写しにする（#1962）。
     // 写せる候補が無ければ偽（呼ぶ側は ADR 0169 の本文の語の道へ落ちる）。
     [[nodiscard]] bool offer_auto_vim_completion();
-    [[nodiscard]] std::optional<std::string>
-    vim_auto_completion_text(core::Offset origin, const core::CompletionEntry &entry) const;
     // 言語サーバーが起きている窓で打った Vim の鍵（#1962）。accept(VimKeyPress) が「起きている」の
     // 真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、鍵を流した後に typed_vim_character。
     void typed_vim_key_with_language(const core::VimKey &key);
     // 自動で開いた面が出ている間の Ctrl-y / Ctrl-e は面を閉じるだけで Vim に渡さない（真）。
     // 文字・Backspace・Ctrl-n / Ctrl-p・Esc 以外の鍵は面を閉じてから Vim に渡す（偽）。
     [[nodiscard]] bool auto_vim_completion_took(const core::VimKey &key);
-    // INSERT で打った鍵 key の 1 文字が、鍵の前のキャレット before の直後に入ったなら
-    // typed_for_language へ渡す（貼り付け・1 鍵の引数・`map` の右辺で入った文字は渡さない）。
-    void typed_vim_character(const core::VimKey &key, core::Offset before);
+    // deliver_vim_key が engine に流す鍵ごとに typed_insert_ を書き直す（typed_watch_ の間だけ）。
+    void watched_vim_key(const core::VimKey &key);
+    // 打った鍵を流し終えた後、最後に流した鍵が typed_insert_ の 1 文字で、それが流す前のキャレット
+    // の直後にそのまま入ったなら typed_for_language へ渡す。
+    void typed_vim_character();
     void follow_vim_completion();
     void choose_vim_completion(std::optional<std::size_t> row);
     void settle_vim_completion(CompletionSession &session);
@@ -1871,6 +1871,13 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
+    // 言語サーバーが running の窓で打った鍵を流している間だけ立つ（typed_vim_key_with_language が
+    // ScopedValue で置く・#1962）。立っている間だけ deliver_vim_key が watched_vim_key を呼ぶ。
+    bool typed_watch_ = false;
+    // 最後に engine へ流した鍵が打った文字（出どころ typed・map の右辺でも再生でもない）で、
+    // INSERT が 1 鍵の引数を待たずに受けたなら、その文字と流す前のキャレット。ほかの鍵を
+    // 流したら空（watched_vim_key だけが書き、typed_vim_character が読んで消す）。
+    std::optional<std::pair<core::VimCharacter, core::Offset>> typed_insert_;
     // 開いている入力行に打った鍵が 1 つでも届いたか（Vim の some_key_typed）。Ex の行を履歴に
     // 足すのはこれが立っているときだけ（remember(CommandLine)）。note_command_key だけが立て、
     // close_command_input だけが倒す。

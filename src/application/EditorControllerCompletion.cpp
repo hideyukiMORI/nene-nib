@@ -42,13 +42,16 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenCompletion.hpp"
+#include "ScopedValue.hpp"
 #include "ScrollCompletion.hpp"
 #include "StepCompletion.hpp"
 #include "UiMessage.hpp"
 #include "Utf8.hpp"
+#include "VimCharacter.hpp"
 #include "VimCompletionOffer.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimKeySource.hpp"
 #include "VimMode.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimState.hpp"
@@ -274,10 +277,10 @@ void EditorController::forget_completion_answer()
     state_ = state_.with_language_answers(std::move(answers));
 }
 
-// 面を開ける状態か。通常モードか、Vim の INSERT で打鍵が自動に開く面（triggered・engine の補完が
-// 閉じている間・#1962。Vim の手で開く面は engine の Ctrl-n の道
-// offer_vim_completion）・入力行と面と
-// エクスプローラーの焦点と全面プレビューの外・変換中でない（ADR 0014）・選択が無い。
+// 面を開ける状態か。通常モードか、Vim の INSERT で打鍵が自動に開く面（triggered・engine の
+// 補完が閉じている間・#1962。Vim の手で開く面は engine の Ctrl-n の道 offer_vim_completion）。
+// どちらも入力行と面とエクスプローラーの焦点と全面プレビューの外・変換中でない（ADR 0014）・
+// 選択が無い。
 bool EditorController::completion_startable(bool triggered) const
 {
     switch (state_.mode())
@@ -325,6 +328,7 @@ void EditorController::typed_for_language(std::string_view typed)
 {
     if (active_language_server().phase == LanguageServerPhase::running)
     {
+        // 補完と並べて足す所（段 S6c の引数の情報）。open_triggered_completion の中には足さない。
         open_triggered_completion(typed);
     }
 }
@@ -395,7 +399,9 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
         session.words_collected = true;
     }
     session.awaiting = request_completion(session.id, trigger);
-    arrange(session, state_.text().text_range(session.origin, caret));
+    std::string typed = state_.text().text_range(session.origin, caret);
+    arrange(session, typed);
+    session.requested = std::move(typed);
     if (alive(session))
     {
         completion_ = std::move(session);
@@ -460,11 +466,13 @@ void EditorController::refresh_completion(CompletionSession &session)
     const core::Offset caret = state_.selection().caret;
     session.caret = caret;
     session.revision = state_.history().revision();
-    narrow(session, state_.text().text_range(session.origin, caret));
+    std::string typed = state_.text().text_range(session.origin, caret);
+    narrow(session, typed);
     if (session.incomplete)
     {
         session.awaiting = request_completion(session.id);
         session.incomplete = session.awaiting;
+        session.requested = std::move(typed);
     }
 }
 
@@ -870,26 +878,43 @@ void EditorController::merge_vim_completion_answer(CompletionSession &session,
 // ------------------------------------------------- Vim の INSERT で打鍵が自動に開く面（#1962）
 
 // 言語サーバーが起きている窓で打った Vim の鍵（ADR 0190 の追補・#1962）。打った鍵の入口
-// （accept(VimKeyPress)）だけが呼ぶので、再生（`.` `@`）・`map`
-// の右辺・:normal!（press_vim_keys）・ IME の確定（type_as_vim_keys）の鍵はここを通らない。engine
-// の歩は変えない。
+// （accept(VimKeyPress)）だけが呼ぶので、再生（`.` `@`）・:normal!（press_vim_keys）・IME の
+// 確定（type_as_vim_keys）の鍵はここを通らない。`map` の右辺は鍵の出どころで見分ける
+// （watched_vim_key）。engine の歩は変えない。
 void EditorController::typed_vim_key_with_language(const core::VimKey &key)
 {
     if (auto_vim_completion_took(key))
     {
         return;
     }
-    const core::VimState &vim = state_.vim();
-    // 1 鍵の引数（Ctrl-r のレジスタ・Ctrl-v の文字）を待つ INSERT
-    // の鍵は、打った文字として数えない。
-    const bool inserting = state_.mode() == core::EditMode::vim &&
-                           vim.mode == core::VimMode::insert && !vim.input_wait.has_value();
-    const core::Offset before = state_.selection().caret;
-    static_cast<void>(typed_vim_key(key));
-    if (inserting)
     {
-        typed_vim_character(key, before);
+        // 言語サーバーが running でなければ見張らない（1 文字ごとに文字列を作らない）。
+        const ScopedValue<bool> watch{typed_watch_, active_language_server().phase ==
+                                                        LanguageServerPhase::running};
+        typed_insert_.reset();
+        static_cast<void>(typed_vim_key(key));
     }
+    typed_vim_character();
+}
+
+// engine に流す鍵の 1 つ（deliver_vim_key の頭・typed_watch_ の間だけ）。打った文字として
+// 数えるのは、出どころが typed（map の右辺の単位は typed_unit が mapped にする・KeyMapEmit の
+// mapped）で再生の中でなく、流す前の engine が INSERT で 1 鍵の引数（Ctrl-r のレジスタ・
+// Ctrl-v の文字）を待っていない文字の鍵だけ。左辺の待ちの後に一度に流れた鍵
+// （`inoremap jk <Esc>` の `j.`）も、最後に流した `.` を、それを流す前のキャレットで数える。
+void EditorController::watched_vim_key(const core::VimKey &key)
+{
+    typed_insert_.reset();
+    const auto *character = std::get_if<core::VimCharacter>(&key);
+    const core::VimState &vim = state_.vim();
+    if (character == nullptr || unit_source_ != core::VimKeySource::typed ||
+        replay_depth_.has_value() || state_.command_input().has_value() ||
+        state_.mode() != core::EditMode::vim || vim.mode != core::VimMode::insert ||
+        vim.input_wait.has_value())
+    {
+        return;
+    }
+    typed_insert_ = std::pair{*character, state_.selection().caret};
 }
 
 bool EditorController::auto_vim_completion_took(const core::VimKey &key)
@@ -923,16 +948,22 @@ bool EditorController::auto_vim_completion_took(const core::VimKey &key)
     return false;
 }
 
-void EditorController::typed_vim_character(const core::VimKey &key, core::Offset before)
+// 鍵の後も INSERT で、最後に流した打った文字が流す前のキャレットの直後にそのまま入ったときだけ
+// （1 文字で抜ける鍵・貼り付け・1 鍵の引数で入った文字は渡さない）。
+void EditorController::typed_vim_character()
 {
-    const auto *character = std::get_if<core::VimCharacter>(&key);
-    if (character == nullptr || state_.mode() != core::EditMode::vim ||
-        state_.vim().mode != core::VimMode::insert)
+    if (!typed_insert_.has_value())
+    {
+        return;
+    }
+    const auto [character, before] = typed_insert_.value();
+    typed_insert_.reset();
+    if (state_.mode() != core::EditMode::vim || state_.vim().mode != core::VimMode::insert)
     {
         return;
     }
     std::string typed;
-    core::append_utf8(typed, character->code);
+    core::append_utf8(typed, character.code);
     const core::Offset caret = state_.selection().caret;
     if (caret.value != before.value + typed.size() ||
         state_.text().text_range(before, caret) != typed)
@@ -944,7 +975,8 @@ void EditorController::typed_vim_character(const core::VimKey &key, core::Offset
 
 // 自動の面の候補を engine の写しにする（ADR 0169 の形へ移る）。写すのは面に出ている LSP の候補
 // （今の接頭辞で絞った列）だけで、要求は出し直さず、待っている要求と届いていた答えは捨てる。以後の
-// 面は engine が持つので手で開いた面として扱う（by_hand を立てる）。
+// 面は engine が持つので手で開いた面として扱う（by_hand を立てる）。engine の語に直すのは手で開いた
+// 面と同じ vim_completion_text の 1 本で、比べる範囲は最後の要求を出したときの接頭辞（requested）。
 bool EditorController::offer_auto_vim_completion()
 {
     if (!completion_.has_value())
@@ -952,11 +984,16 @@ bool EditorController::offer_auto_vim_completion()
         return false;
     }
     CompletionSession &session = completion_.value();
+    const auto typed = vim_completion_span(session.origin, session.requested);
+    if (!typed.has_value())
+    {
+        return false;
+    }
     std::vector<core::CompletionEntry> server;
     for (const std::size_t position : session.shown)
     {
         core::CompletionEntry entry = session.entries.at(position);
-        auto text = vim_auto_completion_text(session.origin, entry);
+        auto text = vim_completion_text(typed.value(), session.origin, entry);
         if (text.has_value())
         {
             entry.insert = std::move(text).value();
@@ -981,23 +1018,6 @@ bool EditorController::offer_auto_vim_completion()
     state_ = state_.with_vim(core::vim_completion_offered(
         state_.vim(), core::VimCompletionOffer{vim_words(session), session.origin}));
     return true;
-}
-
-// 自動の面の候補が、語の頭からキャレットまでと置き換える本文（確定の範囲は通常モードと同じ
-// completion_range）。範囲が語の頭より後ろから始まれば間の本文を前に足し、前から始まれば入れる
-// 本文がその間の本文で始まるときだけ残りを入れる（直せなければ空・列に入れない）。改行は LF。
-std::optional<std::string>
-EditorController::vim_auto_completion_text(core::Offset origin,
-                                           const core::CompletionEntry &entry) const
-{
-    std::string text = inserted_text(entry.insert, "\n");
-    const core::OffsetRange range = completion_range(origin, entry);
-    if (range.begin.value >= origin.value)
-    {
-        return state_.text().text_range(origin, range.begin) + text;
-    }
-    const std::string before = state_.text().text_range(range.begin, origin);
-    return text.starts_with(before) ? std::optional{text.substr(before.size())} : std::nullopt;
 }
 
 std::optional<CompletionView> EditorController::completion_view() const

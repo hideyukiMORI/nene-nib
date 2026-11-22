@@ -20,6 +20,7 @@
 #include "EditorSettings.hpp"
 #include "FilePath.hpp"
 #include "LayoutRect.hpp"
+#include "MapRow.hpp"
 #include "MoveCaret.hpp"
 #include "NewTab.hpp"
 #include "OpenDocument.hpp"
@@ -38,7 +39,12 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimModeSet.hpp"
+#include "VimNamedRegisters.hpp"
+#include "VimRegister.hpp"
+#include "VimRegisterSnapshot.hpp"
 #include "VimSpecialKey.hpp"
+#include "VimState.hpp"
 #include "VimStep.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
@@ -63,6 +69,9 @@ constexpr std::string_view source_path = "C:\\work\\main.cpp";
 constexpr std::string_view clangd_command = R"("C:\LLVM\bin\clangd.exe" --log=error)";
 constexpr std::string_view capable_answer =
     R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":[".","->"]}}}})";
+// trigger に `-` を持つサーバー（Ctrl-r の名前の鍵 `-` が入れる文字と同じ・#1962）。
+constexpr std::string_view dash_answer =
+    R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":["-"]}}}})";
 constexpr std::string_view completion_method = "textDocument/completion";
 constexpr std::size_t shown_lines = 4;
 
@@ -310,28 +319,40 @@ void verify_other_tabs()
            "the words of another tab are offered after the words of this document");
 }
 
-[[nodiscard]] SettingsReading lsp_settings()
+[[nodiscard]] SettingsReading lsp_settings(std::vector<core::MapRow> maps)
 {
     auto settings = core::default_editor_settings();
     settings.lsp = true;
     settings.lsp_commands = {{"cpp", std::string{clangd_command}}};
+    settings.maps = std::move(maps);
     return SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}};
+}
+
+[[nodiscard]] SettingsReading lsp_settings()
+{
+    return lsp_settings({});
 }
 
 // main.cpp を開いて補完の能力つきで `initialize` に答え、Vim のモードにする（eol の文書なので
 // Vim の本文は 1 行。試験は `o` で 2 行目を開いて打つ）。
-void capable(Editing &editing)
+// answer は `initialize` の答え（既定は trigger `.` `->`）。
+void capable(Editing &editing, std::string_view answer)
 {
     editing.files().hold_at(std::string(source_path), Bytes{std::string("int main() {}\n")});
     applied(editing.controller(), app::OpenDocument{core::FilePath::parse(source_path).value()});
     editing.language_server().serve(app::ServerStarted{});
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
-    editing.language_server().serve(app::ServerMessage{std::string{capable_answer}});
+    editing.language_server().serve(app::ServerMessage{std::string{answer}});
     static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
     applied(editing.controller(),
             app::MoveCaret{core::CaretMotion::document_end, core::SelectionAnchoring::collapse});
     applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+}
+
+void capable(Editing &editing)
+{
+    capable(editing, capable_answer);
 }
 
 [[nodiscard]] app::EditorFrame answered(Editing &editing, std::string_view result)
@@ -594,6 +615,68 @@ void verify_triggered_replays()
            "keys fed as :normal! ask nothing");
 }
 
+constexpr core::VimModeSet insert_modes{false, true, false, false, false};
+
+// #1962: 打った文字として数えるのは、出どころが typed で 1 鍵の引数を待たずに INSERT が受けた
+// 文字の鍵だけ。`map` の右辺（`inoremap x .`）と Ctrl-r のレジスタの名前（`-` を持つ `"-` の
+// `<C-r>-`・名前の鍵と入る文字が同じで、キャレットも 1 字だけ進む）で入った trigger は頼まない。
+void verify_triggered_not_typed()
+{
+    Editing mapped(lsp_settings({core::MapRow{insert_modes, "x", ".", false}}));
+    capable(mapped);
+    static_cast<void>(pressed(mapped, "ox"));
+    expect(completion_requests(mapped) == 0 && !mapped.controller().completion_open() &&
+               body(mapped) == "int main() {}\n.\n",
+           "a trigger put in by the right side of a map asks nothing");
+    Editing named(lsp_settings());
+    capable(named, dash_answer);
+    static_cast<void>(pressed(named, "o--<Esc>x"));
+    expect(completion_requests(named) == 2 && body(named) == "int main() {}\n-\n",
+           "each typed trigger asks once");
+    static_cast<void>(pressed(named, "a<C-r>-"));
+    expect(completion_requests(named) == 2 && !named.controller().completion_open() &&
+               body(named) == "int main() {}\n--\n",
+           "a trigger put in by the register named after Ctrl-r asks nothing");
+}
+
+// #1962: 左辺の待ち（`inoremap jk <Esc>` の `j`）の後に打った trigger は、待っていた鍵と一度に
+// 流れても打った文字として頼む。左辺は今までどおり効く。
+void verify_triggered_after_pending()
+{
+    Editing editing(lsp_settings({core::MapRow{insert_modes, "jk", "<Esc>", false}}));
+    capable(editing);
+    static_cast<void>(pressed(editing, "oxj"));
+    expect(completion_requests(editing) == 0 && body(editing) == "int main() {}\nx\n",
+           "the first key of a map waits without putting anything in");
+    static_cast<void>(pressed(editing, "."));
+    expect(completion_requests(editing) == 1 && editing.controller().completion_open() &&
+               body(editing) == "int main() {}\nxj.\n",
+           "a trigger typed after a waiting key asks once when both go in together");
+    static_cast<void>(pressed(editing, "jk"));
+    expect(editing.controller().vim_state().mode == core::VimMode::normal &&
+               !editing.controller().completion_open() && body(editing) == "int main() {}\nxj.\n",
+           "the map still leaves INSERT and the waiting request ends");
+}
+
+// #1962: 何も選んでいない面を閉じる Ctrl-e と Ctrl-y は録画に積まない（レジスタは打った文字と Esc
+// だけ）。
+void verify_triggered_recording()
+{
+    Editing editing(lsp_settings());
+    capable(editing);
+    static_cast<void>(pressed(editing, "qaox."));
+    static_cast<void>(answered(editing, R"([{"label":"size"}])"));
+    static_cast<void>(pressed(editing, "<C-e>y."));
+    static_cast<void>(answered(editing, R"([{"label":"size"}])"));
+    static_cast<void>(pressed(editing, "<C-y><Esc>q"));
+    const core::VimState &vim = editing.controller().vim_state();
+    const core::VimRegister &held =
+        vim.registers.registers.at(core::vim_register_index(U'a').value_or(0)).value();
+    expect(completion_requests(editing) == 2 && held.text == "ox.y.\x1b" &&
+               body(editing) == "int main() {}\nx.y.\n",
+           "Ctrl-e and Ctrl-y that only close the face are not recorded");
+}
+
 // #1962: LSP がオフの文書では、同じ鍵の列が言語サーバーの port に触れず、面を開かない。
 void verify_triggered_off()
 {
@@ -636,5 +719,8 @@ void verify_vim_insert_completion()
     verify_triggered_waiting();
     verify_triggered_replays();
     verify_triggered_off();
+    verify_triggered_not_typed();
+    verify_triggered_after_pending();
+    verify_triggered_recording();
 }
 } // namespace nenenib::tests
