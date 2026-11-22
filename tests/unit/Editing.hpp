@@ -20,6 +20,7 @@
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageRoots.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -226,6 +227,10 @@ class Editing final
     {
         return language_roots_;
     }
+    [[nodiscard]] ScriptedLanguageServerSearch &language_server_search() noexcept
+    {
+        return language_server_search_;
+    }
 
   private:
     [[nodiscard]] nenenib::application::EditorPorts
@@ -244,13 +249,35 @@ class Editing final
 
     [[nodiscard]] nenenib::application::EditorPorts ports()
     {
-        return nenenib::application::EditorPorts{
-            appearance_,   clipboard_,       files_,         code_pages_,     settings_,
-            themes_,       session_,         history_,       folders_,        bookmarks_,
-            text_layouts_, autosave_,        fonts_,         bell_,           markdown_,
-            reads_,        language_server_, wall_clock_,    printer_,        shell_registration_,
-            images_,       start_lists_,     ui_language_,   project_search_, previews_,
-            reveal_,       links_,           language_roots_};
+        return nenenib::application::EditorPorts{appearance_,
+                                                 clipboard_,
+                                                 files_,
+                                                 code_pages_,
+                                                 settings_,
+                                                 themes_,
+                                                 session_,
+                                                 history_,
+                                                 folders_,
+                                                 bookmarks_,
+                                                 text_layouts_,
+                                                 autosave_,
+                                                 fonts_,
+                                                 bell_,
+                                                 markdown_,
+                                                 reads_,
+                                                 language_server_,
+                                                 wall_clock_,
+                                                 printer_,
+                                                 shell_registration_,
+                                                 images_,
+                                                 start_lists_,
+                                                 ui_language_,
+                                                 project_search_,
+                                                 previews_,
+                                                 reveal_,
+                                                 links_,
+                                                 language_roots_,
+                                                 language_server_search_};
     }
 
     ScriptedAppearance appearance_{Reading{Appearance::dark}};
@@ -281,6 +308,7 @@ class Editing final
     ScriptedReveal reveal_;
     ScriptedLinkOpen links_;
     ScriptedLanguageRoots language_roots_;
+    ScriptedLanguageServerSearch language_server_search_;
     EditorController controller_;
 };
 } // namespace nenenib::tests

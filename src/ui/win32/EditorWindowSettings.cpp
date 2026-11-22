@@ -137,12 +137,13 @@ void EditorWindow::follow_settings_closing()
 // 閉じて保存するだけで、本文へ渡さない。
 bool EditorWindow::press_settings(LPARAM data)
 {
-    if (!controller_.settings_open())
+    const auto view = controller_.settings_view();
+    if (!controller_.settings_open() || !view.has_value())
     {
         return false;
     }
-    const auto [pressed, intents] =
-        settings_press_step(settings_target_under(low_word_of(data), high_word_of(data)));
+    const auto [pressed, intents] = settings_press_step(
+        settings_target_under(low_word_of(data), high_word_of(data)), view.value());
     settings_pressed_ = pressed;
     // 閉じるだけだった押しは、続く 2 回目の押しをダブルクリックに数えさせない。
     settings_dismissed_ = !intents.empty();
