@@ -19,6 +19,8 @@ struct ServerAbilities
     std::vector<std::string> trigger_characters = {};
     bool hover = false;
     bool definition = false;
+    // `referencesProvider`（#1947・ADR 0191 の決定 2）。
+    bool references = false;
     DocumentSync sync = DocumentSync::none;
     SaveNotice save = SaveNotice::none;
 };

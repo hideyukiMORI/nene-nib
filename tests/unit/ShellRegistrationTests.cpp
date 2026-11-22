@@ -309,7 +309,7 @@ void verify_packaged()
         applied(controller, app::CancelCommand{});
         return shell_row ? std::size_t{0} : palette.total;
     };
-    expect(listed() == 61, "the packaged ordinary list has no registration rows");
+    expect(listed() == 62, "the packaged ordinary list has no registration rows");
     applied(controller, app::InsertText{"ab"});
     expect(applied(controller, app::RegisterShell{}) == "ab" &&
                notice(controller.frame()) == "Store 版では右クリックへの登録は使えません" &&
@@ -320,7 +320,7 @@ void verify_packaged()
                port.touches() == 0,
            "neither operation touches the shell registration in the packaged build");
     applied(controller, app::SelectEditMode{core::EditMode::vim});
-    expect(listed() == 56, "the packaged vim normal list has no registration rows");
+    expect(listed() == 57, "the packaged vim normal list has no registration rows");
 }
 } // namespace
 

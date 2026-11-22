@@ -18,6 +18,8 @@ inline constexpr std::size_t lsp_completion_limit = 500;
 // hover の平文の上限（決定 4）。行の数とバイトの数の両方で切る。
 inline constexpr std::size_t lsp_hover_line_limit = 40;
 inline constexpr std::size_t lsp_hover_byte_limit = 4096;
+// 参照の答えで使う場所の上限（ADR 0191 の決定 4）。受け取りの時点で超えた分を捨てる。
+inline constexpr std::size_t lsp_reference_limit = 1000;
 
 // サーバーの答えを読む 3 本（ADR 0190 の決定 4）。引数は答えの `result`。OS に触れない純関数で、
 // 位置（LspRange）は写さずに返す（本文の位置へは使う側が lsp_range_to_offsets で写す）。

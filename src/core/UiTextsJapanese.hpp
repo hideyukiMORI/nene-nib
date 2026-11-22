@@ -164,6 +164,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_open_language_server_log_name, "言語サーバーの記録を開く"},
     {UiMessage::operation_open_language_server_log_description,
      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます"},
+    {UiMessage::operation_list_references_name, "参照の一覧"},
+    {UiMessage::operation_list_references_description,
+     "キャレットの位置の名前を使っている所を言語サーバーに聞き、Ctrl+P の一覧で見ます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -444,5 +447,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::settings_caret_motion_description, "キャレットが動くとき、尾を引いて滑らかに移る"},
     {UiMessage::settings_caret_motion_time_name, "キャレットの動きの時間"},
     {UiMessage::settings_caret_motion_time_description, "動きにかける時間（40〜300 ms）"},
+    {UiMessage::palette_mark_references, "参照"},
+    {UiMessage::notice_references_not_found, "参照が見つかりません"},
+    {UiMessage::notice_references_not_supported, "この言語サーバーは参照に答えません"},
+    {UiMessage::notice_references_first_of, "参照 {1} 件のうち {0} 件を出しています"},
 }};
 } // namespace nenenib::core

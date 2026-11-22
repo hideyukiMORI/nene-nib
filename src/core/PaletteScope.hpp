@@ -20,6 +20,8 @@ enum class PaletteScope : std::uint8_t
     commands,
     operations,
     project_hits,
-    diagnostics
+    diagnostics,
+    // 言語サーバーの参照の答え（#1947・ADR 0191 の決定 4・files には混ぜない）。
+    references
 };
 } // namespace nenenib::core

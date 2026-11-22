@@ -222,11 +222,15 @@ enum class VimAction : std::uint8_t
     // `gl`（#1939）。キャレットの上の診断の文の全部を札で見せる。`gd` と同じく NORMAL で回数も
     // オペレータも無いときだけ効果を添え、状態と失敗の印は表に行が無かったときのまま（Vim に
     // `gl` は無く、表に無い g の鍵と同じに鳴る）。
-    language_diagnostic
+    language_diagnostic,
+    // `gr`（#1947・ADR 0191 の決定 4）。次の 1 鍵を取る接頭辞で、`grr` は参照の問い（Neovim
+    // の既定）。 ほかの鍵は表に無い g の鍵と同じに失敗する（Vim の `gr{char}`
+    // の仮想置換は入れない）。
+    prefix_g_references
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
 constexpr std::size_t vim_action_count =
-    static_cast<std::size_t>(VimAction::language_diagnostic) + 1;
+    static_cast<std::size_t>(VimAction::prefix_g_references) + 1;
 } // namespace nenenib::core

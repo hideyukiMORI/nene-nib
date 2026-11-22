@@ -10,6 +10,8 @@ namespace nenenib::core
 enum class LanguageQueryKind : std::uint8_t
 {
     definition,
-    hover
+    hover,
+    // 参照の一覧（#1947・ADR 0191 の決定 4）。Vim の `grr` と操作「参照の一覧」。
+    references
 };
 } // namespace nenenib::core

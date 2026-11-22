@@ -109,6 +109,9 @@ enum class EditorOperation : std::uint8_t
     even_panes,
     // 言語サーバーの記録（標準エラーと知らせ）を無題のタブに写して開く（ADR 0160 の 2026-11-22 の
     // 追補・LSP 段 S8・Ex の `:LspLog` と同じ）。鍵は無く、両方のモードの F1 の一覧に載る。
-    open_language_server_log
+    open_language_server_log,
+    // 参照の一覧（#1947・ADR 0191 の決定 4）。Shift+F12 で両モード（VS Code と同じ・Vim の NORMAL
+    // の `grr` と同じ問い）。答えは Ctrl+P の一覧の記号 `&` で開く。
+    list_references
 };
 } // namespace nenenib::core

@@ -29,6 +29,8 @@ enum class VimPrefix : std::uint8_t
     bracket_forward,
     // `\` の 1 回目と 2 回目。2 回目の次の鍵がイージーモーションの動作（ADR 0163 の決定 1）。
     leader,
-    leader_leader
+    leader_leader,
+    // `gr`（#1947）。次の鍵が `r` なら参照の問い、ほかは失敗する。
+    g_references
 };
 } // namespace nenenib::core

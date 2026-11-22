@@ -32,4 +32,27 @@ void verify_preview_cycle_key()
            "Ctrl+M without Shift runs no operation");
     expect(!operation_chord('M', false, true).has_value(), "Shift+M is not an operation chord");
 }
+
+// F12 の写し（ADR 0190 の決定 8・ADR 0191 の決定 4・#1954 のレビュー R4）。Shift+F12 は両モードで
+// 参照の一覧、Shift なしは定義へ移動のまま、Ctrl つきは操作にならない。
+void verify_reference_key()
+{
+    using nenenib::core::EditMode;
+    using nenenib::core::EditorOperation;
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::operation_chord;
+    const auto shifted = operation_chord(VK_F12, false, true);
+    const auto plain = operation_chord(VK_F12, false, false);
+    expect(shifted.has_value() &&
+               operation_for(shifted.value(), EditMode::ordinary) ==
+                   EditorOperation::list_references &&
+               operation_for(shifted.value(), EditMode::vim) == EditorOperation::list_references,
+           "Shift+F12 lists the references in both modes");
+    expect(plain.has_value() && operation_for(plain.value(), EditMode::ordinary) ==
+                                    EditorOperation::go_to_definition,
+           "F12 without Shift still goes to the definition");
+    const auto control = operation_chord(VK_F12, true, false);
+    expect(!control.has_value() || !operation_for(control.value(), EditMode::ordinary).has_value(),
+           "Ctrl+F12 runs no operation");
+}
 } // namespace nenenib::tests::ui
