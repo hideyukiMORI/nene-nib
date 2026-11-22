@@ -40,6 +40,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -246,6 +247,7 @@ void verify_startup_question()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageServerSearch language_server_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -258,7 +260,7 @@ void verify_startup_question()
                          fonts,           bell,        markdown,     reads,
                          language_server, wall_clock,  printer,      shell_registration,
                          images,          start_lists, ui_language,  project_search,
-                         previews,        reveal,      links},
+                         previews,        reveal,      links,        language_server_search},
         nenenib::core::Distribution::unpackaged, {open_of(giant_path), open_of(small_path)});
     expect(!controller.delivery().display_question,
            "starting with a small file last does not ask about the giant one yet");
@@ -662,18 +664,20 @@ void verify_startup_before_layout()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageServerSearch language_server_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
-    const app::EditorPorts ports{appearance,      clipboard,   files,        code_pages,
-                                 settings,        themes,      session,      history,
-                                 folders,         bookmarks,   text_layouts, autosave,
-                                 fonts,           bell,        markdown,     reads,
-                                 language_server, wall_clock,  printer,      shell_registration,
-                                 images,          start_lists, ui_language,  project_search,
-                                 previews,        reveal,      links};
+    const app::EditorPorts ports{
+        appearance,      clipboard,   files,        code_pages,
+        settings,        themes,      session,      history,
+        folders,         bookmarks,   text_layouts, autosave,
+        fonts,           bell,        markdown,     reads,
+        language_server, wall_clock,  printer,      shell_registration,
+        images,          start_lists, ui_language,  project_search,
+        previews,        reveal,      links,        language_server_search};
     app::EditorController started(ports, nenenib::core::Distribution::unpackaged,
                                   {open_of(giant_path)});
     expect(started.delivery().display_question, "starting with a giant line asks");

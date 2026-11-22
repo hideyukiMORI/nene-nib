@@ -890,6 +890,8 @@ void EditorController::accept(const WorkCompleted &)
     collect_reveals();
     // リンクを OS に渡す頼みの失敗（#1869 の段 L2）。頼んでいなければ呼ばない。
     collect_link_opens();
+    // 設定の面の言語サーバーの探し（#1945）。頼んでいなければ呼ばない。
+    collect_language_server_search();
     const auto &input = state_.command_input();
     const auto *palette =
         input.has_value() ? std::get_if<core::CommandPalette>(&input.value()) : nullptr;

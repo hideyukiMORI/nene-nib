@@ -78,6 +78,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/Lexer.cpp src/core/LexCpp.cpp src/core/LexCursor.cpp src/core/LexJson.cpp src/core/LexPython.cpp src/core/LexMarkdown.cpp src/core/LexJavaScript.cpp src/core/LexHtml.cpp src/core/LexCss.cpp src/core/LexYaml.cpp src/core/LexToml.cpp src/core/LexGdscript.cpp src/core/LexIni.cpp src/core/LexCsharp.cpp src/core/LexRust.cpp src/core/LexGo.cpp src/core/LexPhp.cpp src/core/LexSql.cpp src/core/LexLua.cpp src/core/LexDockerfile.cpp src/core/LexPowershell.cpp src/core/LexShell.cpp src/core/LexCmake.cpp src/core/SyntaxColor.cpp
     src/core/JsonNumber.cpp src/core/JsonValue.cpp src/core/JsonParse.cpp src/core/JsonWrite.cpp
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp src/core/LspLanguageId.cpp
+    src/core/KnownLanguageServers.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
     src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp)
@@ -103,7 +104,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerLanguageServer.cpp src/application/ServerCommand.cpp
     src/application/EditorControllerLanguageDocuments.cpp src/application/DocumentUri.cpp
     src/application/EditorControllerLanguageRequests.cpp src/application/InsertCompletion.cpp
-    src/application/EditorControllerLanguageQueries.cpp
+    src/application/EditorControllerLanguageQueries.cpp src/application/EditorControllerLanguageServerRows.cpp
     src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
@@ -249,6 +250,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/LanguageServerSlotTests.cpp
+    tests/unit/LanguageServerCandidateTests.cpp
     tests/unit/TitleBarLayoutPropertyTests.cpp
     tests/unit/GridCellsPropertyTests.cpp
     tests/unit/UtfPropertyTests.cpp
@@ -303,7 +305,8 @@ nenenib_target(nenenib_adapters adapters_win32 STATIC
     src/adapters/win32/OverlappedDrain.cpp src/adapters/win32/PipeRead.cpp src/adapters/win32/PipeWrite.cpp
     src/adapters/win32/ServerCommandLine.cpp
     src/adapters/win32/InheritedHandles.cpp src/adapters/win32/ServerChild.cpp
-    src/adapters/win32/Win32LanguageServer.cpp)
+    src/adapters/win32/Win32LanguageServer.cpp
+    src/adapters/win32/ServerSearch.cpp src/adapters/win32/ServerSearchShelf.cpp src/adapters/win32/Win32LanguageServerSearch.cpp)
 nenenib_link(nenenib_adapters nenenib_core)
 nenenib_link(nenenib_adapters nenenib_application)
 # RegGetValueW（OS のテーマ読み取り）とエクスプローラーへの登録の Reg*（ADR 0178）。ここが advapi32 を結ぶ唯一のモジュール。
@@ -373,6 +376,17 @@ nenenib_link(nib_start_list_tests nenenib_application)
 nenenib_link(nib_start_list_tests nenenib_adapters)
 add_test(NAME nib_start_lists COMMAND nib_start_list_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 set_tests_properties(nib_start_lists PROPERTIES TIMEOUT 60)
+
+# Issue #1945（LSP 段 S4）: 言語サーバーの探し（Win32LanguageServerSearch）を、作った一時のフォルダを置き場に
+# して本物のワーカー 1 本で測る（本物の PATH に依らない）。時刻は読まず、合図の受け皿だけを待つので、止まらない
+# ときはこの制限時間で落ちる。`--system` はこの機械の置き場で探して見つかった物を出す道具（CTest に載せない）。
+nenenib_target(nib_server_search_tests adapter_tests EXECUTABLE tests/adapters/ServerSearchAdapterTests.cpp
+    tests/adapters/TemporaryTestDirectory.cpp)
+nenenib_link(nib_server_search_tests nenenib_core)
+nenenib_link(nib_server_search_tests nenenib_application)
+nenenib_link(nib_server_search_tests nenenib_adapters)
+add_test(NAME nib_server_searches COMMAND nib_server_search_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+set_tests_properties(nib_server_searches PROPERTIES TIMEOUT 60)
 
 # Issue #515: 自動退避の置き場を本物のフォルダとワーカー 1 本で測る（ADR 0137 の決定 8）。時刻は読まず、
 # 合図の受け皿だけを待つので、止まらないときはこの制限時間で落ちる。

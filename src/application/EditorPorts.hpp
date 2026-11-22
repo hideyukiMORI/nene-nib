@@ -14,6 +14,7 @@
 #include "HistoryPort.hpp"
 #include "ImagePort.hpp"
 #include "LanguageServerPort.hpp"
+#include "LanguageServerSearchPort.hpp"
 #include "LinkOpenPort.hpp"
 #include "MarkdownPort.hpp"
 #include "PreviewPort.hpp"
@@ -86,5 +87,8 @@ struct EditorPorts
     // プレビューのリンク（web と mail）を OS の既定の道に渡す（施主決定 D105・#1869 の段 L2）。
     // 札で開くときと、頼んだ後の合図のときだけ呼ぶ。
     LinkOpenPort &links;
+    // PC の中の言語サーバーを裏で探す（LSP 段 S4・#1945）。設定の面を開いたときと、頼んだ後の合図の
+    // ときだけ呼び、起動・開く・切り替え・保存・打鍵の道では呼ばない。
+    LanguageServerSearchPort &language_server_search;
 };
 } // namespace nenenib::application

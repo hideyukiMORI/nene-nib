@@ -48,6 +48,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -561,6 +562,7 @@ void verify_open_failure_adds_no_tab()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageServerSearch language_server_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -573,7 +575,7 @@ void verify_open_failure_adds_no_tab()
                     fonts,           bell,        markdown,     reads,
                     language_server, wall_clock,  printer,      shell_registration,
                     images,          start_lists, ui_language,  project_search,
-                    previews,        reveal,      links},
+                    previews,        reveal,      links,        language_server_search},
         nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }
@@ -1200,6 +1202,7 @@ void verify_recent_after_startup()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageServerSearch language_server_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -1212,7 +1215,7 @@ void verify_recent_after_startup()
                     fonts,           bell,        markdown,     reads,
                     language_server, wall_clock,  printer,      shell_registration,
                     images,          start_lists, ui_language,  project_search,
-                    previews,        reveal,      links},
+                    previews,        reveal,      links,        language_server_search},
         nenenib::core::Distribution::unpackaged,
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});

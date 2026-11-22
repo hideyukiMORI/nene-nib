@@ -98,6 +98,6 @@ void Direct2DRenderer::draw_settings(const application::EditorFrame &frame,
                                  settings_layouts_);
     settings_area_ = area;
     settings_layout_ = painter.arranged(view, area);
-    painter.paint(view, settings_layout_.value(), frame.palette, frame.body.error);
+    painter.paint(view, settings_layout_.value(), frame.palette, frame.body);
 }
 } // namespace nenenib::ui::win32

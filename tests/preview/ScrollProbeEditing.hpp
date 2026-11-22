@@ -19,6 +19,7 @@
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -67,7 +68,7 @@ class ScrollProbeEditing final
             fonts_,           bell_,        markdown_,    reads_,
             language_server_, wall_clock_,  printer_,     shell_registration_,
             images_,          start_lists_, ui_language_, project_search_,
-            previews_,        reveal_,      links_};
+            previews_,        reveal_,      links_,       language_server_search_};
     }
 
     ScriptedAppearance appearance_{Reading{core::Appearance::dark}};
@@ -97,6 +98,7 @@ class ScrollProbeEditing final
     ScriptedPreview previews_;
     ScriptedReveal reveal_;
     ScriptedLinkOpen links_;
+    ScriptedLanguageServerSearch language_server_search_;
     application::EditorController controller_;
 };
 } // namespace nenenib::tests::preview

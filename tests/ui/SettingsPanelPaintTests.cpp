@@ -14,6 +14,8 @@
 #include "EditMode.hpp"
 #include "EditorFeature.hpp"
 #include "EditorOperation.hpp"
+#include "LanguageServerRowAction.hpp"
+#include "LanguageServerRowState.hpp"
 #include "LayoutRect.hpp"
 #include "OperationBindings.hpp"
 #include "OperationShortcut.hpp"
@@ -38,6 +40,7 @@
 #include "SettingsValue.hpp"
 #include "SettingsView.hpp"
 #include "SoftwareTarget.hpp"
+#include "SyntaxPalette.hpp"
 #include "WindowChecks.hpp"
 
 #include <windows.h>
@@ -72,7 +75,20 @@ constexpr std::int32_t shown_top = 10;
 constexpr std::int32_t wide_width = 1280;
 constexpr std::int32_t narrow_width = 520;
 constexpr core::RgbColor heavy{255, 107, 107};
+// 言語サーバーの節の状態の色（構文の色の string と warning・#1945）。
+constexpr core::RgbColor good{143, 209, 158};
+constexpr core::RgbColor notable{242, 197, 92};
 constexpr core::RgbColor black{0, 0, 0};
+
+// 本文の構文の色（使うのは error・string・warning の 3 つ）。
+[[nodiscard]] core::SyntaxPalette body_colors() noexcept
+{
+    core::SyntaxPalette body{};
+    body.error = heavy;
+    body.string = good;
+    body.warning = notable;
+    return body;
+}
 // 見本の行: 配色（選ぶ欄）・折り返し（オン）・操作の案内（オフ）・字の大きさ（段の上下）・括弧の
 // 相手（常にオン・low）・言語サーバー（オン・high・裏）。
 constexpr std::size_t wrap_row = 1;
@@ -185,7 +201,7 @@ class PanelStrip final
             [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
             {
                 SettingsPanelPainter painter(surface, *brush, text_, layouts_);
-                painter.paint(view, layout, palette_, heavy);
+                painter.paint(view, layout, palette_, body_colors());
             });
     }
     // 見えている行 row の上端が bitmap の shown_top に来る帯の上端。
@@ -288,6 +304,50 @@ void verify_tiers(const PanelStrip &strip, const core::Palette &palette)
                painted_with(low, fixed, palette.panel) <
                    static_cast<std::size_t>(core::width_of(fixed) * core::height_of(fixed)),
            "a low tier draws a muted dot and an always-on row writes words instead of a switch");
+}
+
+// 「言語サーバー」の節の行（#1945）: 「使う」は accent の枠と字・動いている状態の語は構文の色の
+// string・見つかった状態は warning・押す物の無い行はボタンを描かない・焦点の行は accent の枠。
+void verify_servers(const PanelStrip &strip, const core::Palette &palette)
+{
+    using State = app::LanguageServerRowState;
+    using Action = app::LanguageServerRowAction;
+    auto view = sample_view(std::nullopt);
+    view.servers = {
+        {"C / C++", "clangd", State::running, R"(C:\LLVM\bin\clangd.exe)", true, Action::remove},
+        {"Python", "pyright-langserver", State::found, R"(C:\npm\langserver.js)", true,
+         Action::use},
+        {"Go", "gopls", State::missing, "go install gopls", true, Action::none}};
+    view.servers_hidden = 2;
+    const std::size_t first = view.rows.size();
+    const auto top = strip.top_showing(view, wide_width, first);
+    const auto layout = strip.layout_of(view, wide_width, top);
+    const auto pixels = strip(view, wide_width, top);
+    const auto &running = PanelStrip::row_box(layout, first);
+    expect(painted_with(pixels, running.box, good) > 0 &&
+               painted_with(pixels, core::settings_control_box(layout, running), palette.accent) ==
+                   0,
+           "a running server writes its state in the string color and Remove has no accent");
+    const auto found_top = strip.top_showing(view, wide_width, first + 1);
+    const auto found_layout = strip.layout_of(view, wide_width, found_top);
+    const auto found = strip(view, wide_width, found_top);
+    const auto &usable = PanelStrip::row_box(found_layout, first + 1);
+    const auto button = core::settings_control_box(found_layout, usable);
+    expect(painted_with(found, usable.box, notable) > 0 &&
+               pixel_is(found, button.left, (button.top + button.bottom) / 2, palette.accent),
+           "a found server is written in the warning color and Use has an accent frame");
+    const auto missing_top = strip.top_showing(view, wide_width, first + 2);
+    const auto missing_layout = strip.layout_of(view, wide_width, missing_top);
+    const auto &missing = PanelStrip::row_box(missing_layout, first + 2);
+    expect(core::width_of(core::settings_control_box(missing_layout, missing)) == 0 &&
+               painted_with(strip(view, wide_width, missing_top), missing.box, palette.accent) == 0,
+           "a missing server has no button");
+    auto focused = view;
+    focused.focused = first + 1;
+    const auto ringed = strip(focused, wide_width, found_top);
+    expect(pixel_is(ringed, usable.box.left + 20, usable.box.top, palette.accent) &&
+               pixel_is(ringed, usable.box.left + 5, usable.box.top + 28, palette.current_line),
+           "the focused language row has the current line face inside an accent frame");
 }
 
 // 細い窓（700 DIP 未満）は全幅で、`:set` の名前を描かない。
@@ -409,6 +469,7 @@ void verify_settings_panel_paint()
         verify_rows(strip, palette);
         verify_tiers(strip, palette);
         verify_narrow(strip, palette);
+        verify_servers(strip, palette);
     }
 }
 } // namespace nenenib::tests::ui

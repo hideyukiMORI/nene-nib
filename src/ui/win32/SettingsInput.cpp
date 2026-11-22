@@ -84,13 +84,20 @@ constexpr unsigned char continuation_mark = 0x80;
     return {application::StepSettings{down}};
 }
 
-// 行のクリックは焦点を置き、スイッチの行はどこを押しても切り替える。選ぶ欄は欄を押すと次の値、
-// 段の上下は − と ＋。
+// 見えている行 row が「ほかの N 言語を見る」の 1 行か（行のどこを押しても開く・#1945）。
+[[nodiscard]] bool folds(const application::SettingsView &view, std::size_t row) noexcept
+{
+    return view.servers_hidden > 0 && row == view.rows.size() + view.servers.size();
+}
+
+// 行のクリックは焦点を置き、スイッチの行と畳みの行はどこを押しても切り替える。選ぶ欄は欄を押すと
+// 次の値、段の上下は − と ＋、言語サーバーの行の「使う」「外す」はボタンを押したときだけ。
 [[nodiscard]] SettingsIntents row_clicked(core::SettingsTarget target,
                                           const application::SettingsView &view)
 {
     SettingsIntents intents{application::FocusSettingsRow{target.index}};
-    if (target.part != core::SettingsPart::row || toggles(view, target.index))
+    if (target.part != core::SettingsPart::row || toggles(view, target.index) ||
+        folds(view, target.index))
     {
         intents.emplace_back(
             application::ChangeSetting{target.part != core::SettingsPart::row_minus});

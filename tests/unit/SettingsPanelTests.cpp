@@ -76,7 +76,7 @@ constexpr core::SettingsTextWidths short_widths{{40, 40, 40, 20, 40, 60}, {60, 6
                                         const core::LayoutRect &area, std::int32_t scroll)
 {
     return core::settings_layout(
-        core::SettingsLayoutRequest{area, dpi, rows, std::nullopt, short_widths, scroll});
+        core::SettingsLayoutRequest{area, dpi, rows, short_widths, scroll});
 }
 
 [[nodiscard]] std::size_t count_of(const core::SettingsLayout &layout, core::SettingsItemKind kind)
@@ -176,7 +176,7 @@ void verify_narrow()
     const auto edge = laid(rows, core::LayoutRect{0, 40, 700, 772}, 0);
     expect(!edge.narrow && edge.panel.left == 240, "700 DIP still shows the drawer");
     const auto scaled = core::settings_layout(core::SettingsLayoutRequest{
-        core::LayoutRect{0, 60, 1920, 1158}, 144, rows, 0, short_widths, 0});
+        core::LayoutRect{0, 60, 1920, 1158}, 144, rows, short_widths, 0});
     expect(scaled.panel.left == 1920 - 690 && !scaled.narrow &&
                core::height_of(row_item(scaled, 0).box) == 84,
            "at 150% the drawer and the rows scale with the DPI");
@@ -188,7 +188,7 @@ void verify_chip_wrap()
     const auto rows = every_row();
     const core::SettingsTextWidths wide{{120, 120, 120, 120, 120, 120}, {60, 60, 60}, 50, 40};
     const auto layout =
-        core::settings_layout(core::SettingsLayoutRequest{wide_area, dpi, rows, 0, wide, 0});
+        core::settings_layout(core::SettingsLayoutRequest{wide_area, dpi, rows, wide, 0});
     expect(layout.chips.at(1).top == layout.chips.at(0).top &&
                layout.chips.at(2).top == layout.chips.at(0).top + 32 &&
                layout.chips.at(2).left == layout.chips.at(0).left &&
@@ -286,9 +286,9 @@ void verify_hit()
            "a row scrolled out of the list is not hit");
 }
 
-// 当たる行が無ければ 1 行の知らせだけ。言語サーバーの節は行を持たず、見出しの下に命令の行（無ければ
-// 「行がありません」の 1 行）が並ぶ。絞っている間（値なし）は節ごと出さない。
-void verify_empty_and_commands()
+// 当たる行が無ければ 1 行の知らせだけ。「言語サーバー」の節の行（#1945）は表の行の後ろに見出しと
+// 並び、「使う」「外す」は 72 × 28 のボタン・押す物の無い行は幅 0・畳みの行は 36 DIP。
+void verify_empty_and_servers()
 {
     const auto none = laid({}, wide_area, 0);
     expect(none.items.size() == 1 && none.items.front().kind == core::SettingsItemKind::empty &&
@@ -296,24 +296,61 @@ void verify_empty_and_commands()
            "no visible row leaves one line for the message");
     const auto rows = every_row();
     const auto headings = count_of(laid(rows, wide_area, 0), core::SettingsItemKind::heading);
-    const auto served = core::settings_layout(
-        core::SettingsLayoutRequest{wide_area, dpi, rows, 2, short_widths, 0});
-    const auto &heading = served.items.at(served.items.size() - 3);
-    expect(count_of(served, core::SettingsItemKind::command) == 2 &&
-               served.items.back().kind == core::SettingsItemKind::command &&
-               heading.kind == core::SettingsItemKind::heading &&
+    auto served_rows = rows;
+    for (const auto control :
+         {core::SettingsControl::action, core::SettingsControl::blank, core::SettingsControl::fold})
+    {
+        served_rows.push_back(
+            core::SettingsLayoutRow{core::SettingsSection::language_server, control});
+    }
+    const auto served = laid(served_rows, wide_area, 0);
+    const auto &heading = served.items.at(served.items.size() - 4);
+    const auto &action = row_item(served, rows.size());
+    const auto &blank = row_item(served, rows.size() + 1);
+    const auto &fold = row_item(served, rows.size() + 2);
+    const auto button = core::settings_control_box(served, action);
+    expect(heading.kind == core::SettingsItemKind::heading &&
                heading.index == std::to_underlying(core::SettingsSection::language_server) &&
                count_of(served, core::SettingsItemKind::heading) == headings + 1 &&
-               count_of(served, core::SettingsItemKind::no_commands) == 0,
-           "the command lines follow the language server heading after the rows");
-    // 要約の 1 行目が箱に入り切らなければ、箱は 1 行ぶん（17 DIP）高い（文を 2 行に折る）。
+               count_of(served, core::SettingsItemKind::row) == rows.size() + 3,
+           "the language server rows follow their heading after the table rows");
+    expect(core::width_of(button) == 72 && core::height_of(button) == 28 &&
+               button.right == action.box.right - 12 &&
+               core::width_of(core::settings_control_box(served, blank)) == 0 &&
+               core::height_of(action.box) == 56 && core::height_of(fold.box) == 36,
+           "Use and Remove are 72 x 28 DIP, a row without one has no box and the fold row is low");
+    // 当たりは行の領域に見えているときだけなので、節が見える所まで送ってから引く。
+    const auto at_end = laid(served_rows, wide_area, served.scroll_limit);
+    const auto &shown_action = row_item(at_end, rows.size());
+    expect(hit_centre(at_end, core::settings_control_box(at_end, shown_action)) ==
+                   core::SettingsTarget{core::SettingsPart::row_value, rows.size()} &&
+               core::settings_hit(at_end, shown_action.box.left + 20, shown_action.box.top + 20) ==
+                   core::SettingsTarget{core::SettingsPart::row, rows.size()} &&
+               hit_centre(at_end, row_item(at_end, rows.size() + 2).box) ==
+                   core::SettingsTarget{core::SettingsPart::row, rows.size() + 2},
+           "the button is hit on its box and the rest of the row only takes the focus");
+    // 札と Ctrl+6 は節の見出しから終わりまでを見せる送りで着く。
+    const core::LayoutRect small{0, 40, 1280, 440};
+    const auto top = laid(served_rows, small, 0);
+    const auto revealed =
+        core::settings_scroll_revealing_section(top, core::SettingsSection::language_server);
+    const auto shown = laid(served_rows, small, revealed);
+    expect(revealed == top.scroll_limit && shown.items.back().box.bottom <= shown.list.bottom &&
+               shown.items.at(shown.items.size() - 4).box.top >= shown.list.top,
+           "a section is revealed from its heading to its last line");
+}
+
+// 要約の 1 行目が箱に入り切らなければ、箱は 1 行ぶん（17 DIP）高い（文を 2 行に折る）。
+void verify_summary_height()
+{
+    const auto rows = every_row();
     auto long_widths = short_widths;
     long_widths.estimate = 392;
-    const auto tall = core::settings_layout(
-        core::SettingsLayoutRequest{wide_area, dpi, rows, std::nullopt, long_widths, 0});
+    const auto tall =
+        core::settings_layout(core::SettingsLayoutRequest{wide_area, dpi, rows, long_widths, 0});
     long_widths.estimate = 391;
-    const auto fitting = core::settings_layout(
-        core::SettingsLayoutRequest{wide_area, dpi, rows, std::nullopt, long_widths, 0});
+    const auto fitting =
+        core::settings_layout(core::SettingsLayoutRequest{wide_area, dpi, rows, long_widths, 0});
     const auto summary_of = [](const core::SettingsLayout &layout)
     {
         return std::ranges::find(layout.items, core::SettingsItemKind::summary,
@@ -323,30 +360,6 @@ void verify_empty_and_commands()
     expect(core::height_of(summary_of(tall)) == 113 && core::height_of(summary_of(fitting)) == 96 &&
                core::width_of(summary_of(tall)) == 391 + 24,
            "a summary line wider than its box makes the box one line taller");
-    const auto bare = core::settings_layout(
-        core::SettingsLayoutRequest{wide_area, dpi, rows, 0, short_widths, 0});
-    expect(count_of(bare, core::SettingsItemKind::command) == 0 &&
-               bare.items.back().kind == core::SettingsItemKind::no_commands &&
-               count_of(bare, core::SettingsItemKind::heading) == headings + 1,
-           "without a command the section holds one line that says so");
-    const auto filtered = laid(rows, wide_area, 0);
-    expect(count_of(filtered, core::SettingsItemKind::command) == 0 &&
-               count_of(filtered, core::SettingsItemKind::no_commands) == 0 &&
-               filtered.items.back().kind == core::SettingsItemKind::row,
-           "the language server section is hidden while the rows are filtered");
-    // 行を持たない節は、札と Ctrl+6 が見出しから終わりまでを見せる送りで着く。
-    const core::LayoutRect small{0, 40, 1280, 440};
-    const auto top =
-        core::settings_layout(core::SettingsLayoutRequest{small, dpi, rows, 2, short_widths, 0});
-    const auto revealed =
-        core::settings_scroll_revealing_section(top, core::SettingsSection::language_server);
-    const auto shown = core::settings_layout(
-        core::SettingsLayoutRequest{small, dpi, rows, 2, short_widths, revealed});
-    expect(revealed == top.scroll_limit && shown.items.back().box.bottom <= shown.list.bottom &&
-               shown.items.at(shown.items.size() - 3).box.top >= shown.list.top &&
-               core::settings_scroll_revealing_section(laid(rows, small, 0),
-                                                       core::SettingsSection::language_server) == 0,
-           "a section without rows is revealed from its heading to its last line");
 }
 
 [[nodiscard]] const app::SettingsView &panel_of(const app::EditorFrame &frame)
@@ -365,8 +378,11 @@ void verify_intents()
     expect(panel_of(focused).focused == std::optional<std::size_t>{3},
            "FocusSettingsRow puts the focus on the visible row");
     const auto last = controller.apply_frame(app::FocusSettingsRow{1000});
-    expect(panel_of(last).focused == std::optional{panel_of(last).rows.size() - 1},
-           "a row past the end focuses the last row");
+    const auto &shown = panel_of(last);
+    const std::size_t total =
+        shown.rows.size() + shown.servers.size() + (shown.servers_hidden > 0 ? 1 : 0);
+    expect(shown.focused == std::optional{total - 1},
+           "a row past the end focuses the last row (the language server fold row)");
     const auto scrolled = controller.apply_frame(app::ScrollSettings{120});
     const auto clamped = controller.apply_frame(app::ScrollSettings{-4});
     expect(panel_of(scrolled).scroll == 120 && panel_of(clamped).scroll == 0 &&
@@ -407,7 +423,8 @@ void verify_settings_panel_scope()
     verify_chip_wrap();
     verify_scroll();
     verify_hit();
-    verify_empty_and_commands();
+    verify_empty_and_servers();
+    verify_summary_height();
     verify_intents();
     verify_operation();
 }
