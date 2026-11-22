@@ -137,3 +137,7 @@
 ## 追補（2026-11-22・#1947）: `&` 参照
 
 記号の表（決定 2）に `&`（`PaletteScope::references`・案内の名前「参照」）を 1 行足す。C++ の参照の印。候補の印は `PaletteOrigin::reference` で、`files` には混ぜない。候補を作るのは controller の `append_reference_choices`（面を開くときに 1 回・最後に届いた言語サーバーの参照の答えから）、確定は診断と同じ `CommandChoiceKind::land`（出どころで分ける）。中身は ADR 0191 の決定 4。
+
+## 追補（2026-11-22・#1955）: `%` 記号
+
+記号の表（決定 2）に `%`（`PaletteScope::symbols`・案内の名前「記号」）を 1 行足す。Vim の Ex で今のファイルを指す `%` で、この一覧も今の文書の記号だけ。候補の印は `PaletteOrigin::symbol` で、`files` には混ぜない。候補を作るのは controller の `append_symbol_choices`（面を開くときに 1 回・最後に届いた言語サーバーの記号の答えから）、確定は参照と同じ `CommandChoiceKind::land`。中身は ADR 0191 の決定 5。

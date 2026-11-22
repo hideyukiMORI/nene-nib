@@ -247,7 +247,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspSyncPropertyTests.cpp
     tests/unit/LspFramesPropertyTests.cpp
     tests/unit/SubstitutePropertyTests.cpp
-    tests/unit/LspDiagnosticsTests.cpp tests/unit/DiagnosticJumpTests.cpp tests/unit/LspReferencesTests.cpp
+    tests/unit/LspDiagnosticsTests.cpp tests/unit/DiagnosticJumpTests.cpp tests/unit/LspReferencesTests.cpp tests/unit/LspSymbolsTests.cpp
     tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/LanguageServerSlotTests.cpp

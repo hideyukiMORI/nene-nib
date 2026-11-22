@@ -23,10 +23,11 @@ using Pending = std::pair<const JsonValue *, std::string>;
 
 // `SymbolKind` の 1〜26 の名前（LSP 3.17）。
 constexpr std::array<std::string_view, 26> kind_marks{
-    {"file",     "module",    "namespace", "package",     "class",    "method",       "property",
-     "field",    "constructor", "enum",    "interface",   "function", "variable",     "constant",
-     "string",   "number",    "boolean",   "array",       "object",   "key",          "null",
-     "enum member", "struct", "event",     "operator",    "type parameter"}};
+    {"file",     "module",        "namespace",   "package",     "class",     "method",
+     "property", "field",         "constructor", "enum",        "interface", "function",
+     "variable", "constant",      "string",      "number",      "boolean",   "array",
+     "object",   "key",           "null",        "enum member", "struct",    "event",
+     "operator", "type parameter"}};
 constexpr std::string_view unknown_kind_mark = "symbol";
 
 // 跳ぶ先の範囲。平らな答えは location.range、階層の答えは selectionRange（無ければ range）。
@@ -41,7 +42,8 @@ constexpr std::string_view unknown_kind_mark = "symbol";
 }
 
 // 記号 1 つ。親の名前は `containerName` が先、無ければ階層の親。
-[[nodiscard]] std::optional<LspSymbol> symbol_of(const JsonObject &object, const std::string &parent)
+[[nodiscard]] std::optional<LspSymbol> symbol_of(const JsonObject &object,
+                                                 const std::string &parent)
 {
     const std::string *name = json_text_member(object, "name");
     const auto range = symbol_range(object);
@@ -73,7 +75,8 @@ void push_children(std::vector<Pending> &pending, const JsonObject &object, cons
 }
 } // namespace
 
-std::expected<std::vector<LspSymbol>, LspAnswerFailure> lsp_document_symbols(const JsonValue &result)
+std::expected<std::vector<LspSymbol>, LspAnswerFailure>
+lsp_document_symbols(const JsonValue &result)
 {
     std::vector<LspSymbol> symbols;
     if (std::holds_alternative<JsonNull>(result.value))

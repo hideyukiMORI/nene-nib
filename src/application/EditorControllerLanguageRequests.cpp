@@ -25,10 +25,10 @@
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
-#include "PendingLspContext.hpp"
-#include "PendingLspRequest.hpp"
 #include "LspSymbol.hpp"
 #include "LspSymbols.hpp"
+#include "PendingLspContext.hpp"
+#include "PendingLspRequest.hpp"
 #include "ServerAbilities.hpp"
 
 #include <algorithm>
@@ -160,9 +160,10 @@ references_answer(const PendingLspRequest &request, const core::LspResponse &res
 }
 
 // 記号の答え（#1955・ADR 0191 の決定 5）。照合は定義と同じ。誤りの答えと読めない答えは空の列。
-[[nodiscard]] std::optional<LanguageSymbols>
-symbols_answer(const PendingLspRequest &request, const core::LspResponse &response,
-               const LspRequestContext &current, core::LspPositionEncoding encoding)
+[[nodiscard]] std::optional<LanguageSymbols> symbols_answer(const PendingLspRequest &request,
+                                                            const core::LspResponse &response,
+                                                            const LspRequestContext &current,
+                                                            core::LspPositionEncoding encoding)
 {
     const auto *context = std::get_if<LspRequestContext>(&request.context);
     if (context == nullptr || !(*context == current))

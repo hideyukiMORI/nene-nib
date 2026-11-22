@@ -328,6 +328,18 @@ EditorController::palette_reference_of(const core::CommandChoice &choice) const
     return listed->at(index.value());
 }
 
+// 跳ぶ候補を選ぶ（CommandChoiceKind::land）。参照と記号はここ、ほかは診断（#1939）。
+void EditorController::land_palette_choice(const core::CommandChoice &choice)
+{
+    if (choice.origin == std::optional{core::PaletteOrigin::reference} ||
+        choice.origin == std::optional{core::PaletteOrigin::symbol})
+    {
+        land_palette_reference(choice);
+        return;
+    }
+    land_palette_diagnostic(choice);
+}
+
 // 候補を選ぶ（決定 4・5）。面を閉じ、定義と同じ着地の 1 本（開いていなければ開いてから・`''`
 // を置く）。
 void EditorController::land_palette_reference(const core::CommandChoice &choice)

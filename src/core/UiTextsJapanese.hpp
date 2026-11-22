@@ -158,6 +158,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_list_references_name, "参照の一覧"},
     {UiMessage::operation_list_references_description,
      "キャレットの位置の名前を使っている所を言語サーバーに聞き、Ctrl+P の一覧で見ます"},
+    {UiMessage::operation_list_symbols_name, "記号の一覧"},
+    {UiMessage::operation_list_symbols_description,
+     "今の文書の関数や型などの記号を言語サーバーに聞き、Ctrl+P の一覧で見ます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -423,5 +426,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_references_not_found, "参照が見つかりません"},
     {UiMessage::notice_references_not_supported, "この言語サーバーは参照に答えません"},
     {UiMessage::notice_references_first_of, "参照 {1} 件のうち {0} 件を出しています"},
+    {UiMessage::palette_mark_symbols, "記号"},
+    {UiMessage::notice_symbols_not_found, "記号が見つかりません"},
+    {UiMessage::notice_symbols_not_supported, "この言語サーバーは記号に答えません"},
 }};
 } // namespace nenenib::core

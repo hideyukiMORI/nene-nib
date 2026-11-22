@@ -291,8 +291,8 @@ void verify_list_and_landing()
     expect(rows.at(0).label.text() == "main.cpp:1:5" && first.has_value() &&
                first.value().text() == "int main() {}" &&
                rows.at(1).label.text() == "main.cpp:2:9" &&
-               rows.at(2).label.text() == "two.cpp:3:10" && !rows.at(2).detail.has_value(),
-           "open tabs show the line; a file not open shows only file:line:column");
+               rows.at(2).label.text() == "two.cpp:3" && !rows.at(2).detail.has_value(),
+           "open tabs show the line; a file not open shows only file:line");
     const auto landed = editing.controller().apply_frame(app::ActivateCommandChoice{2});
     expect(!landed.command_palette.has_value() && caret_on(landed, 3, 10),
            "choosing a reference in a file not open opens it and lands on the reference");
@@ -386,8 +386,8 @@ void verify_limit_and_foreign()
            "a cut answer says how many places it had");
 }
 
-// 位置の単位は答えた席の単位。開いているタブは本文で行と桁を写し、開いていないファイルは答えの
-// 文字の位置 + 1 の桁（複数バイトの行ではずれる・跳んだ先は本文で写すので正しい）。
+// 位置の単位は答えた席の単位。開いているタブは本文で行と桁を写し、開いていないファイルは桁を
+// 出さない（答えの単位では複数バイトの行でずれる・#1955・跳んだ先は本文で写すので正しい）。
 void verify_encodings_and_wide_lines()
 {
     constexpr std::string_view wide_main = "int main() {}\n/*\xE3\x81\x82\xE3\x81\x84*/ main();\n";
@@ -405,8 +405,8 @@ void verify_encodings_and_wide_lines()
         return;
     }
     const auto &rows = listed.command_palette.value().rows;
-    expect(rows.at(0).label.text() == "main.cpp:2:8" && rows.at(1).label.text() == "two.cpp:3:8",
-           "the open tab counts the column in the text and the file not open uses the answer");
+    expect(rows.at(0).label.text() == "main.cpp:2:8" && rows.at(1).label.text() == "two.cpp:3",
+           "the open tab counts the column in the text and the file not open shows no column");
     expect(caret_on(editing.controller().apply_frame(app::ActivateCommandChoice{1}), 3, 8),
            "the reference in the file not open lands on the name after opening it");
 

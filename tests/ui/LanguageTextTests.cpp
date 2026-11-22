@@ -427,7 +427,7 @@ void verify_palette_notes_at(const Pen &pen, const Pen &bold, const core::Palett
                                   core::PaletteOrigin::bookmark, core::PaletteOrigin::history,
                                   core::PaletteOrigin::folder, core::PaletteOrigin::document_format,
                                   core::PaletteOrigin::project_hit, core::PaletteOrigin::diagnostic,
-                                  core::PaletteOrigin::reference})
+                                  core::PaletteOrigin::reference, core::PaletteOrigin::symbol})
         {
             expect_fits_in(pen, note, Said{language, core::palette_origin_label(origin, language)},
                            "the palette row note fits its 112 DIP frame");

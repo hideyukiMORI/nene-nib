@@ -165,6 +165,10 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_list_references_name, "List references"},
     {UiMessage::operation_list_references_description,
      "Ask the language server where the name at the caret is used and see it in the Ctrl+P list"},
+    {UiMessage::operation_list_symbols_name, "List symbols"},
+    {UiMessage::operation_list_symbols_description,
+     "Ask the language server for the functions, types and other symbols of this document and see "
+     "them in the Ctrl+P list"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -446,5 +450,8 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_references_not_found, "No references found"},
     {UiMessage::notice_references_not_supported, "This language server does not answer references"},
     {UiMessage::notice_references_first_of, "Showing {0} of {1} references"},
+    {UiMessage::palette_mark_symbols, "Symbols"},
+    {UiMessage::notice_symbols_not_found, "No symbols found"},
+    {UiMessage::notice_symbols_not_supported, "This language server does not answer symbols"},
 }};
 } // namespace nenenib::core

@@ -12,6 +12,8 @@ enum class LanguageQueryKind : std::uint8_t
     definition,
     hover,
     // 参照の一覧（#1947・ADR 0191 の決定 4）。Vim の `grr` と操作「参照の一覧」。
-    references
+    references,
+    // 記号の一覧（#1955・ADR 0191 の決定 5）。Vim の `gO` と操作「記号の一覧」。
+    symbols
 };
 } // namespace nenenib::core

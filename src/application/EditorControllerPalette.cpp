@@ -264,6 +264,7 @@ void EditorController::open_palette(std::string_view input, std::size_t selected
     auto entries = palette_entries(bookmarks.value_or(FileBookmarks{}));
     append_diagnostic_choices(entries);
     append_reference_choices(entries);
+    append_symbol_choices(entries);
     request_folder(entries);
     state_ = state_.with_command_input(
         core::CommandPalette::opened(
@@ -463,12 +464,13 @@ bool EditorController::bookmark_toggle_allowed() const
     const auto *palette = std::get_if<core::CommandPalette>(&input.value());
     // 設定のコマンド（:）と操作の一覧（?）の面にはファイルが無いので、何も出さず何もしない。
     // 全文検索（!）の当たりの行と診断（^）の行はブックマークの対象ではない（ADR 0167・設計席の決め
-    // 2026-11-16・#1939）。参照（&）の行も同じ（#1947）。
+    // 2026-11-16・#1939）。参照（&）と記号（%）の行も同じ（#1947・#1955）。
     return palette != nullptr && palette->scope() != core::PaletteScope::commands &&
            palette->scope() != core::PaletteScope::operations &&
            palette->scope() != core::PaletteScope::project_hits &&
            palette->scope() != core::PaletteScope::diagnostics &&
-           palette->scope() != core::PaletteScope::references;
+           palette->scope() != core::PaletteScope::references &&
+           palette->scope() != core::PaletteScope::symbols;
 }
 
 void EditorController::accept(const ToggleBookmark &)
@@ -570,13 +572,8 @@ void EditorController::submit_palette(const core::CommandPalette &palette)
         }
         return;
     case core::CommandChoiceKind::land:
-        // 参照（#1947）と診断（#1939）は出どころで分ける。
-        if (choice.origin == std::optional{core::PaletteOrigin::reference})
-        {
-            land_palette_reference(choice);
-            return;
-        }
-        land_palette_diagnostic(choice);
+        // 参照（#1947）・記号（#1955）と診断（#1939）は出どころで分ける。
+        land_palette_choice(choice);
         return;
     case core::CommandChoiceKind::fill:
         break;

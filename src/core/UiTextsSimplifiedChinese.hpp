@@ -146,6 +146,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_list_references_name, "引用列表"},
     {UiMessage::operation_list_references_description,
      "向语言服务器查询光标处名称的使用位置，并在 Ctrl+P 列表中查看"},
+    {UiMessage::operation_list_symbols_name, "符号列表"},
+    {UiMessage::operation_list_symbols_description,
+     "向语言服务器查询当前文档的函数、类型等符号，并在 Ctrl+P 列表中查看"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -392,5 +395,8 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_references_not_found, "找不到引用"},
     {UiMessage::notice_references_not_supported, "此语言服务器不提供引用"},
     {UiMessage::notice_references_first_of, "显示 {1} 个引用中的 {0} 个"},
+    {UiMessage::palette_mark_symbols, "符号"},
+    {UiMessage::notice_symbols_not_found, "找不到符号"},
+    {UiMessage::notice_symbols_not_supported, "此语言服务器不提供符号"},
 }};
 } // namespace nenenib::core

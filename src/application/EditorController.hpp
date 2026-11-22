@@ -91,10 +91,10 @@
 #include "LanguageQueryKind.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
-#include "LanguageSymbols.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
 #include "LanguageServers.hpp"
+#include "LanguageSymbols.hpp"
 #include "LineEnding.hpp"
 #include "LineNumber.hpp"
 #include "LineView.hpp"
@@ -1050,9 +1050,10 @@ class EditorController final
     [[nodiscard]] std::optional<PaletteReference>
     palette_reference_of(const core::CommandChoice &choice) const;
     void land_palette_reference(const core::CommandChoice &choice);
+    void land_palette_choice(const core::CommandChoice &choice);
     // 記号の一覧（#1955・ADR 0191 の決定 5・同じ EditorControllerReferences.cpp）。答えは
-    // held_symbols_ に控えて記号 `%` で開き、候補の指す所は参照と同じ形の palette_symbols_（選ぶ道と
-    // プレビュー欄は palette_reference_of が出どころで列を選ぶ 1 本）。
+    // held_symbols_ に控えて記号 `%` で開き、候補の指す所は参照と同じ形の
+    // palette_symbols_（選ぶ道と プレビュー欄は palette_reference_of が出どころで列を選ぶ 1 本）。
     void settle_symbols_answer();
     void append_symbol_choices(std::vector<core::CommandChoice> &entries);
     // 参照の答えを控えた文書を言語サーバーが閉じたら控えを捨てる（#1954 のレビュー R1）。
@@ -1065,6 +1066,7 @@ class EditorController final
                    const std::string &uri) const;
     // 言語サーバーは動いているが、アクティブな文書を受ける席がその能力を持たない（決定 2）。
     [[nodiscard]] bool lacks_ability(bool ServerAbilities::*ability) const;
+    [[nodiscard]] core::UiMessage unanswered_notice(core::LanguageQueryKind kind) const;
     // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2・EditorControllerLinkCard.cpp）。
     // 開くのは ClickPreviewLink、閉じるのは札の意図と入口の close_link_card_before（札の意図と
     // 使う人の操作でない意図のほか）。web と mail は LinkOpenPort、document は open_listed の 1

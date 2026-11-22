@@ -15,7 +15,7 @@ namespace nenenib::core
 {
 // 出どころの記号の表（ADR 0060 の決定 2）。載せるのは実装した出どころだけで、出どころを足すときは
 // ここに 1 行を足す。表に無い記号で始まる入力は files のただの検索の文字。
-inline constexpr std::array<PaletteMark, 9> palette_marks{{
+inline constexpr std::array<PaletteMark, 10> palette_marks{{
     {'#', PaletteScope::tabs, UiMessage::palette_mark_tabs},
     {'*', PaletteScope::bookmarks, UiMessage::label_bookmarks},
     {'@', PaletteScope::history, UiMessage::label_history},
@@ -27,6 +27,8 @@ inline constexpr std::array<PaletteMark, 9> palette_marks{{
     {'^', PaletteScope::diagnostics, UiMessage::palette_mark_diagnostics},
     // 言語サーバーの参照（#1947・ADR 0191 の決定 4）。C++ の参照の印の `&`。
     {'&', PaletteScope::references, UiMessage::palette_mark_references},
+    // 言語サーバーの記号（#1955・ADR 0191 の決定 5）。Vim の Ex で今のファイルの `%`。
+    {'%', PaletteScope::symbols, UiMessage::palette_mark_symbols},
 }};
 
 // 入力の先頭の 1 文字を表で引く。表にあればその出どころと残りの文字、無ければ files と入力の全体。

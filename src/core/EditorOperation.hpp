@@ -104,6 +104,9 @@ enum class EditorOperation : std::uint8_t
     list_diagnostics,
     // 参照の一覧（#1947・ADR 0191 の決定 4）。Shift+F12 で両モード（VS Code と同じ・Vim の NORMAL
     // の `grr` と同じ問い）。答えは Ctrl+P の一覧の記号 `&` で開く。
-    list_references
+    list_references,
+    // 記号の一覧（#1955・ADR 0191 の決定 5）。鍵なし（F1 の一覧から・Vim の NORMAL は
+    // `gO`）。答えは Ctrl+P の一覧の記号 `%` で開く。
+    list_symbols
 };
 } // namespace nenenib::core
