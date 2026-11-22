@@ -735,6 +735,8 @@ void EditorController::settle_transient()
     settle_project_search();
     // 参照・記号の候補を見せるときに作る（`&` `%` を打った・#1958 のレビュー R1）のも同じ出口。
     settle_listed_answers();
+    // 引数の情報の札が成り立たなくなったら消す（#1959・ADR 0191 の決定 6）のも同じ出口。
+    settle_signature_tip();
     // プレビュー欄の窓の要求と取消も同じ出口（選択の移動・面の閉じ・ADR 0189 の決定 4）。
     settle_finder_preview();
     // タブのメニューの帯の変わりも同じ出口（合図で読めないタブが外れた など・#1790）。
@@ -1406,6 +1408,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.tab_tip = shown_tab_tip();
     // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
     result.hover = shown_hover();
+    // 引数の情報の札（#1959・ADR 0191 の決定 6）。札が無いときの分岐は shown_signature の入口。
+    result.signature = shown_signature();
     // リンクの札（#1869 の段 L2）。見せている結果に同じリンクがある間だけ（shown_link_card
     // の入口）。
     result.link_card = shown_link_card();

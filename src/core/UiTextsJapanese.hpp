@@ -161,6 +161,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_list_symbols_name, "記号の一覧"},
     {UiMessage::operation_list_symbols_description,
      "今の文書の関数や型などの記号を言語サーバーに聞き、Ctrl+P の一覧で見ます"},
+    {UiMessage::operation_show_signature_help_name, "引数の情報を表示"},
+    {UiMessage::operation_show_signature_help_description,
+     "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -437,5 +440,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::palette_empty_symbols,
      "記号はまだありません。Vim の {0} か {1} の「{2}」で頼めます"},
     {UiMessage::palette_references_subject, "{0} の参照"},
+    {UiMessage::notice_signature_not_found, "引数の情報がありません"},
+    {UiMessage::notice_signature_not_supported, "この言語サーバーは引数の情報に答えません"},
 }};
 } // namespace nenenib::core

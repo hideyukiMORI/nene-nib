@@ -75,9 +75,11 @@ constexpr float unbounded_height = 100'000.0F;
 } // namespace
 
 IDWriteTextLayout *HoverTipLayout::fitted(IDWriteFactory &dwrite, IDWriteTextFormat *format,
-                                          std::string_view text, std::int32_t limit)
+                                          std::string_view text, std::int32_t limit,
+                                          DWRITE_TEXT_RANGE emphasis)
 {
-    if (layout_ && format_ == format && limit_ == limit && text_ == text)
+    if (layout_ && format_ == format && limit_ == limit && text_ == text &&
+        emphasis_.startPosition == emphasis.startPosition && emphasis_.length == emphasis.length)
     {
         return layout_.Get();
     }
@@ -91,7 +93,12 @@ IDWriteTextLayout *HoverTipLayout::fitted(IDWriteFactory &dwrite, IDWriteTextFor
     {
         return nullptr;
     }
+    if (emphasis.length > 0 && FAILED(whole->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, emphasis)))
+    {
+        return nullptr;
+    }
     layout_ = whole;
+    emphasis_ = emphasis;
     text_ = std::string(text);
     limit_ = limit;
     format_ = format;
@@ -122,5 +129,6 @@ void HoverTipLayout::clear() noexcept
     text_.clear();
     limit_ = 0;
     format_ = nullptr;
+    emphasis_ = DWRITE_TEXT_RANGE{0, 0};
 }
 } // namespace nenenib::ui::win32

@@ -149,6 +149,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_list_symbols_name, "符号列表"},
     {UiMessage::operation_list_symbols_description,
      "向语言服务器查询当前文档的函数、类型等符号，并在 Ctrl+P 列表中查看"},
+    {UiMessage::operation_show_signature_help_name, "显示参数信息"},
+    {UiMessage::operation_show_signature_help_description,
+     "向语言服务器查询光标处调用的参数，并显示在光标所在行的上方"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -403,5 +406,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_empty_references, "还没有引用。在名称上按 {0}（Vim 为 {1}）即可请求"},
     {UiMessage::palette_empty_symbols, "还没有符号。可在 Vim 中按 {0}，或在 {1} 中选择“{2}”"},
     {UiMessage::palette_references_subject, "{0} 的引用"},
+    {UiMessage::notice_signature_not_found, "没有参数信息"},
+    {UiMessage::notice_signature_not_supported, "此语言服务器不提供参数信息"},
 }};
 } // namespace nenenib::core

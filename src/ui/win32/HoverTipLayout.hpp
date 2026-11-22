@@ -26,8 +26,11 @@ class HoverTipLayout final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     // 収めた layout（作れなければ null）。所有はこの保持で、次の fitted か clear まで有効。
+    // emphasis は太字にする範囲（UTF-16・長さ 0 なら無し・引数の情報の札の今の引数・#1959）。範囲も
+    // 覚えの鍵に入る。
     [[nodiscard]] IDWriteTextLayout *fitted(IDWriteFactory &dwrite, IDWriteTextFormat *format,
-                                            std::string_view text, std::int32_t limit);
+                                            std::string_view text, std::int32_t limit,
+                                            DWRITE_TEXT_RANGE emphasis = {0, 0});
     // 最後に収めた layout の札を、キャレットの矩形 caret の上（入らなければ下）に領域 area の中で
     // 置いて描く値（置き場は core::hover_tip_rect・色は palette の panel / panel_border / text）。
     // layout が無ければ値なし。
@@ -41,6 +44,7 @@ class HoverTipLayout final
     std::string text_;
     std::int32_t limit_ = 0;
     IDWriteTextFormat *format_ = nullptr;
+    DWRITE_TEXT_RANGE emphasis_{0, 0};
     TextLayout layout_;
 };
 } // namespace nenenib::ui::win32

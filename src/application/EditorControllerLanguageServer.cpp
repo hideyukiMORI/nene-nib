@@ -84,6 +84,15 @@ namespace
     core::JsonObject symbols;
     symbols.emplace_back("hierarchicalDocumentSymbolSupport", core::JsonValue{true});
     text_document.emplace_back("documentSymbol", core::JsonValue{std::move(symbols)});
+    // 引数の情報は平文の説明と、引数の範囲を label の中の位置で受ける（#1959・ADR 0191 の決定 2）。
+    core::JsonObject parameter;
+    parameter.emplace_back("labelOffsetSupport", core::JsonValue{true});
+    core::JsonObject information;
+    information.emplace_back("documentationFormat", text_list({"plaintext"}));
+    information.emplace_back("parameterInformation", core::JsonValue{std::move(parameter)});
+    core::JsonObject signature;
+    signature.emplace_back("signatureInformation", core::JsonValue{std::move(information)});
+    text_document.emplace_back("signatureHelp", core::JsonValue{std::move(signature)});
     return core::JsonValue{std::move(text_document)};
 }
 
@@ -187,6 +196,37 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
     abilities.sync = sync_of_kind(core::json_count_of(value));
 }
 
+// 文字列の配列の欄 key（無い・配列でなければ空・文字列でない項目は捨てる）。
+[[nodiscard]] std::vector<std::string> texts_of(const core::JsonObject &object, std::string_view key)
+{
+    std::vector<std::string> texts;
+    const auto member = core::json_member(object, key);
+    const auto *list =
+        member.has_value() ? std::get_if<core::JsonArray>(&member.value().get().value) : nullptr;
+    for (const core::JsonValue &entry : list != nullptr ? *list : core::JsonArray{})
+    {
+        if (const auto *text = std::get_if<std::string>(&entry.value))
+        {
+            texts.push_back(*text);
+        }
+    }
+    return texts;
+}
+
+// `capabilities.signatureHelpProvider`（#1959・ADR 0191 の決定 2・6）。object があれば持ち、
+// `triggerCharacters` と `retriggerCharacters` を読む。
+void read_signature_help(ServerAbilities &abilities, const core::JsonObject &capabilities)
+{
+    const auto *options = core::json_object_member(capabilities, "signatureHelpProvider");
+    if (options == nullptr)
+    {
+        return;
+    }
+    abilities.signature_help = true;
+    abilities.signature_triggers = texts_of(*options, "triggerCharacters");
+    abilities.signature_retriggers = texts_of(*options, "retriggerCharacters");
+}
+
 // `capabilities` → サーバーの能力（ADR 0190 の決定 3）。補完は `completionProvider` の object が
 // あるときで、`triggerCharacters` の文字列だけを届いた順に持つ。
 [[nodiscard]] ServerAbilities server_abilities(const core::JsonObject *capabilities)
@@ -201,9 +241,13 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
                               .definition = provided(*capabilities, "definitionProvider"),
                               .references = provided(*capabilities, "referencesProvider"),
                               .document_symbols = provided(*capabilities, "documentSymbolProvider"),
+                              .signature_help = false,
+                              .signature_triggers = {},
+                              .signature_retriggers = {},
                               .sync = DocumentSync::none,
                               .save = SaveNotice::none};
     read_document_sync(abilities, *capabilities);
+    read_signature_help(abilities, *capabilities);
     const auto *completion = core::json_object_member(*capabilities, "completionProvider");
     if (completion == nullptr)
     {
@@ -283,6 +327,8 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
         return "textDocument/references";
     case LspRequestKind::document_symbol:
         return "textDocument/documentSymbol";
+    case LspRequestKind::signature_help:
+        return "textDocument/signatureHelp";
     }
     return "initialize";
 }
@@ -766,6 +812,7 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::definition:
     case LspRequestKind::references:
     case LspRequestKind::document_symbol:
+    case LspRequestKind::signature_help:
         receive_answer(slot, request, response);
         settle_language_answers(request.kind);
         return;
@@ -855,6 +902,7 @@ void EditorController::expire_lsp_request(LanguageServerSlot slot, const Pending
     case LspRequestKind::definition:
     case LspRequestKind::references:
     case LspRequestKind::document_symbol:
+    case LspRequestKind::signature_help:
         send_lsp_cancel(slot, request.id);
         return;
     }

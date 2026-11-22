@@ -488,6 +488,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::create_text_formats()
     tab_layouts_.clear();
     tab_tip_layout_.clear();
     hover_tip_layout_.clear();
+    signature_tip_layout_.clear();
     explorer_layouts_.clear();
     explorer_shapes_.clear();
     start_layouts_.clear();
@@ -2539,6 +2540,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // 札は面の上・右クリックのメニューの下（メニューが開いている間は出ない・#1789）。
     draw_tab_tip(frame, title);
     draw_hover_tip(frame, minimap.body);
+    // 引数の情報の札はキャレットの行の上（補完の面は下・hover の札とは同時に出ない・#1959）。
+    draw_signature_tip(frame, minimap.body);
     draw_link_card(frame, minimap.body);
     draw_context_menu(frame, width, height);
     gutter_layouts_.end();

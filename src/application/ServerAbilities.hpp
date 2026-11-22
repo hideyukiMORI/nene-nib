@@ -23,6 +23,11 @@ struct ServerAbilities
     bool references = false;
     // `documentSymbolProvider`（#1955・ADR 0191 の決定 2）。
     bool document_symbols = false;
+    // `signatureHelpProvider` と、その `triggerCharacters` `retriggerCharacters`（#1959・ADR 0191 の
+    // 決定 2・6・文字列だけを届いた順に）。
+    bool signature_help = false;
+    std::vector<std::string> signature_triggers = {};
+    std::vector<std::string> signature_retriggers = {};
     DocumentSync sync = DocumentSync::none;
     SaveNotice save = SaveNotice::none;
 };

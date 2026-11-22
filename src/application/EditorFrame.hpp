@@ -22,6 +22,7 @@
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "LinkCardView.hpp"
+#include "LspSignature.hpp"
 #include "MinimapFrame.hpp"
 #include "OperationGuide.hpp"
 #include "OtherFrame.hpp"
@@ -173,6 +174,10 @@ struct EditorFrame
     // 12 行に切った値で、答えの文脈（文書・revision・キャレット）が今と同じ間だけ値を持つ。
     // renderer はキャレットの上（入らなければ下）に札を描く。
     std::optional<std::string> hover{};
+    // 引数の情報の札（#1959・ADR 0191 の決定 6）。挿入中にキャレットが答えの行にある間だけ値を
+    // 持つ。renderer はキャレットの行の上（入らなければ下）に hover の札と同じ部品で描き、今の引数を
+    // 強める。
+    std::optional<core::LspSignature> signature{};
     // プレビューのリンクの札（施主決定 D106・#1869 の段 L2）。札が開いていて、見せている結果の同じ
     // 要素に同じリンクがある間だけ値を持つ。renderer はリンクの下（入らなければ上）に札を描く
     // （置き場は core::link_card_rect・文は core::link_card_texts）。

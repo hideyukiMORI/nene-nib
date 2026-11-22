@@ -406,6 +406,8 @@ void EditorController::accept(const InsertText &intent)
         active_language_server().phase == LanguageServerPhase::running)
     {
         open_triggered_completion(intent.utf8);
+        // 引数の情報も同じ枝の後ろ（#1959・ADR 0191 の決定 6）。
+        settle_typed_signature(intent.utf8);
     }
 }
 
@@ -453,6 +455,8 @@ void EditorController::accept(const CancelSelection &)
     case core::EditMode::ordinary:
         break;
     }
+    // 通常モードの Esc は引数の情報の札も消す（#1959・ADR 0191 の決定 6）。
+    drop_signature_tip();
     move_caret_to(state_.selection().caret, core::SelectionAnchoring::collapse);
 }
 

@@ -32,7 +32,9 @@
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimCaret.hpp"
+#include "LanguageServerPhase.hpp"
 #include "VimCharacter.hpp"
+#include "VimKey.hpp"
 #include "VimClipboardText.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimJumpLists.hpp"
@@ -579,6 +581,25 @@ void EditorController::accept(const VimKeyPress &intent)
         return;
     }
     static_cast<void>(typed_vim_key(intent.key));
+    // INSERT で打った `triggerCharacters` の 1 文字で引数の情報を頼む（#1959・ADR 0191 の決定 6）。
+    // 照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
+    if (language_servers_.awake != 0 &&
+        active_language_server().phase == LanguageServerPhase::running)
+    {
+        settle_typed_vim_signature(intent.key);
+    }
+}
+
+// INSERT のままで ASCII の 1 文字を打った鍵だけを引数の情報の打鍵の道へ渡す。
+void EditorController::settle_typed_vim_signature(const core::VimKey &key)
+{
+    const auto *typed = std::get_if<core::VimCharacter>(&key);
+    constexpr char32_t last_ascii = 0x7F;
+    if (typed == nullptr || typed->code > last_ascii || state_.vim().mode != core::VimMode::insert)
+    {
+        return;
+    }
+    settle_typed_signature(std::string(1, static_cast<char>(typed->code)));
 }
 
 // 打った鍵の入口（ADR 0176 の決定 3・4）。表が空なら分岐 1 つで今までの道。表を引けないとき

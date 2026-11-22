@@ -6,6 +6,7 @@
 #include "EditorFrame.hpp"
 #include "HoverTip.hpp"
 #include "LayoutRect.hpp"
+#include "LspSignature.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
 #include "RectCovers.hpp"
@@ -16,6 +17,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
 #include "UiTextSizes.hpp"
+#include "Utf16.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -251,6 +253,45 @@ void Direct2DRenderer::draw_hover_tip(const application::EditorFrame &frame,
     if (paint.has_value())
     {
         hover_tip_box_ = paint.value().box;
+        paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
+    }
+}
+
+namespace
+{
+// 今の引数（label の中のバイトの範囲）→ UTF-16 の範囲（写せなければ長さ 0）。
+[[nodiscard]] DWRITE_TEXT_RANGE signature_emphasis(const core::LspSignature &signature)
+{
+    const std::string_view label{signature.label};
+    const auto begin = core::to_utf16(label.substr(0, signature.active_begin));
+    const auto end = core::to_utf16(label.substr(0, signature.active_end));
+    if (!begin.has_value() || !end.has_value() || end.value().size() <= begin.value().size())
+    {
+        return DWRITE_TEXT_RANGE{0, 0};
+    }
+    return DWRITE_TEXT_RANGE{static_cast<UINT32>(begin.value().size()),
+                             static_cast<UINT32>(end.value().size() - begin.value().size())};
+}
+} // namespace
+
+// 引数の情報の札（#1959・ADR 0191 の決定 6）。hover の札と同じ書式・置き場（キャレットの行の上・入らな
+// ければ下）・描く 1 本で、今の引数を太字にする。
+void Direct2DRenderer::draw_signature_tip(const application::EditorFrame &frame,
+                                          const core::LayoutRect &area)
+{
+    if (!frame.signature.has_value())
+    {
+        return;
+    }
+    const core::LspSignature &signature = frame.signature.value();
+    static_cast<void>(signature_tip_layout_.fitted(
+        *dwrite_.Get(), tab_tip_format_.Get(), signature.label,
+        core::hover_tip_text_limit(core::width_of(area), dpi_), signature_emphasis(signature)));
+    const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
+                                 caret_rectangle_.right, caret_rectangle_.bottom};
+    const auto paint = signature_tip_layout_.painted(caret, area, frame.palette, dpi_);
+    if (paint.has_value())
+    {
         paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
     }
 }

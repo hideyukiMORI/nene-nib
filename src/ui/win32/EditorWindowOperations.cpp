@@ -508,6 +508,7 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::list_diagnostics, &EditorWindow::run_list_diagnostics},
         {core::EditorOperation::list_references, &EditorWindow::run_list_references},
         {core::EditorOperation::list_symbols, &EditorWindow::run_list_symbols},
+        {core::EditorOperation::show_signature_help, &EditorWindow::run_show_signature_help},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -809,6 +810,12 @@ void EditorWindow::run_list_references()
 void EditorWindow::run_list_symbols()
 {
     send(application::QueryLanguage{core::LanguageQueryKind::symbols});
+}
+
+// 引数の情報を表示（#1959・ADR 0191 の決定 6）。
+void EditorWindow::run_show_signature_help()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::signature_help});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

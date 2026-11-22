@@ -28,6 +28,10 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
    - **`%` は今の文書の今の改訂の記号だけ**（#1958 のレビュー R2・設計席の決め 4）。手で `%` を打ったとき、控えた答えがアクティブな文書のものでないか、頼んだ後に文書が変わっていれば（改訂番号で比べる）見せず、今の文書について `gO` と同じ道で頼み直す。届いた答えは開いている `%` の一覧の候補にする。頼めなければ一覧の中の空の 1 行。候補（当たり）を作るのは参照と同じく `%` を見せるときだけで、巨大な行の扱いも参照と同じ。
    - 限界: 同じ名前の記号（多重定義・別の名前空間）は候補の題名が同じで、補足の親の名前とプレビューで見分ける（レビュー L2・試用で判断）。平らな答え（`SymbolInformation`）は `location.range` しか無いので、着地は名前でなく宣言の頭で、プレビューの強調も行末まで伸びる（L3・clangd は階層で答える）。参照の答えを窓が非アクティブの間に控えた後で `&` で開くと「N 件のうち」の知らせは出ない（知らせは答えが届いて開いたときだけ・a のレビューの小さな点）。
 6. **c 引数の情報（`textDocument/signatureHelp`）。** 頼むのは、Vim の INSERT と通常モードでサーバーの `triggerCharacters` の 1 文字を打ったとき（LSP が動いている文書の真偽の後ろ・ADR 0190 の決定 10）と、操作「引数の情報を表示」（**鍵なし**・F1 の一覧から。VS Code の Ctrl+Shift+Space は D61 の「通常 / Vim の切り替え」が両モードで使っているので触らない・設計席の決め 2026-11-22）。見せ方は hover の札の部品で、キャレットの行の上に `label` を出し、今の引数を強める。次の `)`・Esc・行の移動で消える。補完の一覧と同時なら札が上・一覧が下。lsp がオフ・能力が無いときの打鍵の道は何もしない。
+   - 段 c（#1959）の形: 能力は `signatureHelpProvider`（object）とその `triggerCharacters`・`retriggerCharacters`（`ServerAbilities.signature_help` `signature_triggers` `signature_retriggers`）。client は `signatureHelp.signatureInformation`（`documentationFormat=["plaintext"]`・`parameterInformation.labelOffsetSupport=true`）を申し出る。要求は `LspRequestKind::signature_help` で、`context` は `triggerKind`（打った文字は 2・操作は 1）・`triggerCharacter`・`isRetrigger`（札が出ているか）。札が出ている間は `retriggerCharacters` でも頼み直す。
+   - 札は hover の札と**別の欄**（controller の `signature_tip_`・`SignatureTip{document, line, signature}`）で、打鍵では消えない（設計席の答え 2026-11-22）。消すのは意図の出口の `settle_signature_tip` の 1 か所（文書が替わった・キャレットが答えの行を離れた・挿入を抜けた（Vim の INSERT でなくなった）・入力行・右クリックのメニュー・設定の面・窓が非アクティブ・hover と診断の札が出た）と、`)` を打った（trigger なら頼み直し、入れ子の外側の札はその答えが戻す）・通常モードの Esc（`CancelSelection`）・空の答え。照合で捨てた答え（打ち続けて文脈が変わった）は今の札を残す。手で頼んで空なら「引数の情報がありません」、能力が無ければ「この言語サーバーは引数の情報に答えません」。
+   - 読みは core の `lsp_signature_help`（`LspSignatureHelp.cpp`・`label` は 1,024 バイトで切る）。描くのは hover の札と同じ `HoverTipLayout`（別の 1 本 `signature_tip_layout_`）・書式・`hover_tip_rect`・`paint_tab_tip` で、今の引数は太字（強める範囲は保持の鍵に入る）。
+   - 打鍵の道: 頼むかの照合は、通常モードの `accept(InsertText)` と Vim の `accept(VimKeyPress)`（INSERT の ASCII の 1 文字）のどちらも「言語サーバーが動いている」の真偽の後ろで、能力の無い席では欄を 1 つ読んで返る。
 7. **d 整形（`textDocument/formatting` と `rangeFormatting`）。** 操作「文書を整形」「選択範囲を整形」（**どちらも鍵なし**・F1 の一覧から。VS Code の Shift+Alt+F は ADR 0078 の「Alt と組んだ鍵は操作にしない」に当たるので入れない・設計席の決め 2026-11-22）。Vim の `gq` は Nib に無いので触らない。答えの `TextEdit[]` は、全部を覆う 1 区間（最小の始まり〜最大の終わり）の新しい本文を手元で組み、`EditorController::replace` を 1 回だけ呼ぶ（1 つの undo の単位・`Edit.restore` は当てる前のキャレット）。頼んだ時の改訂番号から本文が変わっていたら捨てて 1 行の知らせ。`tabSize` と `insertSpaces` は今の文書の設定から。保存のときの自動の整形は入れない（設定の鍵が要る・`settings.v6` の時）。
 8. **文と操作。** 画面の文は `UiMessage` の 3 列（操作の名前と説明は操作の群に表の順・知らせは末尾）、操作は `EditorOperation` の末尾。日本語の文に「面」を使わない。設定の鍵は足さない。
 
@@ -35,7 +39,8 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
 
 - a 参照の能力の無い要求を送らない・文脈の照合・一覧の候補と着地・上限: **active**（`nib_tests --lsp-references`）。
 - b 記号の同じ守り（読み・能力・文脈の照合・一覧の候補と着地・`gO`）: **active**（`nib_tests --lsp-symbols`）。
-- c 引数の情報・d 整形の同じ守り: **planned**（各段の PR で、足した scope を名指しして active に書き換える）。
+- c 引数の情報の同じ守り（読み・能力・自動の頼み・札の出る間と消える条件・lsp がオフと能力の無い席で打鍵の道が言語サーバーに触れない契約）: **active**（`nib_tests --lsp-signature`）。
+- d 整形の同じ守り: **planned**（段 d の PR で、足した scope を名指しして active に書き換える）。
 - 整形が 1 つの undo の単位で、`u` で元の本文とキャレットに戻る: **planned**（性質の試験・段 d の PR で active にする）。
 - 打鍵の道（段 c）のオフの速さ: **planned**（QLT-014・段 c の PR の後に設計席が速さのゲートを回して active にする）。
 
