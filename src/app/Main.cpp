@@ -316,10 +316,10 @@ last_resort_for(nenenib::application::EditorController &controller)
 // 起動引数の読み込みと復号の後（Issue #19）。
 // 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
 // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
+// 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
-    // 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
     nenenib::adapters::win32::Win32TimingAdapter timing;
     bind_measure(timing, given);
     nenenib::adapters::win32::Win32AppearanceAdapter appearance;

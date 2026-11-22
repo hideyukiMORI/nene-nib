@@ -113,6 +113,8 @@ void opened(Editing &editing)
 {
     editing.files().hold_at(std::string(source_path), Bytes{std::string("int main() {}\n")});
     applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    // root を探した答えの合図で起きる（ADR 0161 の 2026-11-22 の追補・段 S3）。
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
 }
 
 // `initialize` に答えて running まで進める。
