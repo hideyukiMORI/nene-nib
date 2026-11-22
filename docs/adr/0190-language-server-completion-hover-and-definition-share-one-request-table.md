@@ -64,3 +64,12 @@ PR #1844（#1833）と PR #1843（#1834）の実装と独立レビュー（`D:/N
 4. **`gd` と `K` の engine の歩は、いつも「表に行が無い鍵」と同じ状態・同じ失敗の印**で、効果だけが LSP への問い。engine は LSP が動いているかを知らず、port に触れない。NORMAL・回数なし・オペレータなしのときだけ問いになる。`:normal!` と再生（`.` `@`）は `gd` `K` の後ろの鍵を捨てる（答えは後から届くので、後ろの鍵を先に走らせない）。本物の Vim の `gd`（局所の宣言へ跳ぶ）と `K`（`keywordprg`）にはせず、LSP が無ければ今までどおり失敗（限界・fixture には入れない）。
 5. **学び。** 操作（`EditorOperation`）を 1 つ足したら、F1 の一覧の行数を数える検査（`--command-palette` `--shell-registration`）が動く。依頼書の検証にこの 2 つと `--every-scope` を書く（#1844 で数え漏れが 2 件、後ろの段 #1850 で見つかった）。
 6. **補完の 2 つ目の鍵は `Ctrl+I`（通常モードだけ・施主決定 D104）。** `Ctrl+Space` は簡体字の IME のオン・オフに取られる環境があるので、逃げ道を 1 つ持つ。`Ctrl+I` は文字としては Tab（0x09）で届くので、操作を走らせた後の文字を本文へ入れない。Vim のモードには足さない。
+
+## 追補（2026-11-23・#1961・設計席の決め・施主の試用で出た不具合）: 決定 3 の能力に診断と同期を足す
+
+決定 3 の `initialize` の `textDocument` の能力は補完・hover・定義だけで、`publishDiagnostics` を名乗っていなかった。typescript-language-server 6.1.0 は、client がこの能力を名乗らないと `textDocument/publishDiagnostics` を送らない（窓を出さない調べで 0 通 → 名乗ると 1 通）。
+
+- **名乗るのは実装してある物だけ**: `textDocument.synchronization` は `{"didSave":true}`（保存の後の `didSave` は ADR 0161 の 2026-11-20 の追補で送っている・`willSave` `willSaveWaitUntil` は送らないので書かない・`dynamicRegistration` は書かない）。`textDocument.publishDiagnostics` は `{"versionSupport":true}`（`version` は `lsp_published_diagnostics` が読み、送った版と照らしている）。`relatedInformation` `tagSupport` `codeDescriptionSupport` は読まないので書かない（ADR 0161 の決定 9 の限界のまま）。`workspace` の能力（`workspaceFolders` `configuration`）は実装していないので名乗らない。段 S6 の参照・記号・引数の情報・整形は、それぞれの PR が自分の能力を足す。書く所は `text_document_capabilities` の 1 か所のまま。
+- **ほかのサーバー**: 同じ能力の前後で、pyright・gopls・clangd は誤りの行を足した文書に同じ診断を 1 通ずつ返し、rust-analyzer は前後とも同じ（25 秒の間は空の通知 1 通・型の誤りは `cargo check` の後）で、振る舞いは変わらない（窓を出さない道具 `D:\NeNeNib\scripts\20261123\k-1961-caps\caps-probe.py`・試用のプロジェクトのファイルは書き換えない）。
+- **URI の綴り**: typescript-language-server と pyright は `file:///d%3A/...`（ドライブが小文字・`:` が `%3A`）で返す。前からパスへ写して照合しており（ADR 0161 の 2026-11-20 の追補）、`--language-server` の `verify_diagnostics_uri_forms` にこの綴り（`file:///c%3A/work/main.cpp`）を足した。
+- **契約**: `--language-server` の `verify_abilities` の `initialize` の期待に `synchronization` と `publishDiagnostics` を足した。
