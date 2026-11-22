@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace nenenib::application
@@ -28,6 +29,9 @@ namespace nenenib::application
 // - awaiting は LSP の答えを待っていること、incomplete は最後の答えが `isIncomplete` だったこと
 //   （次の打鍵で出し直す）、stepped は使う人が選ぶ行を動かしたこと（答えが届いたときに選んでいる
 //   候補を保つ）。
+// - requested は最後に LSP の要求を出したときの接頭辞（語の頭からキャレットまでの本文）。Vim の
+//   INSERT で自動に開いた面の候補を engine の語に直すとき（vim_completion_text）に、答えの
+//   `textEdit` の範囲と比べる要求の範囲を作る（#1962）。
 // 公開 aggregate（CPP-003）。
 struct CompletionSession
 {
@@ -48,5 +52,6 @@ struct CompletionSession
     bool awaiting = false;
     bool incomplete = false;
     bool stepped = false;
+    std::string requested = {};
 };
 } // namespace nenenib::application
