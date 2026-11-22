@@ -77,6 +77,7 @@
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "FontSize.hpp"
+#include "FoundLanguageServer.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
@@ -91,6 +92,8 @@
 #include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerRowState.hpp"
+#include "LanguageServerRowView.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
 #include "LanguageServers.hpp"
@@ -149,6 +152,7 @@
 #include "ServerStarted.hpp"
 #include "Session.hpp"
 #include "SettingsOpen.hpp"
+#include "SettingsSection.hpp"
 #include "SettingsView.hpp"
 #include "SplitExtent.hpp"
 #include "SplitState.hpp"
@@ -1436,8 +1440,37 @@ class EditorController final
     void retry_unsaved_settings();
     // 面の切り替えをその場で効かせる（保存しない）。
     void preview_settings(core::EditorSettings settings);
+    // 見えている行の鍵（settings_rows の添字の後ろに「言語サーバー」の節の行と畳みの 1
+    // 行・#1945）。
     [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
     [[nodiscard]] std::optional<std::size_t> focused_settings_row() const;
+    // 鍵 key の行の節。
+    [[nodiscard]] core::SettingsSection settings_section_of(std::size_t key) const noexcept;
+
+    // ------------------------------------- 設定の「言語サーバー」の節（LSP 段 S4・#1945）
+    // EditorControllerLanguageServerRows.cpp の群だけが探しの結果を読み書きする。
+    // 表の順の全部の行（表に無い言語の命令の行はその後ろ）。
+    [[nodiscard]] std::vector<LanguageServerRowView> language_server_rows() const;
+    [[nodiscard]] LanguageServerRowView known_server_row(std::size_t index) const;
+    // 見えている行（rows の添字・畳んでいれば畳んでも出す行だけ）。
+    [[nodiscard]] std::vector<std::size_t>
+    shown_language_server_rows(const std::vector<LanguageServerRowView> &rows) const;
+    [[nodiscard]] LanguageServerRowState
+    configured_state(std::span<const core::Language> languages) const;
+    void describe_configured(LanguageServerRowView &view, const std::string &command) const;
+    // 面を開いたときに探しを頼み、合図の道で結果を採る（走っていなければ port を呼ばない）。
+    void request_language_server_search();
+    void collect_language_server_search();
+    // 行 index の「使う」「外す」（rows の数なら「ほかの N 言語を見る」）。
+    void act_on_language_server_row(std::size_t index);
+    [[nodiscard]] bool used_commands(std::vector<std::pair<std::string, std::string>> &commands,
+                                     std::size_t index) const;
+    void restart_language_servers_of(core::Language language);
+    void unfold_language_server_rows(const std::vector<LanguageServerRowView> &rows);
+    // 命令の行が変わった言語の席を止め、失敗の控えを消し、起こすかを決め直す。
+    void
+    follow_language_server_commands(const std::vector<std::pair<std::string, std::string>> &before,
+                                    const std::vector<std::pair<std::string, std::string>> &after);
     // 配達に載せる IME の構え（面が開いている間は閉じ直さない・#1836）。
     [[nodiscard]] ImeStance shown_ime_stance() const;
 
@@ -1927,6 +1960,11 @@ class EditorController final
     std::uint64_t completion_sessions_ = 0;
     // 開いている設定の面（ADR 0170 の 2026-11-18 の追補 2）。
     std::optional<SettingsOpen> settings_;
+    // 言語サーバーの探し（#1945）。頼んで結果をまだ採っていないか・表の行ごとに最初に見つかった
+    // 候補（候補の添字と見つかった物・値なしは見つからない）。まだ 1 度も届いていなければ値なし。
+    bool language_server_search_reading_ = false;
+    std::optional<std::vector<std::optional<std::pair<std::size_t, FoundLanguageServer>>>>
+        found_language_servers_;
     // 面を閉じたときの書き込みが失敗し、状態の設定がまだファイルに無い（R1）。書けたとき・窓を
     // 閉じるときの書き直しの後に落とす。
     bool settings_unsaved_ = false;

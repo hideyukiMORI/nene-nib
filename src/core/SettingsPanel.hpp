@@ -32,6 +32,11 @@ inline constexpr std::int32_t settings_value_width_dips = 172;
 inline constexpr std::int32_t settings_value_height_dips = 30;
 // 切れない機能の「常にオン」の語の欄の幅（DIP・高さはスイッチと同じ）。
 inline constexpr std::int32_t settings_fixed_width_dips = 72;
+// 「言語サーバー」の節の「使う」「外す」のボタンの大きさと、「ほかの N 言語を見る」の行の高さ
+// （DIP・#1945）。
+inline constexpr std::int32_t settings_action_width_dips = 72;
+inline constexpr std::int32_t settings_action_height_dips = 28;
+inline constexpr std::int32_t settings_fold_height_dips = 36;
 // 行の内側の左右の余白と、行の中の部品どうしの空き（DIP）。
 inline constexpr std::int32_t settings_row_padding_dips = 12;
 inline constexpr std::int32_t settings_row_gap_dips = 14;
@@ -65,8 +70,8 @@ inline constexpr std::array<SettingsPreset, 3> settings_presets{
 [[nodiscard]] SettingsTarget settings_hit(const SettingsLayout &layout, std::int32_t x,
                                           std::int32_t y) noexcept;
 
-// 行の右端の部品の矩形（スイッチは 40 × 22・「常にオン」の語は 72 × 22・ほかは 172 × 30・行の右の
-// 内側に縦の中央）。
+// 行の右端の部品の矩形（スイッチは 40 × 22・「常にオン」の語は 72 × 22・「使う」「外す」は
+// 72 × 28・押す物の無い行と畳みの行は幅 0・ほかは 172 × 30・行の右の内側に縦の中央）。
 [[nodiscard]] LayoutRect settings_control_box(const SettingsLayout &layout,
                                               const SettingsLayoutItem &row) noexcept;
 // 段の上下の欄 box の中の −（plus が偽）と ＋ のボタン。
@@ -78,7 +83,7 @@ inline constexpr std::array<SettingsPreset, 3> settings_presets{
 [[nodiscard]] std::int32_t settings_scroll_revealing(const SettingsLayout &layout,
                                                      std::size_t row) noexcept;
 // 節 section の見出しからその節の最後のものまでが行の領域に入る送り（最小の動き・入り切らなければ
-// 見出しを上端に）。行を持たない節（言語サーバー）の札と Ctrl+6 が使う。節が無ければ今の送り。
+// 見出しを上端に）。節の札と Ctrl+1〜6 が使う。節が無ければ今の送り。
 [[nodiscard]] std::int32_t settings_scroll_revealing_section(const SettingsLayout &layout,
                                                              SettingsSection section) noexcept;
 // 送り from からホイールで lines 行（正が下）送った送り。上限で止まる。from は application の

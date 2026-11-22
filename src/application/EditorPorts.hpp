@@ -15,6 +15,7 @@
 #include "ImagePort.hpp"
 #include "LanguageRootPort.hpp"
 #include "LanguageServerPort.hpp"
+#include "LanguageServerSearchPort.hpp"
 #include "LinkOpenPort.hpp"
 #include "MarkdownPort.hpp"
 #include "PreviewPort.hpp"
@@ -91,5 +92,8 @@ struct EditorPorts
     // S3）。 lsp がオンで命令のある言語の文書の root
     // がまだ分からないときと、頼んだ後の合図のときだけ 呼ぶ（オフなら呼ばない・D60）。
     LanguageRootPort &language_roots;
+    // PC の中の言語サーバーを裏で探す（LSP 段 S4・#1945）。設定の面を開いたときと、頼んだ後の合図の
+    // ときだけ呼び、起動・開く・切り替え・保存・打鍵の道では呼ばない。
+    LanguageServerSearchPort &language_server_search;
 };
 } // namespace nenenib::application

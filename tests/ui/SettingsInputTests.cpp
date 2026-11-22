@@ -13,6 +13,9 @@
 #include "FilterSettings.hpp"
 #include "FocusSettingsRow.hpp"
 #include "JumpSettingsSection.hpp"
+#include "LanguageServerRowAction.hpp"
+#include "LanguageServerRowState.hpp"
+#include "LanguageServerRowView.hpp"
 #include "RevertSettings.hpp"
 #include "ScrollSettings.hpp"
 #include "SettingsInput.hpp"
@@ -20,6 +23,7 @@
 #include "SettingsLayout.hpp"
 #include "SettingsPart.hpp"
 #include "SettingsPreset.hpp"
+#include "SettingsPress.hpp"
 #include "SettingsRow.hpp"
 #include "SettingsRowView.hpp"
 #include "SettingsRows.hpp"
@@ -55,6 +59,7 @@ using nenenib::ui::win32::settings_right_press_intents;
 using nenenib::ui::win32::settings_takes_wheel;
 using nenenib::ui::win32::SettingsIntents;
 using nenenib::ui::win32::SettingsKeyPress;
+using nenenib::ui::win32::SettingsPress;
 
 constexpr std::size_t guide_row = 1;
 constexpr std::size_t size_row = 2;
@@ -105,6 +110,19 @@ constexpr WPARAM key_count = 256;
            std::holds_alternative<app::JumpSettingsSection>(intent) ||
            std::holds_alternative<app::FocusSettingsRow>(intent) ||
            std::holds_alternative<app::ScrollSettings>(intent);
+}
+
+// 言語サーバーの行の無い所の押しの覚え（身元は空）。
+[[nodiscard]] std::optional<SettingsPress> pressing(core::SettingsTarget target)
+{
+    return SettingsPress{target, {}};
+}
+
+[[nodiscard]] app::LanguageServerRowView server_row(std::string language,
+                                                    app::LanguageServerRowAction action)
+{
+    return app::LanguageServerRowView{
+        language, language, app::LanguageServerRowState::configured, {}, true, action, language};
 }
 
 template <typename Intent> [[nodiscard]] bool only(const SettingsIntents &intents)
@@ -227,15 +245,17 @@ void verify_mouse()
     using core::SettingsPart;
     using core::SettingsTarget;
     const auto view = sample(std::nullopt, {});
-    const auto [nothing, closing] = settings_press_step(SettingsTarget{SettingsPart::outside, 0});
+    const auto [nothing, closing] =
+        settings_press_step(SettingsTarget{SettingsPart::outside, 0}, view);
     expect(!nothing.has_value() && only<app::CloseSettings>(closing) &&
                settings_release_intents(nothing, SettingsTarget{SettingsPart::outside, 0}, view)
                    .empty(),
            "a press outside only closes the panel; nothing is held for the release");
     const SettingsTarget guide{SettingsPart::row, guide_row};
-    const auto [held, silent] = settings_press_step(guide);
+    const auto [held, silent] = settings_press_step(guide, view);
     const auto clicked = settings_release_intents(held, guide, view);
-    expect(held == std::optional{guide} && silent.empty() && clicked.size() == 2 &&
+    expect(held.has_value() && held.value().target == guide && held.value().server.empty() &&
+               silent.empty() && clicked.size() == 2 &&
                std::holds_alternative<app::FocusSettingsRow>(clicked.front()) &&
                std::holds_alternative<app::ChangeSetting>(clicked.back()),
            "a switch row toggles when it is released where it was pressed");
@@ -244,18 +264,18 @@ void verify_mouse()
             settings_release_intents(held, SettingsTarget{SettingsPart::outside, 0}, view)
                 .empty() &&
             only<app::FocusSettingsRow>(
-                settings_release_intents(SettingsTarget{SettingsPart::row, size_row},
+                settings_release_intents(pressing(SettingsTarget{SettingsPart::row, size_row}),
                                          SettingsTarget{SettingsPart::row, size_row}, view)),
         "releasing on another part does nothing and a value row only takes the focus");
     const SettingsTarget minus{SettingsPart::row_minus, size_row};
-    const auto stepped = settings_release_intents(minus, minus, view);
+    const auto stepped = settings_release_intents(pressing(minus), minus, view);
     expect(stepped.size() == 2 && std::holds_alternative<app::ChangeSetting>(stepped.back()) &&
                !std::get<app::ChangeSetting>(stepped.back()).forward &&
                only<app::CloseSettings>(
-                   settings_release_intents(SettingsTarget{SettingsPart::close, 0},
+                   settings_release_intents(pressing(SettingsTarget{SettingsPart::close, 0}),
                                             SettingsTarget{SettingsPart::close, 0}, view)) &&
                only<app::ChooseSettingsPreset>(
-                   settings_release_intents(SettingsTarget{SettingsPart::preset, 2},
+                   settings_release_intents(pressing(SettingsTarget{SettingsPart::preset, 2}),
                                             SettingsTarget{SettingsPart::preset, 2}, view)),
            "the minus button steps back, the close mark closes and a preset is chosen");
     expect(only<app::CloseSettings>(
@@ -266,6 +286,33 @@ void verify_mouse()
                settings_takes_wheel(SettingsTarget{SettingsPart::panel, 0}) &&
                settings_takes_wheel(guide),
            "the wheel over the text is left to the text and does not reach the panel");
+}
+
+// 押してから離すまでに探しの結果が届き、畳まれていた行が現れて後ろの行の位置がずれても、離した
+// 位置に来た別の行の「使う」/「外す」は動かない（行の身元で比べる・#1945 のレビュー R2）。
+void verify_press_survives_shifted_rows()
+{
+    using core::SettingsPart;
+    using core::SettingsTarget;
+    using Action = app::LanguageServerRowAction;
+    auto before = sample(std::nullopt, {});
+    before.servers = {server_row("cpp", Action::remove), server_row("zig", Action::remove)};
+    // 「zig」の「外す」を押す。押している間に「python」の行（使う）が現れて zig の位置に来る。
+    const SettingsTarget remove{SettingsPart::row_value, before.rows.size() + 1};
+    const auto [held, silent] = settings_press_step(remove, before);
+    auto after = before;
+    after.servers = {server_row("cpp", Action::remove), server_row("python", Action::use),
+                     server_row("zig", Action::remove)};
+    expect(held.has_value() && held.value().server == "zig" && silent.empty() &&
+               settings_release_intents(held, remove, after).empty(),
+           "a row that slid under the pointer while the button was held does not act");
+    const auto same = settings_release_intents(held, remove, before);
+    expect(same.size() == 2 && std::holds_alternative<app::FocusSettingsRow>(same.front()) &&
+               std::holds_alternative<app::ChangeSetting>(same.back()),
+           "releasing on the same language row acts on it");
+    const SettingsTarget moved{SettingsPart::row_value, after.rows.size() + 2};
+    expect(settings_release_intents(held, moved, after).empty(),
+           "the same language at another position is another part and does not act either");
 }
 
 // 面が閉じた所（開いていた → 閉じた）でだけ変換の取り消しを呼ぶ。閉じる道（Esc・Ctrl+,・✕・
@@ -294,6 +341,7 @@ void verify_settings_input()
     verify_values_and_search();
     verify_characters();
     verify_mouse();
+    verify_press_survives_shifted_rows();
     verify_composition_is_cancelled_on_close();
 }
 } // namespace nenenib::tests::ui

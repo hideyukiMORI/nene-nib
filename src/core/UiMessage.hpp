@@ -364,7 +364,6 @@ enum class UiMessage : std::uint16_t
     settings_finder_preview_right,
     settings_finder_preview_below,
     settings_finder_preview_off,
-    settings_lsp_no_commands,
     // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2）: 種類ごとの題・開き方の 1 行・
     // ボタンの名前・鍵の案内（鍵の名前は訳さない）と、開けなかった・写した知らせ。
     link_card_title_web,
@@ -392,10 +391,24 @@ enum class UiMessage : std::uint16_t
     palette_mark_diagnostics,
     notice_no_diagnostics,
     notice_no_diagnostic_here,
+    // 設定の「言語サーバー」の節（LSP 段 S4・#1945）:
+    // 行の状態の語・押す物・見つからないときの案内・止めた理由・畳みの 1 行。
+    settings_lsp_state_running,
+    settings_lsp_state_starting,
+    settings_lsp_state_stopped,
+    settings_lsp_state_configured,
+    settings_lsp_state_found,
+    settings_lsp_state_missing,
+    settings_lsp_state_searching,
+    settings_lsp_use,
+    settings_lsp_remove,
+    settings_lsp_install_hint,
+    settings_lsp_stopped_reason,
+    settings_lsp_more,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_no_diagnostic_here) + 1U;
+    std::to_underlying(UiMessage::settings_lsp_more) + 1U;
 } // namespace nenenib::core

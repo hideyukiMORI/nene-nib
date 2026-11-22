@@ -8,6 +8,9 @@
 #include "KeyChord.hpp"
 #include "KeycapPainter.hpp"
 #include "KeycapStyle.hpp"
+#include "LanguageServerRowAction.hpp"
+#include "LanguageServerRowState.hpp"
+#include "LanguageServerRowView.hpp"
 #include "OperationBindings.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
@@ -17,6 +20,7 @@
 #include "SettingsPanel.hpp"
 #include "SettingsPreset.hpp"
 #include "SettingsRows.hpp"
+#include "SettingsSection.hpp"
 #include "SettingsSubject.hpp"
 #include "SettingsTextWidths.hpp"
 #include "UiTexts.hpp"
@@ -58,7 +62,6 @@ constexpr std::int32_t summary_padding_dips = core::settings_summary_inset_dips;
 constexpr std::int32_t summary_line_dips = core::settings_summary_line_dips;
 constexpr std::int32_t summary_note_dips = 16;
 constexpr std::int32_t icon_dips = 14;
-constexpr std::int32_t command_name_dips = 110;
 constexpr KeycapStyle chord_style_shape{6.0F, 20.0F, 4.0F, {}, {}, {}};
 
 [[nodiscard]] D2D1_COLOR_F to_color(core::RgbColor color) noexcept
@@ -126,11 +129,26 @@ core::SettingsLayout SettingsPanelPainter::arranged(const application::SettingsV
                                                     const core::LayoutRect &area) const
 {
     std::vector<core::SettingsLayoutRow> rows;
-    rows.reserve(view.rows.size());
+    rows.reserve(view.rows.size() + view.servers.size() + 1);
     for (const auto &row : view.rows)
     {
         rows.push_back(core::SettingsLayoutRow{
             row.row.section, core::settings_control_of(row.row.subject, row.switchable)});
+    }
+    // 「言語サーバー」の節の行（押す物があれば action）と、畳んだ行があれば「ほかの N
+    // 言語を見る」。
+    for (const auto &server : view.servers)
+    {
+        rows.push_back(
+            core::SettingsLayoutRow{core::SettingsSection::language_server,
+                                    server.action == application::LanguageServerRowAction::none
+                                        ? core::SettingsControl::blank
+                                        : core::SettingsControl::action});
+    }
+    if (view.servers_hidden > 0)
+    {
+        rows.push_back(core::SettingsLayoutRow{core::SettingsSection::language_server,
+                                               core::SettingsControl::fold});
     }
     core::SettingsTextWidths widths{};
     for (std::size_t index = 0; index < view.tabs.size(); ++index)
@@ -145,10 +163,8 @@ core::SettingsLayout SettingsPanelPainter::arranged(const application::SettingsV
     widths.revert = width(said(core::UiMessage::settings_revert), text_.label);
     widths.close = width(said(core::UiMessage::settings_close), text_.label);
     widths.estimate = width(core::speed_estimate_text(view.summary, text_.language), text_.strong);
-    // 言語サーバーの節（命令の行）は絞っていない間だけ出す。
-    const auto commands = view.lsp_listed ? std::optional{view.lsp_commands.size()} : std::nullopt;
     return core::settings_layout(
-        core::SettingsLayoutRequest{area, text_.dpi, rows, commands, widths, view.scroll});
+        core::SettingsLayoutRequest{area, text_.dpi, rows, widths, view.scroll});
 }
 
 void SettingsPanelPainter::paint(const application::SettingsView &view,
@@ -285,18 +301,8 @@ void SettingsPanelPainter::paint_item(const application::SettingsView &view,
     case core::SettingsItemKind::summary_note:
         paint_note(core::UiMessage::settings_tier_note, item.box);
         return;
-    case core::SettingsItemKind::no_commands:
-        paint_note(core::UiMessage::settings_lsp_no_commands, item.box);
-        return;
     case core::SettingsItemKind::row:
-        if (view.focused == std::optional{item.index})
-        {
-            fill_rounded(item.box, row_radius_dips, palette_.current_line);
-        }
-        paint_row(view.rows.at(item.index), layout, item);
-        return;
-    case core::SettingsItemKind::command:
-        paint_command(view, item.box, item.index);
+        paint_any_row(view, layout, item);
         return;
     case core::SettingsItemKind::empty:
         write_centered(
@@ -441,6 +447,11 @@ void SettingsPanelPainter::paint_control(const application::SettingsRowView &row
     case core::SettingsControl::readonly:
         paint_value(row.value, box, false);
         return;
+    // 「言語サーバー」の節の部品は設定の行には来ない（paint_server と paint_fold が描く）。
+    case core::SettingsControl::action:
+    case core::SettingsControl::blank:
+    case core::SettingsControl::fold:
+        return;
     }
     std::unreachable();
 }
@@ -500,19 +511,188 @@ void SettingsPanelPainter::paint_stepper(std::string_view value, const core::Set
     write_centered(value, text_.label, box, palette_.text);
 }
 
-// 言語サーバーの命令の行（言語の名前と命令・読むだけ）。
-void SettingsPanelPainter::paint_command(const application::SettingsView &view,
-                                         const core::LayoutRect &box, std::size_t index)
+// 行の領域の 1 行（見えている行の通しの位置: 設定の行 → 言語サーバーの行 → 畳みの 1 行）。焦点の
+// 行は current_line の面。言語サーバーの節の焦点はさらに text の 1 DIP の枠で囲む（#1929 の
+// 「焦点の色がほとんど変わらない」をこの節では繰り返さない・#1945。accent は背景に近いテーマが
+// あるので枠に使わない・レビュー M1）。
+void SettingsPanelPainter::paint_any_row(const application::SettingsView &view,
+                                         const core::SettingsLayout &layout,
+                                         const core::SettingsLayoutItem &item)
 {
-    const auto &[language, command] = view.lsp_commands.at(index);
-    const auto split = std::min(box.right, box.left + pixels(command_name_dips));
-    write(language, text_.note, core::LayoutRect{box.left, box.top, split, box.bottom},
-          palette_.text);
-    write(command, text_.mono, core::LayoutRect{split, box.top, box.right, box.bottom},
-          palette_.muted);
+    const bool focused = view.focused == std::optional{item.index};
+    if (focused)
+    {
+        fill_rounded(item.box, row_radius_dips, palette_.current_line);
+    }
+    if (item.index < view.rows.size())
+    {
+        paint_row(view.rows.at(item.index), layout, item);
+        return;
+    }
+    if (focused)
+    {
+        outline(item.box, row_radius_dips, palette_.text);
+    }
+    const std::size_t server = item.index - view.rows.size();
+    if (server < view.servers.size())
+    {
+        paint_server(view.servers.at(server), layout, item);
+        return;
+    }
+    paint_fold(view, item.box);
 }
 
-// muted の小さな 1 行（要約の箱の下の段の決め方・命令の行が無いとき）。
+// 状態の語と色（状態を色分けしない・語で伝え、動いている物の語は ● で始まる・レビュー R4）。
+std::pair<core::UiMessage, core::RgbColor>
+SettingsPanelPainter::server_state(application::LanguageServerRowState state) const noexcept
+{
+    switch (state)
+    {
+    case application::LanguageServerRowState::running:
+        return {core::UiMessage::settings_lsp_state_running, palette_.text};
+    case application::LanguageServerRowState::starting:
+        return {core::UiMessage::settings_lsp_state_starting, palette_.muted};
+    case application::LanguageServerRowState::stopped:
+        return {core::UiMessage::settings_lsp_state_stopped, heavy_};
+    case application::LanguageServerRowState::configured:
+        return {core::UiMessage::settings_lsp_state_configured, palette_.muted};
+    case application::LanguageServerRowState::found:
+        return {core::UiMessage::settings_lsp_state_found, palette_.text};
+    case application::LanguageServerRowState::missing:
+        return {core::UiMessage::settings_lsp_state_missing, palette_.gutter};
+    case application::LanguageServerRowState::searching:
+        return {core::UiMessage::settings_lsp_state_searching, palette_.gutter};
+    }
+    std::unreachable();
+}
+
+// 言語サーバーの 1 行（1 行目: 言語の名前・サーバーの名前（等幅で小さく）・右端に状態の語、2 行目:
+// パスか命令の行（等幅・入り切らなければパスは先頭側を「…」で省く）か案内の文、右: 「使う」か
+// 「外す」）。
+void SettingsPanelPainter::paint_server(const application::LanguageServerRowView &row,
+                                        const core::SettingsLayout &layout,
+                                        const core::SettingsLayoutItem &item)
+{
+    const auto control = core::settings_control_box(layout, item);
+    paint_server_button(row.action, control);
+    const auto gap = pixels(core::settings_row_gap_dips);
+    const auto right = control.left - (core::width_of(control) > 0 ? gap : 0);
+    const auto left = item.box.left + pixels(core::settings_row_padding_dips);
+    const core::LayoutRect title{left, item.box.top + pixels(title_top_dips), right,
+                                 item.box.top + pixels(title_top_dips + title_height_dips)};
+    const auto [message, ink] = server_state(row.state);
+    const auto state = said(message);
+    const auto stated = std::min(width(state, text_.note), core::width_of(title));
+    write_trailing(state, text_.note, title, ink);
+    const core::LayoutRect name{left, title.top, title.right - stated - pixels(tier_gap_dips),
+                                title.bottom};
+    const auto used = write(row.title, text_.strong, name, palette_.text);
+    write(row.server, text_.mono,
+          core::LayoutRect{name.left + used + pixels(tier_gap_dips), name.top, name.right,
+                           name.bottom},
+          palette_.gutter);
+    const core::LayoutRect second{left, title.bottom + pixels(hint_gap_dips), right,
+                                  item.box.bottom - pixels(title_top_dips)};
+    if (row.code && tail_matters(row.state))
+    {
+        write_tail(row.detail, text_.mono, second, palette_.muted);
+        return;
+    }
+    write(row.detail, row.code ? text_.mono : text_.note, second, palette_.muted);
+}
+
+// 言語サーバーの行の右の押す物。「使う」は主ボタン（accent の地と on_accent の字・レビュー M1）、
+// 「外す」は background の地と panel_border の枠と text の字、押す物の無い行は描かない。
+void SettingsPanelPainter::paint_server_button(application::LanguageServerRowAction action,
+                                               const core::LayoutRect &box)
+{
+    switch (action)
+    {
+    case application::LanguageServerRowAction::none:
+        return;
+    case application::LanguageServerRowAction::use:
+        paint_button(said(core::UiMessage::settings_lsp_use), box, true, palette_.on_accent);
+        return;
+    case application::LanguageServerRowAction::remove:
+        fill_rounded(box, box_radius_dips, palette_.background);
+        paint_button(said(core::UiMessage::settings_lsp_remove), box, false, palette_.text);
+        return;
+    }
+    std::unreachable();
+}
+
+// 2 行目が見つかったパスか命令の行（末尾の実行ファイルの名前が肝心）の状態か。入れ方の命令と探して
+// いる間は頭が肝心なので末尾を切る。
+bool SettingsPanelPainter::tail_matters(application::LanguageServerRowState state) noexcept
+{
+    switch (state)
+    {
+    case application::LanguageServerRowState::running:
+    case application::LanguageServerRowState::starting:
+    case application::LanguageServerRowState::configured:
+    case application::LanguageServerRowState::found:
+        return true;
+    case application::LanguageServerRowState::stopped:
+    case application::LanguageServerRowState::missing:
+    case application::LanguageServerRowState::searching:
+        return false;
+    }
+    std::unreachable();
+}
+
+// 入り切らなければ先頭側を「…」で省き、末尾を残して描く（パスの実行ファイルの名前を消さない・
+// レビューの軽い指摘）。省く位置は全文の文字組みの当たり判定で決め、字の途中で切らない。
+void SettingsPanelPainter::write_tail(std::string_view text, IDWriteTextFormat *format,
+                                      const core::LayoutRect &area, core::RgbColor color)
+{
+    constexpr std::string_view ellipsis = "…";
+    const auto full = width(text, format);
+    const auto room = core::width_of(area);
+    const auto shown = text.empty() ? nullptr : line(text, format);
+    if (full <= room || shown == nullptr)
+    {
+        write(text, format, area, color);
+        return;
+    }
+    BOOL trailing = FALSE;
+    BOOL inside = FALSE;
+    DWRITE_HIT_TEST_METRICS hit{};
+    // 幅は切り上げなので 1 画素の余りを見込む。
+    const auto cut = static_cast<float>(full - room + width(ellipsis, format) + 1);
+    const std::wstring wide = core::to_utf16(text).value_or(std::wstring{});
+    if (FAILED(shown->HitTestPoint(cut, 0.0F, &trailing, &inside, &hit)))
+    {
+        write(text, format, area, color);
+        return;
+    }
+    // 当たった字が cut より左から始まるなら、その字ごと省く。
+    const std::size_t from =
+        std::min<std::size_t>(wide.size(), hit.textPosition + (hit.left < cut ? hit.length : 0U));
+    std::string kept{ellipsis};
+    kept += core::to_utf8(std::wstring_view{wide}.substr(from)).value_or(std::string{});
+    write(kept, format, area, color);
+}
+
+// 「ほかの N 言語を見る」と下向きの印（行のどこを押しても開く）。
+void SettingsPanelPainter::paint_fold(const application::SettingsView &view,
+                                      const core::LayoutRect &box)
+{
+    const auto padding = pixels(core::settings_row_padding_dips);
+    const auto text = core::ui_text_filled(core::UiMessage::settings_lsp_more, text_.language,
+                                           {std::to_string(view.servers_hidden)});
+    const auto used = write(text, text_.note,
+                            core::LayoutRect{box.left + padding, box.top,
+                                             box.right - padding - pixels(icon_dips), box.bottom},
+                            palette_.text);
+    const float x = static_cast<float>(box.left + padding + used) + scaled(glyph_half_dips * 2.0F);
+    const float y = centre_of(box).y;
+    stroke(D2D1::Point2F(x - scaled(glyph_half_dips), y - scaled(2.0F)),
+           D2D1::Point2F(x, y + scaled(2.0F)), palette_.muted);
+    stroke(D2D1::Point2F(x, y + scaled(2.0F)),
+           D2D1::Point2F(x + scaled(glyph_half_dips), y - scaled(2.0F)), palette_.muted);
+}
+
+// muted の小さな 1 行（要約の箱の下の段の決め方）。
 void SettingsPanelPainter::paint_note(core::UiMessage message, const core::LayoutRect &box)
 {
     write(said(message), text_.note, box, palette_.muted);

@@ -40,6 +40,7 @@
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageRoots.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -268,21 +269,43 @@ void with_startup(ScriptedSettings &settings, ScriptedThemes &themes,
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
     ScriptedLanguageRoots language_roots;
+    ScriptedLanguageServerSearch language_server_search;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, pages};
     ScriptedLanguageServer language_server;
-    EditorController controller{
-        app::EditorPorts{appearance,      clipboard,   files,        pages,
-                         settings,        themes,      session,      history,
-                         folders,         bookmarks,   text_layouts, autosave,
-                         fonts,           bell,        markdown,     reads,
-                         language_server, wall_clock,  printer,      shell_registration,
-                         images,          start_lists, ui_language,  project_search,
-                         previews,        reveal,      links,        language_roots},
-        nenenib::core::Distribution::unpackaged,
-        {app::OpenDocument{FilePath::parse("initial.txt").value()}}};
+    EditorController controller{app::EditorPorts{appearance,
+                                                 clipboard,
+                                                 files,
+                                                 pages,
+                                                 settings,
+                                                 themes,
+                                                 session,
+                                                 history,
+                                                 folders,
+                                                 bookmarks,
+                                                 text_layouts,
+                                                 autosave,
+                                                 fonts,
+                                                 bell,
+                                                 markdown,
+                                                 reads,
+                                                 language_server,
+                                                 wall_clock,
+                                                 printer,
+                                                 shell_registration,
+                                                 images,
+                                                 start_lists,
+                                                 ui_language,
+                                                 project_search,
+                                                 previews,
+                                                 reveal,
+                                                 links,
+                                                 language_roots,
+                                                 language_server_search},
+                                nenenib::core::Distribution::unpackaged,
+                                {app::OpenDocument{FilePath::parse("initial.txt").value()}}};
     check(controller);
 }
 

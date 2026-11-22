@@ -20,6 +20,7 @@
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageRoots.hpp"
 #include "ScriptedLanguageServer.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -61,13 +62,35 @@ class ScrollProbeEditing final
   private:
     [[nodiscard]] application::EditorPorts ports()
     {
-        return application::EditorPorts{
-            appearance_, clipboard_,       files_,         code_pages_,     settings_,
-            themes_,     session_,         history_,       folders_,        bookmarks_,
-            layouts_,    autosave_,        fonts_,         bell_,           markdown_,
-            reads_,      language_server_, wall_clock_,    printer_,        shell_registration_,
-            images_,     start_lists_,     ui_language_,   project_search_, previews_,
-            reveal_,     links_,           language_roots_};
+        return application::EditorPorts{appearance_,
+                                        clipboard_,
+                                        files_,
+                                        code_pages_,
+                                        settings_,
+                                        themes_,
+                                        session_,
+                                        history_,
+                                        folders_,
+                                        bookmarks_,
+                                        layouts_,
+                                        autosave_,
+                                        fonts_,
+                                        bell_,
+                                        markdown_,
+                                        reads_,
+                                        language_server_,
+                                        wall_clock_,
+                                        printer_,
+                                        shell_registration_,
+                                        images_,
+                                        start_lists_,
+                                        ui_language_,
+                                        project_search_,
+                                        previews_,
+                                        reveal_,
+                                        links_,
+                                        language_roots_,
+                                        language_server_search_};
     }
 
     ScriptedAppearance appearance_{Reading{core::Appearance::dark}};
@@ -98,6 +121,7 @@ class ScrollProbeEditing final
     ScriptedReveal reveal_;
     ScriptedLinkOpen links_;
     ScriptedLanguageRoots language_roots_;
+    ScriptedLanguageServerSearch language_server_search_;
     application::EditorController controller_;
 };
 } // namespace nenenib::tests::preview
