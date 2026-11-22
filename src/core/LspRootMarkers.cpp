@@ -2,15 +2,13 @@
 
 #include "FileFolder.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
-#include <functional>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace nenenib::core
 {
@@ -39,26 +37,6 @@ constexpr std::array<std::string_view, 2> php_markers{"composer.json", ".git"};
     return value == '\\' || value == '/';
 }
 
-// folder の下の name（区切りは folder の末尾に無ければ `\` を 1 つ）。
-[[nodiscard]] FilePath child_of(const FilePath &folder, std::string_view name)
-{
-    std::string text(folder.text());
-    if (!text.empty() && !separator(text.back()))
-    {
-        text.push_back('\\');
-    }
-    text.append(name);
-    // folder も name も検証済みの文字だけなので、つないだ文字列も読める（不変条件）。
-    return FilePath::parse(text).value();
-}
-
-// folder の下に印のどれかがあるか（表の順に見て、最初にあった所で止める）。
-[[nodiscard]] bool marked(const FilePath &folder, std::span<const std::string_view> markers,
-                          const std::function<bool(const FilePath &)> &present)
-{
-    return std::ranges::any_of(markers, [&](std::string_view marker)
-                               { return present(child_of(folder, marker)); });
-}
 } // namespace
 
 // 言語を足すとこの switch が落ちる（CPP-002）。足した言語の印を nvim-lspconfig で決める。
@@ -104,25 +82,30 @@ std::span<const std::string_view> lsp_root_markers(Language language) noexcept
     return git_only;
 }
 
-std::optional<FilePath> lsp_root_found(const FilePath &folder, Language language,
-                                       const std::function<bool(const FilePath &)> &present)
+std::vector<FilePath> lsp_root_folders(const FilePath &folder)
 {
-    const auto markers = lsp_root_markers(language);
-    std::optional<FilePath> current = folder;
-    for (std::size_t depth = 0; depth < lsp_root_search_depth && current.has_value(); ++depth)
+    std::vector<FilePath> folders{folder};
+    while (folders.size() < lsp_root_search_depth)
     {
-        const FilePath &here = current.value();
-        if (marked(here, markers, present))
+        auto parent = folder_of(folders.back());
+        if (!parent.has_value() || parent.value().text() == folders.back().text())
         {
-            return here;
+            break;
         }
-        auto parent = folder_of(here);
-        if (!parent.has_value() || parent.value().text() == here.text())
-        {
-            return std::nullopt;
-        }
-        current = std::move(parent);
+        folders.push_back(std::move(parent).value());
     }
-    return std::nullopt;
+    return folders;
+}
+
+FilePath lsp_root_marker_path(const FilePath &folder, std::string_view marker)
+{
+    std::string text(folder.text());
+    if (!text.empty() && !separator(text.back()))
+    {
+        text.push_back('\\');
+    }
+    text.append(marker);
+    // folder も marker も検証済みの文字だけなので、つないだ文字列も読める（不変条件）。
+    return FilePath::parse(text).value();
 }
 } // namespace nenenib::core
