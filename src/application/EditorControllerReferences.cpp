@@ -43,9 +43,6 @@ namespace nenenib::application
 {
 namespace
 {
-// 一覧に出す参照の上限（決定 4）。
-constexpr std::size_t reference_limit = 1000;
-
 // 候補の command（控えた列の位置の 10 進）→ 位置。
 [[nodiscard]] std::optional<std::size_t> listed_index(std::string_view command) noexcept
 {
@@ -87,11 +84,22 @@ constexpr std::size_t reference_limit = 1000;
     return core::ProjectHit{core::LineNumber{at.start.line + 1}, core::Column{1}, {}, 0, 0, 0};
 }
 
-// 開いていないファイルの候補の題名「相対パス:行」（桁なし）。
-[[nodiscard]] core::CommandChoice unopened_choice(const core::FilePath &file,
-                                                  const core::ProjectHitRow &row)
+// 当たり（text は開いているタブの本文・開いていなければ nullptr）。
+[[nodiscard]] core::ProjectHit listed_hit(const core::LspRange &at, const core::TextBuffer *text,
+                                          core::LspPositionEncoding encoding)
+{
+    return text != nullptr ? opened_hit(*text, at, encoding) : unopened_hit(at);
+}
+
+// 参照の候補の題名。開いているタブは「相対パス:行:桁」、開いていないファイルは「相対パス:行」。
+[[nodiscard]] core::CommandChoice reference_choice(const core::FilePath &file,
+                                                   const core::ProjectHitRow &row, bool opened)
 {
     core::CommandChoice choice = core::project_hit_choice(file, row);
+    if (opened)
+    {
+        return choice;
+    }
     auto label = core::clipped_display_text(row.path + ":" + std::to_string(row.line.value));
     if (label.has_value())
     {
@@ -124,16 +132,17 @@ constexpr std::size_t reference_limit = 1000;
 } // namespace
 
 // 参照の答え（決定 4）は 1 回使って消す。何も待っていないときだけ一覧を開き、空なら 1 行知らせる。
-// 違えば知らせずに捨てる（定義の答えと同じ・ADR 0190 の追補 3）。
+// 違えば知らせずに捨てる（定義の答えと同じ・ADR 0190 の追補 3）。窓が非アクティブの間に届いた答えは
+// 一覧を開かずに控える（`&` で開けば見える・#1954 のレビュー R5）。切った答えは「N 件のうち」を
+// 1 行知らせる（L2）。
 void EditorController::settle_references_answer()
 {
-    const auto &answer = state_.language_answers().references;
-    if (!answer.has_value())
+    auto answers = state_.language_answers();
+    if (!answers.references.has_value())
     {
         return;
     }
-    LanguageDefinition answered = answer.value();
-    LanguageAnswers answers = state_.language_answers();
+    LanguageDefinition answered = std::move(answers.references).value();
     answers.references.reset();
     state_ = state_.with_language_answers(std::move(answers));
     const bool usable = faces_closed() && awaits_nothing();
@@ -148,16 +157,39 @@ void EditorController::settle_references_answer()
             state_.with_command_message(ui_notice(core::UiMessage::notice_references_not_found));
         return;
     }
-    if (answered.locations.size() > reference_limit)
-    {
-        answered.locations.resize(reference_limit);
-    }
+    const std::size_t listed = answered.locations.size();
+    const std::size_t total = answered.total;
     held_references_ = std::move(answered);
+    if (window_inactive_)
+    {
+        return;
+    }
     run_palette_request(core::ExPaletteRequest{core::PaletteScope::references, {}});
+    if (total > listed)
+    {
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_references_first_of,
+                                                  {std::to_string(listed), std::to_string(total)}));
+    }
+}
+
+// 控えた答えを捨てる（#1954 のレビュー R1）。答えを頼んだ文書を言語サーバーが閉じたとき（タブを
+// 閉じた・lsp をオフにした・席が止まった）に、文書を閉じる道の 1 か所から呼ぶ。記号も同じ。
+void EditorController::forget_listed_answers(AutosaveId document)
+{
+    if (held_references_.has_value() && held_references_.value().context.document == document)
+    {
+        held_references_.reset();
+    }
+    if (held_symbols_.has_value() && held_symbols_.value().second.context.document == document)
+    {
+        held_symbols_.reset();
+    }
 }
 
 // 面を開くときに 1 回だけ作る参照の候補（ADR 0062 の決定 15）。答えの順のまま。`file:` でない場所は
-// 外す。
+// 外す。ルートは 1 回、ファイル・タブ・本文は URI ごとに 1 回だけ引く（#1954 のレビュー R1・1,000
+// 件 × タブ 20 で 1 件ごとに引くと Debug で 1 回 約 70 ms）。
 void EditorController::append_reference_choices(std::vector<core::CommandChoice> &entries)
 {
     palette_references_.clear();
@@ -166,43 +198,63 @@ void EditorController::append_reference_choices(std::vector<core::CommandChoice>
         return;
     }
     const auto encoding = held_references_.value().encoding;
+    const auto root = project_search_root();
+    std::vector<std::pair<std::string_view, ListedFile>> seen;
     for (const core::LspLocation &location : held_references_.value().locations)
     {
-        const auto file = core::file_path_of_uri(location.uri);
-        if (!file.has_value())
+        const ListedFile &listed = listed_file_in(seen, location.uri);
+        if (!listed.first.has_value())
         {
             continue;
         }
-        const auto tab = open_tab_of(file.value());
-        const auto text = tab.has_value() ? tab_text_at(tab.value()) : std::nullopt;
-        const core::FilePath root = project_search_root().value_or(file.value());
-        const core::ProjectHit hit = text.has_value()
-                                         ? opened_hit(*text.value().first, location.range, encoding)
-                                         : unopened_hit(location.range);
-        const core::ProjectHitRow row = core::project_hit_row(root, file.value(), hit);
-        core::CommandChoice choice = text.has_value() ? core::project_hit_choice(file.value(), row)
-                                                      : unopened_choice(file.value(), row);
+        const core::FilePath &file = listed.first.value();
+        const core::ProjectHit hit = listed_hit(location.range, listed.second, encoding);
+        core::CommandChoice choice = reference_choice(
+            file, core::project_hit_row(root.value_or(file), file, hit), listed.second != nullptr);
         choice.command = std::to_string(palette_references_.size());
         choice.kind = core::CommandChoiceKind::land;
         choice.origin = core::PaletteOrigin::reference;
         entries.push_back(std::move(choice));
-        palette_references_.push_back(PaletteReference{
-            file.value(), LspLanding{.at = location.range.start, .encoding = encoding},
-            PreviewAnchor{hit.line, hit.match_begin, hit.match_end}});
+        palette_references_.push_back(
+            PaletteReference{file, LspLanding{.at = location.range.start, .encoding = encoding},
+                             PreviewAnchor{hit.line, hit.match_begin, hit.match_end}});
     }
 }
 
-// 記号の答え（決定 5）も 1 回使って消す。使える条件と知らせは参照と同じ。答えた文書を控え、一覧は
-// その文書の記号だけ。
+// 引いた URI の覚え seen から引き、無ければ引いて覚える（URI の数は答えのファイルの数）。
+const EditorController::ListedFile &
+EditorController::listed_file_in(std::vector<std::pair<std::string_view, ListedFile>> &seen,
+                                 const std::string &uri) const
+{
+    const auto found = std::ranges::find(seen, std::string_view{uri},
+                                         &std::pair<std::string_view, ListedFile>::first);
+    if (found != seen.end())
+    {
+        return found->second;
+    }
+    seen.emplace_back(uri, listed_file_of(uri));
+    return seen.back().second;
+}
+
+// URI → ファイルと、開いているタブの本文（開いていなければ nullptr・`file:` でなければ値なし）。
+EditorController::ListedFile EditorController::listed_file_of(const std::string &uri) const
+{
+    auto file = core::file_path_of_uri(uri);
+    const auto tab = file.has_value() ? open_tab_of(file.value()) : std::nullopt;
+    const auto text = tab.has_value() ? tab_text_at(tab.value()) : std::nullopt;
+    return ListedFile{std::move(file), text.has_value() ? text.value().first : nullptr};
+}
+
+// 記号の答え（決定 5）も 1 回使って消す。使える条件・窓が非アクティブのとき・知らせは参照と同じ。
+// 答えた文書を控え、一覧はその文書の記号だけ。
 void EditorController::settle_symbols_answer()
 {
-    const auto &answer = state_.language_answers().symbols;
-    if (!answer.has_value())
+    auto answers = state_.language_answers();
+    if (!answers.symbols.has_value())
     {
         return;
     }
-    LanguageSymbols answered = answer.value();
-    LanguageAnswers answers = state_.language_answers();
+    LanguageSymbols answered = std::move(answers.symbols).value();
     answers.symbols.reset();
     state_ = state_.with_language_answers(std::move(answers));
     const bool usable = faces_closed() && awaits_nothing();
@@ -218,7 +270,10 @@ void EditorController::settle_symbols_answer()
         return;
     }
     held_symbols_ = std::pair{path.value(), std::move(answered)};
-    run_palette_request(core::ExPaletteRequest{core::PaletteScope::symbols, {}});
+    if (!window_inactive_)
+    {
+        run_palette_request(core::ExPaletteRequest{core::PaletteScope::symbols, {}});
+    }
 }
 
 // 面を開くときに 1 回だけ作る記号の候補（文書の順）。文書が開いていれば本文で行と印を写す。
@@ -232,6 +287,7 @@ void EditorController::append_symbol_choices(std::vector<core::CommandChoice> &e
     const auto &[file, answer] = held_symbols_.value();
     const auto tab = open_tab_of(file);
     const auto text = tab.has_value() ? tab_text_at(tab.value()) : std::nullopt;
+    const core::TextBuffer *body = text.has_value() ? text.value().first : nullptr;
     for (const core::LspSymbol &symbol : answer.symbols)
     {
         auto choice = symbol_choice(symbol, palette_symbols_.size());
@@ -239,9 +295,7 @@ void EditorController::append_symbol_choices(std::vector<core::CommandChoice> &e
         {
             continue;
         }
-        const core::ProjectHit hit = text.has_value()
-                                         ? opened_hit(*text.value().first, symbol.at, answer.encoding)
-                                         : unopened_hit(symbol.at);
+        const core::ProjectHit hit = listed_hit(symbol.at, body, answer.encoding);
         entries.push_back(std::move(choice).value());
         palette_symbols_.push_back(
             PaletteReference{file, LspLanding{.at = symbol.at.start, .encoding = answer.encoding},

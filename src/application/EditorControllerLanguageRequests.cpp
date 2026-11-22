@@ -32,6 +32,7 @@
 #include "ServerAbilities.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
@@ -136,8 +137,26 @@ definition_answer(const PendingLspRequest &request, const core::LspResponse &res
     {
         return std::nullopt;
     }
-    return LanguageDefinition{
-        .context = *context, .locations = locations_of(response.result), .encoding = encoding};
+    auto locations = locations_of(response.result);
+    const std::size_t total = locations.size();
+    return LanguageDefinition{.context = *context,
+                              .locations = std::move(locations),
+                              .encoding = encoding,
+                              .total = total};
+}
+
+// 参照の答え（ADR 0191 の決定 4）。定義と同じ照合で、受け取りの時点で lsp_reference_limit 件に切る
+// （全件を状態へ写さない・#1954 のレビュー R2）。total は切る前の件数。
+[[nodiscard]] std::optional<LanguageDefinition>
+references_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                  const LspRequestContext &current, core::LspPositionEncoding encoding)
+{
+    auto answer = definition_answer(request, response, current, encoding);
+    if (answer.has_value() && answer.value().locations.size() > core::lsp_reference_limit)
+    {
+        answer.value().locations.resize(core::lsp_reference_limit);
+    }
+    return answer;
 }
 
 // 記号の答え（#1955・ADR 0191 の決定 5）。照合は定義と同じ。誤りの答えと読めない答えは空の列。
@@ -355,7 +374,7 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
         answers.definition = definition_answer(request, response, current, link_of(slot).encoding);
         break;
     case LspRequestKind::references:
-        answers.references = definition_answer(request, response, current, link_of(slot).encoding);
+        answers.references = references_answer(request, response, current, link_of(slot).encoding);
         break;
     case LspRequestKind::document_symbol:
         answers.symbols = symbols_answer(request, response, current, link_of(slot).encoding);
