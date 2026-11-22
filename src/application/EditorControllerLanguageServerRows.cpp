@@ -165,7 +165,8 @@ found_command(const core::LanguageServerCandidate &candidate, const FoundLanguag
                                                 : found.executable.text()};
 }
 
-// name の命令の行を value にする（無ければ名前の順の位置に足す）。
+// name の命令の行を value にする（無ければ名前の順の位置に足す）。commands は名前の順に並んで
+// いる前提（設定の codec が読むときに名前の順へ並べ、ここが足すのも名前の順の位置）。
 void put_command(Commands &commands, std::string_view name, const std::string &value)
 {
     const auto at = std::ranges::find_if(commands, [name](const auto &entry)
@@ -309,7 +310,8 @@ LanguageServerRowView EditorController::known_server_row(std::size_t index) cons
                                LanguageServerRowState::searching,
                                {},
                                false,
-                               LanguageServerRowAction::none};
+                               LanguageServerRowAction::none,
+                               std::string{core::language_name(row.languages.front())}};
     if (const auto *command = row_command(commands, row))
     {
         view.server = configured_server(row, *command);
@@ -352,9 +354,13 @@ std::vector<LanguageServerRowView> EditorController::language_server_rows() cons
     {
         const std::string &command = *command_named(commands, name);
         const auto language = core::language_of_name(name);
-        LanguageServerRowView view{
-            name, executable_stem(command),       LanguageServerRowState::configured, {},
-            true, LanguageServerRowAction::remove};
+        LanguageServerRowView view{name,
+                                   executable_stem(command),
+                                   LanguageServerRowState::configured,
+                                   {},
+                                   true,
+                                   LanguageServerRowAction::remove,
+                                   name};
         if (language.has_value())
         {
             const std::array languages{language.value()};

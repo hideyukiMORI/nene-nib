@@ -361,6 +361,34 @@ void verify_fold_and_unlisted()
     static_cast<void>(controller.apply(app::CloseSettings{}));
     expect(editing.settings().writes() == 1, "the removal is saved once");
 }
+// 手で書いた引数つきの命令の行は、別の行の「使う」・「外す」・畳みを開くの後に閉じても、書いた
+// bytes のまま残る（触るのは押した行の言語の行だけ・#1945 のレビュー）。
+void verify_hand_written_lines_stay()
+{
+    constexpr std::string_view rust = R"("C:\my tools\rust-analyzer.exe" --log-file C:\w\ra.log)";
+    constexpr std::string_view java = R"(C:\jdtls\jdtls.exe -data "C:\w s\ws" --stdio)";
+    auto settings = core::default_editor_settings();
+    settings.lsp_commands = {{"java", std::string{java}}, {"rust", std::string{rust}}};
+    Editing editing(SettingsReading{std::optional<core::EditorSettings>{settings}});
+    auto &controller = editing.controller();
+    opened_with_results(editing);
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    const auto panel = panel_of(controller.frame());
+    const std::size_t fold = panel.rows.size() + panel.servers.size();
+    static_cast<void>(controller.apply(app::FocusSettingsRow{fold}));
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    static_cast<void>(controller.apply(app::FocusSettingsRow{panel.rows.size()}));
+    static_cast<void>(controller.apply(app::StepSettings{true}));
+    static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    static_cast<void>(controller.apply(app::CloseSettings{}));
+    const auto written = editing.settings().written().value_or(core::default_editor_settings());
+    const auto *kept_rust = command_of(written, "rust");
+    const auto *kept_java = command_of(written, "java");
+    expect(editing.settings().writes() == 1 && kept_rust != nullptr && *kept_rust == rust &&
+               kept_java != nullptr && *kept_java == java &&
+               command_of(written, "cpp") != nullptr && command_of(written, "python") != nullptr,
+           "hand-written lines with arguments survive other rows' Use and the fold");
+}
 } // namespace
 
 void verify_language_server_candidates_scope()
@@ -373,5 +401,6 @@ void verify_language_server_candidates_scope()
     verify_revert_drops_use();
     verify_remove_stops_running();
     verify_fold_and_unlisted();
+    verify_hand_written_lines_stay();
 }
 } // namespace nenenib::tests

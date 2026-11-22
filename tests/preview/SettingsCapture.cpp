@@ -110,18 +110,18 @@ constexpr float full_channel = 255.0F;
     // 「言語サーバー」の節の見本（案 A の絵と同じ 5 行と畳みの 1 行・#1945）。
     using State = app::LanguageServerRowState;
     using Action = app::LanguageServerRowAction;
-    view.servers = {{"C / C++", "clangd", State::running,
-                     R"(C:\Program Files\LLVM\bin\clangd.exe --background-index)", true,
-                     Action::remove},
-                    {"Python", "pyright-langserver", State::found,
-                     R"(C:\Users\nib\AppData\Roaming\npm\node_modules\pyright\langserver.index.js)",
-                     true, Action::use},
-                    {"TypeScript / JavaScript", "typescript-language-server", State::missing,
-                     "npm i -g typescript-language-server typescript", true, Action::none},
-                    {"Rust", "rust-analyzer", State::found,
-                     R"(C:\Users\nib\.cargo\bin\rust-analyzer.exe)", true, Action::use},
-                    {"Go", "gopls", State::missing, "go install golang.org/x/tools/gopls@latest",
-                     true, Action::none}};
+    view.servers = {
+        {"C / C++", "clangd", State::running,
+         R"(C:\Program Files\LLVM\bin\clangd.exe --background-index)", true, Action::remove, "cpp"},
+        {"Python", "pyright-langserver", State::found,
+         R"(C:\Users\nib\AppData\Roaming\npm\node_modules\pyright\langserver.index.js)", true,
+         Action::use, "python"},
+        {"TypeScript / JavaScript", "typescript-language-server", State::missing,
+         "npm i -g typescript-language-server typescript", true, Action::none, "typescript"},
+        {"Rust", "rust-analyzer", State::found, R"(C:\Users\nib\.cargo\bin\rust-analyzer.exe)",
+         true, Action::use, "rust"},
+        {"Go", "gopls", State::missing, "go install golang.org/x/tools/gopls@latest", true,
+         Action::none, "go"}};
     view.servers_hidden = 10;
     const std::size_t shown = view.rows.size() + view.servers.size() + 1;
     if (focused >= 0 && static_cast<std::size_t>(focused) < shown)
@@ -224,7 +224,7 @@ constexpr float full_channel = 255.0F;
     target.Clear(D2D1::ColorF(static_cast<float>(ground.red) / full_channel,
                               static_cast<float>(ground.green) / full_channel,
                               static_cast<float>(ground.blue) / full_channel, 1.0F));
-    painter.paint(view, layout, theme.ui, theme.body);
+    painter.paint(view, layout, theme.ui, theme.body.error);
     std::printf("settings: panel %d..%d, %zu items, scroll %d of %d, %zu layouts held\n",
                 layout.panel.left, layout.panel.right, layout.items.size(), layout.scroll,
                 layout.scroll_limit, layouts.size());

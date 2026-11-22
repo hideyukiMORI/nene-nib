@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -231,11 +232,24 @@ constexpr std::size_t utf8_bom_size = 3;
     return std::nullopt;
 }
 
+// node.exe の探しの覚え（1 回の探しの中で 1 回だけ探す・#1945 のレビュー R1）。外の optional は
+// 探したか、中は見つかったか。
+using NodeSearch = std::optional<std::optional<std::wstring>>;
+
 [[nodiscard]] std::optional<application::FoundLanguageServer>
-found_npm(const ServerSearchPlaces &places, const application::LanguageServerProbe &probe)
+found_npm(const ServerSearchPlaces &places, const application::LanguageServerProbe &probe,
+          NodeSearch &node_search)
 {
     const auto script = npm_script(places, probe);
-    const auto node = script.has_value() ? searched(places.folders, L"node") : std::nullopt;
+    if (!script.has_value())
+    {
+        return std::nullopt;
+    }
+    if (!node_search.has_value())
+    {
+        node_search = searched(places.folders, L"node");
+    }
+    const auto &node = node_search.value();
     if (!node.has_value())
     {
         return std::nullopt;
@@ -280,6 +294,17 @@ found_program(const ServerSearchPlaces &places, const application::LanguageServe
     return found;
 }
 
+// folder が探してよい置き場か（UNC の段と、割り当てたネットワークのドライブの段は探さない）。
+[[nodiscard]] bool local_place(const std::wstring &folder)
+{
+    if (!absolute_folder(folder) || folder.starts_with(L"\\\\"))
+    {
+        return false;
+    }
+    const std::wstring root{folder.at(0), L':', L'\\'};
+    return GetDriveTypeW(root.c_str()) != DRIVE_REMOTE;
+}
+
 // 版のフォルダ year の下の `<種類>\VC\Tools\Llvm\x64\bin` の在る物。
 void push_llvm(std::vector<std::wstring> &folders, const std::wstring &year)
 {
@@ -297,7 +322,7 @@ void push_llvm(std::vector<std::wstring> &folders, const std::wstring &year)
 // LLVM）。base が絶対パスでなければ何もしない。
 void push_visual_studio(std::vector<std::wstring> &folders, const std::wstring &base)
 {
-    if (!absolute_folder(base))
+    if (!local_place(base))
     {
         return;
     }
@@ -348,16 +373,29 @@ std::vector<std::wstring> absolute_path_folders(const std::wstring &value)
 
 std::vector<std::optional<application::FoundLanguageServer>>
 find_language_servers(const std::vector<application::LanguageServerProbe> &probes,
-                      const ServerSearchPlaces &places)
+                      const ServerSearchPlaces &places, const std::stop_token &stop)
 {
     std::vector<std::optional<application::FoundLanguageServer>> found;
     found.reserve(probes.size());
+    NodeSearch node_search;
     for (const auto &probe : probes)
     {
+        // 止める合図が来たら残りを探さない（窓を閉じるときの join を待たせない）。
+        if (stop.stop_requested())
+        {
+            found.emplace_back(std::nullopt);
+            continue;
+        }
         found.push_back(probe.package.empty() ? found_program(places, probe)
-                                              : found_npm(places, probe));
+                                              : found_npm(places, probe, node_search));
     }
     return found;
+}
+
+std::vector<std::wstring> local_places(std::vector<std::wstring> folders)
+{
+    std::erase_if(folders, [](const std::wstring &folder) { return !local_place(folder); });
+    return folders;
 }
 
 ServerSearchPlaces system_search_places()
@@ -375,6 +413,8 @@ ServerSearchPlaces system_search_places()
     push_visual_studio(places.folders, environment(L"ProgramFiles(x86)"));
     places.npm_roots = path;
     push_beneath(places.npm_roots, environment(L"APPDATA"), L"npm");
+    places.folders = local_places(std::move(places.folders));
+    places.npm_roots = local_places(std::move(places.npm_roots));
     return places;
 }
 } // namespace nenenib::adapters::win32

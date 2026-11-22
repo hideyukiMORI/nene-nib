@@ -1,5 +1,6 @@
 #pragma once
 
+#include "LanguageServerRowAction.hpp"
 #include "LanguageServerRowState.hpp"
 #include "LanguageServerRowView.hpp"
 #include "LayoutRect.hpp"
@@ -11,7 +12,6 @@
 #include "SettingsPanelText.hpp"
 #include "SettingsRowView.hpp"
 #include "SettingsView.hpp"
-#include "SyntaxPalette.hpp"
 #include "UiMessage.hpp"
 
 #include <cstddef>
@@ -47,10 +47,9 @@ class SettingsPanelPainter final
     // 文字の幅を測って配置を作る。area は面を置ける帯（タイトルバーの下からステータスバーの上）。
     [[nodiscard]] core::SettingsLayout arranged(const application::SettingsView &view,
                                                 const core::LayoutRect &area) const;
-    // body は本文の構文の色（段の印の heavy は error・言語サーバーの節の「動いています」は string・
-    // 「見つかりました」は warning・#1945）。
+    // heavy は本文の構文の色の error（段の印の「重い」と言語サーバーの節の「止めました」）。
     void paint(const application::SettingsView &view, const core::SettingsLayout &layout,
-               const core::Palette &palette, const core::SyntaxPalette &body);
+               const core::Palette &palette, core::RgbColor heavy);
 
   private:
     void paint_header(const core::SettingsLayout &layout);
@@ -76,6 +75,9 @@ class SettingsPanelPainter final
     server_state(application::LanguageServerRowState state) const noexcept;
     void paint_server(const application::LanguageServerRowView &row,
                       const core::SettingsLayout &layout, const core::SettingsLayoutItem &item);
+    void paint_server_button(application::LanguageServerRowAction action,
+                             const core::LayoutRect &box);
+    [[nodiscard]] static bool tail_matters(application::LanguageServerRowState state) noexcept;
     void paint_fold(const application::SettingsView &view, const core::LayoutRect &box);
     void paint_note(core::UiMessage message, const core::LayoutRect &box);
     void paint_footer(const application::SettingsView &view, const core::SettingsLayout &layout);
@@ -104,6 +106,9 @@ class SettingsPanelPainter final
     // area の幅で折り返して描く（2 行まで・縦は area の中央）。
     void write_wrapped(std::string_view text, IDWriteTextFormat *format,
                        const core::LayoutRect &area, core::RgbColor color);
+    // area に入り切らなければ先頭側を「…」で省いて末尾を残す（パスの実行ファイルの名前・#1945）。
+    void write_tail(std::string_view text, IDWriteTextFormat *format, const core::LayoutRect &area,
+                    core::RgbColor color);
     void write_centered(std::string_view text, IDWriteTextFormat *format,
                         const core::LayoutRect &area, core::RgbColor color);
     void write_trailing(std::string_view text, IDWriteTextFormat *format,
@@ -121,7 +126,5 @@ class SettingsPanelPainter final
     PaletteRowLayouts &layouts_;
     core::Palette palette_{};
     core::RgbColor heavy_{};
-    core::RgbColor good_{};
-    core::RgbColor notable_{};
 };
 } // namespace nenenib::ui::win32

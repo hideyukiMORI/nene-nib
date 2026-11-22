@@ -381,7 +381,8 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::settings_lsp_state_searching, "正在查找…"},
     {UiMessage::settings_lsp_use, "使用"},
     {UiMessage::settings_lsp_remove, "移除"},
-    {UiMessage::settings_lsp_install_hint, "安装 {0} 并加入 PATH 后会显示在这里"},
+    {UiMessage::settings_lsp_install_hint,
+     "安装 {0} 后重新打开设置即可显示在这里（修改了 PATH 时请重新启动 Nib）"},
     {UiMessage::settings_lsp_stopped_reason, "多次启动失败后已停止。:set lsp 可重新启动"},
     {UiMessage::settings_lsp_more, "查看其他 {0} 种语言"},
 }};

@@ -169,12 +169,10 @@ core::SettingsLayout SettingsPanelPainter::arranged(const application::SettingsV
 
 void SettingsPanelPainter::paint(const application::SettingsView &view,
                                  const core::SettingsLayout &layout, const core::Palette &palette,
-                                 const core::SyntaxPalette &body)
+                                 core::RgbColor heavy)
 {
     palette_ = palette;
-    heavy_ = body.error;
-    good_ = body.string;
-    notable_ = body.warning;
+    heavy_ = heavy;
     fill(layout.panel, palette_.panel);
     fill(layout.border, palette_.panel_border);
     paint_header(layout);
@@ -514,8 +512,9 @@ void SettingsPanelPainter::paint_stepper(std::string_view value, const core::Set
 }
 
 // 行の領域の 1 行（見えている行の通しの位置: 設定の行 → 言語サーバーの行 → 畳みの 1 行）。焦点の
-// 行は current_line の面。言語サーバーの節の焦点はさらに accent の 1 DIP の枠で囲む（#1929 の
-// 「焦点の色がほとんど変わらない」をこの節では繰り返さない・#1945）。
+// 行は current_line の面。言語サーバーの節の焦点はさらに text の 1 DIP の枠で囲む（#1929 の
+// 「焦点の色がほとんど変わらない」をこの節では繰り返さない・#1945。accent は背景に近いテーマが
+// あるので枠に使わない・レビュー M1）。
 void SettingsPanelPainter::paint_any_row(const application::SettingsView &view,
                                          const core::SettingsLayout &layout,
                                          const core::SettingsLayoutItem &item)
@@ -532,7 +531,7 @@ void SettingsPanelPainter::paint_any_row(const application::SettingsView &view,
     }
     if (focused)
     {
-        outline(item.box, row_radius_dips, palette_.accent);
+        outline(item.box, row_radius_dips, palette_.text);
     }
     const std::size_t server = item.index - view.rows.size();
     if (server < view.servers.size())
@@ -543,14 +542,14 @@ void SettingsPanelPainter::paint_any_row(const application::SettingsView &view,
     paint_fold(view, item.box);
 }
 
-// 状態の語と色（色だけで伝えない・語を必ず添える・動いている物の語は ● で始まる）。
+// 状態の語と色（状態を色分けしない・語で伝え、動いている物の語は ● で始まる・レビュー R4）。
 std::pair<core::UiMessage, core::RgbColor>
 SettingsPanelPainter::server_state(application::LanguageServerRowState state) const noexcept
 {
     switch (state)
     {
     case application::LanguageServerRowState::running:
-        return {core::UiMessage::settings_lsp_state_running, good_};
+        return {core::UiMessage::settings_lsp_state_running, palette_.text};
     case application::LanguageServerRowState::starting:
         return {core::UiMessage::settings_lsp_state_starting, palette_.muted};
     case application::LanguageServerRowState::stopped:
@@ -558,7 +557,7 @@ SettingsPanelPainter::server_state(application::LanguageServerRowState state) co
     case application::LanguageServerRowState::configured:
         return {core::UiMessage::settings_lsp_state_configured, palette_.muted};
     case application::LanguageServerRowState::found:
-        return {core::UiMessage::settings_lsp_state_found, notable_};
+        return {core::UiMessage::settings_lsp_state_found, palette_.text};
     case application::LanguageServerRowState::missing:
         return {core::UiMessage::settings_lsp_state_missing, palette_.gutter};
     case application::LanguageServerRowState::searching:
@@ -568,22 +567,14 @@ SettingsPanelPainter::server_state(application::LanguageServerRowState state) co
 }
 
 // 言語サーバーの 1 行（1 行目: 言語の名前・サーバーの名前（等幅で小さく）・右端に状態の語、2 行目:
-// パスか命令の行（等幅・入り切らなければ「…」）か案内の文、右: 「使う」（accent
-// の枠）か「外す」）。
+// パスか命令の行（等幅・入り切らなければパスは先頭側を「…」で省く）か案内の文、右: 「使う」か
+// 「外す」）。
 void SettingsPanelPainter::paint_server(const application::LanguageServerRowView &row,
                                         const core::SettingsLayout &layout,
                                         const core::SettingsLayoutItem &item)
 {
     const auto control = core::settings_control_box(layout, item);
-    if (row.action != application::LanguageServerRowAction::none)
-    {
-        const bool use = row.action == application::LanguageServerRowAction::use;
-        fill_rounded(control, box_radius_dips, palette_.background);
-        outline(control, box_radius_dips, use ? palette_.accent : palette_.panel_border);
-        write_centered(
-            said(use ? core::UiMessage::settings_lsp_use : core::UiMessage::settings_lsp_remove),
-            text_.label, control, use ? palette_.accent : palette_.text);
-    }
+    paint_server_button(row.action, control);
     const auto gap = pixels(core::settings_row_gap_dips);
     const auto right = control.left - (core::width_of(control) > 0 ? gap : 0);
     const auto left = item.box.left + pixels(core::settings_row_padding_dips);
@@ -600,10 +591,86 @@ void SettingsPanelPainter::paint_server(const application::LanguageServerRowView
           core::LayoutRect{name.left + used + pixels(tier_gap_dips), name.top, name.right,
                            name.bottom},
           palette_.gutter);
-    write(row.detail, row.code ? text_.mono : text_.note,
-          core::LayoutRect{left, title.bottom + pixels(hint_gap_dips), right,
-                           item.box.bottom - pixels(title_top_dips)},
-          palette_.muted);
+    const core::LayoutRect second{left, title.bottom + pixels(hint_gap_dips), right,
+                                  item.box.bottom - pixels(title_top_dips)};
+    if (row.code && tail_matters(row.state))
+    {
+        write_tail(row.detail, text_.mono, second, palette_.muted);
+        return;
+    }
+    write(row.detail, row.code ? text_.mono : text_.note, second, palette_.muted);
+}
+
+// 言語サーバーの行の右の押す物。「使う」は主ボタン（accent の地と on_accent の字・レビュー M1）、
+// 「外す」は background の地と panel_border の枠と text の字、押す物の無い行は描かない。
+void SettingsPanelPainter::paint_server_button(application::LanguageServerRowAction action,
+                                               const core::LayoutRect &box)
+{
+    switch (action)
+    {
+    case application::LanguageServerRowAction::none:
+        return;
+    case application::LanguageServerRowAction::use:
+        paint_button(said(core::UiMessage::settings_lsp_use), box, true, palette_.on_accent);
+        return;
+    case application::LanguageServerRowAction::remove:
+        fill_rounded(box, box_radius_dips, palette_.background);
+        paint_button(said(core::UiMessage::settings_lsp_remove), box, false, palette_.text);
+        return;
+    }
+    std::unreachable();
+}
+
+// 2 行目が見つかったパスか命令の行（末尾の実行ファイルの名前が肝心）の状態か。入れ方の命令と探して
+// いる間は頭が肝心なので末尾を切る。
+bool SettingsPanelPainter::tail_matters(application::LanguageServerRowState state) noexcept
+{
+    switch (state)
+    {
+    case application::LanguageServerRowState::running:
+    case application::LanguageServerRowState::starting:
+    case application::LanguageServerRowState::configured:
+    case application::LanguageServerRowState::found:
+        return true;
+    case application::LanguageServerRowState::stopped:
+    case application::LanguageServerRowState::missing:
+    case application::LanguageServerRowState::searching:
+        return false;
+    }
+    std::unreachable();
+}
+
+// 入り切らなければ先頭側を「…」で省き、末尾を残して描く（パスの実行ファイルの名前を消さない・
+// レビューの軽い指摘）。省く位置は全文の文字組みの当たり判定で決め、字の途中で切らない。
+void SettingsPanelPainter::write_tail(std::string_view text, IDWriteTextFormat *format,
+                                      const core::LayoutRect &area, core::RgbColor color)
+{
+    constexpr std::string_view ellipsis = "…";
+    const auto full = width(text, format);
+    const auto room = core::width_of(area);
+    const auto shown = text.empty() ? nullptr : line(text, format);
+    if (full <= room || shown == nullptr)
+    {
+        write(text, format, area, color);
+        return;
+    }
+    BOOL trailing = FALSE;
+    BOOL inside = FALSE;
+    DWRITE_HIT_TEST_METRICS hit{};
+    // 幅は切り上げなので 1 画素の余りを見込む。
+    const auto cut = static_cast<float>(full - room + width(ellipsis, format) + 1);
+    const std::wstring wide = core::to_utf16(text).value_or(std::wstring{});
+    if (FAILED(shown->HitTestPoint(cut, 0.0F, &trailing, &inside, &hit)))
+    {
+        write(text, format, area, color);
+        return;
+    }
+    // 当たった字が cut より左から始まるなら、その字ごと省く。
+    const std::size_t from =
+        std::min<std::size_t>(wide.size(), hit.textPosition + (hit.left < cut ? hit.length : 0U));
+    std::string kept{ellipsis};
+    kept += core::to_utf8(std::wstring_view{wide}.substr(from)).value_or(std::string{});
+    write(kept, format, area, color);
 }
 
 // 「ほかの N 言語を見る」と下向きの印（行のどこを押しても開く）。

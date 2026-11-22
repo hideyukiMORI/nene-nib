@@ -43,6 +43,7 @@
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
 #include "SettingsLayout.hpp"
+#include "SettingsPress.hpp"
 #include "SettingsTarget.hpp"
 #include "SplitLayout.hpp"
 #include "StartPress.hpp"
@@ -625,9 +626,9 @@ class EditorWindow final
     // 補完の面の上で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・#1844 の R1b）。
     bool completion_click_began_ = false;
     std::int32_t completion_wheel_remainder_ = 0;
-    // 設定の面の上で押した部品（離したときに同じ部品なら動かす）・ホイールの余り・探す欄へ打つ
-    // 文字の上位サロゲート（#1836）。
-    std::optional<core::SettingsTarget> settings_pressed_;
+    // 設定の面の上で押した部品と行の身元（離したときに同じなら動かす・#1945 の
+    // R2）・ホイールの余り・探す欄へ打つ 文字の上位サロゲート（#1836）。
+    std::optional<SettingsPress> settings_pressed_;
     std::int32_t settings_wheel_remainder_ = 0;
     wchar_t settings_high_surrogate_ = 0;
     // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。

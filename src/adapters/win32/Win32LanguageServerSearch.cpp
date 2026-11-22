@@ -26,7 +26,8 @@ void Win32LanguageServerSearch::bind(std::function<void()> arrived)
     shelf_->bind(std::move(arrived));
 }
 
-// 止める合図が来ていれば探さない。
+// 止める合図が来ていれば探さない。探しの途中で来たら残りの候補を探さず、結果も置かない（窓を閉じる
+// ときの join を待たせない・#1945 のレビュー R1）。
 void Win32LanguageServerSearch::search(std::vector<application::LanguageServerProbe> probes)
 {
     worker_.post(
@@ -36,7 +37,12 @@ void Win32LanguageServerSearch::search(std::vector<application::LanguageServerPr
             {
                 return;
             }
-            shelf->deliver(find_language_servers(probes, (*places)()));
+            auto found = find_language_servers(probes, (*places)(), stop);
+            if (stop.stop_requested())
+            {
+                return;
+            }
+            shelf->deliver(std::move(found));
         });
 }
 

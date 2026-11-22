@@ -17,10 +17,12 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <optional>
 #include <semaphore>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -160,7 +162,7 @@ struct Places
 // 1 回の探し（ワーカーなし）。
 void verify_found(const Places &made)
 {
-    const auto found = adapters::find_language_servers(sample_probes(), made.places);
+    const auto found = adapters::find_language_servers(sample_probes(), made.places, {});
     expect(found.size() == sample_probes().size(), "one result per candidate in the same order");
     expect(executable_of(found.at(0)) == utf8_of(under(made.root, L"bin\\clangd.exe")) &&
                script_of(found.at(0)).empty(),
@@ -178,10 +180,10 @@ void verify_found(const Places &made)
            "a bin outside its package, a missing script and a bad package name are not found");
     auto no_node = made.places;
     no_node.folders = {under(made.root, L"bin")};
-    const auto without = adapters::find_language_servers(sample_probes(), no_node);
+    const auto without = adapters::find_language_servers(sample_probes(), no_node, {});
     expect(without.at(0).has_value() && !without.at(4).has_value(),
            "without node.exe in the folders an npm server is not found");
-    expect(adapters::find_language_servers(sample_probes(), adapters::ServerSearchPlaces{})
+    expect(adapters::find_language_servers(sample_probes(), adapters::ServerSearchPlaces{}, {})
                    .at(0)
                    .has_value() == false,
            "no folders means nothing is found (the current folder is never searched)");
@@ -194,6 +196,23 @@ void verify_path_folders()
     expect(folders == std::vector<std::wstring>{LR"(C:\a)", LR"(C:\b c)", LR"(D:\d)",
                                                 LR"(\\server\share)"},
            "PATH keeps only absolute folders, unquoted and trimmed");
+    // UNC の段（`\\?\` も）は探さない。この機械の C: はネットワークのドライブではない。
+    const auto local = adapters::local_places(
+        {LR"(C:\a)", LR"(\\server\share)", LR"(\\?\C:\b)", LR"(relative)", LR"(C:\c)"});
+    expect(local == std::vector<std::wstring>{LR"(C:\a)", LR"(C:\c)"},
+           "UNC folders and relative folders are dropped and local drive folders are kept");
+}
+
+// 止める合図が来ていれば、在る物も探さずに「見つからない」で埋める（数と順は同じ・レビュー R1）。
+void verify_stopped(const Places &made)
+{
+    std::stop_source source;
+    source.request_stop();
+    const auto found =
+        adapters::find_language_servers(sample_probes(), made.places, source.get_token());
+    expect(found.size() == sample_probes().size() &&
+               std::ranges::none_of(found, [](const auto &one) { return one.has_value(); }),
+           "a stop request leaves every candidate unsearched");
 }
 
 // ワーカー 1 本で探して、合図の後に 1 回だけ受け取る。
@@ -228,7 +247,7 @@ int print_system()
     }
     const auto places = adapters::system_search_places();
     std::printf("%zu folders, %zu npm roots\n", places.folders.size(), places.npm_roots.size());
-    const auto found = adapters::find_language_servers(probes, places);
+    const auto found = adapters::find_language_servers(probes, places, {});
     for (std::size_t index = 0; index < probes.size(); ++index)
     {
         const std::string executable = executable_of(found.at(index));
@@ -244,6 +263,7 @@ int run_tests()
     const auto made = made_places();
     verify_found(made);
     verify_path_folders();
+    verify_stopped(made);
     verify_worker(made);
     std::fprintf(stdout, "%zu checks, %zu failures\n", checks(), failures());
     return failures() == 0 ? 0 : 1;

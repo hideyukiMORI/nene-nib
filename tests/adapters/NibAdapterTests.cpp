@@ -1665,6 +1665,30 @@ void verify_v4_migration(Win32FileAdapter &files)
            "with v5 and v4 both present v5 wins");
 }
 
+// v4 だけの profile で設定の「言語サーバー」の節の「使う」を押して閉じた（#1945 のレビュー）:
+// 「使う」 は c と cpp の命令の行を置くだけなので、保存は v4 → v5 の移行の道に乗り、v5 だけを書いて
+// v4 を bytes のまま残す。v5 は置いた命令の行（空白のパスは `"` で囲んだ形）をそのまま持つ。
+void verify_v4_migration_with_language_server_use(Win32FileAdapter &files)
+{
+    reset_settings(files, std::nullopt);
+    expect(files.write(settings_paths().released, released_v4_settings).has_value(),
+           "prepare a profile with only the 1.0.0 v4");
+    Win32SettingsAdapter store(files, settings_paths());
+    const auto reading = store.read();
+    auto used = reading.value_or(std::nullopt).value_or(default_editor_settings());
+    const std::string clangd = R"("C:\Program Files\LLVM\bin\clangd.exe")";
+    used.lsp_commands = {{"c", clangd}, {"cpp", clangd}};
+    expect(reading && reading.value().has_value() && store.write(used).has_value(),
+           "Use on a v4-only profile saves on close");
+    const auto saved = decode_settings(
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v5);
+    expect(saved && same_settings(saved.value(), used) &&
+               saved.value().lsp_commands == used.lsp_commands &&
+               read_text(files, settings_paths().released, 4096).value_or("") ==
+                   released_v4_settings,
+           "the Use lines go to v5 and v4 stays byte for byte");
+}
+
 // v4 に v5 の鍵が在れば拒否し、1.0.0 が読込の後に v4 を変えたら古い写しで書かず、v4 の lock は
 // 待たずに断り、壊れた v5 は v4 へ戻らない（ADR 0170 の 2026-11-16 の追補の 2・3・6）。
 void verify_v4_conflicts(Win32FileAdapter &files)
@@ -1734,6 +1758,7 @@ void verify_oversized_settings(Win32FileAdapter &files)
 void verify_settings_migration(Win32FileAdapter &files)
 {
     verify_v4_migration(files);
+    verify_v4_migration_with_language_server_use(files);
     verify_v4_conflicts(files);
     verify_v3_migration(files);
     verify_v3_conflicts(files);
