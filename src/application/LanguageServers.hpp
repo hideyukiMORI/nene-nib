@@ -6,6 +6,7 @@
 #include "LanguageRootAnswer.hpp"
 #include "LanguageRootRequest.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerLog.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
 
@@ -33,8 +34,9 @@ inline constexpr std::size_t language_root_memory = 64;
 // は印を 探した答えの覚え（（フォルダ・言語）ごとに 1 つ・窓を閉じるまで・上限 language_root_memory
 // で 古い方から捨てる・段 S3）、seeking は頼んでまだ答えの来ない（フォルダ・言語）（同じ頼みを 2 回
 // 出さない・空なら collect を呼ばない）。answers は roots を書き換えた回数（held の鍵）、held は
-// アクティブな文書について reconcile が 1 回決めた root（#1944 のレビュー L1）。公開 aggregate
-// （CPP-003）。
+// アクティブな文書について reconcile が 1 回決めた root（#1944 のレビュー L1）、log は席ごとの
+// 標準エラーと知らせの記録（`:LspLog`・席を止めても残す・ADR 0160 の 2026-11-22 の追補）。公開
+// aggregate（CPP-003）。
 struct LanguageServers
 {
     std::array<LanguageServerLink, language_server_slot_limit> links = {};
@@ -51,5 +53,6 @@ struct LanguageServers
     std::vector<LanguageRootRequest> seeking = {};
     std::uint64_t answers = 0;
     std::optional<HeldLanguageRoot> held = std::nullopt;
+    LanguageServerLog log = {};
 };
 } // namespace nenenib::application

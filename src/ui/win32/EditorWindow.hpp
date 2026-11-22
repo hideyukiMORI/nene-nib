@@ -568,6 +568,7 @@ class EditorWindow final
     void run_narrow_pane();
     void run_even_panes();
     void resize_operated_pane(core::PaneResize resize);
+    void run_open_language_server_log();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

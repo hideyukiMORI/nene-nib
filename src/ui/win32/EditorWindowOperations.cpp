@@ -35,6 +35,7 @@
 #include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OperationTexts.hpp"
@@ -514,6 +515,8 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::widen_pane, &EditorWindow::run_widen_pane},
         {core::EditorOperation::narrow_pane, &EditorWindow::run_narrow_pane},
         {core::EditorOperation::even_panes, &EditorWindow::run_even_panes},
+        {core::EditorOperation::open_language_server_log,
+         &EditorWindow::run_open_language_server_log},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -828,6 +831,13 @@ void EditorWindow::run_show_diagnostic()
 void EditorWindow::run_list_diagnostics()
 {
     send(application::RunDiagnosticCommand{core::DiagnosticCommand::list});
+}
+
+// 言語サーバーの記録（ADR 0160 の 2026-11-22 の追補・`:LspLog` と同じ）。開くかは controller
+// が決める。
+void EditorWindow::run_open_language_server_log()
+{
+    send(application::OpenLanguageServerLog{});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

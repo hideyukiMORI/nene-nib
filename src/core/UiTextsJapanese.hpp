@@ -161,6 +161,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_narrow_pane_description, "いまの枠を狭め、もう 1 つの枠を広げます"},
     {UiMessage::operation_even_panes_name, "枠を等分に戻す"},
     {UiMessage::operation_even_panes_description, "2 つの枠を同じ大きさに戻します"},
+    {UiMessage::operation_open_language_server_log_name, "言語サーバーの記録を開く"},
+    {UiMessage::operation_open_language_server_log_description,
+     "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -435,5 +438,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::settings_lsp_stopped_reason,
      "続けて起こせなかったので止めました。:set lsp で起こし直します"},
     {UiMessage::settings_lsp_more, "ほかの {0} 言語を見る"},
+    {UiMessage::notice_language_server_log_empty, "言語サーバーの記録はまだありません"},
+    {UiMessage::status_language_server_starting, "{0}: 起動中"},
 }};
 } // namespace nenenib::core
