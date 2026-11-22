@@ -422,5 +422,6 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::palette_mark_references, "参照"},
     {UiMessage::notice_references_not_found, "参照が見つかりません"},
     {UiMessage::notice_references_not_supported, "この言語サーバーは参照に答えません"},
+    {UiMessage::notice_references_first_of, "参照 {1} 件のうち {0} 件を出しています"},
 }};
 } // namespace nenenib::core

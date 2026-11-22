@@ -445,5 +445,6 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::palette_mark_references, "References"},
     {UiMessage::notice_references_not_found, "No references found"},
     {UiMessage::notice_references_not_supported, "This language server does not answer references"},
+    {UiMessage::notice_references_first_of, "Showing {0} of {1} references"},
 }};
 } // namespace nenenib::core

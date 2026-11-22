@@ -1047,6 +1047,14 @@ class EditorController final
     [[nodiscard]] std::optional<PaletteReference>
     palette_reference_of(const core::CommandChoice &choice) const;
     void land_palette_reference(const core::CommandChoice &choice);
+    // 参照の答えを控えた文書を言語サーバーが閉じたら控えを捨てる（#1954 のレビュー R1）。
+    void forget_listed_answers(AutosaveId document);
+    // URI → ファイルと開いているタブの本文（URI が変わったときだけ引く）。
+    using ListedFile = std::pair<std::optional<core::FilePath>, const core::TextBuffer *>;
+    [[nodiscard]] ListedFile listed_file_of(const std::string &uri) const;
+    [[nodiscard]] const ListedFile &
+    listed_file_in(std::vector<std::pair<std::string_view, ListedFile>> &seen,
+                   const std::string &uri) const;
     // 言語サーバーは動いているが、アクティブな文書を受ける席がその能力を持たない（決定 2）。
     [[nodiscard]] bool lacks_ability(bool ServerAbilities::*ability) const;
     // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2・EditorControllerLinkCard.cpp）。

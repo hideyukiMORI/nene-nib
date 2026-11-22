@@ -391,5 +391,6 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_mark_references, "引用"},
     {UiMessage::notice_references_not_found, "找不到引用"},
     {UiMessage::notice_references_not_supported, "此语言服务器不提供引用"},
+    {UiMessage::notice_references_first_of, "显示 {1} 个引用中的 {0} 个"},
 }};
 } // namespace nenenib::core

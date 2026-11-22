@@ -2,8 +2,11 @@
 // `grr`・通常モードの Shift+F12・操作「参照の一覧」・Ctrl+P の一覧の記号 `&`。core の表、engine の
 // 効果、controller の道を替え玉 ScriptedLanguageServer で確かめる。
 #include "ActivateCommandChoice.hpp"
+#include "CancelCommand.hpp"
+#include "CloseTab.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandText.hpp"
 #include "DisplayText.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -20,6 +23,7 @@
 #include "LspAnswerFailure.hpp"
 #include "LspAnswers.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OperationBindings.hpp"
 #include "OperationKey.hpp"
@@ -53,6 +57,7 @@
 #include "VimTestSupport.hpp"
 #include "VimViewport.hpp"
 #include "VisibleLines.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <cstdint>
@@ -115,10 +120,11 @@ app::EditorFrame delivered(Editing &editing, app::ServerEvent event)
 }
 
 // main.cpp と two.cpp を置き、main.cpp を開いて capabilities で `initialize` に答える。
-void started(Editing &editing, std::string_view capabilities)
+void started_with(Editing &editing, std::string_view capabilities, std::string_view main_text,
+                  std::string_view two_text)
 {
-    editing.files().hold_at(std::string(source_path), Bytes{std::string(source_text)});
-    editing.files().hold_at(std::string(second_path), Bytes{std::string(second_text)});
+    editing.files().hold_at(std::string(source_path), Bytes{std::string(main_text)});
+    editing.files().hold_at(std::string(second_path), Bytes{std::string(two_text)});
     static_cast<void>(editing.controller().apply(app::VisibleLines{4}));
     applied(editing.controller(), app::OpenDocument{core::FilePath::parse(source_path).value()});
     static_cast<void>(delivered(editing, app::ServerStarted{}));
@@ -126,6 +132,11 @@ void started(Editing &editing, std::string_view capabilities)
         editing,
         app::ServerMessage{std::string{R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":)"} +
                            std::string{capabilities} + "}}"}));
+}
+
+void started(Editing &editing, std::string_view capabilities)
+{
+    started_with(editing, capabilities, source_text, second_text);
 }
 
 void referencing(Editing &editing)
@@ -343,6 +354,138 @@ void verify_vim_keys()
     expect(answered(editing, three_references).command_palette.has_value(),
            "the answer to grr opens the list");
 }
+// 1 件の参照の場所の JSON。
+[[nodiscard]] std::string reference_at(std::string_view uri, std::size_t line,
+                                       std::size_t character)
+{
+    const std::string start =
+        R"({"line":)" + std::to_string(line) + R"(,"character":)" + std::to_string(character) + "}";
+    return R"({"uri":")" + std::string{uri} + R"(","range":{"start":)" + start + R"(,"end":)" +
+           start + "}}";
+}
+
+// 受け取りで 1,000 件に切り、切ったことを 1 行知らせる。`file:` でない場所は外す（#1954 の
+// レビュー R2・R4・L2）。
+void verify_limit_and_foreign()
+{
+    Editing editing(lsp_on());
+    referencing(editing);
+    static_cast<void>(asked(editing));
+    std::string many = "[" + reference_at("untitled:Untitled-1", 0, 0);
+    for (std::size_t index = 0; index < 1001; ++index)
+    {
+        many += "," + reference_at("file:///C:/work/main.cpp", 0, 4);
+    }
+    many += "]";
+    const auto listed = answered(editing, many);
+    expect(listed.command_palette.has_value() && listed.command_palette.value().total == 999,
+           "the answer is cut to 1,000 places and the place that is not a file is left out");
+    expect(message_of(listed) == core::ui_text_filled(core::UiMessage::notice_references_first_of,
+                                                      editing.controller().display_language(),
+                                                      {"1000", "1002"}),
+           "a cut answer says how many places it had");
+}
+
+// 位置の単位は答えた席の単位。開いているタブは本文で行と桁を写し、開いていないファイルは答えの
+// 文字の位置 + 1 の桁（複数バイトの行ではずれる・跳んだ先は本文で写すので正しい）。
+void verify_encodings_and_wide_lines()
+{
+    constexpr std::string_view wide_main = "int main() {}\n/*\xE3\x81\x82\xE3\x81\x84*/ main();\n";
+    constexpr std::string_view wide_two = "int y;\n\n/*\xE3\x81\x82\xE3\x81\x84*/ main();\n";
+    Editing editing(lsp_on());
+    started_with(editing, R"({"textDocumentSync":2,"referencesProvider":true})", wide_main,
+                 wide_two);
+    static_cast<void>(asked(editing));
+    const auto listed =
+        answered(editing, "[" + reference_at("file:///C:/work/main.cpp", 1, 7) + "," +
+                              reference_at("file:///C:/work/two.cpp", 2, 7) + "]");
+    if (!listed.command_palette.has_value() || listed.command_palette.value().rows.size() < 2)
+    {
+        expect(false, "the wide lines list both references");
+        return;
+    }
+    const auto &rows = listed.command_palette.value().rows;
+    expect(rows.at(0).label.text() == "main.cpp:2:8" && rows.at(1).label.text() == "two.cpp:3:8",
+           "the open tab counts the column in the text and the file not open uses the answer");
+    expect(caret_on(editing.controller().apply_frame(app::ActivateCommandChoice{1}), 3, 8),
+           "the reference in the file not open lands on the name after opening it");
+
+    Editing bytes(lsp_on());
+    started_with(bytes,
+                 R"({"positionEncoding":"utf-8","textDocumentSync":2,"referencesProvider":true})",
+                 wide_main, wide_two);
+    static_cast<void>(asked(bytes));
+    static_cast<void>(answered(bytes, "[" + reference_at("file:///C:/work/main.cpp", 1, 11) + "]"));
+    expect(caret_on(bytes.controller().apply_frame(app::ActivateCommandChoice{0}), 2, 8),
+           "a server that counts UTF-8 bytes lands on the same name");
+}
+
+// `grr` は頼めたら成功の歩に読み替わり、マクロの続きが走る（#1954 のレビュー R4）。
+void verify_grr_keeps_the_macro()
+{
+    Editing editing(lsp_on());
+    started_with(editing, R"({"textDocumentSync":2,"referencesProvider":true})",
+                 "int main() {}\nint x;\nint y;\nint z;\n", second_text);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(editing.controller(), "qagrrjqgg@a");
+    expect(caret_on(editing.controller().frame(), 2, 1),
+           "the j after grr in the macro runs when it is replayed");
+}
+
+// 一覧を開いた後に本文を短くしてから `&` を開き直して選んでも、本文の外へは跳ばない。答えを頼んだ
+// 文書を閉じたら控えも捨てる（#1954 のレビュー R1・R4）。
+void verify_reopen_after_edit()
+{
+    Editing editing(lsp_on());
+    referencing(editing);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, three_references));
+    applied(editing.controller(), app::CancelCommand{});
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(editing.controller(), "jdG");
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto reopened = editing.controller().apply_frame(app::CommandText{"&"});
+    expect(reopened.command_palette.has_value() && reopened.command_palette.value().total == 3,
+           "& lists the last references again");
+    const auto landed = editing.controller().apply_frame(app::ActivateCommandChoice{1});
+    expect(!landed.command_palette.has_value() && landed.caret.position.line.value == 1,
+           "a reference past the shortened text lands inside the text");
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto still = editing.controller().apply_frame(app::CommandText{"&"});
+    expect(still.command_palette.has_value() && still.command_palette.value().total == 3,
+           "the references stay while the asking document is open");
+    applied(editing.controller(), app::CancelCommand{});
+}
+
+// 窓が非アクティブの間に届いた答えは一覧を開かずに控える（#1954 のレビュー R5）。
+void verify_inactive_window()
+{
+    Editing editing(lsp_on());
+    referencing(editing);
+    static_cast<void>(asked(editing));
+    static_cast<void>(editing.controller().apply(app::WindowDeactivated{}));
+    expect(!answered(editing, three_references).command_palette.has_value(),
+           "an answer that arrives while the window is inactive opens nothing");
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto held = editing.controller().apply_frame(app::CommandText{"&"});
+    expect(held.command_palette.has_value() && held.command_palette.value().total == 3,
+           "the held answer shows under &");
+}
+
+// 答えを頼んだ文書を閉じたら控えを捨てる（#1954 のレビュー R1）。
+void verify_forgotten_on_close()
+{
+    Editing editing(lsp_on());
+    referencing(editing);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, three_references));
+    static_cast<void>(editing.controller().apply_frame(app::ActivateCommandChoice{2}));
+    applied(editing.controller(), app::CloseTab{0});
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto after = editing.controller().apply_frame(app::CommandText{"&"});
+    expect(!after.command_palette.has_value() || after.command_palette.value().total == 0,
+           "closing the asking document forgets its references");
+}
 } // namespace
 
 void verify_lsp_references_scope()
@@ -353,5 +496,11 @@ void verify_lsp_references_scope()
     verify_list_and_landing();
     verify_absent_and_stale();
     verify_vim_keys();
+    verify_limit_and_foreign();
+    verify_encodings_and_wide_lines();
+    verify_grr_keeps_the_macro();
+    verify_reopen_after_edit();
+    verify_inactive_window();
+    verify_forgotten_on_close();
 }
 } // namespace nenenib::tests
