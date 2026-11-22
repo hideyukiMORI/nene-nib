@@ -145,7 +145,7 @@ void verify_extension_table()
         {"README.MD", Language::markdown},
         {"C:\\x\\Main.CPP", Language::cpp},
         {"tool.Py", Language::python},
-        {"Makefile", Language::plain},
+        {"LICENSE", Language::plain},
         {"", Language::plain},
         {"C:\\dir.md\\notes", Language::plain},
         {"src/a.b/c.json", Language::json},
