@@ -80,6 +80,10 @@ namespace
     text_document.emplace_back("definition", core::JsonValue{std::move(definition)});
     // 参照（ADR 0191 の決定 2）。
     text_document.emplace_back("references", core::JsonValue{core::JsonObject{}});
+    // 記号は階層の答えを受ける（#1955・ADR 0191 の決定 2）。
+    core::JsonObject symbols;
+    symbols.emplace_back("hierarchicalDocumentSymbolSupport", core::JsonValue{true});
+    text_document.emplace_back("documentSymbol", core::JsonValue{std::move(symbols)});
     return core::JsonValue{std::move(text_document)};
 }
 
@@ -196,6 +200,7 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
                               .hover = provided(*capabilities, "hoverProvider"),
                               .definition = provided(*capabilities, "definitionProvider"),
                               .references = provided(*capabilities, "referencesProvider"),
+                              .document_symbols = provided(*capabilities, "documentSymbolProvider"),
                               .sync = DocumentSync::none,
                               .save = SaveNotice::none};
     read_document_sync(abilities, *capabilities);
@@ -276,6 +281,8 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
         return "textDocument/definition";
     case LspRequestKind::references:
         return "textDocument/references";
+    case LspRequestKind::document_symbol:
+        return "textDocument/documentSymbol";
     }
     return "initialize";
 }
@@ -547,7 +554,8 @@ void EditorController::drop_language_answers_of(LanguageServerSlot slot)
     }
     const auto &answers = state_.language_answers();
     if (answers.completion.has_value() || answers.hover.has_value() ||
-        answers.definition.has_value() || answers.references.has_value())
+        answers.definition.has_value() || answers.references.has_value() ||
+        answers.symbols.has_value())
     {
         state_ = state_.with_language_answers({});
     }
@@ -757,6 +765,7 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::hover:
     case LspRequestKind::definition:
     case LspRequestKind::references:
+    case LspRequestKind::document_symbol:
         receive_answer(slot, request, response);
         settle_language_answers(request.kind);
         return;
@@ -845,6 +854,7 @@ void EditorController::expire_lsp_request(LanguageServerSlot slot, const Pending
     case LspRequestKind::hover:
     case LspRequestKind::definition:
     case LspRequestKind::references:
+    case LspRequestKind::document_symbol:
         send_lsp_cancel(slot, request.id);
         return;
     }

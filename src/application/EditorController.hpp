@@ -91,6 +91,7 @@
 #include "LanguageQueryKind.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageSymbols.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
 #include "LanguageServers.hpp"
@@ -382,6 +383,8 @@ class EditorController final
     [[nodiscard]] bool request_definition();
     // 参照（#1947・ADR 0191 の決定 4）。`includeDeclaration: true`。
     [[nodiscard]] bool request_references();
+    // 記号（#1955・ADR 0191 の決定 5）。今の文書の記号の一覧。
+    [[nodiscard]] bool request_document_symbols();
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // アクティブな文書を受ける席の、`initialize` の答えから読んだサーバーの能力（決定 3）。段 B の
@@ -1047,6 +1050,11 @@ class EditorController final
     [[nodiscard]] std::optional<PaletteReference>
     palette_reference_of(const core::CommandChoice &choice) const;
     void land_palette_reference(const core::CommandChoice &choice);
+    // 記号の一覧（#1955・ADR 0191 の決定 5・同じ EditorControllerReferences.cpp）。答えは
+    // held_symbols_ に控えて記号 `%` で開き、候補の指す所は参照と同じ形の palette_symbols_（選ぶ道と
+    // プレビュー欄は palette_reference_of が出どころで列を選ぶ 1 本）。
+    void settle_symbols_answer();
+    void append_symbol_choices(std::vector<core::CommandChoice> &entries);
     // 言語サーバーは動いているが、アクティブな文書を受ける席がその能力を持たない（決定 2）。
     [[nodiscard]] bool lacks_ability(bool ServerAbilities::*ability) const;
     // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2・EditorControllerLinkCard.cpp）。
@@ -1845,6 +1853,10 @@ class EditorController final
     // 参照の候補の指す所（候補の command がこの列の位置）。
     std::optional<LanguageDefinition> held_references_;
     std::vector<PaletteReference> palette_references_;
+    // 最後に届いた記号の答えとその文書（#1955・次の答えまで `%` の一覧に出す）と、面を開いたときに
+    // 控えた記号の候補の指す所。
+    std::optional<std::pair<core::FilePath, LanguageSymbols>> held_symbols_;
+    std::vector<PaletteReference> palette_symbols_;
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;
