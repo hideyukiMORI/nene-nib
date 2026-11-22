@@ -33,6 +33,9 @@
 #include "MinimapGrab.hpp"
 #include "OperationTexts.hpp"
 #include "PaneLayouts.hpp"
+#include "PaneResize.hpp"
+#include "PaneSide.hpp"
+#include "PaneSplit.hpp"
 #include "PointText.hpp"
 #include "PointerClicks.hpp"
 #include "PresentedMilestones.hpp"
@@ -43,8 +46,11 @@
 #include "RgbColor.hpp"
 #include "SessionEnd.hpp"
 #include "SettingsLayout.hpp"
+#include "SettingsPress.hpp"
 #include "SettingsTarget.hpp"
+#include "SplitGrab.hpp"
 #include "SplitLayout.hpp"
+#include "SplitShare.hpp"
 #include "StartPress.hpp"
 #include "StartScreenView.hpp"
 #include "StatusBarHit.hpp"
@@ -325,7 +331,10 @@ class EditorWindow final
     // send の本体（意図を写して frame を窓へ映す）。深さは数えない。
     void deliver(const application::EditorIntent &intent);
     // 意図を送った後の 1 段を写す（順は delivery_order・要るかは delivery_step_due・#1854）。
-    void delivery_step(DeliveryStep step, core::SplitLayout previous_layout,
+    // 枠の配置・境界の比・操作中の側（変わったら寸法を送り直す・ADR 0148 の 2026-11-22 の追補）。
+    using PaneArrangement = std::pair<core::PaneSplit, core::PaneSide>;
+    [[nodiscard]] PaneArrangement pane_arrangement() const noexcept;
+    void delivery_step(DeliveryStep step, PaneArrangement previous_layout,
                        application::EditorDelivery &delivery);
     // 合図のメッセージを受けた。send の途中なら覚えるだけ、そうでなければ送る。
     void receive_work();
@@ -424,7 +433,7 @@ class EditorWindow final
     void turn_wheel(WPARAM word, LPARAM data);
     [[nodiscard]] bool over_title_bar(LPARAM data) const;
     [[nodiscard]] bool over_other_pane(LPARAM data) const;
-    void follow_split(core::SplitLayout previous, application::EditorDelivery &delivery);
+    void follow_split(PaneArrangement previous, application::EditorDelivery &delivery);
     void follow_explorer(application::EditorDelivery &delivery);
     void follow_minimap(application::EditorDelivery &delivery);
     void choose_explorer_root();
@@ -475,6 +484,22 @@ class EditorWindow final
     void end_minimap_drag(UINT message);
     [[nodiscard]] bool take_minimap_escape(LPARAM data);
     [[nodiscard]] bool explorer_divider_cursor(LPARAM data) const;
+    // 2 枠の境界のドラッグ（EditorWindowSplit.cpp・ADR 0148 の 2026-11-22 の追補の決定 3）。
+    [[nodiscard]] std::optional<std::int32_t> split_divider_start(LPARAM point) const;
+    [[nodiscard]] std::optional<core::SplitShare> step_split(UINT message, LPARAM data);
+    [[nodiscard]] bool press_split_divider(LPARAM data);
+    void drag_split_divider(LPARAM data);
+    [[nodiscard]] bool release_split_divider(LPARAM data);
+    void lose_split_divider();
+    [[nodiscard]] bool cancel_split_divider();
+    [[nodiscard]] bool take_split_escape(LPARAM data);
+    void settle_split_divider(LPARAM point);
+    [[nodiscard]] bool reset_split_share(LPARAM data);
+    void hover_split_divider(LPARAM data);
+    [[nodiscard]] bool split_divider_cursor(LPARAM data) const;
+    [[nodiscard]] bool divider_cursor(LPARAM data) const;
+    void lose_dividers();
+    void forget_divider_hover() noexcept;
     [[nodiscard]] std::int32_t explorer_width_at(std::int32_t x) const;
     // 操作 → メンバ関数の表を引く（EditorWindowOperations.cpp・ADR 0078 の追補 #1188）。操作ごとの
     // 関数は引数なしで、本体は前の run_operation の case のまま。
@@ -539,6 +564,11 @@ class EditorWindow final
     void run_previous_diagnostic();
     void run_show_diagnostic();
     void run_list_diagnostics();
+    void run_widen_pane();
+    void run_narrow_pane();
+    void run_even_panes();
+    void resize_operated_pane(core::PaneResize resize);
+    void run_open_language_server_log();
     // 参照の一覧（#1947）。
     void run_list_references();
     // 記号の一覧（#1955）。
@@ -558,7 +588,9 @@ class EditorWindow final
     // タブの札の待ち（#1789）に OS の載せの待ち時間を読む。起動と WM_SETTINGCHANGE の 2 か所。
     void read_hover_setting();
     [[nodiscard]] application::VisibleLines body_view() const;
-    [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
+    [[nodiscard]] core::PaneLayouts body_panes(core::FontSize font_size) const;
+    // 本文の枠を置く client（面とミニマップを除いた所・body_panes と境界のドラッグが共用）。
+    [[nodiscard]] core::LayoutRect pane_client() const;
     [[nodiscard]] core::ExplorerLayout explorer_frame() const;
     [[nodiscard]] core::BodyLayout active_body(const core::EditorSettings &settings) const;
 
@@ -614,6 +646,14 @@ class EditorWindow final
     bool minimap_escape_held_ = false;
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
+    // 2 枠の境界を押してから離すまで（ADR 0148 の 2026-11-22 の追補の決定 3）。値があるのは窓が
+    // 捕まえている間だけ。次の値は split_step の 1 本（SplitPress.hpp）。
+    std::optional<SplitGrab> split_grab_;
+    // 捕まえている間の最後の点（Esc で取り消した時点のカーソルをこの点で決め直す・面の境と同じ）。
+    LPARAM split_drag_point_ = 0;
+    bool split_escape_held_ = false;
+    // 最後の WM_MOUSEMOVE の点が境界の上だったか（カーソルを矢印にする）。
+    bool over_split_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     UINT hover_setting_ = default_tab_tip_milliseconds;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
@@ -636,9 +676,9 @@ class EditorWindow final
     // 補完の面の上で始まった押しの列か（2 回目・3 回目の押しを本文へ渡さない・#1844 の R1b）。
     bool completion_click_began_ = false;
     std::int32_t completion_wheel_remainder_ = 0;
-    // 設定の面の上で押した部品（離したときに同じ部品なら動かす）・ホイールの余り・探す欄へ打つ
-    // 文字の上位サロゲート（#1836）。
-    std::optional<core::SettingsTarget> settings_pressed_;
+    // 設定の面の上で押した部品と行の身元（離したときに同じなら動かす・#1945 の
+    // R2）・ホイールの余り・探す欄へ打つ 文字の上位サロゲート（#1836）。
+    std::optional<SettingsPress> settings_pressed_;
     std::int32_t settings_wheel_remainder_ = 0;
     wchar_t settings_high_surrogate_ = 0;
     // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。

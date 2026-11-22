@@ -27,6 +27,8 @@
 #include "TestSupport.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
@@ -52,7 +54,7 @@ constexpr std::string_view source_text = "int add(int a, int b);\nint main() {\n
 constexpr std::string_view signature_method = "textDocument/signatureHelp";
 // 実物の clangd（D:/NeNeNib/scripts/20261122/lsp-s6 の probe）の能力と答えの形。
 constexpr std::string_view clangd_abilities =
-    R"({"textDocumentSync":2,"signatureHelpProvider":{"triggerCharacters":["(",")","{","}","<",">",","]}})";
+    R"j({"textDocumentSync":2,"signatureHelpProvider":{"triggerCharacters":["(",")","{","}","<",">",","]}})j";
 constexpr std::string_view clangd_answer =
     R"({"activeParameter":1,"activeSignature":0,"signatures":[{"label":"add(int a, int b) -> int","parameters":[{"label":[4,9]},{"label":[11,16]}]}]})";
 
@@ -92,9 +94,12 @@ void started(Editing &editing, std::string_view capabilities)
         editing,
         app::ServerMessage{std::string{R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":)"} +
                            std::string{capabilities} + "}}"}));
-    applied(editing.controller(), app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
-    applied(editing.controller(), app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
-    applied(editing.controller(), app::MoveCaret{core::CaretMotion::line_end, core::SelectionAnchoring::collapse});
+    applied(editing.controller(),
+            app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
+    applied(editing.controller(),
+            app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse});
+    applied(editing.controller(),
+            app::MoveCaret{core::CaretMotion::line_end, core::SelectionAnchoring::collapse});
 }
 
 [[nodiscard]] std::size_t asked_count(Editing &editing)
@@ -134,11 +139,11 @@ void verify_reading()
                clangd.value().active_begin == 11 && clangd.value().active_end == 16,
            "the clangd answer highlights the second parameter");
     const auto named = read(
-        R"({"activeParameter":0,"signatures":[{"label":"f(x, y)","activeParameter":1,"parameters":[{"label":"x"},{"label":"y"}]}]})");
+        R"j({"activeParameter":0,"signatures":[{"label":"f(x, y)","activeParameter":1,"parameters":[{"label":"x"},{"label":"y"}]}]})j");
     expect(named.has_value() && named.value().active_begin == 5 && named.value().active_end == 6,
            "a string label is found in the signature and its own activeParameter wins");
     const auto wide = read(
-        R"({"signatures":[{"label":"g(\u3042 p, int q)","parameters":[{"label":[2,5]},{"label":[7,12]}]}],"activeParameter":1})");
+        R"j({"signatures":[{"label":"g(\u3042 p, int q)","parameters":[{"label":[2,5]},{"label":[7,12]}]}],"activeParameter":1})j");
     expect(wide.has_value() && wide.value().label.substr(wide.value().active_begin,
                                                          wide.value().active_end -
                                                              wide.value().active_begin) == "int q",
@@ -152,7 +157,7 @@ void verify_reading()
                core::lsp_signature_help(wrong.value()).error() ==
                    core::LspAnswerFailure::invalid_result,
            "null and no signatures are no tip and another shape fails");
-    const auto bare = read(R"({"signatures":[{"label":"h()"}]})");
+    const auto bare = read(R"j({"signatures":[{"label":"h()"}]})j");
     expect(bare.has_value() && bare.value().active_begin == 0 && bare.value().active_end == 0,
            "a signature without parameters highlights nothing");
     expect(std::ranges::none_of(core::operation_bindings,
@@ -173,9 +178,11 @@ void verify_typing()
     Editing editing(lsp_settings(true));
     started(editing, clangd_abilities);
     const std::size_t before = asked_count(editing);
-    static_cast<void>(typed(editing, "add("));
+    // 窓は打った 1 文字ごとに InsertText を送る。
+    static_cast<void>(typed(editing, "add"));
+    static_cast<void>(typed(editing, "("));
     expect(asked_count(editing) == before + 1 &&
-               contains(editing.language_server().sent().back(), R"("triggerCharacter":"(")") &&
+               contains(editing.language_server().sent().back(), R"j("triggerCharacter":"(")j") &&
                contains(editing.language_server().sent().back(), R"("isRetrigger":false)"),
            "typing ( asks for the signature");
     const auto shown = answered(editing, clangd_answer);
@@ -197,28 +204,48 @@ void verify_typing()
     expect(!editing.controller().frame().signature.has_value(), "Esc closes the tip");
     static_cast<void>(typed(editing, "("));
     static_cast<void>(answered(editing, clangd_answer));
-    applied(editing.controller(), app::MoveCaret{core::CaretMotion::previous_line, core::SelectionAnchoring::collapse});
+    applied(editing.controller(),
+            app::MoveCaret{core::CaretMotion::previous_line, core::SelectionAnchoring::collapse});
     expect(!editing.controller().frame().signature.has_value(),
            "moving to another line closes the tip");
     static_cast<void>(typed(editing, "("));
     expect(!answered(editing, "null").signature.has_value(), "an empty answer shows no tip");
 }
 
-// Vim の INSERT でも頼み、NORMAL へ抜けたら消える。
+// 窓で打った鍵と同じ入口（accept(VimKeyPress)）で鍵を 1 つずつ送る。
+void pressed(Editing &editing, std::string_view keys)
+{
+    for (const core::VimKey &key : vim_keys_of(keys))
+    {
+        static_cast<void>(editing.controller().apply(app::VimKeyPress{key}));
+    }
+}
+
+// Vim の INSERT でも頼み、NORMAL へ抜けたら消える。頼むのは使う人が打った 1 文字が本文に入った
+// ときだけで、`map` の右辺・録画の再生・`:normal` は頼まない（#1962 と同じ決め）。
 void verify_vim_insert()
 {
     Editing editing(lsp_settings(true));
     started(editing, clangd_abilities);
     applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
     const std::size_t before = asked_count(editing);
-    vim_replay(editing.controller(), "aadd(");
+    pressed(editing, "aadd(");
     expect(asked_count(editing) == before + 1, "typing ( in INSERT asks for the signature");
     expect(answered(editing, clangd_answer).signature.has_value(), "the INSERT shows the tip");
-    vim_replay(editing.controller(), "<Esc>");
+    pressed(editing, "<Esc>");
     expect(!editing.controller().frame().signature.has_value(), "leaving INSERT closes the tip");
     const std::size_t normal = asked_count(editing);
-    vim_replay(editing.controller(), "f(");
+    pressed(editing, "f(");
     expect(asked_count(editing) == normal, "a ( typed as a NORMAL argument asks nothing");
+    static_cast<void>(run_ex(editing.controller(), "inoremap xx add("));
+    pressed(editing, "axx<Esc>");
+    expect(asked_count(editing) == normal, "a ( from the right side of a map asks nothing");
+    pressed(editing, "qqa(<Esc>q");
+    const std::size_t recorded = asked_count(editing);
+    pressed(editing, "@q");
+    static_cast<void>(run_ex(editing.controller(), "normal! a("));
+    expect(recorded == normal + 1 && asked_count(editing) == recorded,
+           "the ( typed while recording asks; the replay and :normal ask nothing");
 }
 
 // 契約: lsp がオフ・サーバーが能力を持たないとき、打鍵の道は言語サーバーに触れない（#1959）。
@@ -255,9 +282,8 @@ void verify_operation()
            "the operation asks as invoked");
     const auto empty = answered(editing, "null");
     expect(!empty.signature.has_value() &&
-               message_of(empty) ==
-                   core::ui_text(core::UiMessage::notice_signature_not_found,
-                                 editing.controller().display_language()),
+               message_of(empty) == core::ui_text(core::UiMessage::notice_signature_not_found,
+                                                  editing.controller().display_language()),
            "an empty answer to the operation says so");
 
     Editing unable(lsp_settings(true));

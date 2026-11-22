@@ -75,11 +75,9 @@ constexpr float unbounded_height = 100'000.0F;
 } // namespace
 
 IDWriteTextLayout *HoverTipLayout::fitted(IDWriteFactory &dwrite, IDWriteTextFormat *format,
-                                          std::string_view text, std::int32_t limit,
-                                          DWRITE_TEXT_RANGE emphasis)
+                                          std::string_view text, std::int32_t limit)
 {
-    if (layout_ && format_ == format && limit_ == limit && text_ == text &&
-        emphasis_.startPosition == emphasis.startPosition && emphasis_.length == emphasis.length)
+    if (layout_ && format_ == format && limit_ == limit && text_ == text)
     {
         return layout_.Get();
     }
@@ -93,16 +91,32 @@ IDWriteTextLayout *HoverTipLayout::fitted(IDWriteFactory &dwrite, IDWriteTextFor
     {
         return nullptr;
     }
-    if (emphasis.length > 0 && FAILED(whole->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, emphasis)))
-    {
-        return nullptr;
-    }
     layout_ = whole;
-    emphasis_ = emphasis;
     text_ = std::string(text);
     limit_ = limit;
     format_ = format;
     return layout_.Get();
+}
+
+bool HoverTipLayout::emphasized(DWRITE_TEXT_RANGE emphasis)
+{
+    if (!layout_)
+    {
+        return false;
+    }
+    if (emphasis_.startPosition == emphasis.startPosition && emphasis_.length == emphasis.length)
+    {
+        return true;
+    }
+    if ((emphasis_.length > 0 &&
+         FAILED(layout_->SetFontWeight(DWRITE_FONT_WEIGHT_NORMAL, emphasis_))) ||
+        (emphasis.length > 0 && FAILED(layout_->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, emphasis))))
+    {
+        clear();
+        return false;
+    }
+    emphasis_ = emphasis;
+    return true;
 }
 
 std::optional<TabTipPaint> HoverTipLayout::painted(const core::LayoutRect &caret,

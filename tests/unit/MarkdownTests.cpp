@@ -799,7 +799,7 @@ void verify_code_piece_colors()
                !crowded.at(1).code_colors.has_value() &&
                colored(crowded.at(2), 0U, 4U, core::SyntaxRole::comment),
            "only the piece over the colour limit keeps one colour and the state still carries");
-    const auto unknown = blocks_of(fenced_lines("zig", lines + 1U));
+    const auto unknown = blocks_of(fenced_lines("nim", lines + 1U));
     expect(unknown.size() == 2U && !unknown.front().code_colors.has_value() &&
                !unknown.back().code_colors.has_value(),
            "pieces of an unknown language keep one colour");

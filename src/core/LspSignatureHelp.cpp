@@ -96,8 +96,9 @@ parameter_range(std::string_view label, const JsonValue &parameter)
     const std::uint64_t index = own.has_value() ? own.value() : active.value_or(0);
     const JsonValue *parameter = parameter_at(signature, index);
     const auto range = parameter != nullptr ? parameter_range(*label, *parameter) : std::nullopt;
-    std::string kept = label->substr(0, whole_code_points(std::string_view{*label}.substr(
-                                            0, std::min(label->size(), lsp_signature_label_limit))));
+    std::string kept =
+        label->substr(0, whole_code_points(std::string_view{*label}.substr(
+                             0, std::min(label->size(), lsp_signature_label_limit))));
     const auto [begin, end] = range.value_or(std::pair<std::size_t, std::size_t>{0, 0});
     const std::size_t limit = kept.size();
     return LspSignature{.label = std::move(kept),
@@ -126,7 +127,8 @@ lsp_signature_help(const JsonValue &result)
         return std::optional<LspSignature>{};
     }
     const std::uint64_t chosen = json_count_member(*help, "activeSignature").value_or(0);
-    const JsonValue &signature = list->at(chosen < list->size() ? static_cast<std::size_t>(chosen) : 0);
+    const JsonValue &signature =
+        list->at(chosen < list->size() ? static_cast<std::size_t>(chosen) : 0);
     const JsonObject *object = json_object_of(signature);
     if (object == nullptr)
     {

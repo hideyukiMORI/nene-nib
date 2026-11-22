@@ -26,11 +26,12 @@ class HoverTipLayout final
     using TextLayout = Microsoft::WRL::ComPtr<IDWriteTextLayout>;
 
     // 収めた layout（作れなければ null）。所有はこの保持で、次の fitted か clear まで有効。
-    // emphasis は太字にする範囲（UTF-16・長さ 0 なら無し・引数の情報の札の今の引数・#1959）。範囲も
-    // 覚えの鍵に入る。
     [[nodiscard]] IDWriteTextLayout *fitted(IDWriteFactory &dwrite, IDWriteTextFormat *format,
-                                            std::string_view text, std::int32_t limit,
-                                            DWRITE_TEXT_RANGE emphasis = {0, 0});
+                                            std::string_view text, std::int32_t limit);
+    // 最後に収めた layout の太字の範囲を emphasis にする（UTF-16・長さ 0 なら無し・引数の情報の札の
+    // 今の引数・#1959）。前の範囲は戻す。同じ範囲なら何もしない。layout が無いか当てられなければ
+    // false（当てられなければ保持を捨てる）。
+    [[nodiscard]] bool emphasized(DWRITE_TEXT_RANGE emphasis);
     // 最後に収めた layout の札を、キャレットの矩形 caret の上（入らなければ下）に領域 area の中で
     // 置いて描く値（置き場は core::hover_tip_rect・色は palette の panel / panel_border / text）。
     // layout が無ければ値なし。

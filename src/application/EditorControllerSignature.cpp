@@ -54,8 +54,9 @@ void EditorController::settle_typed_signature(std::string_view typed)
     {
         signature_tip_.reset();
     }
-    const bool asked = listed(abilities.signature_triggers, typed) ||
-                       (signature_tip_.has_value() && listed(abilities.signature_retriggers, typed));
+    const bool asked =
+        listed(abilities.signature_triggers, typed) ||
+        (signature_tip_.has_value() && listed(abilities.signature_retriggers, typed));
     if (asked)
     {
         static_cast<void>(request_signature_help(std::string{typed}));
@@ -74,8 +75,8 @@ bool EditorController::request_signature_help(std::optional<std::string> trigger
     document.emplace_back("uri", core::JsonValue{active_document_of(slot.value()).uri});
     core::JsonObject context;
     context.emplace_back("triggerKind",
-                         core::JsonValue{core::json_integer(trigger.has_value() ? character_trigger
-                                                                                : invoked_trigger)});
+                         core::JsonValue{core::json_integer(
+                             trigger.has_value() ? character_trigger : invoked_trigger)});
     if (trigger.has_value())
     {
         context.emplace_back("triggerCharacter", core::JsonValue{std::move(trigger).value()});
@@ -109,8 +110,8 @@ void EditorController::settle_signature_answer()
         signature_tip_.reset();
         if (invoked)
         {
-            state_ = state_.with_command_message(
-                ui_notice(core::UiMessage::notice_signature_not_found));
+            state_ =
+                state_.with_command_message(ui_notice(core::UiMessage::notice_signature_not_found));
         }
         return;
     }

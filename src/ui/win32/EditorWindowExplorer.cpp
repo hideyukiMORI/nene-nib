@@ -378,8 +378,9 @@ bool EditorWindow::reset_explorer_width(LPARAM data)
 // カーソルを変えない（Issue #1380 の R-3）。
 void EditorWindow::hover_explorer_divider(LPARAM data)
 {
-    if (explorer_grab_offset_.has_value() || selecting_ || preview_dragging_ || explorer_pressed_ ||
-        left_pressed_.has_value() || minimap_grab_.has_value())
+    if (explorer_grab_offset_.has_value() || split_grab_.has_value() || selecting_ ||
+        preview_dragging_ || explorer_pressed_ || left_pressed_.has_value() ||
+        minimap_grab_.has_value())
     {
         return;
     }

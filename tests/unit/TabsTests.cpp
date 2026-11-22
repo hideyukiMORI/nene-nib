@@ -48,6 +48,8 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageRoots.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -561,19 +563,21 @@ void verify_open_failure_adds_no_tab()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageRoots language_roots;
+    ScriptedLanguageServerSearch searches;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     EditorController controller(
-        EditorPorts{appearance,      clipboard,   files,        code_pages,
-                    settings,        themes,      session,      history,
-                    folders,         bookmarks,   text_layouts, autosave,
-                    fonts,           bell,        markdown,     reads,
-                    language_server, wall_clock,  printer,      shell_registration,
-                    images,          start_lists, ui_language,  project_search,
-                    previews,        reveal,      links},
+        EditorPorts{
+            appearance,   clipboard,       files,          code_pages,     settings,
+            themes,       session,         history,        folders,        bookmarks,
+            text_layouts, autosave,        fonts,          bell,           markdown,
+            reads,        language_server, wall_clock,     printer,        shell_registration,
+            images,       start_lists,     ui_language,    project_search, previews,
+            reveal,       links,           language_roots, searches},
         nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }
@@ -1200,19 +1204,21 @@ void verify_recent_after_startup()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageRoots language_roots;
+    ScriptedLanguageServerSearch searches;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     EditorController controller(
-        EditorPorts{appearance,      clipboard,   files,        code_pages,
-                    settings,        themes,      session,      history,
-                    folders,         bookmarks,   text_layouts, autosave,
-                    fonts,           bell,        markdown,     reads,
-                    language_server, wall_clock,  printer,      shell_registration,
-                    images,          start_lists, ui_language,  project_search,
-                    previews,        reveal,      links},
+        EditorPorts{
+            appearance,   clipboard,       files,          code_pages,     settings,
+            themes,       session,         history,        folders,        bookmarks,
+            text_layouts, autosave,        fonts,          bell,           markdown,
+            reads,        language_server, wall_clock,     printer,        shell_registration,
+            images,       start_lists,     ui_language,    project_search, previews,
+            reveal,       links,           language_roots, searches},
         nenenib::core::Distribution::unpackaged,
         {open_at("C:\\work\\a.txt"), open_at("C:\\work\\b.txt"), open_at("C:\\work\\c.txt")});
     applied(controller, VisibleLines{10});

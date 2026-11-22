@@ -11,8 +11,8 @@
 #include "LanguageServerLink.hpp"
 #include "LanguageServerPhase.hpp"
 #include "LanguageServerSlot.hpp"
-#include "LanguageSignature.hpp"
 #include "LanguageServers.hpp"
+#include "LanguageSignature.hpp"
 #include "LanguageSymbols.hpp"
 #include "LspAnswerFailure.hpp"
 #include "LspAnswers.hpp"
@@ -26,8 +26,8 @@
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
-#include "LspSymbol.hpp"
 #include "LspSignatureHelp.hpp"
+#include "LspSymbol.hpp"
 #include "LspSymbols.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
@@ -193,8 +193,9 @@ references_answer(const PendingLspRequest &request, const core::LspResponse &res
     {
         return std::nullopt;
     }
-    const auto read = response.result.has_value() ? core::lsp_signature_help(response.result.value())
-                                                  : std::unexpected{core::LspAnswerFailure::invalid_result};
+    const auto read = response.result.has_value()
+                          ? core::lsp_signature_help(response.result.value())
+                          : std::unexpected{core::LspAnswerFailure::invalid_result};
     return LanguageSignature{.context = *context,
                              .signature = read.has_value() ? read.value() : std::nullopt};
 }

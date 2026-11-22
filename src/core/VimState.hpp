@@ -108,7 +108,8 @@ struct VimState
     std::optional<VimBlockInsert> block_insert = std::nullopt;
     // `"{name}` の前に打った回数（Vim の opcount・#1319）。回数と選んだレジスタが両方残る
     // あいだだけ値を持ち、`"` の後の桁は数え直して掛ける（`5"a0` の `0` は桁でなく行頭・
-    // `2"a3dd` は 6 行）。置くのは selected_register、消すのは vim_step の 1 か所。
+    // `2"a3dd` は 6 行）。置くのは selected_register と `Ctrl-w` の後ろの桁（window_counted・
+    // `2<C-w>3>` は 6・ADR 0148 の 2026-11-22 の追補）、消すのは vim_step の 1 か所。
     std::optional<VimRegisterCount> register_count = std::nullopt;
     // VISUAL のオペレータが最後に覚えた範囲の仮想桁（Vim の oap->start_vcol / end_vcol・#1436）。
     // 文字単位と行単位の VISUAL の `A` が読む。書くのは VISUAL のオペレータの 1 か所

@@ -77,6 +77,7 @@
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "FontSize.hpp"
+#include "FoundLanguageServer.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
@@ -89,8 +90,11 @@
 #include "LanguageAnswers.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageQueryKind.hpp"
+#include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
+#include "LanguageServerRowState.hpp"
+#include "LanguageServerRowView.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServerTrouble.hpp"
 #include "LanguageServers.hpp"
@@ -104,6 +108,7 @@
 #include "LspLocation.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
+#include "LspProgressValue.hpp"
 #include "LspRequest.hpp"
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
@@ -113,6 +118,7 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenFailureReply.hpp"
+#include "OpenLanguageServerLog.hpp"
 #include "OpenRequest.hpp"
 #include "OpenedAs.hpp"
 #include "OpenedDocument.hpp"
@@ -122,7 +128,9 @@
 #include "PaletteProjectSearch.hpp"
 #include "PaletteReference.hpp"
 #include "PaneSide.hpp"
+#include "PaneSizing.hpp"
 #include "PaneSource.hpp"
+#include "PaneSplit.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
 #include "PointerClicks.hpp"
@@ -138,8 +146,11 @@
 #include "ProjectSearchView.hpp"
 #include "ReplayLevel.hpp"
 #include "ReplayRounds.hpp"
+#include "ResizePane.hpp"
+#include "ResizeSplit.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "ServerErrorOutput.hpp"
 #include "ServerEvent.hpp"
 #include "ServerExited.hpp"
 #include "ServerFailed.hpp"
@@ -148,8 +159,10 @@
 #include "ServerStarted.hpp"
 #include "Session.hpp"
 #include "SettingsOpen.hpp"
+#include "SettingsSection.hpp"
 #include "SettingsView.hpp"
 #include "SignatureTip.hpp"
+#include "SplitExtent.hpp"
 #include "SplitState.hpp"
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
@@ -314,6 +327,17 @@ class EditorController final
     // 知らせの欄にキャレットの上の診断の文が出ているか（frame の diagnostic_message の有無と同じ
     // 値・ADR 0161 の決定 4 の追補）。窓がステータスバーのクリックを決める口で、frame を作らない。
     [[nodiscard]] bool diagnostic_message_shown() const;
+    // アクティブな文書を受ける言語サーバーの席の 1 行（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
+    // `initialize` の答えを待つ間は「<言語>: 起動中」、running で `$/progress` の動いている
+    // token があれば最後に動いたものの「<言語>: <題> <文> <百分率>%」、ほかは値なし。frame の
+    // language_server_status が同じ値を引く。lsp がオフで子が居なければ欄を 1 つ読むだけで値なし。
+    // frame を作らない。
+    [[nodiscard]] std::optional<core::DisplayText> language_server_status() const;
+    // アクティブな文書を言語サーバーの席が受けているか（起こしている・`initialize` を待つ・
+    // running・#1950 のレビュー R3）。frame の language_server_served と窓のステータスバーの
+    // hit test（status_server_item）が同じ値を引き、真の間は右端の欄の幅を変えない。lsp がオフで
+    // 子が居なければ欄を 1 つ読むだけで偽。frame を作らない。
+    [[nodiscard]] bool language_server_served() const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -341,6 +365,12 @@ class EditorController final
     // 枠の配置と操作中の枠の側（ADR 0148 の決定 8）。窓がマウスの点の下の枠と、本文の行数を
     // 数える枠（pane_layouts の片側）を引くための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] const SplitState &split() const noexcept;
+    // 配置と境界の比を畳んだ値（pane_layouts の引数・ADR 0148 の 2026-11-22 の追補）。状態の 2 欄を
+    // 読むだけ。
+    [[nodiscard]] core::PaneSplit pane_split() const noexcept;
+    // 保存した字の大きさ（入力行の評価も字の大きさは重ねない・shown_settings と同じ値）。窓がマウス
+    // の動くたびに本文の枠の配置を引く口で、delivery も frame も作らない。
+    [[nodiscard]] core::FontSize font_size() const noexcept;
     // プレビューの見せ方（ADR 0155 の改訂 15）。窓が tick
     // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
     [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
@@ -597,6 +627,9 @@ class EditorController final
     // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。transient で開くときは、
     // プレビューのタブがあれば置き換え、無ければ開いたタブに印を付ける（ADR 0179 の決定 3）。
     void open_read(const core::FilePath &path, OpenedDocument opened, OpenedAs opened_as);
+    // 開いた本文を何も書いていない無題に置くか、アクティブの右に新しいタブを足して置く（決定 5 の
+    // (b)(c)）。open_read と言語サーバーの記録の写しが同じ 1 本を通る。
+    void place_opened(core::TextBuffer text, Document document);
     // 既に開いているタブ position へ切り替える（決定 3-1）。pinned ならそのタブの印を消す
     // （決定 3 の pinned・4-3・4-5）。transient なら印は変えない。
     void reach_open_tab(std::size_t position, OpenedAs opened_as);
@@ -795,6 +828,8 @@ class EditorController final
     void accept(const ScrollExplorer &intent);
     void accept(const ExplorerRootChosen &intent);
     void accept(const ResizeExplorer &intent);
+    void accept(const ResizeSplit &intent);
+    void accept(const ResizePane &intent);
     // マウスを載せた面の行（#1390）。使う人の操作ではない（帯の PointTitleBar と同じ側）。
     void accept(const HoverExplorer &intent);
     [[nodiscard]] std::vector<core::FilePath> unsaved_files() const;
@@ -946,7 +981,21 @@ class EditorController final
     void resume_language_servers();
     void consider_language_server(core::Language language);
     void yield_language_server();
-    [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language) const;
+    [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language);
+    // root（2026-11-22 の追補・段 S3）: document_root はアクティブな文書の root（設定の root →
+    // 印を探した答え → 文書のフォルダ・まだ分からなければ理由）、seek は印を探す頼みを 1 回だけ
+    // 出し、collect は答えを覚えて決め直す（頼んでいなければ port を呼ばない）。held_root は
+    // reconcile が hold_language_root で 1 回決めた値が今も同じ鍵なら読み、違えば document_root
+    // （#1944 のレビュー L1）。
+    [[nodiscard]] std::expected<core::FilePath, LanguageRootGap>
+    document_root(core::Language language) const;
+    [[nodiscard]] std::expected<core::FilePath, LanguageRootGap>
+    held_root(core::Language language) const;
+    void hold_language_root(core::Language language);
+    [[nodiscard]] bool holds_language_root(core::Language language) const;
+    void seek_language_root(core::Language language);
+    void collect_language_roots();
+    [[nodiscard]] bool has_language_server_command(core::Language language) const;
     [[nodiscard]] std::optional<ServerLaunch>
     language_server_launch(core::Language language, const core::FilePath &root) const;
     void start_language_server(LanguageServerSlot slot, core::Language language,
@@ -965,10 +1014,27 @@ class EditorController final
     void receive_server(LanguageServerSlot slot, const ServerMessage &message);
     void receive_server(LanguageServerSlot slot, const ServerExited &exited);
     void receive_server(LanguageServerSlot slot, const ServerFailed &failed);
+    // 標準エラーの塊は記録へ（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
+    void receive_server(LanguageServerSlot slot, const ServerErrorOutput &output);
     void end_language_server(LanguageServerSlot slot);
     void receive_lsp(LanguageServerSlot slot, const core::LspResponse &response);
     void receive_lsp(LanguageServerSlot slot, const core::LspNotification &notification);
     void receive_lsp(LanguageServerSlot slot, const core::LspRequest &request);
+    // `$/progress` の 1 通を席の token ごとの今の値へ写す（追補）。
+    void receive_progress(LanguageServerSlot slot, core::LspProgressValue value);
+    // 席 slot の言語（記録の行の頭・止めた後の残りは今の文書の言語）。
+    [[nodiscard]] core::Language slot_language(LanguageServerSlot slot) const;
+    // 読まずに捨てる出来事のうち記録に残すもの（#1950 のレビュー M1）。止めた席の port が返した
+    // 残りと、同じ集めの中で止めた後に来た出来事の、標準エラーの塊と showMessage / logMessage
+    // だけを language の行として記録に足す。状態・知らせ・答えは動かさない。
+    void log_unread(LanguageServerSlot slot, core::Language language, const ServerEvent &event);
+    // 記録を無題のタブに写して開く（追補・F1 の一覧と `:LspLog`）。先にたまった出来事を集め、
+    // 記録が空なら 1 行知らせて開かない。
+    void open_language_server_log();
+    void accept(const OpenLanguageServerLog &);
+    // アクティブな文書を受ける席の進み具合か起動中の 1 行（追補）。frame と hit test が同じ値を
+    // 引く（language_server_status）。
+    void add_language_server_status(EditorFrame &result) const;
     void accept(const LanguageServerTick &);
     void age_lsp_requests(LanguageServerSlot slot);
     void expire_lsp_request(LanguageServerSlot slot, const PendingLspRequest &request);
@@ -1030,7 +1096,7 @@ class EditorController final
     void drop_hover();
     // 引数の情報の札（#1959・EditorControllerSignature.cpp）。
     void settle_typed_signature(std::string_view typed);
-    void settle_typed_vim_signature(const core::VimKey &key);
+    void settle_typed_vim_signature(const core::VimKey &key, std::size_t before);
     void settle_signature_answer();
     void settle_signature_tip();
     [[nodiscard]] bool signature_allowed() const;
@@ -1476,8 +1542,37 @@ class EditorController final
     void retry_unsaved_settings();
     // 面の切り替えをその場で効かせる（保存しない）。
     void preview_settings(core::EditorSettings settings);
+    // 見えている行の鍵（settings_rows の添字の後ろに「言語サーバー」の節の行と畳みの 1
+    // 行・#1945）。
     [[nodiscard]] std::vector<std::size_t> visible_settings_rows() const;
     [[nodiscard]] std::optional<std::size_t> focused_settings_row() const;
+    // 鍵 key の行の節。
+    [[nodiscard]] core::SettingsSection settings_section_of(std::size_t key) const noexcept;
+
+    // ------------------------------------- 設定の「言語サーバー」の節（LSP 段 S4・#1945）
+    // EditorControllerLanguageServerRows.cpp の群だけが探しの結果を読み書きする。
+    // 表の順の全部の行（表に無い言語の命令の行はその後ろ）。
+    [[nodiscard]] std::vector<LanguageServerRowView> language_server_rows() const;
+    [[nodiscard]] LanguageServerRowView known_server_row(std::size_t index) const;
+    // 見えている行（rows の添字・畳んでいれば畳んでも出す行だけ）。
+    [[nodiscard]] std::vector<std::size_t>
+    shown_language_server_rows(const std::vector<LanguageServerRowView> &rows) const;
+    [[nodiscard]] LanguageServerRowState
+    configured_state(std::span<const core::Language> languages) const;
+    void describe_configured(LanguageServerRowView &view, const std::string &command) const;
+    // 面を開いたときに探しを頼み、合図の道で結果を採る（走っていなければ port を呼ばない）。
+    void request_language_server_search();
+    void collect_language_server_search();
+    // 行 index の「使う」「外す」（rows の数なら「ほかの N 言語を見る」）。
+    void act_on_language_server_row(std::size_t index);
+    [[nodiscard]] bool used_commands(std::vector<std::pair<std::string, std::string>> &commands,
+                                     std::size_t index) const;
+    void restart_language_servers_of(core::Language language);
+    void unfold_language_server_rows(const std::vector<LanguageServerRowView> &rows);
+    // 命令の行が変わった言語の席を止め、失敗の控えを消し、起こすかを決め直す。
+    void
+    follow_language_server_commands(const std::vector<std::pair<std::string, std::string>> &before,
+                                    const std::vector<std::pair<std::string, std::string>> &after);
     // 配達に載せる IME の構え（面が開いている間は閉じ直さない・#1836）。
     [[nodiscard]] ImeStance shown_ime_stance() const;
 
@@ -1543,6 +1638,14 @@ class EditorController final
     void perform(const core::VimSwitchTab &effect);
     // `Ctrl-w` の窓の命令（ADR 0148 の決定 7）。2 枠の意図が入るまで何もしない。
     void perform(const core::VimWindowCommand &command);
+    void perform(const core::PaneSizing &sizing);
+    // 鍵で枠の大きさを変える 1 本（ResizePane・Vim の Ctrl-w・Ex の :resize・ADR 0148 の
+    // 2026-11-22 の追補の決定 4）。窓から届いた境界の寸法と今の比から sized_share を呼ぶ。
+    void resize_pane(core::PaneSizing sizing);
+    // もう 1 つの枠の寸法（追補の決定 5・届く前は操作中の枠の値）。
+    [[nodiscard]] const core::TextViewGeometry &other_geometry() const noexcept;
+    // もう 1 つの枠を、操作中の枠の形で読む写しにその枠の行数を置いた状態。
+    [[nodiscard]] std::optional<EditorState> other_pane_viewed() const;
     // `:s///c` の 1 歩（ADR 0168 の決定 6）。置く当たりを写し、問いを開くか続けるか終える。
     void perform(const core::VimConfirmSubstitute &effect);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
@@ -1595,6 +1698,9 @@ class EditorController final
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
     void clamp_scroll();
+    // もう 1 つの枠の先頭の行を、その枠の寸法で clamp_scroll と同じ規則で収める（境界が動いたとき・
+    // ADR 0148 の 2026-11-22 の追補の決定 5）。
+    void clamp_other_scroll();
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
@@ -1674,7 +1780,7 @@ class EditorController final
     visible_lines(const PaneSource &source, std::optional<SyntaxStateCache> &cache,
                   std::size_t &lexed) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
-    screen_rows_of(const LineView &shown) const;
+    screen_rows_of(const LineView &shown, const core::TextViewGeometry &geometry) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
     // 位置解決と同じ GridCells（本文の索引を借りる）を 1 frame に 1 つ作って切り出す。
     // 失敗は升を読めないとき。構文の色は visible_lines と同じ遡りと覚えで付ける（#839）。
@@ -1759,6 +1865,11 @@ class EditorController final
     std::int32_t window_height_ = 0;
     // エクスプローラーの面の高さに入る行数（ルート名の行を含む・#1125）。0 は寸法が届く前。
     std::size_t explorer_lines_ = 0;
+    // 2 枠の境界の寸法と、もう 1 つの枠の寸法と行数（VisibleLines が運ぶ・ADR 0148 の 2026-11-22 の
+    // 追補の決定 4・5）。other_lines_ が 0 なら操作中の枠の値を使う。
+    std::optional<core::SplitExtent> split_extent_;
+    core::TextViewGeometry other_geometry_{};
+    std::size_t other_lines_ = 0;
     std::optional<TextLayoutFailure> layout_failure_;
     // 今の意図が描き直しを要るか（EditorDelivery.repaint）。apply の入口で true に戻し、合図
     // （AutosaveTick / PreviewTick）が何も変えなかったときだけ false にする（#813）。
@@ -1970,6 +2081,11 @@ class EditorController final
     std::uint64_t completion_sessions_ = 0;
     // 開いている設定の面（ADR 0170 の 2026-11-18 の追補 2）。
     std::optional<SettingsOpen> settings_;
+    // 言語サーバーの探し（#1945）。頼んで結果をまだ採っていないか・表の行ごとに最初に見つかった
+    // 候補（候補の添字と見つかった物・値なしは見つからない）。まだ 1 度も届いていなければ値なし。
+    bool language_server_search_reading_ = false;
+    std::optional<std::vector<std::optional<std::pair<std::size_t, FoundLanguageServer>>>>
+        found_language_servers_;
     // 面を閉じたときの書き込みが失敗し、状態の設定がまだファイルに無い（R1）。書けたとき・窓を
     // 閉じるときの書き直しの後に落とす。
     bool settings_unsaved_ = false;

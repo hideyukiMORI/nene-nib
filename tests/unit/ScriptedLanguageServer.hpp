@@ -24,8 +24,8 @@ namespace nenenib::tests
 // start で受けた要求と席、send で受けた本文と席を順に覚え、stop と expire_retired と collect の
 // 呼ばれた回数を数え、collect が返す出来事を先に仕込める（仕込んだ分は次の collect が全部を返し、
 // その後は空）。席を名指さずに仕込んだ出来事は最後に start した席のもの。stop はその席に仕込んだ
-// 出来事を捨てる（本物と同じく古い子の本文を次の子の前に混ぜない）。refuse は次の start を
-// 断らせる。
+// 出来事を列から外して返す（本物と同じく古い子の本文を次の子の前に混ぜない）。refuse は次の start
+// を 断らせる。
 class ScriptedLanguageServer final : public nenenib::application::LanguageServerPort
 {
   public:
@@ -50,12 +50,22 @@ class ScriptedLanguageServer final : public nenenib::application::LanguageServer
         sent_slots_.push_back(slot);
     }
 
-    void stop(nenenib::application::LanguageServerSlot slot) override
+    [[nodiscard]] std::vector<nenenib::application::ServerEvent>
+    stop(nenenib::application::LanguageServerSlot slot) override
     {
         ++stops_;
         stopped_slots_.push_back(slot);
+        std::vector<nenenib::application::ServerEvent> unread;
+        for (const auto &event : events_)
+        {
+            if (event.slot == slot)
+            {
+                unread.push_back(event.event);
+            }
+        }
         std::erase_if(events_, [slot](const nenenib::application::LanguageServerEvent &event)
                       { return event.slot == slot; });
+        return unread;
     }
 
     void expire_retired() override

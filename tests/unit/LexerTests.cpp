@@ -1999,8 +1999,19 @@ void verify_other_languages()
     {
         expect(core::has_lexer(language), "the twenty-five languages with a lexer report one");
     }
-    // #862 で plain の外の言語はすべて字句器を持つ。plain は区間なしで状態をそのまま返す。
+    // #862 で plain の外の言語はすべて字句器を持った。#1917 で足した 16 言語は字句器を持たず
+    // （色なし）、plain と同じく区間なしで状態をそのまま返す。
     expect(!core::has_lexer(Language::plain), "plain has no lexer");
+    for (const Language language :
+         {Language::java, Language::kotlin, Language::dart, Language::zig, Language::terraform,
+          Language::make, Language::batch, Language::ruby, Language::swift, Language::scala,
+          Language::haskell, Language::elixir, Language::r, Language::perl, Language::vue,
+          Language::svelte})
+    {
+        expect(!core::has_lexer(language) && core::syntax_backfill_lines(language) == 0U &&
+                   core::lex_line(language, plain, "int x = \"s\"; /* c").spans.empty(),
+               "a language added without a lexer paints nothing");
+    }
     for (const LexState &in : {plain, block, raw_xyz})
     {
         const LexLine lexed = core::lex_line(Language::plain, in, "int x = \"s\"; /* c");

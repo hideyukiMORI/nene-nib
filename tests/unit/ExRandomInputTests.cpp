@@ -664,7 +664,9 @@ void typed_steps(EditorController &controller, const std::vector<Step> &steps)
                                                  editing.project_search(),
                                                  editing.previews(),
                                                  editing.reveal(),
-                                                 editing.links()},
+                                                 editing.links(),
+                                                 editing.language_roots(),
+                                                 editing.language_server_search()},
                                 nenenib::core::Distribution::unpackaged};
     open_document(controller, editing.files(), trial.first);
     for (std::size_t index = 0; index < trial.second.size(); ++index)

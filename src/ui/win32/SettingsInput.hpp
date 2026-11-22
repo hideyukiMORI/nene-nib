@@ -4,6 +4,7 @@
 #include "SettingsKeyPress.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsPart.hpp"
+#include "SettingsPress.hpp"
 #include "SettingsTarget.hpp"
 #include "SettingsView.hpp"
 
@@ -33,11 +34,13 @@ settings_key_intents(const SettingsKeyPress &press, const application::SettingsV
                                                          wchar_t &pending,
                                                          const application::SettingsView &view);
 
-// 左の押し。面の外は CloseSettings の 1 つ（本文へ渡さない）で覚えは無し、面の中は覚えるだけ。
-[[nodiscard]] std::pair<std::optional<core::SettingsTarget>, SettingsIntents>
-settings_press_step(core::SettingsTarget target);
-// 左の離し。押した部品 pressed と同じ部品の上で離したときだけ、その部品の意図。
-[[nodiscard]] SettingsIntents settings_release_intents(std::optional<core::SettingsTarget> pressed,
+// 左の押し。面の外は CloseSettings の 1 つ（本文へ渡さない）で覚えは無し、面の中は部品と、言語
+// サーバーの行なら行の身元を覚えるだけ（view は押したときの表示値）。
+[[nodiscard]] std::pair<std::optional<SettingsPress>, SettingsIntents>
+settings_press_step(core::SettingsTarget target, const application::SettingsView &view);
+// 左の離し。押した部品と同じ部品で、言語サーバーの行なら同じ身元の行の上で離したときだけ、その
+// 部品の意図（押している間に探しの結果が届いて行がずれたら何もしない・#1945 のレビュー R2）。
+[[nodiscard]] SettingsIntents settings_release_intents(const std::optional<SettingsPress> &pressed,
                                                        core::SettingsTarget released,
                                                        const application::SettingsView &view);
 // 右の押し。面の外は CloseSettings の 1 つ、中は何もしない（どちらも本文のメニューを開かない）。

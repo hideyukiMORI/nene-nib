@@ -44,6 +44,8 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageRoots.hpp"
+#include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -406,19 +408,21 @@ void verify_quiet_start_with_files()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageRoots language_roots;
+    ScriptedLanguageServerSearch searches;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
     EditorController controller(
-        EditorPorts{appearance,      clipboard,   files,        code_pages,
-                    settings,        themes,      session,      history,
-                    folders,         bookmarks,   text_layouts, autosave,
-                    fonts,           bell,        markdown,     reads,
-                    language_server, wall_clock,  printer,      shell_registration,
-                    images,          start_lists, ui_language,  project_search,
-                    previews,        reveal,      links},
+        EditorPorts{
+            appearance,   clipboard,       files,          code_pages,     settings,
+            themes,       session,         history,        folders,        bookmarks,
+            text_layouts, autosave,        fonts,          bell,           markdown,
+            reads,        language_server, wall_clock,     printer,        shell_registration,
+            images,       start_lists,     ui_language,    project_search, previews,
+            reveal,       links,           language_roots, searches},
         nenenib::core::Distribution::unpackaged, {work_open('a'), work_open('b')});
     // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
     // 3）。
@@ -429,7 +433,8 @@ void verify_quiet_start_with_files()
                markdown.collects() == 0 && language_server.touches() == 0 &&
                wall_clock.calls() == 0 && printer.jobs().empty() &&
                shell_registration.touches() == 0 && images.touches() == 0 &&
-               start_lists.touches() == 0 && previews.touches() == 0 && links.touches() == 0,
+               start_lists.touches() == 0 && previews.touches() == 0 && links.touches() == 0 &&
+               language_roots.touches() == 0 && searches.touches() == 0,
            "starting with file arguments never touches the history, the folder, autosave, the "
            "bell, the clock, the printer, the shell registration, the preview images nor the "
            "start screen lists");
@@ -530,9 +535,10 @@ void verify_quiet_after_start_lists()
     applied(controller, nenenib::application::SwitchPane{});
     applied(controller, nenenib::application::ClosePane{});
     expect(editing.history().writes() == 0 && editing.start_lists().requests() == 1 &&
-               editing.start_lists().collects() == 1,
+               editing.start_lists().collects() == 1 &&
+               editing.language_server_search().touches() == 0,
            "with the read finished, opening, switching, new tabs, typing, saving and panes never "
-           "touch the start lists");
+           "touch the start lists nor search for language servers");
     // 表示言語の観測は起動の 1 回だけ（ADR 0123 の追補 2026-11-13 の決定 2・#1019）。
     expect(editing.ui_language().calls() == 1,
            "opening, switching, new tabs, typing, saving and panes never observe the OS language");
@@ -554,7 +560,8 @@ void verify_quiet_restore()
                restored.printer().jobs().empty() && restored.shell_registration().touches() == 0 &&
                restored.images().touches() == 0 && restored.start_lists().touches() == 0 &&
                restored.previews().touches() == 0 && restored.reveal().touches() == 0 &&
-               restored.links().touches() == 0,
+               restored.links().touches() == 0 && restored.language_roots().touches() == 0 &&
+               restored.language_server_search().touches() == 0,
            "restoring the last tabs never touches the history, the folder, autosave, the bell, "
            "the clock, the printer, the shell registration nor the preview images");
 }
@@ -603,7 +610,8 @@ void verify_quiet_paths()
                editing.images().touches() == 0 && editing.start_lists().requests() == 1 &&
                editing.start_lists().collects() == 0 && editing.project_search().touches() == 0 &&
                editing.previews().touches() == 0 && editing.reveal().touches() == 0 &&
-               editing.links().touches() == 0,
+               editing.links().touches() == 0 && editing.language_roots().touches() == 0 &&
+               editing.language_server_search().touches() == 0,
            "opening, switching, new tabs, saving and typing never touch the history, the folder, "
            "autosave, the bell, the clipboard, the language server (lsp off), the clock, the "
            "printer, the preview images nor the explorer reveal, and only opening asks the read "

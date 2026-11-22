@@ -14,9 +14,11 @@
 #include "KeyMapEmit.hpp"
 #include "KeyMapPass.hpp"
 #include "KeyMapPending.hpp"
+#include "LanguageServerPhase.hpp"
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "PaneSizing.hpp"
 #include "QuantityText.hpp"
 #include "ReplayLevel.hpp"
 #include "ScopedValue.hpp"
@@ -32,9 +34,7 @@
 #include "Utf8.hpp"
 #include "VimBlockEdit.hpp"
 #include "VimCaret.hpp"
-#include "LanguageServerPhase.hpp"
 #include "VimCharacter.hpp"
-#include "VimKey.hpp"
 #include "VimClipboardText.hpp"
 #include "VimInsertBlock.hpp"
 #include "VimJumpLists.hpp"
@@ -442,6 +442,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     return std::holds_alternative<core::VimSwitchTab>(step.effect) ||
            std::holds_alternative<core::VimWindowCommand>(step.effect) ||
+           std::holds_alternative<core::PaneSizing>(step.effect) ||
            std::holds_alternative<core::VimReplay>(step.effect);
 }
 
@@ -580,26 +581,40 @@ void EditorController::accept(const VimKeyPress &intent)
     {
         return;
     }
+    // 照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
+    const bool watching = language_servers_.awake != 0 &&
+                          active_language_server().phase == LanguageServerPhase::running;
+    const std::size_t before = watching ? state_.text().size_bytes() : 0;
     static_cast<void>(typed_vim_key(intent.key));
     // INSERT で打った `triggerCharacters` の 1 文字で引数の情報を頼む（#1959・ADR 0191 の決定 6）。
-    // 照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
-    if (language_servers_.awake != 0 &&
-        active_language_server().phase == LanguageServerPhase::running)
+    if (watching)
     {
-        settle_typed_vim_signature(intent.key);
+        settle_typed_vim_signature(intent.key, before);
     }
 }
 
-// INSERT のままで ASCII の 1 文字を打った鍵だけを引数の情報の打鍵の道へ渡す。
-void EditorController::settle_typed_vim_signature(const core::VimKey &key)
+// 使う人が打った ASCII の 1 文字がそのまま本文に入った（INSERT のまま・本文が 1 バイト増え、
+// キャレットの直前がその文字）ときだけ、引数の情報の打鍵の道へ渡す。`map` の右辺（増え方が違う・
+// 打った鍵と違う文字）と、左辺の途中で待っている鍵（本文が増えない）は頼まない。録画の再生・`.`・
+// `:normal`・貼り付け（Ctrl-R など）・IME の確定（CommitText）はこの入口（accept(VimKeyPress)）を
+// 通らない。
+void EditorController::settle_typed_vim_signature(const core::VimKey &key, std::size_t before)
 {
     const auto *typed = std::get_if<core::VimCharacter>(&key);
     constexpr char32_t last_ascii = 0x7F;
-    if (typed == nullptr || typed->code > last_ascii || state_.vim().mode != core::VimMode::insert)
+    if (typed == nullptr || typed->code > last_ascii ||
+        state_.vim().mode != core::VimMode::insert || state_.text().size_bytes() != before + 1)
     {
         return;
     }
-    settle_typed_signature(std::string(1, static_cast<char>(typed->code)));
+    const std::size_t caret = state_.selection().caret.value;
+    const std::string typed_text(1, static_cast<char>(typed->code));
+    if (caret == 0 ||
+        state_.text().text_range(core::Offset{caret - 1}, core::Offset{caret}) != typed_text)
+    {
+        return;
+    }
+    settle_typed_signature(typed_text);
 }
 
 // 打った鍵の入口（ADR 0176 の決定 3・4）。表が空なら分岐 1 つで今までの道。表を引けないとき
@@ -2210,6 +2225,12 @@ void EditorController::perform(const core::VimWindowCommand &command)
         return;
     }
     std::unreachable();
+}
+
+// 枠の大きさの鍵（ADR 0148 の 2026-11-22 の追補の決定 4）。1 枠では何もしない。
+void EditorController::perform(const core::PaneSizing &sizing)
+{
+    resize_pane(sizing);
 }
 
 std::expected<core::VimStep, TextLayoutFailure>

@@ -144,7 +144,7 @@ constexpr std::size_t guide_row = 0;
 [[nodiscard]] SettingsIntents clicked(core::SettingsPart part)
 {
     const core::SettingsTarget target{part, 0};
-    const auto [pressed, intents] = settings_press_step(target);
+    const auto [pressed, intents] = settings_press_step(target, sample());
     auto released = settings_release_intents(pressed, target, sample());
     released.insert(released.begin(), intents.begin(), intents.end());
     return released;
@@ -216,7 +216,7 @@ void verify_open_routes()
                leaves_ime(after(key(VK_ESCAPE, false, true))),
            "a held Ctrl+, or Esc repeating does not close and leaves the IME alone");
     const core::SettingsTarget row{core::SettingsPart::row, guide_row};
-    const auto [pressed, silent] = settings_press_step(row);
+    const auto [pressed, silent] = settings_press_step(row, sample());
     expect(leaves_ime(after(silent)) &&
                leaves_ime(after(settings_release_intents(pressed, row, sample()))) &&
                leaves_ime(after(clicked(core::SettingsPart::panel))),

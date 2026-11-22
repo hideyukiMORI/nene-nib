@@ -25,6 +25,9 @@ namespace
     return DisplayText::parse(text).value();
 }
 
+// 件数と言語サーバーの 1 行の間（U+00B7 の前後に空白・訳さない記号）。
+constexpr std::string_view server_text_separator = " \xC2\xB7 ";
+
 constexpr auto decimal_digits =
     static_cast<std::size_t>(std::numeric_limits<std::size_t>::digits10) + 1U;
 
@@ -97,6 +100,25 @@ std::optional<DisplayText> diagnostic_count_item(const DiagnosticCounts &counts)
         break;
     }
     return fixed(shown);
+}
+
+std::optional<DisplayText> status_server_text(const DiagnosticCounts &counts,
+                                              const std::optional<DisplayText> &status)
+{
+    auto counted = diagnostic_count_item(counts);
+    if (!status.has_value())
+    {
+        return counted;
+    }
+    if (!counted.has_value())
+    {
+        return status;
+    }
+    std::string joined(counted.value().text());
+    joined += server_text_separator;
+    joined += status.value().text();
+    auto parsed = DisplayText::parse(joined);
+    return parsed ? std::optional<DisplayText>{std::move(parsed).value()} : counted;
 }
 
 DisplayText caret_status_item(const TextPosition &caret, DisplayLanguage language)

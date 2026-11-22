@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 61> expected_2{
+constexpr std::array<OperationChoiceExpected, 66> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -173,13 +173,28 @@ constexpr std::array<OperationChoiceExpected, 61> expected_2{
      {core::EditorOperation::list_diagnostics, 58U, "診断の一覧", 5U,
       "開いているタブの診断を Ctrl+P の一覧で見ます", 26U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
-     {core::EditorOperation::list_references, 59U, "参照の一覧", 5U,
+     {core::EditorOperation::widen_pane, 59U, "枠を広げる", 5U,
+      "いまの枠を広げ、もう 1 つの枠を狭めます", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::narrow_pane, 60U, "枠を狭める", 5U,
+      "いまの枠を狭め、もう 1 つの枠を広げます", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::even_panes, 61U, "枠を等分に戻す", 7U,
+      "2 つの枠を同じ大きさに戻します", 16U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::open_language_server_log, 62U, "言語サーバーの記録を開く", 12U,
+      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます", 30U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_references, 63U, "参照の一覧", 5U,
       "キャレットの位置の名前を使っている所を言語サーバーに聞き、Ctrl+P の一覧で見ます", 43U,
       "Shift+F12", "", core::CommandChoiceKind::operate, std::nullopt},
-     {core::EditorOperation::list_symbols, 60U, "記号の一覧", 5U,
+     {core::EditorOperation::list_symbols, 64U, "記号の一覧", 5U,
       "今の文書の関数や型などの記号を言語サーバーに聞き、Ctrl+P の一覧で見ます", 39U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 58> expected_3{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::show_signature_help, 65U, "引数の情報を表示", 8U,
+      "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します", 40U, "",
+      "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 63> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -329,13 +344,28 @@ constexpr std::array<OperationChoiceExpected, 58> expected_3{
      {core::EditorOperation::list_diagnostics, 58U, "診断の一覧", 5U,
       "開いているタブの診断を Ctrl+P の一覧で見ます", 26U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
-     {core::EditorOperation::list_references, 59U, "参照の一覧", 5U,
+     {core::EditorOperation::widen_pane, 59U, "枠を広げる", 5U,
+      "いまの枠を広げ、もう 1 つの枠を狭めます", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::narrow_pane, 60U, "枠を狭める", 5U,
+      "いまの枠を狭め、もう 1 つの枠を広げます", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::even_panes, 61U, "枠を等分に戻す", 7U,
+      "2 つの枠を同じ大きさに戻します", 16U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::open_language_server_log, 62U, "言語サーバーの記録を開く", 12U,
+      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます", 30U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_references, 63U, "参照の一覧", 5U,
       "キャレットの位置の名前を使っている所を言語サーバーに聞き、Ctrl+P の一覧で見ます", 43U,
       "Shift+F12", "", core::CommandChoiceKind::operate, std::nullopt},
-     {core::EditorOperation::list_symbols, 60U, "記号の一覧", 5U,
+     {core::EditorOperation::list_symbols, 64U, "記号の一覧", 5U,
       "今の文書の関数や型などの記号を言語サーバーに聞き、Ctrl+P の一覧で見ます", 39U, "", "",
-      core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 61> expected_4{
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::show_signature_help, 65U, "引数の情報を表示", 8U,
+      "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します", 40U, "",
+      "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 66> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -388,9 +418,24 @@ constexpr std::array<OperationChoiceExpected, 61> expected_4{
      {core::EditorOperation::list_diagnostics, 58U, "診断の一覧", 5U,
       "開いているタブの診断を Ctrl+P の一覧で見ます", 26U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
-     {core::EditorOperation::list_symbols, 60U, "記号の一覧", 5U,
+     {core::EditorOperation::widen_pane, 59U, "枠を広げる", 5U,
+      "いまの枠を広げ、もう 1 つの枠を狭めます", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::narrow_pane, 60U, "枠を狭める", 5U,
+      "いまの枠を狭め、もう 1 つの枠を広げます", 21U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::even_panes, 61U, "枠を等分に戻す", 7U,
+      "2 つの枠を同じ大きさに戻します", 16U, "", "", core::CommandChoiceKind::operate,
+      std::nullopt},
+     {core::EditorOperation::open_language_server_log, 62U, "言語サーバーの記録を開く", 12U,
+      "言語サーバーの標準エラーと知らせの記録を無題のタブで開きます", 30U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::list_symbols, 64U, "記号の一覧", 5U,
       "今の文書の関数や型などの記号を言語サーバーに聞き、Ctrl+P の一覧で見ます", 39U, "", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::show_signature_help, 65U, "引数の情報を表示", 8U,
+      "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します", 40U, "",
+      "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
@@ -467,7 +512,7 @@ constexpr std::array<OperationChoiceExpected, 61> expected_4{
      {core::EditorOperation::previous_diagnostic, 56U, "前の診断へ", 5U,
       "前の誤りや警告へ移動します（言語サーバーの診断）", 24U, "Shift+F8", "",
       core::CommandChoiceKind::operate, std::nullopt},
-     {core::EditorOperation::list_references, 59U, "参照の一覧", 5U,
+     {core::EditorOperation::list_references, 63U, "参照の一覧", 5U,
       "キャレットの位置の名前を使っている所を言語サーバーに聞き、Ctrl+P の一覧で見ます", 43U,
       "Shift+F12", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::save_as, 2U, "名前を付けて保存", 8U, "別の名前のファイルに保存します",
@@ -574,14 +619,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 2339328U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 2587392U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 2232320U, expected_3,
+     {"", core::EditMode::vim, 256U, 2480384U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 2339328U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 2587392U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,

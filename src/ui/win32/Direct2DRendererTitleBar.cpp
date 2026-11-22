@@ -274,8 +274,10 @@ namespace
 }
 } // namespace
 
-// 引数の情報の札（#1959・ADR 0191 の決定 6）。hover の札と同じ書式・置き場（キャレットの行の上・入らな
-// ければ下）・描く 1 本で、今の引数を太字にする。
+// 引数の情報の札（#1959・ADR 0191 の決定 6）。hover
+// の札と同じ書式・置き場（キャレットの行の上・入らな ければ下）・描く 1
+// 本で、今の引数を太字にする。描く順は hover の札の後（補完の面は下・hover の札と
+// は同時に出ない）。
 void Direct2DRenderer::draw_signature_tip(const application::EditorFrame &frame,
                                           const core::LayoutRect &area)
 {
@@ -284,9 +286,13 @@ void Direct2DRenderer::draw_signature_tip(const application::EditorFrame &frame,
         return;
     }
     const core::LspSignature &signature = frame.signature.value();
-    static_cast<void>(signature_tip_layout_.fitted(
-        *dwrite_.Get(), tab_tip_format_.Get(), signature.label,
-        core::hover_tip_text_limit(core::width_of(area), dpi_), signature_emphasis(signature)));
+    static_cast<void>(
+        signature_tip_layout_.fitted(*dwrite_.Get(), tab_tip_format_.Get(), signature.label,
+                                     core::hover_tip_text_limit(core::width_of(area), dpi_)));
+    if (!signature_tip_layout_.emphasized(signature_emphasis(signature)))
+    {
+        return;
+    }
     const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
                                  caret_rectangle_.right, caret_rectangle_.bottom};
     const auto paint = signature_tip_layout_.painted(caret, area, frame.palette, dpi_);
