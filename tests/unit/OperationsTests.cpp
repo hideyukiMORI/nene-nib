@@ -131,7 +131,8 @@ constexpr std::array<ChordRow, 67> chord_rows{{
     {ctrl_shift(OperationKey::f), EditorOperation::search_project, EditorOperation::search_project},
     {ctrl_shift(OperationKey::g), std::nullopt, std::nullopt},
     {ctrl(OperationKey::f3), std::nullopt, std::nullopt},
-    // 定義へ移動の F12 は両モード（ADR 0190 の決定 8）。Shift+F12 は参照の一覧（#1947）。Ctrl つきは
+    // 定義へ移動の F12 は両モード（ADR 0190 の決定 8）。Shift+F12 は参照の一覧（#1947）。Ctrl
+    // つきは
     // 値なし。
     {KeyChord{false, false, OperationKey::f12}, EditorOperation::go_to_definition,
      EditorOperation::go_to_definition},

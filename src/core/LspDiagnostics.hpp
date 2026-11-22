@@ -18,12 +18,18 @@ namespace nenenib::core
 // 1 文書の診断の上限（ADR 0161 の決定 2・限界）。超えた分は捨てて件数に `+` を付ける。
 inline constexpr std::size_t lsp_diagnostics_limit = 1000;
 
-// 1 件の文の上限（バイト・#1939）。超えた分は code point を割らない所で切る。上限の 1,000 件と
-// 掛けても 1 文書で 4 MiB に収まる。札は hover と同じく 12 行で切る（hover_tip_text）。
-inline constexpr std::size_t lsp_diagnostic_message_limit = 4096;
+// 1 件の文の上限（バイト・#1939）。超えた分は code point を割らない所で切る。source と code を
+// 足した 1 件（3,840 ＋ 128 ＋ 128 ＝ 4,096）を上限の 1,000 件と掛けても 1 文書で 4 MiB に収まる
+// （下の static_assert・レビュー R3 の推奨 2）。札は hover と同じく 12 行で切る（hover_tip_text）。
+inline constexpr std::size_t lsp_diagnostic_message_limit = 3840;
 
 // source と文字列の code の上限（バイト）。超えたら欄が無いのと同じ（空）。
 inline constexpr std::size_t lsp_diagnostic_label_limit = 128;
+
+static_assert(lsp_diagnostics_limit *
+                      (lsp_diagnostic_message_limit + 2 * lsp_diagnostic_label_limit) <=
+                  std::size_t{4} * 1024 * 1024,
+              "the diagnostics of one document fit in 4 MiB of text");
 
 // 診断を運ぶ通知の method（LSP 3.17）。
 inline constexpr std::string_view lsp_publish_diagnostics_method =

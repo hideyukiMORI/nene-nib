@@ -2,8 +2,11 @@
 // `]d` `[d`・通常モードの F8 / Shift+F8）・札（`gl`・操作「診断を表示」）・Ctrl+P の一覧（`^`）。
 // core の純関数と表、engine の効果、controller の道を替え玉 ScriptedLanguageServer で確かめる。
 #include "ActivateCommandChoice.hpp"
+#include "CancelComposition.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandText.hpp"
+#include "ComposeText.hpp"
 #include "Diagnostic.hpp"
 #include "DiagnosticCommand.hpp"
 #include "DiagnosticJump.hpp"
@@ -40,6 +43,7 @@
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
+#include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextPosition.hpp"
@@ -143,7 +147,7 @@ void diagnosed(Editing &editing)
     static_cast<void>(delivered(
         editing,
         app::ServerMessage{
-            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2,"hoverProvider":true}}})"}));
     editing.language_server().publish(source_uri, 0, three_diagnostics);
     static_cast<void>(editing.controller().apply(app::WorkCompleted{}));
 }
@@ -416,6 +420,117 @@ void verify_list()
     expect(!landed.command_palette.has_value() && landed.active_tab == 0 && caret_on(landed, 2, 5),
            "choosing a diagnostic of another tab switches to it and lands on the diagnostic");
 }
+// 札を出すとき、出ている hover の要求を取り消す。後から届いた古い答えは札を消さず（`]d` で文脈が
+// 変わった後）、上書きもしない（`K` の直後に同じ所で札を出した後）（レビュー R3 の推奨 1）。
+void verify_tip_outlives_hover()
+{
+    Editing editing(lsp_on());
+    diagnosed(editing);
+    expect(editing.controller().request_hover(), "the server can hover");
+    const auto asked = editing.language_server().requests("textDocument/hover");
+    static_cast<void>(commanded(editing, core::DiagnosticCommand::next));
+    editing.language_server().answer(asked.back(), R"({"contents":"doc"})");
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    expect(tip_of(editing) == "bad main\nsecond line\nclangd(42)\n\na hint",
+           "a hover answer arriving after the jump does not clear the tip");
+    expect(editing.controller().request_hover(), "the server can hover at the diagnostic");
+    const auto again = editing.language_server().requests("textDocument/hover");
+    static_cast<void>(commanded(editing, core::DiagnosticCommand::show));
+    editing.language_server().answer(again.back(), R"({"contents":"doc"})");
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    expect(tip_of(editing) == "bad main\nsecond line\nclangd(42)\n\na hint",
+           "a hover answer for the same place does not replace the tip shown after it");
+}
+
+// `]d` `[d` は跳べたら成功の歩なので、マクロと map の右辺の残りが流れる。診断が無くて跳べなければ
+// 失敗の歩のまま残りを捨てる（Neovim と同じ・レビュー R3 の推奨 3）。
+void verify_keys_succeed_in_macros()
+{
+    Editing editing(lsp_on());
+    diagnosed(editing);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(editing.controller(), "qa]dxq");
+    expect(whole_vim_body(editing.controller()) == "int ain() {}\nint x;\n",
+           "the recorded keys jump and delete");
+    vim_replay(editing.controller(), "@a");
+    expect(whole_vim_body(editing.controller()) == "int ain() {}\nint ;\n",
+           "replaying ]dx jumps to the next diagnostic and still runs x");
+    vim_replay(editing.controller(), "gg@a");
+    expect(whole_vim_body(editing.controller()) == "int ain() {}\nint ;\n" &&
+               caret_on(editing.controller().frame(), 1, 1),
+           "without diagnostics ]d fails and the rest of the macro is dropped");
+
+    Editing mapping(lsp_on());
+    diagnosed(mapping);
+    applied(mapping.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(mapping.controller(), ":");
+    static_cast<void>(mapping.controller().apply_frame(app::CommandText{"nnoremap Q ]dx"}));
+    static_cast<void>(mapping.controller().apply_frame(app::SubmitCommand{}));
+    vim_replay(mapping.controller(), "Q");
+    expect(whole_vim_body(mapping.controller()) == "int ain() {}\nint x;\n",
+           "a map right side goes on after ]d lands");
+}
+
+// INSERT の `Ctrl-o` の後の `]d` は、鍵の中でクリックの道を通らず、鍵の出口で 1 回だけ INSERT を
+// 始め直す（レビュー R3 の推奨 4）。打った字は跳んだ先に入り、undo は 1 回で戻る。
+void verify_insert_pause_jump()
+{
+    Editing editing(lsp_on());
+    diagnosed(editing);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(editing.controller(), "i<C-o>]dZ<Esc>");
+    expect(whole_vim_body(editing.controller()) == "int Zmain() {}\nint x;\n" &&
+               caret_on(editing.controller().frame(), 1, 5),
+           "i<C-o>]d resumes INSERT at the diagnostic");
+    vim_replay(editing.controller(), "u");
+    expect(whole_vim_body(editing.controller()) == source_text, "one u takes the typed text back");
+}
+
+// F8 は IME の変換中は何もしない。INSERT では跳んでそこから打てる。オペレータを待つ間の F8 は
+// 本文を変えずに跳び、オペレータは残る（F12 の着地と同じ・レビュー R3 の軽い 1）。
+void verify_f8_states()
+{
+    Editing editing(lsp_on());
+    diagnosed(editing);
+    applied(editing.controller(), app::ComposeText{composed_of("あ", {}, 0)});
+    const auto composing = commanded(editing, core::DiagnosticCommand::next);
+    expect(composing.composition.has_value() && caret_on(composing, 1, 1) &&
+               tip_of(editing) == "<none>",
+           "F8 during an IME composition does nothing");
+    applied(editing.controller(), app::CancelComposition{});
+
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(editing.controller(), "i");
+    static_cast<void>(commanded(editing, core::DiagnosticCommand::next));
+    vim_replay(editing.controller(), "Z<Esc>");
+    expect(whole_vim_body(editing.controller()) == "int Zmain() {}\nint x;\n",
+           "F8 in INSERT lands on the diagnostic and typing goes on there");
+
+    Editing pending(lsp_on());
+    diagnosed(pending);
+    applied(pending.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(pending.controller(), "d");
+    const auto waited = commanded(pending, core::DiagnosticCommand::next);
+    expect(caret_on(waited, 1, 5) && whole_vim_body(pending.controller()) == source_text,
+           "F8 while an operator waits jumps without changing the text");
+    vim_replay(pending.controller(), "l");
+    expect(whole_vim_body(pending.controller()) == "int ain() {}\nint x;\n",
+           "the waiting operator stays and takes the next motion from the landing");
+}
+
+// 整数の code は負でも 10 進の文字にする（LSP の integer）。
+void verify_negative_code()
+{
+    const auto text = core::TextBuffer::from_utf8("ab").value();
+    const auto params = core::parse_json(
+        R"({"uri":"u","diagnostics":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"message":"m","code":-3}]})");
+    const auto published = core::lsp_published_diagnostics(
+        core::LspNotification{std::string(core::lsp_publish_diagnostics_method), params.value()},
+        text, core::LspPositionEncoding::utf16);
+    expect(published.has_value() && published.value().diagnostics.size() == 1 &&
+               published.value().diagnostics.front().code == "-3",
+           "a negative integer code reads in decimal");
+}
 } // namespace
 
 void verify_diagnostic_jump_scope()
@@ -429,5 +544,10 @@ void verify_diagnostic_jump_scope()
     verify_show_and_absent();
     verify_vim_jumps();
     verify_list();
+    verify_tip_outlives_hover();
+    verify_keys_succeed_in_macros();
+    verify_insert_pause_jump();
+    verify_f8_states();
+    verify_negative_code();
 }
 } // namespace nenenib::tests

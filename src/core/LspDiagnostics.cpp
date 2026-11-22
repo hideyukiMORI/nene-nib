@@ -4,6 +4,7 @@
 #include "DiagnosticSeverity.hpp"
 #include "DiagnosticsCount.hpp"
 #include "JsonNull.hpp"
+#include "JsonNumber.hpp"
 #include "JsonValue.hpp"
 #include "LspJsonRead.hpp"
 #include "LspPosition.hpp"
@@ -69,8 +70,8 @@ constexpr std::uint64_t highest_severity = 4;
     return text != nullptr && text->size() <= lsp_diagnostic_label_limit ? *text : std::string{};
 }
 
-// code の欄（LSP 3.17 は integer | string）。0 以上の整数は 10 進の文字列、文字列はそのまま
-// （上限を越えたら空）、それ以外は空。
+// code の欄（LSP 3.17 は integer | string）。整数（負も・JSON の数が整数として読めるとき）は 10
+// 進の 文字列、文字列はそのまま（上限を越えたら空）、それ以外は空。
 [[nodiscard]] std::string code_member(const JsonObject &object)
 {
     const Member found = json_member(object, "code");
@@ -78,9 +79,10 @@ constexpr std::uint64_t highest_severity = 4;
     {
         return {};
     }
-    if (const std::optional<std::uint64_t> number = json_count_of(found.value().get()))
+    if (const auto *number = std::get_if<JsonNumber>(&found.value().get().value);
+        number != nullptr && number->integer.has_value())
     {
-        return std::to_string(number.value());
+        return std::to_string(number->integer.value());
     }
     return label_member(object, "code");
 }

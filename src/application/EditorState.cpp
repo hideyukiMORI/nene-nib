@@ -675,7 +675,7 @@ EditorState EditorState::with_opened(core::TextBuffer text, Document document) c
     next.display_ = core::DisplayForm::text;
     next.language_ = language_of(next.document_);
     next.syntax_enabled_ = true;
-    next.diagnostics_.clear();
+    next.diagnostics_.reset();
     next.diagnostics_version_ = 0;
     next.diagnostics_count_ = core::DiagnosticsCount::complete;
     next.display_inquiry_ = DisplayInquiry::unjudged;
@@ -744,9 +744,9 @@ EditorState EditorState::with_vim_marks(core::VimMarks marks) const
     return next;
 }
 
-const std::vector<core::Diagnostic> &EditorState::diagnostics() const noexcept
+std::span<const core::Diagnostic> EditorState::diagnostics() const noexcept
 {
-    return diagnostics_;
+    return diagnostics_of(diagnostics_);
 }
 
 std::uint64_t EditorState::diagnostics_version() const noexcept
@@ -763,7 +763,7 @@ EditorState EditorState::with_diagnostics(std::vector<core::Diagnostic> diagnost
                                           std::uint64_t version, core::DiagnosticsCount count) const
 {
     EditorState next(*this);
-    next.diagnostics_ = std::move(diagnostics);
+    next.diagnostics_ = shared_diagnostics(std::move(diagnostics));
     next.diagnostics_version_ = version;
     next.diagnostics_count_ = count;
     return next;
@@ -781,7 +781,7 @@ EditorState EditorState::with_parked_diagnostics(std::size_t position,
         return *this;
     }
     auto bundle = *loaded.value();
-    bundle.diagnostics = std::move(diagnostics);
+    bundle.diagnostics = shared_diagnostics(std::move(diagnostics));
     bundle.diagnostics_version = version;
     bundle.diagnostics_count = count;
     EditorState next(*this);

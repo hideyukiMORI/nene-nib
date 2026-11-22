@@ -51,10 +51,21 @@ void EditorController::accept(const QueryLanguage &intent)
                               : core::UiMessage::notice_language_server_not_running));
 }
 
-// `gd` `K`。出せなければ何もしない（engine の歩は表に行が無かったときと同じ失敗のまま）。
+// `gd` `K` `grr`。出せなければ何もしない（engine の歩は表に行が無かったときと同じ失敗のまま）。
+// `grr` は頼めたら stepped_vim が成功の歩に読み替える（診断の鍵と同じ・ADR 0191 の決定 4・
+// #1939 のレビュー R3 の推奨 3）。`gd` `K` は ADR 0190 の追補 4 のまま失敗の歩。
 void EditorController::perform(const core::VimLanguageQuery &effect)
 {
-    static_cast<void>(query_language(effect.kind));
+    const bool asked = query_language(effect.kind);
+    switch (effect.kind)
+    {
+    case core::LanguageQueryKind::definition:
+    case core::LanguageQueryKind::hover:
+        return;
+    case core::LanguageQueryKind::references:
+        vim_effect_landed_ = asked;
+        return;
+    }
 }
 
 // 問いを出す 1 本（段 A の入口へ）。出せたら真。hover の前の答えは捨てる（札も消える）。
