@@ -16,7 +16,7 @@ namespace
 // が落ちる。
 [[nodiscard]] consteval std::size_t operation_count() noexcept
 {
-    return std::to_underlying(EditorOperation::open_language_server_log) + 1U;
+    return std::to_underlying(EditorOperation::list_references) + 1U;
 }
 
 // 表の i 行目が i 番目の値を持つ（EditorOperation の順に 1 回ずつ）。

@@ -29,6 +29,7 @@
 #include "ServerAbilities.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <optional>
@@ -133,8 +134,26 @@ definition_answer(const PendingLspRequest &request, const core::LspResponse &res
     {
         return std::nullopt;
     }
-    return LanguageDefinition{
-        .context = *context, .locations = locations_of(response.result), .encoding = encoding};
+    auto locations = locations_of(response.result);
+    const std::size_t total = locations.size();
+    return LanguageDefinition{.context = *context,
+                              .locations = std::move(locations),
+                              .encoding = encoding,
+                              .total = total};
+}
+
+// 参照の答え（ADR 0191 の決定 4）。定義と同じ照合で、受け取りの時点で lsp_reference_limit 件に切る
+// （全件を状態へ写さない・#1954 のレビュー R2）。total は切る前の件数。
+[[nodiscard]] std::optional<LanguageDefinition>
+references_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                  const LspRequestContext &current, core::LspPositionEncoding encoding)
+{
+    auto answer = definition_answer(request, response, current, encoding);
+    if (answer.has_value() && answer.value().locations.size() > core::lsp_reference_limit)
+    {
+        answer.value().locations.resize(core::lsp_reference_limit);
+    }
+    return answer;
 }
 } // namespace
 
@@ -183,6 +202,37 @@ bool EditorController::request_definition()
                                                           request_position(slot.value()))},
                           request_context());
     return true;
+}
+
+// 参照（#1947・ADR 0191 の決定 4）。`ReferenceParams` は位置と `context.includeDeclaration`。
+bool EditorController::request_references()
+{
+    const auto slot = requestable_slot(&ServerAbilities::references);
+    if (!slot.has_value())
+    {
+        return false;
+    }
+    auto params =
+        position_params(active_document_of(slot.value()).uri, request_position(slot.value()));
+    core::JsonObject context;
+    context.emplace_back("includeDeclaration", core::JsonValue{true});
+    params.emplace_back("context", core::JsonValue{std::move(context)});
+    send_language_request(slot.value(), LspRequestKind::references,
+                          core::JsonValue{std::move(params)}, request_context());
+    return true;
+}
+
+// 言語サーバーは動いているが、アクティブな文書を受ける席がその能力を持たない（ADR 0191 の決定 2）。
+// 知らせを分けるためだけに読む（要求の可否は requestable_slot の 1 本）。
+bool EditorController::lacks_ability(bool ServerAbilities::*ability) const
+{
+    const auto slot = holding_slot();
+    if (!slot.has_value())
+    {
+        return false;
+    }
+    const auto &link = language_servers_.links.at(slot_index(slot.value()));
+    return link.phase == LanguageServerPhase::running && !(link.abilities.*ability);
 }
 
 const LanguageAnswers &EditorController::language_answers() const noexcept
@@ -283,6 +333,9 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
         break;
     case LspRequestKind::definition:
         answers.definition = definition_answer(request, response, current, link_of(slot).encoding);
+        break;
+    case LspRequestKind::references:
+        answers.references = references_answer(request, response, current, link_of(slot).encoding);
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));

@@ -183,7 +183,16 @@ EditorController::preview_target(const core::CommandChoice &choice) const
     case core::CommandChoiceKind::land:
         // 診断の候補は開いているタブの文書（手元の本文から窓を作る・#1939）。開いている間に裏で
         // 読めなかったタブが帯から外れると位置が帯の外になり得るので、そのときは無し（ARC-010）。
-        return diagnostic_preview_target(choice);
+        if (palette_diagnostic_of(choice).has_value())
+        {
+            return diagnostic_preview_target(choice);
+        }
+        // 参照の候補はファイルと、同じファイルを開いているタブ（#1947）。
+        if (const auto target = palette_reference_of(choice); target.has_value())
+        {
+            return {target.value().file, open_tab_of(target.value().file)};
+        }
+        return {};
     case core::CommandChoiceKind::fill:
     case core::CommandChoiceKind::operate:
         return {};
@@ -214,6 +223,10 @@ EditorController::preview_anchor_of(const core::CommandPalette &palette,
                                     const core::CommandChoice &choice) const
 {
     if (const auto target = palette_diagnostic_of(choice); target.has_value())
+    {
+        return target.value().anchor;
+    }
+    if (const auto target = palette_reference_of(choice); target.has_value())
     {
         return target.value().anchor;
     }

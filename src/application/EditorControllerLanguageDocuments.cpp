@@ -299,6 +299,7 @@ void EditorController::close_language_server_document(LanguageServerSlot slot,
             core::lsp_notification_body("textDocument/didClose", did_close_params(document.uri)));
     }
     place_diagnostics(document.tab, {}, 0, core::DiagnosticsCount::complete);
+    forget_listed_answers(document.tab);
 }
 
 void EditorController::close_language_server_documents(LanguageServerSlot slot, bool notify)

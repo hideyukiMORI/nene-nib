@@ -167,6 +167,7 @@ void verify_lsp_frames_property_scope();
 // LspDiagnosticsTests.cpp（#995・ADR 0161 の決定 2・3・4・8・診断の写しとずらしと行の区間）
 void verify_lsp_diagnostics_scope();
 void verify_diagnostic_jump_scope();
+void verify_lsp_references_scope();
 // LspAnswersTests.cpp（#1825・ADR 0190 の決定 4・答えの読み 3 本と URI → パス）
 void verify_lsp_answers_scope();
 void verify_lsp_sync_property_scope();

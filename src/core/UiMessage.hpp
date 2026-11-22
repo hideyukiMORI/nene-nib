@@ -152,6 +152,9 @@ enum class UiMessage : std::uint16_t
     operation_even_panes_description,
     operation_open_language_server_log_name,
     operation_open_language_server_log_description,
+    // 参照の一覧の操作（#1947・ADR 0191 の決定 4）。
+    operation_list_references_name,
+    operation_list_references_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -414,10 +417,16 @@ enum class UiMessage : std::uint16_t
     settings_caret_motion_description,
     settings_caret_motion_time_name,
     settings_caret_motion_time_description,
+    // 参照の一覧の記号と知らせ（#1947・ADR 0191 の決定 2・4）。
+    palette_mark_references,
+    notice_references_not_found,
+    notice_references_not_supported,
+    // 参照の答えを上限で切った知らせ（#1954 のレビュー L2・{0} は出した件数・{1} は答えの件数）。
+    notice_references_first_of,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::settings_caret_motion_time_description) + 1U;
+    std::to_underlying(UiMessage::notice_references_first_of) + 1U;
 } // namespace nenenib::core

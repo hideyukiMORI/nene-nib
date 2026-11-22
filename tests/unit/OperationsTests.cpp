@@ -131,10 +131,13 @@ constexpr std::array<ChordRow, 67> chord_rows{{
     {ctrl_shift(OperationKey::f), EditorOperation::search_project, EditorOperation::search_project},
     {ctrl_shift(OperationKey::g), std::nullopt, std::nullopt},
     {ctrl(OperationKey::f3), std::nullopt, std::nullopt},
-    // 定義へ移動の F12 は両モード（ADR 0190 の決定 8）。修飾つきは値なし。
+    // 定義へ移動の F12 は両モード（ADR 0190 の決定 8）。Shift+F12 は参照の一覧（#1947）。Ctrl
+    // つきは
+    // 値なし。
     {KeyChord{false, false, OperationKey::f12}, EditorOperation::go_to_definition,
      EditorOperation::go_to_definition},
-    {KeyChord{false, true, OperationKey::f12}, std::nullopt, std::nullopt},
+    {KeyChord{false, true, OperationKey::f12}, EditorOperation::list_references,
+     EditorOperation::list_references},
     {ctrl(OperationKey::f12), std::nullopt, std::nullopt},
     // メモ帳の新しいタブ Ctrl+N（D82・#1395）。通常モードだけで、Vim と Ctrl+Shift+N は値なし。
     {ctrl(OperationKey::n), EditorOperation::new_tab, std::nullopt},
@@ -155,7 +158,7 @@ constexpr std::array<ChordRow, 67> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 63> shown_rows{{
+constexpr std::array<ShownRow, 64> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -240,6 +243,8 @@ constexpr std::array<ShownRow, 63> shown_rows{{
     {EditorOperation::even_panes, "", "", true, true},
     // 鍵なし。両方のモードの F1 の一覧から（ADR 0160 の 2026-11-22 の追補・`:LspLog`）。
     {EditorOperation::open_language_server_log, "", "", true, true},
+    // 参照の一覧（#1947）。Shift+F12 で両モード。
+    {EditorOperation::list_references, "Shift+F12", "Shift+F12", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -428,7 +433,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 63 && vim.size() == 60,
+    expect(ordinary.size() == 64 && vim.size() == 61,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -467,8 +472,9 @@ void verify_operation_choices()
            "the key label finds Ctrl+S before Ctrl+Shift+S");
     expect(operations_of(japanese_choices("f1", EditMode::vim)) ==
                std::vector<Operation>{EditorOperation::list_operations,
-                                      EditorOperation::go_to_definition},
-           "F1 finds the operation list first, then F12 that starts with it");
+                                      EditorOperation::go_to_definition,
+                                      EditorOperation::list_references},
+           "F1 finds the operation list first, then F12 that starts with it and Shift+F12");
     expect(japanese_choices("qqq", EditMode::ordinary).empty(),
            "a query that hits nothing lists nothing");
     expect(japanese_choices("上書き", EditMode::ordinary).empty(),
@@ -505,8 +511,8 @@ void verify_packaged_operation_choices()
         }
         return counted;
     };
-    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{63, 60, 58, 60} &&
-               sizes(Distribution::packaged) == std::vector<std::size_t>{61, 58, 56, 58},
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{64, 61, 59, 61} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{62, 59, 57, 59},
            "the packaged list has two rows fewer than the zip list in every mode");
     const auto packaged = nenenib::core::operation_choices(
         "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},

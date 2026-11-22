@@ -119,6 +119,7 @@ CommandPalette::Result CommandPalette::result_of(const CommandLine &input, Palet
     case PaletteScope::history:
     case PaletteScope::folder:
     case PaletteScope::diagnostics:
+    case PaletteScope::references:
         return Result{listed_positions(entries, query.scope, query.query)};
     case PaletteScope::project_hits:
         // 入力は検索語で、面の絞り込みの文字ではない（ADR 0167 の決定 5）。当たりの候補を列の順の

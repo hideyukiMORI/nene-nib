@@ -16,5 +16,7 @@ struct LanguageAnswers
     std::optional<LanguageCompletion> completion = std::nullopt;
     std::optional<LanguageHover> hover = std::nullopt;
     std::optional<LanguageDefinition> definition = std::nullopt;
+    // 参照の答え（#1947・ADR 0191 の決定 4）。形は定義と同じ場所の列。
+    std::optional<LanguageDefinition> references = std::nullopt;
 };
 } // namespace nenenib::application

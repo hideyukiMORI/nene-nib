@@ -173,6 +173,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_open_language_server_log_name, "Open Language Server Log"},
     {UiMessage::operation_open_language_server_log_description,
      "Open the language servers' error output and messages in an untitled tab"},
+    {UiMessage::operation_list_references_name, "List references"},
+    {UiMessage::operation_list_references_description,
+     "Ask the language server where the name at the caret is used and see it in the Ctrl+P list"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -471,5 +474,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::settings_caret_motion_time_name, "Caret Motion Time"},
     {UiMessage::settings_caret_motion_time_description,
      "How long the caret takes to move (40-300 ms)"},
+    {UiMessage::palette_mark_references, "References"},
+    {UiMessage::notice_references_not_found, "No references found"},
+    {UiMessage::notice_references_not_supported, "This language server does not answer references"},
+    {UiMessage::notice_references_first_of, "Showing {0} of {1} references"},
 }};
 } // namespace nenenib::core

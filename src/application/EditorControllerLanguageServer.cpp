@@ -98,6 +98,8 @@ namespace
     text_document.emplace_back("completion", core::JsonValue{std::move(completion)});
     text_document.emplace_back("hover", core::JsonValue{std::move(hover)});
     text_document.emplace_back("definition", core::JsonValue{std::move(definition)});
+    // 参照（ADR 0191 の決定 2）。
+    text_document.emplace_back("references", core::JsonValue{core::JsonObject{}});
     return core::JsonValue{std::move(text_document)};
 }
 
@@ -217,6 +219,7 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
                               .trigger_characters = {},
                               .hover = provided(*capabilities, "hoverProvider"),
                               .definition = provided(*capabilities, "definitionProvider"),
+                              .references = provided(*capabilities, "referencesProvider"),
                               .sync = DocumentSync::none,
                               .save = SaveNotice::none};
     read_document_sync(abilities, *capabilities);
@@ -295,6 +298,8 @@ void read_document_sync(ServerAbilities &abilities, const core::JsonObject &capa
         return "textDocument/hover";
     case LspRequestKind::definition:
         return "textDocument/definition";
+    case LspRequestKind::references:
+        return "textDocument/references";
     }
     return "initialize";
 }
@@ -607,7 +612,7 @@ void EditorController::drop_language_answers_of(LanguageServerSlot slot)
     }
     const auto &answers = state_.language_answers();
     if (answers.completion.has_value() || answers.hover.has_value() ||
-        answers.definition.has_value())
+        answers.definition.has_value() || answers.references.has_value())
     {
         state_ = state_.with_language_answers({});
     }
@@ -890,6 +895,7 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::completion:
     case LspRequestKind::hover:
     case LspRequestKind::definition:
+    case LspRequestKind::references:
         receive_answer(slot, request, response);
         settle_language_answers(request.kind);
         return;
@@ -1108,6 +1114,7 @@ void EditorController::expire_lsp_request(LanguageServerSlot slot, const Pending
     case LspRequestKind::completion:
     case LspRequestKind::hover:
     case LspRequestKind::definition:
+    case LspRequestKind::references:
         send_lsp_cancel(slot, request.id);
         return;
     }
