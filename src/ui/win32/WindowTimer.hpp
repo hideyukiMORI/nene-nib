@@ -15,7 +15,8 @@ namespace nenenib::ui::win32
 // 窓の作成から壊れるまで）、preview は Markdown のプレビューの解析を頼む合図（ADR 0155・frame に
 // プレビューがある間だけ）、language_server は言語サーバーの古さの合図（ADR 0160 の決定 6・窓の
 // 作成から壊れるまで）、key_map は Vim の `map` の待ち（ADR 0176 の決定 4・左辺の途中で
-// 鍵を積んだ間だけの 1 回）、tab_tip はタブの札の待ち（#1789・タブに載せた間だけの 1 回）。増えたら
+// 鍵を積んだ間だけの 1 回）、tab_tip はタブの札の待ち（#1789・タブに載せた間だけの 1
+// 回）、caret_motion は キャレットの動きの合図（ADR 0191 の決定 3・動いている間だけ）。増えたら
 // 下の switch が落ちる（CPP-002）。
 enum class WindowTimer : UINT_PTR
 {
@@ -25,6 +26,7 @@ enum class WindowTimer : UINT_PTR
     language_server = 4,
     key_map = 5,
     tab_tip = 6,
+    caret_motion = 7,
 };
 
 // 自動退避の合図の間隔（D47 の 30 秒）。時刻は読まず、OS のタイマーに数えさせる。
@@ -45,6 +47,10 @@ inline constexpr UINT key_map_timeout_milliseconds = 1'000;
 // Windows の既定の 400 ms。
 inline constexpr UINT default_tab_tip_milliseconds = 400;
 
+// キャレットの動きの合図の間隔（ADR 0191 の決定 3）。OS のタイマーの最小（USER_TIMER_MINIMUM）の
+// 10 ms。経過は合図の間隔で数えず、時計の port で測る。
+inline constexpr UINT caret_motion_interval_milliseconds = 10;
+
 // WM_TIMER の wParam を窓のタイマーへ写す。窓が張っていない番号は値なし。
 [[nodiscard]] constexpr std::optional<WindowTimer> window_timer_of(WPARAM id) noexcept
 {
@@ -57,6 +63,7 @@ inline constexpr UINT default_tab_tip_milliseconds = 400;
     case WindowTimer::language_server:
     case WindowTimer::key_map:
     case WindowTimer::tab_tip:
+    case WindowTimer::caret_motion:
         return timer;
     }
     return std::nullopt;

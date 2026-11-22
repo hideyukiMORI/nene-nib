@@ -401,5 +401,9 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_language_server_not_absolute, "言語サーバーの命令は絶対パスで書きます: {0}"},
     {UiMessage::notice_language_server_script,
      "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: {0}"},
+    {UiMessage::settings_caret_motion_name, "キャレットの動き"},
+    {UiMessage::settings_caret_motion_description, "キャレットが動くとき、尾を引いて滑らかに移る"},
+    {UiMessage::settings_caret_motion_time_name, "キャレットの動きの時間"},
+    {UiMessage::settings_caret_motion_time_description, "動きにかける時間（40〜300 ms）"},
 }};
 } // namespace nenenib::core

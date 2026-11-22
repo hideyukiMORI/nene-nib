@@ -64,7 +64,7 @@ runs only when --bench names it and is never compared with the reference or adop
 Three more optional benches measure the editor with a language server on (#995 L1d, ADR 0161
 decision 7, D60): they run only when --bench names them, are recorded with --record only, are
 never compared with the eight and have no reference until hide adopts one after the L1 trial. Each
-writes settings.v5 with lsp=on and lsp.cpp.command naming nib_fake_language_server.exe of the
+writes settings.v6 with lsp=on and lsp.cpp.command naming nib_fake_language_server.exe of the
 same build folder as --executable into its own profile (out/speed/profile-lsp), opens
 single-cpp-1000.cpp, and waits until that server runs as the editor's child and the window thread
 went quiet (initialize is answered at once by the fake, and didOpen follows it), before the warmup:
@@ -96,7 +96,7 @@ Two more optional benches record the minimap (#1017, ADR 0171 decision 6) the sa
 only when --bench names them and are never compared with the reference or adopted into it:
 
   minimap-single-key        the key-to-frame-single-cpp trial over single-cpp-1000.cpp with
-                            settings.v5 features=minimap written into its own profile
+                            settings.v6 features=minimap written into its own profile
                             (out/speed/profile-minimap), so every frame copies the held minimap
                             bitmap once and redraws the band of the typed row
   minimap-burst-200         the key-to-frame-burst-200 trial over the same document and profile:
@@ -312,7 +312,7 @@ MATCHPAREN_BENCH = "matchparen-single-key"
 MINIMAP_BENCH = "minimap-single-key"
 # 同じ文書と profile の 200 打鍵（#1017・ADR 0171 の決定 6）。同じく --bench で名指ししたときだけ。
 MINIMAP_BURST_BENCH = "minimap-burst-200"
-# 道具の profile を分ける。features=minimap の settings.v5 がほかのベンチの profile に残らないように。
+# 道具の profile を分ける。features=minimap の settings.v6 がほかのベンチの profile に残らないように。
 MINIMAP_PROFILE = "profile-minimap"
 OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
                     *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH, MINIMAP_BENCH,
@@ -326,7 +326,7 @@ LSP_DIAGNOSTICS = 100
 LSP_READY_GAP_MS = 100.0
 # lsp-diagnostics-ready の試行ごとの [1 枚目, 2 枚目]（打鍵の input_received からの ms）。記録に残す。
 LSP_READY_FRAMES: list = []
-# 道具の profile を分ける。lsp=on の settings.v5 がオフのベンチの profile に残らないように。
+# 道具の profile を分ける。lsp=on の settings.v6 がオフのベンチの profile に残らないように。
 LSP_PROFILE = "profile-lsp"
 PACED_KEYS = 100
 PACED_CHARACTER = "a"
@@ -902,7 +902,7 @@ def bench_minimap(executable: Path, environment: dict, folder: Path,
                   document: Path) -> tuple[dict, dict]:
     """key-to-frame-single over the C++ document with the minimap on (#1017, ADR 0171 decision 6).
 
-    The trial is bench_cpp's over its own profile, whose settings.v5 turns the minimap on; every
+    The trial is bench_cpp's over its own profile, whose settings.v6 turns the minimap on; every
     frame copies the held bitmap once and redraws the band of the typed row.
     """
     return bench_long_line(executable, minimap_environment(environment), folder, document,
@@ -910,7 +910,7 @@ def bench_minimap(executable: Path, environment: dict, folder: Path,
 
 
 def minimap_environment(environment: dict) -> dict:
-    """The minimap profile's environment, its settings.v5 written for this trial (features=minimap)."""
+    """The minimap profile's environment, its settings.v6 written for this trial (features=minimap)."""
     profile = OUTPUT / MINIMAP_PROFILE
     profile.mkdir(parents=True, exist_ok=True)
     minimap = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
@@ -1140,7 +1140,7 @@ def language_server_of(executable: Path) -> Path:
 
 
 def lsp_environment(environment: dict, server: Path, argument: str) -> dict:
-    """The lsp profile's environment, its settings.v5 written for this trial (lsp=on, cpp)."""
+    """The lsp profile's environment, its settings.v6 written for this trial (lsp=on, cpp)."""
     profile = OUTPUT / LSP_PROFILE
     profile.mkdir(parents=True, exist_ok=True)
     lsp = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))

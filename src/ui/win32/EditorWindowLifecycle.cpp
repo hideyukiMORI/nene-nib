@@ -93,7 +93,7 @@ constexpr std::array<UINT, 11> pointer_messages{
 EditorWindow::EditorWindow(HINSTANCE instance, application::EditorController &controller,
                            WindowPorts ports, RendererSources sources)
     : instance_(instance), controller_(controller), timing_(ports.timing), wsl_(ports.wsl),
-      text_layouts_(sources.text_layouts), warmup_(sources.warmup)
+      clock_(ports.motion_clock), text_layouts_(sources.text_layouts), warmup_(sources.warmup)
 {
 }
 
@@ -148,6 +148,7 @@ std::expected<void, WindowFailure> EditorWindow::initialize()
     dpi_ = GetDpiForWindow(window_);
     read_wheel_setting();
     read_hover_setting();
+    read_animation_setting();
     place_at_screen_centre();
     // 起動引数の結果を先に控える。最初の描画が出す VisibleLines の意図で last_failure は消える
     // （ADR 0010 の決定 9）。
@@ -388,6 +389,7 @@ LRESULT EditorWindow::lifetime_message(UINT message, WPARAM word, LPARAM data)
         end_selection_drag();
         KillTimer(window_, autosave_timer);
         KillTimer(window_, language_server_timer);
+        KillTimer(window_, std::to_underlying(WindowTimer::caret_motion));
         stop_preview_timer();
         PostQuitMessage(0);
         return 0;
@@ -651,6 +653,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
     }
     // 打鍵の道の段（#844）。frame を作り終えた直後・描く前。
     timing_.mark(core::Milestone::frame_built);
+    renderer_->allow_caret_motion(animation_setting_);
     const auto drawn =
         frame.layout_failure.has_value()
             ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}
@@ -664,6 +667,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
             place_candidate_window();
         }
         signal_first_frame();
+        follow_caret_motion();
         // プレビューの送りを畳んで位置が変わったら 1 回だけ返す（#1894・変わらなければ送らない
         // ので、この合図で frame を作り続けない）。
         if (const auto settled = renderer_->preview_settled(); settled.has_value())

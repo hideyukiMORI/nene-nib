@@ -373,5 +373,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_language_server_not_absolute, "语言服务器的命令须使用绝对路径：{0}"},
     {UiMessage::notice_language_server_script,
      "语言服务器不能使用 .cmd / .bat（请写成 node.exe 和脚本）：{0}"},
+    {UiMessage::settings_caret_motion_name, "光标动画"},
+    {UiMessage::settings_caret_motion_description, "光标移动时拖着尾巴平滑地移过去"},
+    {UiMessage::settings_caret_motion_time_name, "光标动画时间"},
+    {UiMessage::settings_caret_motion_time_description, "移动所用的时间（40〜300 ms）"},
 }};
 } // namespace nenenib::core

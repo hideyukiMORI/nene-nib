@@ -34,6 +34,9 @@ struct SettingsFields
     std::optional<std::string_view> autoindent;
     // v5 だけの鍵。探して見る面のプレビュー欄の置き方（ADR 0189 の決定 1）。
     std::optional<std::string_view> finder_preview;
+    // v6 だけの鍵。キャレットの動きのオン・オフと時間（ADR 0191 の決定 1）。
+    std::optional<std::string_view> caret_motion;
+    std::optional<std::string_view> caret_motion_time;
     // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
     std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
     // Vim の `map.<modes>.<lhs>` の行（鍵の全体と値・ファイルの中の順）と `mapleader`

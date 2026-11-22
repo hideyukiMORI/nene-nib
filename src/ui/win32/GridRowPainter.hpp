@@ -97,6 +97,22 @@ template <typename Target, typename Layouts> class GridRowPainter final
                            static_cast<float>(canvas.area.bottom));
     }
 
+    // キャレットの矩形（物理画素）。縦棒（変換中も）は升の左端の幅
+    // caret_width、ブロックは升の範囲。 描く draw_caret と、描く前に動きの行き先を知る
+    // renderer（ADR 0191）が共用する。
+    [[nodiscard]] static D2D1_RECT_F
+    caret_box(const GridRowCanvas &canvas, application::GridCellSpan caret, bool composing) noexcept
+    {
+        const auto box = rectangle(canvas, caret);
+        if (composing || canvas.shape == core::CaretShape::bar)
+        {
+            return D2D1::RectF(box.left, box.top + static_cast<float>(canvas.caret_inset),
+                               box.left + static_cast<float>(canvas.caret_width),
+                               box.bottom - static_cast<float>(canvas.caret_inset));
+        }
+        return box;
+    }
+
     // 構文の色の升の範囲を画面行の文字列の UTF-16 の範囲へ写す（#839）。升の境の code point は、
     // その升で始まり升を持つ最初の code point（幅 0 の結合文字は前の文字の側・ADR 0053）。
     [[nodiscard]] static std::vector<ColoredRun> colored_runs(const application::GridRowView &row,
@@ -309,13 +325,10 @@ template <typename Target, typename Layouts> class GridRowPainter final
     RECT draw_caret(IDWriteTextLayout *layout, application::GridCellSpan caret, bool composing,
                     const GridRowCanvas &canvas)
     {
-        auto box = rectangle(canvas, caret);
+        const auto box = caret_box(canvas, caret, composing);
         color(canvas.palette.accent);
         if (composing || canvas.shape == core::CaretShape::bar)
         {
-            box = D2D1::RectF(box.left, box.top + static_cast<float>(canvas.caret_inset),
-                              box.left + static_cast<float>(canvas.caret_width),
-                              box.bottom - static_cast<float>(canvas.caret_inset));
             target_.FillRectangle(box, brush_);
             return rect_of(box);
         }

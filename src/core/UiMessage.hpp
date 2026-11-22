@@ -373,10 +373,15 @@ enum class UiMessage : std::uint16_t
     notice_language_server_not_found,
     notice_language_server_not_absolute,
     notice_language_server_script,
+    // キャレットの動き（ADR 0191・#1933）の設定の画面の行。
+    settings_caret_motion_name,
+    settings_caret_motion_description,
+    settings_caret_motion_time_name,
+    settings_caret_motion_time_description,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_language_server_script) + 1U;
+    std::to_underlying(UiMessage::settings_caret_motion_time_description) + 1U;
 } // namespace nenenib::core

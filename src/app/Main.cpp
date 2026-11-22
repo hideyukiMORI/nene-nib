@@ -32,6 +32,7 @@
 #include "Win32LanguageServer.hpp"
 #include "Win32LinkOpenAdapter.hpp"
 #include "Win32MarkdownAdapter.hpp"
+#include "Win32MotionClock.hpp"
 #include "Win32PreviewAdapter.hpp"
 #include "Win32Printer.hpp"
 #include "Win32ProjectSearchAdapter.hpp"
@@ -312,6 +313,15 @@ last_resort_for(nenenib::application::EditorController &controller)
 // 起動引数の読み込みと復号の後（Issue #19）。
 // 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
 // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
+// 窓が controller を通さずに借りる port（ADR 0011 の決定 1・ADR 0162 の追補 #1450・ADR 0191 の
+// 決定 3）。WSL の一覧の読み手と動きの時計は窓が生きている間ずっと 1 つ。
+nenenib::ui::win32::WindowPorts window_ports(nenenib::application::TimingPort &timing)
+{
+    static nib_adapters::Win32WslDistributions wsl(nib_adapters::wsl_lxss_key);
+    static nenenib::adapters::win32::Win32MotionClock motion;
+    return {timing, wsl, motion};
+}
+
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
@@ -340,7 +350,6 @@ int run(HINSTANCE instance)
     nib_adapters::Win32Clock wall_clock;
     nenenib::ui::win32::Win32Printer printer;
     nib_adapters::Win32ShellRegistration shell_registration(L"Software");
-    nib_adapters::Win32WslDistributions wsl(nib_adapters::wsl_lxss_key);
     nenenib::adapters::win32::Win32DocumentReader reads(worker, files, code_pages);
     nenenib::adapters::win32::Win32LanguageServer language_server({});
     nenenib::adapters::win32::Win32ImageAdapter images(worker);
@@ -363,7 +372,8 @@ int run(HINSTANCE instance)
     const auto last_resort = last_resort_for(controller);
     timing.mark(nenenib::core::Milestone::document_opened);
     const auto window = nenenib::ui::win32::EditorWindow::create(
-        instance, controller, {timing, wsl}, {text_layouts, warmup, controller.display_language()});
+        instance, controller, window_ports(timing),
+        {text_layouts, warmup, controller.display_language()});
     if (!window)
     {
         return report(reason_of(window.error()));

@@ -18,6 +18,8 @@ enum class EditorFeature : std::uint8_t
     minimap,
     start_screen,
     lsp,
-    syntax
+    syntax,
+    // キャレットの動き（ADR 0191・#1933・自分の鍵 caret_motion）。
+    caret_motion
 };
 } // namespace nenenib::core

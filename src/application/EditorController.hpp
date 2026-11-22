@@ -1084,6 +1084,9 @@ class EditorController final
     // 消すのは入口の settle_tab_tip の 1 か所で、使う人の操作の意図（not_user_operation でない
     // 意図）が来たら写す前に消す。札を出しているタブは shown_tab_tip が frame に写す。
     void accept(const TabTipTick &intent);
+    // キャレットの動きの合図（ADR 0191 の決定 3）。進みを覚えて frame
+    // に載せるだけで、状態を変えない。
+    void accept(const CaretMotionTick &intent);
     void settle_tab_tip(const EditorIntent &intent);
     void hide_tab_tip();
     [[nodiscard]] std::optional<std::size_t> shown_tab_tip() const;
@@ -1908,5 +1911,8 @@ class EditorController final
     // この意図が頼むタブの札の待ちのタイマー（EditorDelivery.tab_tip_timer・#1789）。apply の
     // 入口で空に戻し、札の段を変える所（帯の hover・合図・入口の消す 1 か所）だけが置く。
     std::optional<TabTipTimer> tab_tip_timer_;
+    // 最後に届いたキャレットの動きの進み（ADR 0191 の決定 3）。CaretMotionTick だけが置き、frame
+    // が写す。
+    core::CaretMotionClock caret_motion_clock_{};
 };
 } // namespace nenenib::application

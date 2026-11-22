@@ -1,6 +1,7 @@
 #include "SettingsCodec.hpp"
 
 #include "BuiltinThemes.hpp"
+#include "CaretGlide.hpp"
 #include "DisplayLanguageNames.hpp"
 #include "ExplorerLayout.hpp"
 #include "FinderPreview.hpp"
@@ -27,24 +28,50 @@ namespace
 using Failure = application::SettingsFailure;
 using Field = std::optional<std::string_view> SettingsFields::*;
 
-// 鍵の名前と DTO の欄の対（同じ位置）。v4 と v5 だけの鍵も読むが、旧版にあれば
-// apply_v4_fields と apply_v5_fields が拒否する。
-constexpr std::array<std::string_view, 19> field_names{
-    "version",   "colorscheme",    "font_family", "font_size",     "guide",
-    "wrap",      "ui_language",    "lsp",         "explorer",      "root",
-    "features",  "mapleader",      "ignorecase",  "smartcase",     "relativenumber",
-    "scrolloff", "explorer_width", "autoindent",  "finder_preview"};
-constexpr std::array<Field, 19> field_members{
-    &SettingsFields::version,        &SettingsFields::colorscheme,
-    &SettingsFields::font_family,    &SettingsFields::font_size,
-    &SettingsFields::guide,          &SettingsFields::wrap,
-    &SettingsFields::ui_language,    &SettingsFields::lsp,
-    &SettingsFields::explorer,       &SettingsFields::root,
-    &SettingsFields::features,       &SettingsFields::mapleader,
-    &SettingsFields::ignorecase,     &SettingsFields::smartcase,
-    &SettingsFields::relativenumber, &SettingsFields::scrolloff,
-    &SettingsFields::explorer_width, &SettingsFields::autoindent,
-    &SettingsFields::finder_preview};
+// 鍵の名前と DTO の欄の対（同じ位置）。v4・v5・v6 だけの鍵も読むが、旧版にあれば
+// apply_v4_fields・apply_v5_fields・apply_v6_fields が拒否する。
+constexpr std::array<std::string_view, 21> field_names{"version",
+                                                       "colorscheme",
+                                                       "font_family",
+                                                       "font_size",
+                                                       "guide",
+                                                       "wrap",
+                                                       "ui_language",
+                                                       "lsp",
+                                                       "explorer",
+                                                       "root",
+                                                       "features",
+                                                       "mapleader",
+                                                       "ignorecase",
+                                                       "smartcase",
+                                                       "relativenumber",
+                                                       "scrolloff",
+                                                       "explorer_width",
+                                                       "autoindent",
+                                                       "finder_preview",
+                                                       "caret_motion",
+                                                       "caret_motion_time"};
+constexpr std::array<Field, 21> field_members{&SettingsFields::version,
+                                              &SettingsFields::colorscheme,
+                                              &SettingsFields::font_family,
+                                              &SettingsFields::font_size,
+                                              &SettingsFields::guide,
+                                              &SettingsFields::wrap,
+                                              &SettingsFields::ui_language,
+                                              &SettingsFields::lsp,
+                                              &SettingsFields::explorer,
+                                              &SettingsFields::root,
+                                              &SettingsFields::features,
+                                              &SettingsFields::mapleader,
+                                              &SettingsFields::ignorecase,
+                                              &SettingsFields::smartcase,
+                                              &SettingsFields::relativenumber,
+                                              &SettingsFields::scrolloff,
+                                              &SettingsFields::explorer_width,
+                                              &SettingsFields::autoindent,
+                                              &SettingsFields::finder_preview,
+                                              &SettingsFields::caret_motion,
+                                              &SettingsFields::caret_motion_time};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -158,6 +185,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     case SettingsVersion::v3:
     case SettingsVersion::v4:
     case SettingsVersion::v5:
+    case SettingsVersion::v6:
         return switch_from(fields.guide).transform(guide_of);
     }
     std::unreachable();
@@ -178,6 +206,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     case SettingsVersion::v3:
     case SettingsVersion::v4:
     case SettingsVersion::v5:
+    case SettingsVersion::v6:
         return switch_from(fields.wrap).transform(wrapping_of);
     }
     std::unreachable();
@@ -303,6 +332,23 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
                                });
 }
 
+// v5 の鍵の集合を持つ版か（v6 は v5 の全部の鍵を同じ形で持つ・ADR 0191 の決定 1）。
+[[nodiscard]] bool carries_v5_fields(SettingsVersion version) noexcept
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+    case SettingsVersion::v2:
+    case SettingsVersion::v3:
+    case SettingsVersion::v4:
+        return false;
+    case SettingsVersion::v5:
+    case SettingsVersion::v6:
+        return true;
+    }
+    std::unreachable();
+}
+
 // `lsp.<language>.command=<値>` の行。同じ名前の 2 行目は重複、値は空でないことだけを見る（絶対
 // パスかは使う所が見る）。v4 は言語を LanguageTable の名前だけ受ける（1.0.0 と同じ厳しさ・D91）。
 // v5 は名前の形だけを厳密に読み、表に無い名前の行も持って書き戻す（後の版が足した言語の行を
@@ -315,7 +361,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     for (const auto &[name, value] : fields.lsp_commands)
     {
         const bool named = core::language_of_name(name).has_value() ||
-                           (version == SettingsVersion::v5 && command_name_shaped(name));
+                           (carries_v5_fields(version) && command_name_shaped(name));
         if (!named || value.empty() ||
             std::ranges::any_of(commands, [name](const auto &row) { return row.first == name; }))
         {
@@ -372,6 +418,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
         return false;
     case SettingsVersion::v4:
     case SettingsVersion::v5:
+    case SettingsVersion::v6:
         return true;
     }
     std::unreachable();
@@ -432,19 +479,13 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
                                                            const SettingsFields &fields,
                                                            SettingsVersion version)
 {
-    switch (version)
+    if (!carries_v5_fields(version))
     {
-    case SettingsVersion::v1:
-    case SettingsVersion::v2:
-    case SettingsVersion::v3:
-    case SettingsVersion::v4:
         if (fields.autoindent.has_value() || fields.finder_preview.has_value())
         {
             return std::unexpected(Failure::malformed);
         }
         return {};
-    case SettingsVersion::v5:
-        break;
     }
     const auto autoindent = later_switch_from(fields.autoindent);
     if (!autoindent)
@@ -465,6 +506,64 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     return {};
 }
 
+// v6 だけの鍵（ADR 0191 の決定 1）。v5 以前に在れば未知の鍵として拒否し（v5 の読みは 1.1.0 と
+// 同じ厳しさ）、無ければ既定（オフ・120 ms）のまま。v6 は後から足した鍵の形（無ければ既定・有れば
+// 厳密）で読む。時間の読みは core の caret_motion_time_of の 1 本。
+[[nodiscard]] std::expected<void, Failure> apply_v6_fields(core::EditorSettings &settings,
+                                                           const SettingsFields &fields,
+                                                           SettingsVersion version)
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+    case SettingsVersion::v2:
+    case SettingsVersion::v3:
+    case SettingsVersion::v4:
+    case SettingsVersion::v5:
+        if (fields.caret_motion.has_value() || fields.caret_motion_time.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        return {};
+    case SettingsVersion::v6:
+        break;
+    }
+    const auto motion = later_switch_from(fields.caret_motion);
+    if (!motion)
+    {
+        return std::unexpected(motion.error());
+    }
+    settings.caret_motion = motion.value();
+    if (fields.caret_motion_time.has_value())
+    {
+        const auto time = core::caret_motion_time_of(fields.caret_motion_time.value());
+        if (!time.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        settings.caret_motion_time = time.value();
+    }
+    return {};
+}
+
+// v4・v5・v6 の欄を順に置く（どれかが拒めばそこで止める）。
+[[nodiscard]] std::expected<void, Failure> apply_later_fields(core::EditorSettings &settings,
+                                                              const SettingsFields &fields,
+                                                              SettingsVersion version)
+{
+    const auto extended = apply_v4_fields(settings, fields, version);
+    if (!extended)
+    {
+        return extended;
+    }
+    const auto later = apply_v5_fields(settings, fields, version);
+    if (!later)
+    {
+        return later;
+    }
+    return apply_v6_fields(settings, fields, version);
+}
+
 [[nodiscard]] std::string_view version_text(SettingsVersion version)
 {
     switch (version)
@@ -479,6 +578,8 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
         return "4";
     case SettingsVersion::v5:
         return "5";
+    case SettingsVersion::v6:
+        return "6";
     }
     std::unreachable();
 }
@@ -522,15 +623,10 @@ validated(const SettingsFields &fields, SettingsVersion version, const core::The
     }
     core::EditorSettings settings{size.value(), family.value(), theme.value(), guide.value(),
                                   wrap.value()};
-    const auto extended = apply_v4_fields(settings, fields, version);
+    const auto extended = apply_later_fields(settings, fields, version);
     if (!extended)
     {
         return std::unexpected(extended.error());
-    }
-    const auto later = apply_v5_fields(settings, fields, version);
-    if (!later)
-    {
-        return std::unexpected(later.error());
     }
     return settings;
 }
@@ -624,12 +720,13 @@ std::string encode_settings(const core::EditorSettings &settings)
     const auto explorer_width = settings.explorer_width.has_value()
                                     ? std::to_string(settings.explorer_width.value())
                                     : std::string{};
-    // 書くのは v5 だけ（ADR 0170 の 2026-11-16 の追補）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
-    // `explorer_width` の後ろ・`lsp.<language>.command` の前。
-    return std::format("version=5\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
+    // 書くのは v6 だけ（ADR 0191 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
+    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前。
+    return std::format("version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
                        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
-                       "explorer_width={}\nautoindent={}\nfinder_preview={}\n{}{}",
+                       "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
+                       "caret_motion_time={}\n{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        core::display_language_choice_name(settings.ui_language),
                        switch_text(settings.lsp), switch_text(settings.explorer), root,
@@ -637,6 +734,7 @@ std::string encode_settings(const core::EditorSettings &settings)
                        switch_text(settings.smartcase), switch_text(settings.relativenumber),
                        settings.scrolloff, explorer_width, switch_text(settings.autoindent),
                        core::finder_preview_name(settings.finder_preview),
+                       switch_text(settings.caret_motion), settings.caret_motion_time,
                        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

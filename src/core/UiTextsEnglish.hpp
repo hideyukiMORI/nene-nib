@@ -424,5 +424,11 @@ inline constexpr UiTextColumn ui_texts_english{{
      "Write the language server command with an absolute path: {0}"},
     {UiMessage::notice_language_server_script,
      "A .cmd or .bat cannot be a language server (write node.exe and the script): {0}"},
+    {UiMessage::settings_caret_motion_name, "Caret Motion"},
+    {UiMessage::settings_caret_motion_description,
+     "Slide the caret with a short trail when it moves"},
+    {UiMessage::settings_caret_motion_time_name, "Caret Motion Time"},
+    {UiMessage::settings_caret_motion_time_description,
+     "How long the caret takes to move (40-300 ms)"},
 }};
 } // namespace nenenib::core
