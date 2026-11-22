@@ -1,5 +1,6 @@
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
+#include "PaneView.hpp"
 
 #include "CaretMove.hpp"
 #include "ClipboardText.hpp"
@@ -801,6 +802,17 @@ void EditorController::accept(const VisibleLines &intent)
     window_width_ = intent.window_width;
     window_height_ = intent.window_height;
     explorer_lines_ = intent.explorer_lines;
+    split_extent_ = intent.split;
+    // もう 1 つの枠の幅が変わったら、先頭の論理行を保って画面行を行の頭へ戻す（折り返しが変わる・
+    // ADR 0148 の 2026-11-22 の追補の決定 5）。
+    const auto other_width = other_geometry().width;
+    other_geometry_ = intent.other_geometry;
+    other_lines_ = intent.other_lines;
+    if (const PaneView *other = state_.other_pane();
+        other != nullptr && other->first_row > 0 && other_geometry().width != other_width)
+    {
+        state_ = state_.with_other_scrolled(other->first_visible, 0);
+    }
     state_ = state_.with_vim(core::vim_after_resize(state_.vim(), previous, lines));
     auto scroll = state_.scroll();
     scroll.visible_lines = lines;

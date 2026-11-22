@@ -1,5 +1,7 @@
 #include "VimStep.hpp"
+#include "PaneSizing.hpp"
 #include "VimStepDetail.hpp"
+#include "VimWindowResizeBinding.hpp"
 
 #include "ScrollBounds.hpp"
 #include "TabDestination.hpp"
@@ -2096,6 +2098,23 @@ namespace
     return special != nullptr ? vim_window_command_for(*special) : std::nullopt;
 }
 
+// `Ctrl-w` の後ろの大きさの鍵（ADR 0148 の 2026-11-22 の追補の決定 4）→ 枠の大きさの変え方。回数は
+// 升の数（既定 1）で、`_` `|` は回数があればその数ちょうど。大きさの鍵でなければ値なし。
+[[nodiscard]] std::optional<PaneSizing> window_resize_of(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    const auto binding = character != nullptr ? vim_window_resize_for(character->code)
+                                              : std::optional<VimWindowResizeBinding>{};
+    if (!binding.has_value())
+    {
+        return std::nullopt;
+    }
+    const bool counted = state.count.has_value();
+    return PaneSizing{counted ? binding.value().counted : binding.value().uncounted,
+                      binding.value().dimension,
+                      static_cast<std::int32_t>(std::min<std::size_t>(
+                          count_of(state.count), std::numeric_limits<std::int32_t>::max()))};
+}
 // `Ctrl-w` の後ろの鍵（ADR 0148 の決定 7）。窓の命令を効果として返すだけで、モードと選択は
 // 変えない（VISUAL のままで、枠を移るときに畳むのは controller）。回数は捨てる。Esc は待ちを
 // 消すだけ。表に無い鍵は失敗して後ろを打ち切る。
@@ -2105,6 +2124,10 @@ namespace
         special != nullptr && *special == VimSpecialKey::escape)
     {
         return VimStep{finished_input_wait(state), VimNoEffect{}};
+    }
+    if (const auto resize = window_resize_of(state, key); resize.has_value())
+    {
+        return VimStep{finished_input_wait(state), resize.value()};
     }
     const std::optional<VimWindowCommand> command = window_command_of(key);
     if (!command.has_value())
@@ -2805,6 +2828,10 @@ namespace
     return false;
 }
 [[nodiscard]] bool replaces(const VimWindowCommand &) noexcept
+{
+    return false;
+}
+[[nodiscard]] bool replaces(const PaneSizing &) noexcept
 {
     return false;
 }

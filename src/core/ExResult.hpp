@@ -26,6 +26,7 @@
 #include "ExWindowCommand.hpp"
 #include "ExWindowState.hpp"
 #include "FontFamilies.hpp"
+#include "PaneSizing.hpp"
 #include "ThemeCatalog.hpp"
 #include "VimSearchHighlight.hpp"
 
@@ -91,6 +92,8 @@ struct ExResult
     std::optional<ExDocumentRequest> document = std::nullopt;
     std::optional<DisplayForm> display = std::nullopt;
     std::optional<ExWindowCommand> window = std::nullopt;
+    // `:resize` と `:vertical resize`（ADR 0148 の 2026-11-22 の追補の決定 4）。
+    std::optional<PaneSizing> resize = std::nullopt;
     std::optional<ExLanguageRequest> language = std::nullopt;
     std::optional<ExSyntaxRequest> syntax = std::nullopt;
     std::optional<ExLineRequest> line = std::nullopt;

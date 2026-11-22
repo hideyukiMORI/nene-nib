@@ -373,10 +373,16 @@ enum class UiMessage : std::uint16_t
     notice_language_server_not_found,
     notice_language_server_not_absolute,
     notice_language_server_script,
+    operation_widen_pane_name,
+    operation_widen_pane_description,
+    operation_narrow_pane_name,
+    operation_narrow_pane_description,
+    operation_even_panes_name,
+    operation_even_panes_description,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_language_server_script) + 1U;
+    std::to_underlying(UiMessage::operation_even_panes_description) + 1U;
 } // namespace nenenib::core

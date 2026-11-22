@@ -3,6 +3,7 @@
 #include "AutosaveId.hpp"
 #include "EditorState.hpp"
 #include "OffsetRange.hpp"
+#include "TextViewGeometry.hpp"
 #include "VimBlockRange.hpp"
 #include "VimPattern.hpp"
 
@@ -22,5 +23,8 @@ struct PaneSource
     std::optional<core::VimBlockRange> block;
     const core::VimPattern *pattern;
     AutosaveId tab;
+    // その枠の本文の寸法（操作中の枠は窓から届いた寸法・もう 1 つの枠はその枠の寸法・ADR 0148 の
+    // 2026-11-22 の追補の決定 5）。
+    const core::TextViewGeometry &geometry;
 };
 } // namespace nenenib::application

@@ -3,6 +3,7 @@
 #include "OtherView.hpp"
 #include "PaneSide.hpp"
 #include "SplitLayout.hpp"
+#include "SplitShare.hpp"
 
 #include <optional>
 
@@ -19,11 +20,14 @@ struct SplitState
     core::SplitLayout layout = core::SplitLayout::none;
     core::PaneSide active_side = core::PaneSide::first;
     std::optional<OtherView> other;
+    // 境界の位置（ADR 0148 の 2026-11-22 の追補の決定 1）。置くのは with_split_share だけで、分け
+    // る・閉じる・全面プレビューの出入りは等分（既定値）に戻る。layout == none なら読まない。
+    core::SplitShare share{};
 };
 
 [[nodiscard]] inline bool operator==(const SplitState &left, const SplitState &right) noexcept
 {
     return left.layout == right.layout && left.active_side == right.active_side &&
-           left.other == right.other;
+           left.other == right.other && left.share == right.share;
 }
 } // namespace nenenib::application

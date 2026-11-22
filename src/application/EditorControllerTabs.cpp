@@ -6,6 +6,8 @@
 #include "DisplayText.hpp"
 #include "Edit.hpp"
 #include "ExWindowCommand.hpp"
+#include "PaneLayouts.hpp"
+#include "PaneSizing.hpp"
 #include "PaneView.hpp"
 #include "PinTab.hpp"
 #include "PreviewView.hpp"
@@ -307,7 +309,7 @@ void EditorController::accept(const ScrollPane &intent)
         scroll_preview(intent.lines);
         return;
     }
-    const auto pane = state_.other_pane_state();
+    const auto pane = other_pane_viewed();
     if (!pane.has_value())
     {
         return;
@@ -315,7 +317,7 @@ void EditorController::accept(const ScrollPane &intent)
     const EditorState &state = pane.value();
     VisualTextView view(state, ports_.text_layouts,
                         display_pending(state.display_inquiry()) ? core::TextViewGeometry{}
-                                                                 : view_geometry_);
+                                                                 : other_geometry());
     const ScrollState &scroll = state.scroll();
     const auto moved =
         view.shifted(core::VisualPosition{scroll.first_visible, scroll.first_row}, intent.lines)
@@ -334,6 +336,65 @@ core::TitleBarInput EditorController::title_bar_input() const
     return title_bar_input(state_.title_bar_width(), core::reference_dpi);
 }
 
+core::PaneSplit EditorController::pane_split() const noexcept
+{
+    return core::PaneSplit{state_.split().layout, state_.split().share};
+}
+
+core::FontSize EditorController::font_size() const noexcept
+{
+    return state_.settings().font_size;
+}
+
+const core::TextViewGeometry &EditorController::other_geometry() const noexcept
+{
+    return other_lines_ > 0 ? other_geometry_ : view_geometry_;
+}
+
+// もう 1 つの枠の写しの見えている行数は、その枠の行数（ADR 0148 の 2026-11-22 の追補の決定 5）。
+std::optional<EditorState> EditorController::other_pane_viewed() const
+{
+    auto pane = state_.other_pane_state();
+    if (!pane.has_value() || other_lines_ == 0)
+    {
+        return pane;
+    }
+    auto scroll = pane.value().scroll();
+    scroll.visible_lines = other_lines_;
+    return pane.value().with_scroll(scroll);
+}
+
+// 境界のドラッグ（追補の決定 3）。比は窓が範囲に収めた値で、状態に置くだけ。
+void EditorController::accept(const ResizeSplit &intent)
+{
+    state_ = state_.with_split_share(intent.share);
+}
+
+void EditorController::accept(const ResizePane &intent)
+{
+    resize_pane(intent.sizing);
+}
+
+// 鍵の 1 回（追補の決定 4）。寸法が届く前と 1 枠は何もしない。first は今の比から作り直す（同じ
+// 鍵列の中で続けて変えても、窓が寸法を送り直す前の古い値を読まない）。升は左右なら本文の書式の
+// `0` の幅、上下なら行の高さ。
+void EditorController::resize_pane(core::PaneSizing sizing)
+{
+    if (!split_extent_.has_value() || state_.split().layout == core::SplitLayout::none)
+    {
+        return;
+    }
+    auto extent = split_extent_.value();
+    extent.first = core::split_first_length(extent, state_.split().share);
+    const auto cell = extent.dimension == core::PaneDimension::width
+                          ? static_cast<std::int32_t>(view_geometry_.average_advance + 0.5F)
+                          : view_geometry_.line_height;
+    const auto share = core::sized_share(extent, state_.split().active_side, sizing, cell);
+    if (share.has_value())
+    {
+        state_ = state_.with_split_share(share.value());
+    }
+}
 void EditorController::reveal_active_tab()
 {
     const std::int32_t scroll =

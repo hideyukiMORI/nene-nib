@@ -373,5 +373,11 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_language_server_not_absolute, "语言服务器的命令须使用绝对路径：{0}"},
     {UiMessage::notice_language_server_script,
      "语言服务器不能使用 .cmd / .bat（请写成 node.exe 和脚本）：{0}"},
+    {UiMessage::operation_widen_pane_name, "扩大窗格"},
+    {UiMessage::operation_widen_pane_description, "扩大当前窗格，缩小另一个窗格"},
+    {UiMessage::operation_narrow_pane_name, "缩小窗格"},
+    {UiMessage::operation_narrow_pane_description, "缩小当前窗格，扩大另一个窗格"},
+    {UiMessage::operation_even_panes_name, "均分窗格"},
+    {UiMessage::operation_even_panes_description, "将两个窗格恢复为相同大小"},
 }};
 } // namespace nenenib::core

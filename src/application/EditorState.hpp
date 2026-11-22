@@ -33,6 +33,7 @@
 #include "Selection.hpp"
 #include "SettingsIssue.hpp"
 #include "SplitLayout.hpp"
+#include "SplitShare.hpp"
 #include "SplitState.hpp"
 #include "TabRecency.hpp"
 #include "TabSweep.hpp"
@@ -366,6 +367,8 @@ class EditorState final
     [[nodiscard]] EditorState with_pane_swapped() const;
     // 1 枠に戻す（側は first）。文書には触れない。
     [[nodiscard]] EditorState without_split() const;
+    // 境界の位置を置く（ADR 0148 の 2026-11-22 の追補の決定 1）。1 枠なら何もしない。
+    [[nodiscard]] EditorState with_split_share(core::SplitShare share) const;
     // 操作中の枠の文書に当てる編集 edit（本文はまだ edit の前・after が edit の後の本文）を、同じ
     // 文書を出しているもう 1 つの枠のキャレットと先頭行に写す（決定 9）。キャレットは
     // offset_after_edit、先頭行は「その行の行頭の offset を offset_after_edit で写し、after で

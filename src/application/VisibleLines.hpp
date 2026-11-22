@@ -1,9 +1,11 @@
 #pragma once
 
+#include "SplitExtent.hpp"
 #include "TextViewGeometry.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace nenenib::application
 {
@@ -20,5 +22,12 @@ struct VisibleLines
     std::int32_t window_width = 0;
     std::int32_t window_height = 0;
     std::size_t explorer_lines = 0;
+    // 2 枠のときの境界の寸法（ADR 0148 の 2026-11-22 の追補の決定 4・鍵で大きさを変えるときに読む）
+    // と、もう 1 つの枠の寸法と行数（決定 5・両枠の大きさは違ってよい）。1 枠では値なしと 0。
+    // other_lines が 0 なら application はもう 1 つの枠にも操作中の枠の値を使う（寸法が届く前・替え
+    // 玉の試験）。
+    std::optional<core::SplitExtent> split = std::nullopt;
+    core::TextViewGeometry other_geometry{};
+    std::size_t other_lines = 0;
 };
 } // namespace nenenib::application

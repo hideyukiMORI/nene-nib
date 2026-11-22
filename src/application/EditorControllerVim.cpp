@@ -17,6 +17,7 @@
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "PaneSizing.hpp"
 #include "QuantityText.hpp"
 #include "ReplayLevel.hpp"
 #include "ScopedValue.hpp"
@@ -440,6 +441,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     }
     return std::holds_alternative<core::VimSwitchTab>(step.effect) ||
            std::holds_alternative<core::VimWindowCommand>(step.effect) ||
+           std::holds_alternative<core::PaneSizing>(step.effect) ||
            std::holds_alternative<core::VimReplay>(step.effect);
 }
 
@@ -2186,6 +2188,12 @@ void EditorController::perform(const core::VimWindowCommand &command)
         return;
     }
     std::unreachable();
+}
+
+// 枠の大きさの鍵（ADR 0148 の 2026-11-22 の追補の決定 4）。1 枠では何もしない。
+void EditorController::perform(const core::PaneSizing &sizing)
+{
+    resize_pane(sizing);
 }
 
 std::expected<core::VimStep, TextLayoutFailure>

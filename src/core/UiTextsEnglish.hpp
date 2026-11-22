@@ -424,5 +424,13 @@ inline constexpr UiTextColumn ui_texts_english{{
      "Write the language server command with an absolute path: {0}"},
     {UiMessage::notice_language_server_script,
      "A .cmd or .bat cannot be a language server (write node.exe and the script): {0}"},
+    {UiMessage::operation_widen_pane_name, "Widen Pane"},
+    {UiMessage::operation_widen_pane_description,
+     "Make the current pane larger and the other pane smaller"},
+    {UiMessage::operation_narrow_pane_name, "Narrow Pane"},
+    {UiMessage::operation_narrow_pane_description,
+     "Make the current pane smaller and the other pane larger"},
+    {UiMessage::operation_even_panes_name, "Even Panes"},
+    {UiMessage::operation_even_panes_description, "Make the two panes the same size again"},
 }};
 } // namespace nenenib::core

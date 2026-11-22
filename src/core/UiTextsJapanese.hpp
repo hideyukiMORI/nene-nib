@@ -401,5 +401,11 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_language_server_not_absolute, "言語サーバーの命令は絶対パスで書きます: {0}"},
     {UiMessage::notice_language_server_script,
      "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: {0}"},
+    {UiMessage::operation_widen_pane_name, "枠を広げる"},
+    {UiMessage::operation_widen_pane_description, "いまの枠を広げ、もう 1 つの枠を狭めます"},
+    {UiMessage::operation_narrow_pane_name, "枠を狭める"},
+    {UiMessage::operation_narrow_pane_description, "いまの枠を狭め、もう 1 つの枠を広げます"},
+    {UiMessage::operation_even_panes_name, "枠を等分に戻す"},
+    {UiMessage::operation_even_panes_description, "2 つの枠を同じ大きさに戻します"},
 }};
 } // namespace nenenib::core
