@@ -135,6 +135,15 @@ enum class UiMessage : std::uint16_t
     operation_close_other_tabs_description,
     operation_close_right_tabs_name,
     operation_close_right_tabs_description,
+    // 診断の 4 つの操作（#1939・操作の文は enum の頭の群に表の順で並ぶ）。
+    operation_next_diagnostic_name,
+    operation_next_diagnostic_description,
+    operation_previous_diagnostic_name,
+    operation_previous_diagnostic_description,
+    operation_show_diagnostic_name,
+    operation_show_diagnostic_description,
+    operation_list_diagnostics_name,
+    operation_list_diagnostics_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -373,10 +382,14 @@ enum class UiMessage : std::uint16_t
     notice_language_server_not_found,
     notice_language_server_not_absolute,
     notice_language_server_script,
+    // 診断の札の記号と知らせ（#1939）。
+    palette_mark_diagnostics,
+    notice_no_diagnostics,
+    notice_no_diagnostic_here,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_language_server_script) + 1U;
+    std::to_underlying(UiMessage::notice_no_diagnostic_here) + 1U;
 } // namespace nenenib::core

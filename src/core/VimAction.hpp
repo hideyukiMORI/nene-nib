@@ -182,9 +182,10 @@ enum class VimAction : std::uint8_t
     move_paragraph_forward,
     move_sentence_backward,
     move_sentence_forward,
-    // `[` `]`。次の 1 鍵を取って失敗する（族の `[{` `]}` `[(` `])` `[[` `]]` などは未実装・
-    // 次の鍵を別の命令として流さない・#1334）。
-    prefix_bracket,
+    // `[`（prefix_bracket_back）と `]`（末尾の prefix_bracket_forward）。次の 1 鍵を取って失敗する
+    // （族の `[{` `]}` `[(` `])` `[[` `]]` などは未実装・次の鍵を別の命令として流さない・#1334）。
+    // `[d` `]d` だけは失敗のまま診断の跳びの効果を添える（#1939）。
+    prefix_bracket_back,
     // `s` と `R`（#1436）。VISUAL では Vim の nv_subst と nv_Replace のとおり `c` に流す（`s` は
     // 種類のまま・`R` は行単位へ読み替え）。NORMAL の `s` は `cl`（Vim の nv_optrans・#768）。
     // REPLACE モードの `R` は未実装で、表に無い鍵と同じに打ち消す。
@@ -215,10 +216,17 @@ enum class VimAction : std::uint8_t
     // も無いときだけ問いの効果を添え、状態と失敗の印は表に行が無かったときのまま（Vim の局所の
     // `gd` と `keywordprg` は入れない）。VISUAL・回数つき・オペレータの後ろは今までどおり。
     language_definition,
-    language_hover
+    language_hover,
+    // `]`（#1939 で `[` と分けた）。
+    prefix_bracket_forward,
+    // `gl`（#1939）。キャレットの上の診断の文の全部を札で見せる。`gd` と同じく NORMAL で回数も
+    // オペレータも無いときだけ効果を添え、状態と失敗の印は表に行が無かったときのまま（Vim に
+    // `gl` は無く、表に無い g の鍵と同じに鳴る）。
+    language_diagnostic
 };
 
 // 動作の個数（末尾の値から導く）。動作 → 大分類の表の大きさをこれに固定し、欠落と重複を
 // static_assert で落とす（CPP-012 の表と網羅性。VimStep.cpp）。新しい値は末尾に足す。
-constexpr std::size_t vim_action_count = static_cast<std::size_t>(VimAction::language_hover) + 1;
+constexpr std::size_t vim_action_count =
+    static_cast<std::size_t>(VimAction::language_diagnostic) + 1;
 } // namespace nenenib::core

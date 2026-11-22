@@ -87,6 +87,7 @@ namespace
     case core::PaletteScope::folder:
     case core::PaletteScope::operations:
     case core::PaletteScope::project_hits:
+    case core::PaletteScope::diagnostics:
         return {};
     }
     std::unreachable();
@@ -335,6 +336,7 @@ template <typename Input>
     case core::CommandChoiceKind::open:
     case core::CommandChoiceKind::operate:
     case core::CommandChoiceKind::fill:
+    case core::CommandChoiceKind::land:
         return std::nullopt;
     }
     std::unreachable();

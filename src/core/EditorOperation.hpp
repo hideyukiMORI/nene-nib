@@ -94,6 +94,13 @@ enum class EditorOperation : std::uint8_t
     copy_path,
     copy_file_name,
     close_other_tabs,
-    close_right_tabs
+    close_right_tabs,
+    // 診断の 4 つ（#1939・ADR 0161 の決定 9 の追補）。次・前の診断へは F8 / Shift+F8 で両モード
+    // （Vim の NORMAL の `]d` `[d` と同じ跳び）、診断を表示は鍵なしで F1 の一覧から（Vim の NORMAL
+    // の `gl` と同じ札）、診断の一覧は鍵なしで Ctrl+P の一覧を診断の記号で開く。
+    next_diagnostic,
+    previous_diagnostic,
+    show_diagnostic,
+    list_diagnostics
 };
 } // namespace nenenib::core

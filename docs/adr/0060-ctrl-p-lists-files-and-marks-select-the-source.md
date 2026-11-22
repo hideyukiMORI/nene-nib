@@ -129,3 +129,7 @@
 3. 決めるのは core の純関数 `palette_input_hint(layout, dpi, widths)`（`PaletteHintPlace{area, first}`）の 1 本。`widths` は組 k から最後の組までの文の幅で、ui が描く layout（検索欄の幅の右寄せ）の組の境目（`palette_mark_hint_starts`）を当てて測る。ui は出す最初の組の左端で切って描くだけ。
 4. 窓の最小（360 DIP）では、今までは日本語も案内を出さなかった（右半分が 160 DIP より狭い）。いまは入る後ろの組だけを出す。
 5. 幅は `nib_window_tests --language` が 3 言語 × 96 / 120 DPI × 窓の幅 3 通り（360 DIP・1280 px・1920 px）で測り、1280 px 以上では 3 言語とも全部の組が出ることを守る。
+
+## 追補（2026-11-22・#1939）: `^` 診断
+
+記号の表（決定 2）に `^`（`PaletteScope::diagnostics`・案内の名前「診断」）を 1 行足す。`!` は全文検索（ADR 0167）が使っているので、警告の三角に見える `^` にした。候補の印は `PaletteOrigin::diagnostic` で、`files`（記号の無い入力）には混ぜない（ファイルの候補ではない・`in_scope` の 1 本）。候補を作るのは controller の `append_diagnostic_choices`（面を開くときに 1 回）、確定は `CommandChoiceKind::land`。中身は ADR 0161 の同じ日の追補。診断の候補もほかの出どころと同じく、どの記号で開いても開くときに 1 回作る（決定の形のまま・診断 1,000 件で開く 1 回が約 2 ms の目安なので `^` のときだけに絞らない・#1946 のレビュー R3）。

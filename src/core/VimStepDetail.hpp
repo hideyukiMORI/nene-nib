@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CompletionDirection.hpp"
+#include "DiagnosticCommand.hpp"
 #include "EasyMotionKind.hpp"
 #include "ExRange.hpp"
 #include "ExSubstituteRequest.hpp"
@@ -120,6 +121,8 @@ character_search_position(const VimEditorView &view, const VimState &state,
 [[nodiscard]] VimStep failed(VimStep step, VimRepeatFailure failure);
 [[nodiscard]] VimStep language_queried(const VimState &state, LanguageQueryKind kind,
                                        VimStep unbound);
+[[nodiscard]] VimStep diagnostic_commanded(const VimState &state, DiagnosticCommand command,
+                                           VimStep unbound);
 [[nodiscard]] VimStep moved_or_failed(VimStep step, VimMotion motion, Offset from,
                                       const VimMotionLanding &landing);
 [[nodiscard]] VimStep context_marked(VimStep step, const VimEditorView &view);

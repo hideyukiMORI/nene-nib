@@ -8,6 +8,7 @@
 #include "VimCharacterSearchScan.hpp"
 #include "VimCursorCorrect.hpp"
 #include "VimCursorWindow.hpp"
+#include "VimDiagnosticCommand.hpp"
 #include "VimJumpLists.hpp"
 #include "VimJumpMove.hpp"
 #include "VimKeyTable.hpp"
@@ -953,6 +954,24 @@ namespace detail
         return unbound;
     }
     unbound.effect = VimLanguageQuery{kind};
+    return unbound;
+}
+
+// `]d` `[d` `gl`（#1939）。unbound は表に行が無かったときの歩（失敗の印つき）で、NORMAL で
+// オペレータが無いときだけ、その歩に診断の効果を添える。跳び（next / previous）は回数を持ち
+// （無ければ 1）、札（show）は `gd` と同じく回数つきなら添えない。VISUAL とオペレータの後ろは
+// unbound のまま。
+[[nodiscard]] VimStep diagnostic_commanded(const VimState &state, DiagnosticCommand command,
+                                           VimStep unbound)
+{
+    const bool counted = state.count.has_value() || state.register_count.has_value();
+    if (state.mode != VimMode::normal || state.pending.has_value() ||
+        (command == DiagnosticCommand::show && counted))
+    {
+        return unbound;
+    }
+    unbound.effect = VimDiagnosticCommand{
+        .command = command, .count = state.count.has_value() ? state.count.value().value : 1};
     return unbound;
 }
 } // namespace detail

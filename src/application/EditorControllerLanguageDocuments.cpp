@@ -337,10 +337,14 @@ std::optional<LanguageServerSlot> EditorController::holding_slot() const
 // 無いので積まない。
 void EditorController::language_server_edit(const core::Edit &edit)
 {
-    if (!state_.diagnostics().empty())
+    // 置いた列は不変なので、ずらした列を新しく 1 回だけ作って参照を差し替える（#1939 のレビュー
+    // R3）。
+    if (const auto diagnostics = state_.diagnostics(); !diagnostics.empty())
     {
-        state_ = state_.with_diagnostics(core::diagnostics_adjusted(state_.diagnostics(), edit),
-                                         state_.diagnostics_version(), state_.diagnostics_count());
+        state_ = state_.with_diagnostics(
+            core::diagnostics_adjusted(
+                std::vector<core::Diagnostic>(diagnostics.begin(), diagnostics.end()), edit),
+            state_.diagnostics_version(), state_.diagnostics_count());
     }
     const auto slot = holding_slot();
     if (!slot.has_value())

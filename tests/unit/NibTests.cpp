@@ -159,6 +159,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 138> contracts{{
     {"--preview-table", verify_preview_table_scope},
     {"--preview-scroll", verify_preview_scroll_scope},
     {"--language-root", verify_language_root_scope},
+    {"--diagnostic-jump", verify_diagnostic_jump_scope},
 }};
 
 void verify_vim_scope_contracts()
@@ -341,6 +342,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 164> scopes{{
     {"--preview-table", verify_preview_table_scope},
     {"--preview-scroll", verify_preview_scroll_scope},
     {"--language-root", verify_language_root_scope},
+    {"--diagnostic-jump", verify_diagnostic_jump_scope},
 }};
 
 // 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。

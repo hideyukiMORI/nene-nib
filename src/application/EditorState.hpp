@@ -32,6 +32,7 @@
 #include "SearchPreview.hpp"
 #include "Selection.hpp"
 #include "SettingsIssue.hpp"
+#include "SharedDiagnostics.hpp"
 #include "SplitLayout.hpp"
 #include "SplitState.hpp"
 #include "TabRecency.hpp"
@@ -202,8 +203,9 @@ class EditorState final
     // 言語サーバーの診断（ADR 0161 の決定 2）。アクティブな文書のもので、開いた文書・新しいタブは
     // 空。置くのは controller の診断の受け（届いたとき）と編集の 1 本（ずらす）と、`didClose` の
     // 後の片付けだけ。with_parked_diagnostics は帯の位置 position の読み込み済みの脇の束に置く
-    // （アクティブ・範囲の外・まだ読んでいない文書なら何も変えない）。
-    [[nodiscard]] const std::vector<core::Diagnostic> &diagnostics() const noexcept;
+    // （アクティブ・範囲の外・まだ読んでいない文書なら何も変えない）。列は不変の値を指す参照で
+    // 持つので、ほかの with_* の写しは文を写さない（#1939 のレビュー R3）。
+    [[nodiscard]] std::span<const core::Diagnostic> diagnostics() const noexcept;
     [[nodiscard]] std::uint64_t diagnostics_version() const noexcept;
     [[nodiscard]] core::DiagnosticsCount diagnostics_count() const noexcept;
     [[nodiscard]] EditorState with_diagnostics(std::vector<core::Diagnostic> diagnostics,
@@ -461,7 +463,7 @@ class EditorState final
     std::shared_ptr<const core::TextBuffer> vim_text_;
     // INSERT の補完の語の表（ADR 0169 の決定 1）。写しは共有の参照だけ（WordTable の約束）。
     std::optional<core::WordTable> words_;
-    std::vector<core::Diagnostic> diagnostics_;
+    SharedDiagnostics diagnostics_;
     std::uint64_t diagnostics_version_ = 0;
     core::DiagnosticsCount diagnostics_count_ = core::DiagnosticsCount::complete;
     std::optional<core::Composition> composition_;

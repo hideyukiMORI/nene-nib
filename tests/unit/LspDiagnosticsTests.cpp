@@ -186,10 +186,13 @@ void verify_published()
                one.value().count == core::DiagnosticsCount::complete,
            "a publishDiagnostics keeps its uri and version");
     const std::vector<Diagnostic> expected{
-        Diagnostic{OffsetRange{Offset{3}, Offset{9}}, DiagnosticSeverity::warning, "unused"},
-        Diagnostic{OffsetRange{Offset{11}, Offset{12}}, DiagnosticSeverity::error, "no severity"}};
+        Diagnostic{OffsetRange{Offset{3}, Offset{9}}, DiagnosticSeverity::warning,
+                   "unused\nnote: here", "clangd", "x"},
+        Diagnostic{OffsetRange{Offset{11}, Offset{12}}, DiagnosticSeverity::error,
+                   "no severity\r\nsecond"}};
     expect(one.has_value() && one.value().diagnostics == expected,
-           "each diagnostic maps its range, reads severity (absent is error) and keeps one line");
+           "each diagnostic maps its range, reads severity (absent is error) and keeps the whole "
+           "message with its source and code (#1939)");
     const Published bare = published_of(R"({"uri":"u","version":null,"diagnostics":[]})", "a");
     expect(bare.has_value() && !bare.value().version.has_value() &&
                bare.value().diagnostics.empty(),

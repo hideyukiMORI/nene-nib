@@ -464,6 +464,13 @@ void verify_vim_sentence_before_crlf()
            "#751)");
 }
 
+// `[` と `]` の接頭辞（#1939 で分けた）。
+[[nodiscard]] nenenib::core::VimPrefix bracket_prefix_of(char32_t prefix) noexcept
+{
+    return prefix == U'[' ? nenenib::core::VimPrefix::bracket_back
+                          : nenenib::core::VimPrefix::bracket_forward;
+}
+
 // `[` `]` の後ろの 1 鍵。族は未実装なので何も動かさずに失敗し、次の鍵を `{` `}` `(` `)` の移動や
 // もう 1 つの `[` として流さない（Issue #1334・窓では失敗の後ろの鍵も走るので fixture
 // では見えない）。
@@ -472,7 +479,7 @@ void verify_vim_sentence_before_crlf()
 {
     const auto started = vim_step(state, view, VimKey{VimCharacter{prefix}});
     const auto refused = vim_step(started.next, view, VimKey{VimCharacter{key}});
-    return waits_for_prefix(started.next, nenenib::core::VimPrefix::bracket) &&
+    return waits_for_prefix(started.next, bracket_prefix_of(prefix)) &&
            std::holds_alternative<nenenib::core::VimNoEffect>(started.effect) &&
            refused.failure == nenenib::core::VimRepeatFailure::refused &&
            std::holds_alternative<nenenib::core::VimNoEffect>(refused.effect) &&
@@ -511,7 +518,7 @@ void verify_vim_bracket_prefix_refuses()
 {
     const auto started = vim_step(state, view, VimKey{VimCharacter{prefix}});
     const auto escaped = vim_step(started.next, view, VimKey{VimSpecialKey::escape});
-    return waits_for_prefix(started.next, nenenib::core::VimPrefix::bracket) &&
+    return waits_for_prefix(started.next, bracket_prefix_of(prefix)) &&
            !escaped.failure.has_value() &&
            std::holds_alternative<nenenib::core::VimNoEffect>(escaped.effect) &&
            !escaped.next.input_wait.has_value() && !escaped.next.pending.has_value() &&
