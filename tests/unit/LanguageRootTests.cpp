@@ -97,6 +97,36 @@ void hold_all(Editing &editing)
     return text;
 }
 
+// #1917 で足した 16 言語の行（#1948 の噛み合わせ）。現物が `.git` を持たない行は最後に足し、glob
+// の印（sourcekit の `*.xcodeproj`・hls の `*.cabal`）は入れない。
+void verify_added_marker_rows()
+{
+    expect(tiers_of(core::Language::java) ==
+                   "mvnw|gradlew|settings.gradle|settings.gradle.kts|.git,"
+                   "build.xml|pom.xml|build.gradle|build.gradle.kts" &&
+               tiers_of(core::Language::kotlin) ==
+                   "settings.gradle,settings.gradle.kts,build.xml,pom.xml,build.gradle,"
+                   "build.gradle.kts,.git" &&
+               tiers_of(core::Language::dart) == "pubspec.yaml,.git" &&
+               tiers_of(core::Language::zig) == "zls.json,build.zig,.git" &&
+               tiers_of(core::Language::terraform) == ".terraform,.git" &&
+               tiers_of(core::Language::ruby) == "Gemfile,.git" &&
+               tiers_of(core::Language::swift) ==
+                   "buildServer.json|.bsp,compile_commands.json|Package.swift,.git" &&
+               tiers_of(core::Language::scala) ==
+                   "build.sbt,build.sc,build.gradle|build.gradle.kts,pom.xml,.git" &&
+               tiers_of(core::Language::haskell) ==
+                   "hie.yaml|stack.yaml|cabal.project|package.yaml,.git" &&
+               tiers_of(core::Language::elixir) == "mix.exs,.git" &&
+               tiers_of(core::Language::vue) == "package.json,.git" &&
+               tiers_of(core::Language::svelte) ==
+                   "package-lock.json|yarn.lock|pnpm-lock.yaml|bun.lockb|bun.lock|deno.lock,.git",
+           "the added languages follow nvim-lspconfig in priority order");
+    expect(tiers_of(core::Language::make) == ".git" && tiers_of(core::Language::batch) == ".git" &&
+               tiers_of(core::Language::r) == ".git" && tiers_of(core::Language::perl) == ".git",
+           "make, batch, r and perl fall back to .git");
+}
+
 // 印の表: 組の列は優先の順で空の組が無く、`.git` を持つ。中身と順は nvim-lspconfig の現物。
 void verify_marker_table()
 {
@@ -126,6 +156,7 @@ void verify_marker_table()
                tiers_of(core::Language::php) == ".git,composer.json",
            "the tiers follow nvim-lspconfig in priority order");
     expect(tiers_of(core::Language::cs) == ".git", "C# has no glob marker and falls back to .git");
+    verify_added_marker_rows();
 }
 
 // 優先の順: 1 つ目の組を根まで当ててから 2 つ目へ（近い下位の印より遠い上位の印が勝つ）。同じ

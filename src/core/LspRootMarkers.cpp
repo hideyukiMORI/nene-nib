@@ -58,6 +58,59 @@ constexpr std::array<LspRootTier, 2> lua_tiers{LspRootTier{lua_markers}, LspRoot
 // intelephense（現物は `.git` が先）。
 constexpr std::array<std::string_view, 2> php_markers{".git", "composer.json"};
 constexpr auto php_tiers = each_alone(php_markers);
+// jdtls の 2 つの組（nvim 0.11.3 からの入れ子の形・1 つ目の組が `.git` を持つ）。
+constexpr std::array<std::string_view, 5> java_first{"mvnw", "gradlew", "settings.gradle",
+                                                     "settings.gradle.kts", ".git"};
+constexpr std::array<std::string_view, 4> java_second{"build.xml", "pom.xml", "build.gradle",
+                                                      "build.gradle.kts"};
+constexpr std::array<LspRootTier, 2> java_tiers{LspRootTier{java_first}, LspRootTier{java_second}};
+// kotlin_language_server（現物は `.git` を持たないので最後に足す。ほかの `.git`
+// を足した行も同じ）。
+constexpr std::array<std::string_view, 7> kotlin_markers{
+    "settings.gradle", "settings.gradle.kts", "build.xml", "pom.xml",
+    "build.gradle",    "build.gradle.kts",    ".git"};
+constexpr auto kotlin_tiers = each_alone(kotlin_markers);
+// dartls。
+constexpr std::array<std::string_view, 2> dart_markers{"pubspec.yaml", ".git"};
+constexpr auto dart_tiers = each_alone(dart_markers);
+// zls。
+constexpr std::array<std::string_view, 3> zig_markers{"zls.json", "build.zig", ".git"};
+constexpr auto zig_tiers = each_alone(zig_markers);
+// terraformls。
+constexpr std::array<std::string_view, 2> terraform_markers{".terraform", ".git"};
+constexpr auto terraform_tiers = each_alone(terraform_markers);
+// ruby_lsp。
+constexpr std::array<std::string_view, 2> ruby_markers{"Gemfile", ".git"};
+constexpr auto ruby_tiers = each_alone(ruby_markers);
+// sourcekit の root_dir の組の順（glob の `*.xcodeproj` `*.xcworkspace` の組は入れない）。
+constexpr std::array<std::string_view, 2> swift_build{"buildServer.json", ".bsp"};
+constexpr std::array<std::string_view, 2> swift_package{"compile_commands.json", "Package.swift"};
+constexpr std::array<LspRootTier, 3> swift_tiers{
+    LspRootTier{swift_build}, LspRootTier{swift_package}, LspRootTier{git_marker}};
+// metals（`build.gradle` と `build.gradle.kts` は 1 つの組）。
+constexpr std::array<std::string_view, 1> scala_sbt{"build.sbt"};
+constexpr std::array<std::string_view, 1> scala_mill{"build.sc"};
+constexpr std::array<std::string_view, 2> scala_gradle{"build.gradle", "build.gradle.kts"};
+constexpr std::array<std::string_view, 1> scala_maven{"pom.xml"};
+constexpr std::array<LspRootTier, 5> scala_tiers{LspRootTier{scala_sbt}, LspRootTier{scala_mill},
+                                                 LspRootTier{scala_gradle},
+                                                 LspRootTier{scala_maven}, LspRootTier{git_marker}};
+// hls の root_pattern の 1 つの組（glob の `*.cabal` は入れない）。
+constexpr std::array<std::string_view, 4> haskell_markers{"hie.yaml", "stack.yaml", "cabal.project",
+                                                          "package.yaml"};
+constexpr std::array<LspRootTier, 2> haskell_tiers{LspRootTier{haskell_markers},
+                                                   LspRootTier{git_marker}};
+// elixirls の `mix.exs`（umbrella の上の `mix.exs` へ上る処理は持たない）。
+constexpr std::array<std::string_view, 2> elixir_markers{"mix.exs", ".git"};
+constexpr auto elixir_tiers = each_alone(elixir_markers);
+// vue_ls。
+constexpr std::array<std::string_view, 2> vue_markers{"package.json", ".git"};
+constexpr auto vue_tiers = each_alone(vue_markers);
+// svelte の lockfile の組 → `.git`。
+constexpr std::array<std::string_view, 6> svelte_locks{
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock", "deno.lock"};
+constexpr std::array<LspRootTier, 2> svelte_tiers{LspRootTier{svelte_locks},
+                                                  LspRootTier{git_marker}};
 
 [[nodiscard]] constexpr bool separator(char value) noexcept
 {
@@ -129,47 +182,79 @@ constexpr auto php_tiers = each_alone(php_markers);
 
 } // namespace
 
-// 言語を足すとこの switch が落ちる（CPP-002）。足した言語の印を nvim-lspconfig で決める。
+namespace
+{
+using LanguageRootRow = std::pair<Language, std::span<const LspRootTier>>;
+
+// 言語ごとの印の組の列（CPP-012 の表・#1948 で 16 言語を足して switch から表にした）。i 行目が i
+// 番目の Language で、下の static_assert が行の言語を値の順と数で縛る（値を足すと行が足りず、既定の
+// 行の言語が順に合わずに落ちる）。足した言語の印を nvim-lspconfig で決める。make は autotools_ls の
+// `Makefile` などが入れ子のフォルダに置かれやすく（clangd の `configure.ac` と同じ理由）`.git`
+// だけ。 batch は対応する server が無く、r（r_language_server）と perl（perlnavigator）は現物も
+// `.git`。
+constexpr std::array<LanguageRootRow, language_count()> language_roots{{
+    {Language::plain, git_only},
+    {Language::markdown, git_only},
+    {Language::html, git_only},
+    {Language::c, clangd_tiers},
+    {Language::cpp, clangd_tiers},
+    {Language::python, python_tiers},
+    {Language::json, git_only},
+    {Language::javascript, script_tiers},
+    {Language::typescript, script_tiers},
+    {Language::yaml, git_only},
+    {Language::toml, git_only},
+    {Language::xml, git_only},
+    {Language::css, git_only},
+    {Language::powershell, git_only},
+    {Language::shell, git_only},
+    {Language::cmake, git_only},
+    {Language::gdscript, git_only},
+    {Language::dosini, git_only},
+    {Language::gdresource, git_only},
+    {Language::cs, git_only},
+    {Language::rust, rust_tiers},
+    {Language::go, go_tiers},
+    {Language::php, php_tiers},
+    {Language::sql, git_only},
+    {Language::lua, lua_tiers},
+    {Language::dockerfile, git_only},
+    {Language::java, java_tiers},
+    {Language::kotlin, kotlin_tiers},
+    {Language::dart, dart_tiers},
+    {Language::zig, zig_tiers},
+    {Language::terraform, terraform_tiers},
+    {Language::make, git_only},
+    {Language::batch, git_only},
+    {Language::ruby, ruby_tiers},
+    {Language::swift, swift_tiers},
+    {Language::scala, scala_tiers},
+    {Language::haskell, haskell_tiers},
+    {Language::elixir, elixir_tiers},
+    {Language::r, git_only},
+    {Language::perl, git_only},
+    {Language::vue, vue_tiers},
+    {Language::svelte, svelte_tiers},
+}};
+
+[[nodiscard]] consteval bool roots_in_order() noexcept
+{
+    for (std::size_t index = 0; index < language_roots.size(); ++index)
+    {
+        if (std::to_underlying(language_roots.at(index).first) != index)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static_assert(roots_in_order(), "language_roots has one row for every Language in order");
+} // namespace
+
 std::span<const LspRootTier> lsp_root_markers(Language language) noexcept
 {
-    switch (language)
-    {
-    case Language::c:
-    case Language::cpp:
-        return clangd_tiers;
-    case Language::rust:
-        return rust_tiers;
-    case Language::go:
-        return go_tiers;
-    case Language::javascript:
-    case Language::typescript:
-        return script_tiers;
-    case Language::python:
-        return python_tiers;
-    case Language::lua:
-        return lua_tiers;
-    case Language::php:
-        return php_tiers;
-    case Language::plain:
-    case Language::markdown:
-    case Language::html:
-    case Language::json:
-    case Language::yaml:
-    case Language::toml:
-    case Language::xml:
-    case Language::css:
-    case Language::powershell:
-    case Language::shell:
-    case Language::cmake:
-    case Language::gdscript:
-    case Language::dosini:
-    case Language::gdresource:
-    case Language::cs:
-    case Language::sql:
-    case Language::dockerfile:
-        return git_only;
-    }
-    return git_only;
+    return language_roots.at(std::to_underlying(language)).second;
 }
 
 std::vector<FilePath> lsp_root_folders(const FilePath &folder)
