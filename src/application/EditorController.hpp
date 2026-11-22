@@ -312,9 +312,14 @@ class EditorController final
     // アクティブな文書を受ける言語サーバーの席の 1 行（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
     // `initialize` の答えを待つ間は「<言語>: 起動中」、running で `$/progress` の動いている
     // token があれば最後に動いたものの「<言語>: <題> <文> <百分率>%」、ほかは値なし。frame の
-    // language_server_status と窓のステータスバーの hit test（status_server_item）が同じ値を
-    // 引く。lsp がオフで子が居なければ欄を 1 つ読むだけで値なし。frame を作らない。
+    // language_server_status が同じ値を引く。lsp がオフで子が居なければ欄を 1 つ読むだけで値なし。
+    // frame を作らない。
     [[nodiscard]] std::optional<core::DisplayText> language_server_status() const;
+    // アクティブな文書を言語サーバーの席が受けているか（起こしている・`initialize` を待つ・
+    // running・#1950 のレビュー R3）。frame の language_server_served と窓のステータスバーの
+    // hit test（status_server_item）が同じ値を引き、真の間は右端の欄の幅を変えない。lsp がオフで
+    // 子が居なければ欄を 1 つ読むだけで偽。frame を作らない。
+    [[nodiscard]] bool language_server_served() const;
     // 無名レジスタと Vim のモードは表示値に載らないので、fixture の再生だけがここを読む
     // （ADR 0012 の決定 7）。状態を変える口はここには無い。
     [[nodiscard]] const core::VimState &vim_state() const noexcept;
@@ -589,6 +594,9 @@ class EditorController final
     // 何も書いていない無題ならそこに開き、ほかは新しいタブを足す。transient で開くときは、
     // プレビューのタブがあれば置き換え、無ければ開いたタブに印を付ける（ADR 0179 の決定 3）。
     void open_read(const core::FilePath &path, OpenedDocument opened, OpenedAs opened_as);
+    // 開いた本文を何も書いていない無題に置くか、アクティブの右に新しいタブを足して置く（決定 5 の
+    // (b)(c)）。open_read と言語サーバーの記録の写しが同じ 1 本を通る。
+    void place_opened(core::TextBuffer text, Document document);
     // 既に開いているタブ position へ切り替える（決定 3-1）。pinned ならそのタブの印を消す
     // （決定 3 の pinned・4-3・4-5）。transient なら印は変えない。
     void reach_open_tab(std::size_t position, OpenedAs opened_as);
@@ -963,6 +971,10 @@ class EditorController final
     void receive_progress(LanguageServerSlot slot, core::LspProgressValue value);
     // 席 slot の言語（記録の行の頭・止めた後の残りは今の文書の言語）。
     [[nodiscard]] core::Language slot_language(LanguageServerSlot slot) const;
+    // 読まずに捨てる出来事のうち記録に残すもの（#1950 のレビュー M1）。止めた席の port が返した
+    // 残りと、同じ集めの中で止めた後に来た出来事の、標準エラーの塊と showMessage / logMessage
+    // だけを language の行として記録に足す。状態・知らせ・答えは動かさない。
+    void log_unread(LanguageServerSlot slot, core::Language language, const ServerEvent &event);
     // 記録を無題のタブに写して開く（追補・F1 の一覧と `:LspLog`）。先にたまった出来事を集め、
     // 記録が空なら 1 行知らせて開かない。
     void open_language_server_log();

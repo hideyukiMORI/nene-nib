@@ -635,7 +635,7 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
     RECT client{};
     GetClientRect(window_, &client);
     const auto item = core::status_server_item(controller_.diagnostic_counts(),
-                                               controller_.language_server_status());
+                                               controller_.language_server_served());
     const auto layout = core::status_bar_layout(client.right, client.bottom, dpi_, item);
     const bool in_status = core::contains(layout.band, low_word_of(data), high_word_of(data));
     if (controller_.command_line_active() && in_status)

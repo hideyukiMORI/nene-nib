@@ -985,13 +985,21 @@ void EditorController::open_read(const core::FilePath &path, OpenedDocument open
         enter_document();
         return;
     }
+    place_opened(std::move(opened.text), std::move(document));
+    mark_opened(opened_as);
+}
+
+// 開いた本文を置く（決定 5 の (b)(c)）。何も書いていない無題ならそこに、ほかはアクティブの右に
+// 新しいタブを足す。言語サーバーの記録の写し（`:LspLog`）も同じ 1 本を通る（#1950 のレビュー L4）。
+void EditorController::place_opened(core::TextBuffer text, Document document)
+{
     if (blank_untitled())
     {
         // 本文が丸ごと替わるので、新しいタブの道と同じ文書を離れる 1 本を通す（入力行は Esc
         // と同じ形で 閉じ、前に指したタブへは切り替えない・#1583 F1）。今は入力行の間の読みを留める
         // （reads_held）ので入力行は開いていないが、文書を離れる後始末をここで分けない。
         leave_document();
-        state_ = state_.with_opened(std::move(opened.text), std::move(document));
+        state_ = state_.with_opened(std::move(text), std::move(document));
         reopen_replayed_unit();
         // 同じ退避番号で改訂番号 0 のまま本文が丸ごと替わるので、構文の覚えを両方捨てる
         // （ADR 0156 の決定 9）。
@@ -1005,13 +1013,11 @@ void EditorController::open_read(const core::FilePath &path, OpenedDocument open
         ask_display();
         // 本文が丸ごと替わるので、プレビューも頼み直す（ADR 0155 の決定 9）。
         request_preview(true);
-        mark_opened(opened_as);
         return;
     }
     leave_document();
-    state_ = state_.with_new_tab().with_opened(std::move(opened.text), std::move(document));
+    state_ = state_.with_new_tab().with_opened(std::move(text), std::move(document));
     enter_document();
-    mark_opened(opened_as);
 }
 
 // 開いたアクティブなタブに、transient なら印を付ける（ADR 0179 の決定 3-3）。

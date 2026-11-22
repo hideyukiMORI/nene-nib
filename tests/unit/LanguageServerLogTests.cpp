@@ -19,9 +19,11 @@
 #include "FilePath.hpp"
 #include "JsonParse.hpp"
 #include "Language.hpp"
+#include "LanguageServerLink.hpp"
 #include "LanguageServerLog.hpp"
 #include "LanguageServerLogKind.hpp"
 #include "LanguageServerSlot.hpp"
+#include "LanguageServerTick.hpp"
 #include "LayoutRect.hpp"
 #include "LspIncoming.hpp"
 #include "LspMessageType.hpp"
@@ -30,6 +32,7 @@
 #include "LspProgress.hpp"
 #include "LspProgressKind.hpp"
 #include "LspShowMessage.hpp"
+#include "NewTab.hpp"
 #include "OpenDocument.hpp"
 #include "OpenLanguageServerLog.hpp"
 #include "OperationBindings.hpp"
@@ -51,6 +54,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -143,9 +147,20 @@ void verify_server_log_line()
     expect(core::server_log_line("a\xff"
                                  "b\x01"
                                  "c\x7f") == "a\xEF\xBF\xBD"
-                                             "b\xEF\xBF\xBD"
-                                             "c\xEF\xBF\xBD",
-           "a broken byte and the control characters become U+FFFD");
+                                             "b\xE2\x90\x81"
+                                             "c\xE2\x90\xA1",
+           "a broken byte becomes U+FFFD and C0 and DEL become control pictures");
+    expect(core::server_log_line("\x1b[31mred\x1b[0m \x1b]0;title\x07"
+                                 "ok \x1b"
+                                 "c!") == "red ok !",
+           "ANSI escape sequences (CSI, OSC and ESC with one character) are dropped");
+    expect(core::server_log_line("x\x1b") == "x\xE2\x90\x9B",
+           "a lone ESC is shown as its control picture");
+    expect(core::server_log_line("a\xC2\x85"
+                                 "b\xE2\x80\xAE"
+                                 "c\xE2\x81\xA6"
+                                 "d\xE2\x80\x8B") == "a<U+0085>b<U+202E>c<U+2066>d\xE2\x80\x8B",
+           "C1 and the bidirectional controls are shown as code points and others are kept");
     expect(core::server_log_line("\xE3\x81\x82\xE3\x81") == "\xE3\x81\x82\xEF\xBF\xBD\xEF\xBF\xBD",
            "a valid sequence stays and a cut sequence is replaced byte by byte");
     const std::string long_line = core::server_log_line(std::string(5000, 'x'));
@@ -259,29 +274,50 @@ void verify_progress_values()
            "progress without any text shows nothing");
 }
 
-// ステータスバーの欄の形（追補）。進み具合は件数に勝ち、件数より広い。
+// ステータスバーの欄の形（追補・#1950 のレビュー R2 / R3）。言語サーバーの受けている文書の欄は
+// 件数より広い一定の幅で、件数の後ろに進み具合を並べる。
 void verify_status_item()
 {
     const core::DiagnosticCounts none{0, 0, core::DiagnosticsCount::complete};
-    const core::DiagnosticCounts some{1, 0, core::DiagnosticsCount::complete};
-    const auto status = core::DisplayText::parse("cpp: indexing").value();
-    expect(core::status_server_item(none, std::nullopt) == core::StatusServerItem::none &&
-               core::status_server_item(some, std::nullopt) == core::StatusServerItem::counts &&
-               core::status_server_item(some, status) == core::StatusServerItem::progress,
-           "progress wins over the counts and nothing shows nothing");
+    const core::DiagnosticCounts some{2, 1, core::DiagnosticsCount::complete};
+    expect(core::status_server_item(none, false) == core::StatusServerItem::none &&
+               core::status_server_item(some, false) == core::StatusServerItem::counts &&
+               core::status_server_item(none, true) == core::StatusServerItem::server &&
+               core::status_server_item(some, true) == core::StatusServerItem::server,
+           "a served document has the server field whether or not it has counts");
     const auto counted = core::status_bar_layout(1280, 800, 96, core::StatusServerItem::counts);
-    const auto progress = core::status_bar_layout(1280, 800, 96, core::StatusServerItem::progress);
+    const auto served = core::status_bar_layout(1280, 800, 96, core::StatusServerItem::server);
     const auto empty = core::status_bar_layout(1280, 800, 96, core::StatusServerItem::none);
-    expect(core::width_of(counted.diagnostics) == 96 &&
-               core::width_of(progress.diagnostics) == 168 &&
+    expect(core::width_of(counted.diagnostics) == 96 && core::width_of(served.diagnostics) == 168 &&
                core::width_of(empty.diagnostics) == 0 &&
-               progress.diagnostics.right == counted.diagnostics.right,
-           "the progress item is the same right edge field, wider than the counts");
+               served.diagnostics.right == counted.diagnostics.right,
+           "the server field is the same right edge field, wider than the counts");
     expect(counted.items == core::status_bar_layout(1280, 800, 96, some).items,
            "the counts overload lays out like the counts item");
-    const auto narrow = core::status_bar_layout(360, 400, 96, core::StatusServerItem::progress);
+    const auto narrow = core::status_bar_layout(360, 400, 96, core::StatusServerItem::server);
     expect(core::width_of(narrow.diagnostics) == 0,
-           "a narrow window folds the progress item like the counts");
+           "a narrow window folds the server field like the counts");
+    bool fallback = false;
+    bool kept_counts = true;
+    for (std::int32_t width = 300; width <= 1000; width += 4)
+    {
+        const auto wide = core::width_of(
+            core::status_bar_layout(width, 800, 96, core::StatusServerItem::server).diagnostics);
+        const auto counts = core::width_of(
+            core::status_bar_layout(width, 800, 96, core::StatusServerItem::counts).diagnostics);
+        fallback = fallback || wide == 96;
+        kept_counts = kept_counts && (wide == 168 || wide == counts);
+    }
+    expect(fallback && kept_counts,
+           "a window too narrow for the server field gives it the counts width before folding");
+    const auto status = core::DisplayText::parse("cpp: indexing 33%").value();
+    const auto text = [](const std::optional<core::DisplayText> &shown)
+    { return shown.has_value() ? std::string(shown.value().text()) : "<none>"; };
+    expect(text(core::status_server_text(some, status)) == "E2 W1 \xC2\xB7 cpp: indexing 33%" &&
+               text(core::status_server_text(none, status)) == "cpp: indexing 33%" &&
+               text(core::status_server_text(some, std::nullopt)) == "E2 W1" &&
+               text(core::status_server_text(none, std::nullopt)) == "<none>",
+           "the counts come first and stay while progress shows, progress alone without counts");
 }
 
 // `:LspLog` の Ex（追補）。
@@ -339,6 +375,107 @@ void verify_open_log()
     const std::string after = applied(editing.controller(), app::OpenLanguageServerLog{});
     expect(contains(after, "|[cpp][stderr] last words|"),
            "the unfinished last stderr line is closed when the server ends");
+    // 何も書いていない無題からは、ファイルを開く道と同じく置き換える（#1950 のレビュー L4）。
+    static_cast<void>(applied(editing.controller(), app::NewTab{}));
+    const std::size_t blank = editing.controller().frame().tabs.size();
+    const std::string replaced = applied(editing.controller(), app::OpenLanguageServerLog{});
+    expect(editing.controller().frame().tabs.size() == blank && contains(replaced, "last words"),
+           "from a blank untitled tab the log replaces it like opening a file");
+}
+
+// 記録を開いて写しの文（行は | で繋ぐ）。
+[[nodiscard]] std::string log_of(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply_frame(app::VisibleLines{40}));
+    return applied(editing.controller(), app::OpenLanguageServerLog{});
+}
+
+void ticked(Editing &editing, std::size_t times)
+{
+    for (std::size_t tick = 0; tick < times; ++tick)
+    {
+        static_cast<void>(editing.controller().apply_frame(app::LanguageServerTick{}));
+    }
+}
+
+// 止める道は、まだ集めていない標準エラーと logMessage を記録に入れてから止める（#1950 の
+// レビュー M1）。
+void verify_stop_keeps_unread_log()
+{
+    constexpr std::string_view log_message =
+        R"({"jsonrpc":"2.0","method":"window/logMessage","params":{"type":1,"message":"no compile_commands.json"}})";
+    {
+        // `initialize` に答えず標準エラーにだけ理由を書くサーバーを tick が止める。
+        Editing editing(lsp_settings(true));
+        opened(editing);
+        static_cast<void>(delivered(editing, app::ServerStarted{}));
+        editing.language_server().serve(app::ServerErrorOutput{"cannot read config\nhalf"});
+        editing.language_server().serve(app::ServerMessage{std::string(log_message)});
+        ticked(editing, app::language_server_stale_ticks);
+        const std::string text = log_of(editing);
+        expect(
+            text == "[cpp][stderr] cannot read config|[cpp][error] no compile_commands.json|"
+                    "[cpp][stderr] half|",
+            "the silent server stopped by the tick leaves its stderr and log message in the log");
+    }
+    {
+        // `:set nolsp` で `shutdown` を送り、答えないので tick が止める。
+        Editing editing(lsp_settings(true));
+        running(editing);
+        static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+        editing.language_server().serve(app::ServerErrorOutput{"shutting down\n"});
+        ticked(editing, app::language_server_stale_ticks);
+        expect(contains(log_of(editing), "[cpp][stderr] shutting down|"),
+               "a server that does not answer shutdown leaves its stderr in the log");
+    }
+    {
+        // `shutdown` の答えと同じ集めの後ろの塊。
+        Editing editing(lsp_settings(true));
+        running(editing);
+        static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+        auto &server = editing.language_server();
+        server.answer(server.requests("shutdown").back(), "null");
+        server.serve(app::ServerErrorOutput{"after the answer"});
+        server.serve(app::ServerMessage{std::string(log_message)});
+        static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+        const std::string text = log_of(editing);
+        expect(contains(text, "[cpp][stderr] after the answer|") &&
+                   contains(text, "[cpp][error] no compile_commands.json|"),
+               "what came after the shutdown answer in the same collect is logged, not read");
+    }
+    {
+        // 起こしている間に lsp をオフにする（`initialize` の前は何も送れないのですぐ止める）。
+        Editing editing(lsp_settings(true));
+        opened(editing);
+        editing.language_server().serve(app::ServerErrorOutput{"early\n"});
+        static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+        expect(contains(log_of(editing), "[cpp][stderr] early|"),
+               "turning lsp off before initialize keeps the stderr written so far");
+    }
+}
+
+// end の来ない進み具合は、その席が止まった・死んだときに消える（#1950 のレビュー L5）。
+void verify_progress_forgotten_on_stop()
+{
+    Editing editing(lsp_settings(true));
+    running(editing);
+    static_cast<void>(delivered(
+        editing, app::ServerMessage{progress_body("1", R"({"kind":"begin","title":"stuck"})")}));
+    expect(status_of(editing.controller().frame()) == "cpp: stuck", "the begin shows");
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    auto &server = editing.language_server();
+    static_cast<void>(
+        delivered(editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" +
+                                              std::to_string(server.requests("shutdown").back()) +
+                                              R"(,"result":null})"}));
+    static_cast<void>(run_ex(editing.controller(), "set lsp"));
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    const auto again = delivered(
+        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" +
+                                    std::to_string(server.requests("initialize").back()) +
+                                    R"(,"result":{"capabilities":{"textDocumentSync":2}}})"});
+    expect(status_of(again) == "<none>" && again.language_server_served,
+           "a begin without an end is forgotten when its server stops");
 }
 
 // lsp がオフなら何も動かず、記録は空と 1 行知らせる（追補）。
@@ -352,6 +489,25 @@ void verify_log_when_off()
                message_of(frame) == "言語サーバーの記録はまだありません" &&
                status_of(frame) == "<none>",
            "with lsp off the log is empty, nothing is opened and the port is not touched");
+}
+
+// 言語サーバーの受けている文書の frame の列で、右の項目の配置が動かない（#1950 のレビュー R3）。
+void expect_steady_items(std::initializer_list<const app::EditorFrame *> frames)
+{
+    const auto items_of = [](const app::EditorFrame &frame)
+    {
+        return core::status_bar_layout(
+                   1280, 800, 96,
+                   core::status_server_item(frame.diagnostic_counts, frame.language_server_served))
+            .items;
+    };
+    const auto &front = **frames.begin();
+    bool steady = true;
+    for (const app::EditorFrame *frame : frames)
+    {
+        steady = steady && frame->language_server_served && items_of(*frame) == items_of(front);
+    }
+    expect(steady, "the right items do not move while progress comes and goes");
 }
 
 // 起動中と `$/progress`（追補）。
@@ -401,6 +557,7 @@ void verify_progress_status()
     const auto closed =
         delivered(editing, app::ServerMessage{progress_body("2", R"({"kind":"end"})")});
     expect(status_of(closed) == "<none>", "nothing shows when every token has ended");
+    expect_steady_items({&started, &ready, &begun, &closed});
     static_cast<void>(delivered(
         editing, app::ServerMessage{progress_body("3", R"({"kind":"begin","title":"again"})")}));
     const auto restarted = delivered(editing, app::ServerExited{1});
@@ -420,5 +577,7 @@ void verify_language_server_log()
     verify_open_log();
     verify_log_when_off();
     verify_progress_status();
+    verify_stop_keeps_unread_log();
+    verify_progress_forgotten_on_stop();
 }
 } // namespace nenenib::tests

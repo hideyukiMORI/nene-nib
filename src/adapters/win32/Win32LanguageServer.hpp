@@ -34,6 +34,14 @@ inline constexpr std::size_t language_server_retired_limit = 8;
 // 上限（256 KiB）と同じで、超えたら古いバイトから捨てる。
 inline constexpr std::size_t language_server_error_queue_bytes = std::size_t{256} * 1024;
 
+// 出来事の列 events に席 slot の標準エラーのバイト列を積む（2026-11-22 の追補・#1950 のレビュー
+// R1）。その席の最後の出来事が標準エラーの塊なら繋ぎ（あいだにほかの席の出来事があっても・
+// 同じ席の本文との前後は保つ）、そうでなければ新しい塊を積む。列の中のその席の塊のバイトの和が
+// language_server_error_queue_bytes を超えたら、古い塊の古いバイトから捨てる（空になった塊は
+// 列から外す）。合図は出さない。空のバイト列は何もしない。OS に触れない。
+void queue_error_output(std::vector<application::LanguageServerEvent> &events,
+                        application::LanguageServerSlot slot, std::string_view bytes);
+
 // 言語サーバーの子プロセスと OVERLAPPED のパイプ（ADR 0160 の決定 2・6）。
 // スレッドを作らず、Win32Worker も使わない。席（LanguageServerSlot）ごとに
 // 子・パイプ・Job Object を 1 組持つ（2026-11-20 の追補）。I/O の完了と子の終了は
@@ -43,9 +51,10 @@ inline constexpr std::size_t language_server_error_queue_bytes = std::size_t{256
 // 前の合図がまだ collect されていなければ呼ばず、そうでなければ構築時に受けた
 // 合図を呼ぶ（Win32FolderAdapter の合図と同じ形・本番は work_message を送る）。
 // 標準エラーの塊（ServerErrorOutput）は合図を出さずに列に積み（打鍵ごとに書く
-// サーバーで合図を増やさない・2026-11-22 の追補）、同じ席の直前の塊に繋いで
+// サーバーで合図を増やさない・2026-11-22 の追補）、queue_error_output の 1 本で席ごとに
 // language_server_error_queue_bytes までの新しい分を持つ。stop は子を待たない
-// （退く子の process も待ちの配列に載る）。全部の口は UI スレッドだけが呼ぶ。
+// （退く子の process も待ちの配列に載る）。stop は閉じる前に完了済みの読みを回収し、その席の
+// 出来事を列から外して返す（#1950 のレビュー M1）。全部の口は UI スレッドだけが呼ぶ。
 // 取消と完了の分離は ADR 0126（資源は最終完了の後だけ離す）。
 class Win32LanguageServer final : public application::LanguageServerPort
 {
@@ -61,7 +70,8 @@ class Win32LanguageServer final : public application::LanguageServerPort
     [[nodiscard]] std::expected<void, application::ServerFailure>
     start(application::LanguageServerSlot slot, application::ServerLaunch launch) override;
     void send(application::LanguageServerSlot slot, std::string body) override;
-    void stop(application::LanguageServerSlot slot) override;
+    [[nodiscard]] std::vector<application::ServerEvent>
+    stop(application::LanguageServerSlot slot) override;
     [[nodiscard]] std::vector<application::LanguageServerEvent> collect() override;
 
     // pump が待つ handle（席ごとの出ている読み・出ている書き・起きている子と、退く子）。次に

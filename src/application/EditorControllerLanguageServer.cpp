@@ -37,7 +37,9 @@
 #include "ServerAbilities.hpp"
 #include "ServerCommand.hpp"
 #include "ServerErrorOutput.hpp"
+#include "ServerEvent.hpp"
 #include "ServerFailure.hpp"
+#include "ServerMessage.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 #include "UiMessage.hpp"
@@ -594,17 +596,24 @@ void EditorController::drop_language_answers_of(LanguageServerSlot slot)
     }
 }
 
-// 子を待たずに止める（追補）。stop はその席の出来事の列も捨てるので、同じ集めの残りは読まない。
+// 子を待たずに止める（追補）。止める道（tick の「答えない」・`shutdown` の答えなし・答えの後・
+// lsp をオフ・席を譲る・落ちた・窓を閉じる）は全部ここを通る。port の stop が返すその席の
+// まだ集めていない出来事は、標準エラーと logMessage だけを記録に写してから捨てる（#1950 の
+// レビュー M1）。同じ集めの残りは collect_language_server が同じ形で記録にだけ写す。
 void EditorController::stop_language_server(LanguageServerSlot slot)
 {
     auto &servers = language_servers_;
     auto &link = link_of(slot);
+    const core::Language language = slot_language(slot);
     drop_language_answers_of(slot);
     close_language_server_documents(slot, false);
-    ports_.language_server.stop(slot);
+    for (const ServerEvent &event : ports_.language_server.stop(slot))
+    {
+        log_unread(slot, language, event);
+    }
     // 標準エラーの改行の無い最後の行（落ちる前の 1 行など）を閉じる
     // （ADR 0160 の 2026-11-22 の追補）。
-    servers.log.end_output(slot, slot_language(slot));
+    servers.log.end_output(slot, language);
     link.phase = LanguageServerPhase::idle;
     link.language.reset();
     link.pending.clear();
@@ -684,7 +693,8 @@ void EditorController::language_server_failed(LanguageServerSlot slot, core::UiM
 }
 
 // WorkCompleted の道（決定 1）。子が居なければ port を呼ばない。止めた席の同じ集めの残りと、
-// 子の居ない席の出来事は読まない。
+// 子の居ない席の出来事は読まず、標準エラーと logMessage だけを集めた時の言語で記録に写し
+// （#1950 のレビュー M1）、その席の改行の無い残りを最後に閉じる。
 void EditorController::collect_language_server()
 {
     const auto &links = language_servers_.links;
@@ -696,16 +706,67 @@ void EditorController::collect_language_server()
     std::array<std::uint64_t, language_server_slot_limit> generations{};
     std::ranges::transform(links, generations.begin(),
                            [](const LanguageServerLink &link) { return link.generation; });
+    std::array<core::Language, language_server_slot_limit> languages{};
+    std::ranges::transform(language_server_slots, languages.begin(),
+                           [this](LanguageServerSlot slot) { return slot_language(slot); });
+    std::array<bool, language_server_slot_limit> unread{};
     for (const LanguageServerEvent &event : events)
     {
         const std::size_t index = slot_index(event.slot);
         if (links.at(index).generation != generations.at(index) ||
             links.at(index).phase == LanguageServerPhase::idle)
         {
+            log_unread(event.slot, languages.at(index), event.event);
+            unread.at(index) = true;
             continue;
         }
         std::visit([this, slot = event.slot](const auto &value)
                    { this->receive_server(slot, value); }, event.event);
+    }
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        if (unread.at(slot_index(slot)))
+        {
+            language_servers_.log.end_output(slot, languages.at(slot_index(slot)));
+        }
+    }
+}
+
+namespace
+{
+// 本文が showMessage / logMessage の通知なら種類と文（#1950 のレビュー M1）。ほかは値なし。
+[[nodiscard]] std::optional<std::pair<core::LspMessageType, std::string>>
+unread_logged_message(std::string_view body)
+{
+    const auto value = core::parse_json(body);
+    if (!value)
+    {
+        return std::nullopt;
+    }
+    const auto incoming = core::lsp_incoming(value.value());
+    if (!incoming)
+    {
+        return std::nullopt;
+    }
+    const auto *notification = std::get_if<core::LspNotification>(&incoming.value());
+    return notification == nullptr ? std::nullopt : core::lsp_logged_message(*notification);
+}
+} // namespace
+
+void EditorController::log_unread(LanguageServerSlot slot, core::Language language,
+                                  const ServerEvent &event)
+{
+    auto &log = language_servers_.log;
+    if (const auto *output = std::get_if<ServerErrorOutput>(&event))
+    {
+        log.add_output(slot, language, output->bytes);
+        return;
+    }
+    const auto *message = std::get_if<ServerMessage>(&event);
+    const auto logged = message == nullptr ? std::nullopt : unread_logged_message(message->body);
+    if (logged.has_value())
+    {
+        log.add_message(slot, language, log_kind_of(logged.value().first), logged.value().second);
     }
 }
 
@@ -933,13 +994,21 @@ std::optional<core::DisplayText> EditorController::language_server_status() cons
     return core::lsp_progress_text(name, link.progress.back());
 }
 
+bool EditorController::language_server_served() const
+{
+    return language_servers_.awake != 0 && serving_slot(state_.language()).has_value();
+}
+
 void EditorController::add_language_server_status(EditorFrame &result) const
 {
     result.language_server_status = language_server_status();
+    result.language_server_served = language_server_served();
 }
 
 // 記録の写しを無題のタブに開く（追補）。たまった出来事を先に集める（標準エラーは
-// 合図を出さずにたまる）。開いたタブは無題で未変更なので、閉じても「保存しますか」を
+// 合図を出さずにたまる）。置き方はファイルを開く道と同じ place_opened の 1 本（何も書いて
+// いない無題なら置き換え、ほかは右に新しいタブ・#1950 のレビュー L4）。開いたタブは無題で
+// 未変更なので、閉じても「保存しますか」を
 // 聞かず、自動退避も書かない（save_state_of が saved・autosave_plan が keep）。
 // 無題は言語が plain なので言語サーバーも起こさない。
 void EditorController::open_language_server_log()
@@ -956,10 +1025,8 @@ void EditorController::open_language_server_log()
     {
         return;
     }
-    leave_document();
-    state_ = state_.with_new_tab().with_opened(
-        std::move(text).value(), Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}});
-    enter_document();
+    place_opened(std::move(text).value(),
+                 Document{std::nullopt, core::TextEncoding::utf8, std::size_t{0}});
 }
 
 void EditorController::accept(const OpenLanguageServerLog &)

@@ -1810,7 +1810,7 @@ namespace
                                                      std::uint32_t dpi)
 {
     const auto item =
-        core::status_server_item(frame.diagnostic_counts, frame.language_server_status);
+        core::status_server_item(frame.diagnostic_counts, frame.language_server_served);
     return core::status_bar_layout(width, height, dpi, item);
 }
 
@@ -1855,16 +1855,17 @@ std::int32_t Direct2DRenderer::draw_status_bar(const application::EditorFrame &f
                      layout.items.at(index), frame.palette.muted);
     }
     // 診断の件数（言語の右・ADR 0161 の決定 4）。0 件なら項目も幅も無く、枠も使わない。言語サーバー
-    // の進み具合か起動中の 1 行があれば同じ欄（広い幅）に件数の代わりに書き、欄で切る（ADR 0160 の
-    // 2026-11-22 の追補・枠は 1 つのまま）。
-    const auto counted = frame.language_server_status.has_value()
-                             ? frame.language_server_status
-                             : core::diagnostic_count_item(frame.diagnostic_counts);
+    // の受けている文書では件数の後ろに進み具合か起動中の 1 行を並べ（core::status_server_text）、
+    // 一定の幅の欄に左から書いて右で切る（件数は切れない・#1950 のレビュー R2 / R3・枠は 1 つの
+    // まま）。左寄せの書式は同じ字体・大きさの guide_status_format_。
+    const auto counted =
+        core::status_server_text(frame.diagnostic_counts, frame.language_server_status);
     if (counted.has_value() && core::width_of(layout.diagnostics) > 0)
     {
+        auto *const format =
+            frame.language_server_served ? guide_status_format_.Get() : status_format_.Get();
         context_->PushAxisAlignedClip(to_rect(layout.diagnostics), D2D1_ANTIALIAS_MODE_ALIASED);
-        write_status(counted.value().text(), status_format_.Get(), layout.diagnostics,
-                     frame.palette.muted);
+        write_status(counted.value().text(), format, layout.diagnostics, frame.palette.muted);
         context_->PopAxisAlignedClip();
     }
     // 表示形式の印（ADR 0140 の決定 3）。文字は core の表、右寄せは write_right の 1 本。

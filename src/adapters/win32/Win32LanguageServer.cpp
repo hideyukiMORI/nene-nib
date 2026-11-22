@@ -47,7 +47,67 @@ ServerFailure failure_of(core::LspFrameFailure failure) noexcept
     }
     std::unreachable();
 }
+
+// 席 slot の標準エラーの塊のバイトの和。
+std::size_t error_bytes_of(const std::vector<LanguageServerEvent> &events, LanguageServerSlot slot)
+{
+    std::size_t total = 0;
+    for (const LanguageServerEvent &event : events)
+    {
+        const auto *output = std::get_if<ServerErrorOutput>(&event.event);
+        total += event.slot == slot && output != nullptr ? output->bytes.size() : 0;
+    }
+    return total;
+}
+
+// 席 slot の塊の和が上限に収まるまで、古い塊の古いバイトから捨て、空になった塊を外す。
+void trim_error_output(std::vector<LanguageServerEvent> &events, LanguageServerSlot slot)
+{
+    std::size_t total = error_bytes_of(events, slot);
+    for (LanguageServerEvent &event : events)
+    {
+        auto *output = std::get_if<ServerErrorOutput>(&event.event);
+        if (total <= language_server_error_queue_bytes)
+        {
+            break;
+        }
+        if (event.slot != slot || output == nullptr)
+        {
+            continue;
+        }
+        const std::size_t cut =
+            std::min(total - language_server_error_queue_bytes, output->bytes.size());
+        output->bytes.erase(0, cut);
+        total -= cut;
+    }
+    std::erase_if(events,
+                  [slot](const LanguageServerEvent &event)
+                  {
+                      const auto *output = std::get_if<ServerErrorOutput>(&event.event);
+                      return event.slot == slot && output != nullptr && output->bytes.empty();
+                  });
+}
 } // namespace
+
+void queue_error_output(std::vector<LanguageServerEvent> &events, LanguageServerSlot slot,
+                        std::string_view bytes)
+{
+    if (bytes.empty())
+    {
+        return;
+    }
+    const auto latest = std::ranges::find_if(events.rbegin(), events.rend(),
+                                             [slot](const LanguageServerEvent &event)
+                                             { return event.slot == slot; });
+    auto *last = latest == events.rend() ? nullptr : std::get_if<ServerErrorOutput>(&latest->event);
+    if (last == nullptr)
+    {
+        events.push_back(LanguageServerEvent{.slot = slot, .event = ServerErrorOutput{}});
+        last = &std::get<ServerErrorOutput>(events.back().event);
+    }
+    last->bytes.append(bytes);
+    trim_error_output(events, slot);
+}
 
 Win32LanguageServer::Win32LanguageServer(std::function<void()> arrived, std::size_t read_bytes)
     : arrived_(std::move(arrived)), read_bytes_(read_bytes)
@@ -67,7 +127,8 @@ Win32LanguageServer::~Win32LanguageServer()
 std::expected<void, ServerFailure> Win32LanguageServer::start(LanguageServerSlot slot,
                                                               application::ServerLaunch launch)
 {
-    stop(slot);
+    // 前の子の残りは呼ぶ側が stop で受け取っている（ここで外す分は誰も読まない）。
+    static_cast<void>(stop(slot));
     const std::size_t index = application::slot_index(slot);
     auto child = std::make_unique<ServerChild>(read_bytes_);
     const auto spawned = child->spawn(launch);
@@ -103,16 +164,30 @@ void Win32LanguageServer::send(LanguageServerSlot slot, std::string body)
 }
 
 // shutdown は送らない（呼ぶ側の役）。パイプを閉じた子は退く子の枠へ移し、待たずに戻る（ADR 0160
-// の追補）。その席のたまっていた出来事は捨てる（古い子の本文を次の子の前に混ぜない・ほかの席の
-// 出来事は残す）。
-void Win32LanguageServer::stop(LanguageServerSlot slot)
+// の追補）。閉じる前に完了済みの読み（標準エラーと本文）を回収し、その席のたまっていた出来事を
+// 列から外して届いた順に返す（古い子の本文を次の子の前に混ぜない・ほかの席の出来事は残す・
+// controller は記録にだけ写す・#1950 のレビュー M1）。
+std::vector<application::ServerEvent> Win32LanguageServer::stop(LanguageServerSlot slot)
 {
+    const std::size_t index = application::slot_index(slot);
+    auto &child = children_.at(index);
+    if (child)
+    {
+        drain_errors(index);
+        drain_output(index);
+    }
+    std::vector<application::ServerEvent> unread;
+    for (const LanguageServerEvent &event : events_)
+    {
+        if (event.slot == slot)
+        {
+            unread.push_back(event.event);
+        }
+    }
     std::erase_if(events_, [slot](const LanguageServerEvent &event) { return event.slot == slot; });
     // 列が空になったら合図の印も戻す（controller は子が居なければ collect を呼ばないので、出した
     // 合図が回収されないまま次の start の合図を止めない・2026-11-22 の追補）。
     signalled_ = signalled_ && !events_.empty();
-    const std::size_t index = application::slot_index(slot);
-    auto &child = children_.at(index);
     if (child)
     {
         child->close_pipes();
@@ -120,6 +195,7 @@ void Win32LanguageServer::stop(LanguageServerSlot slot)
     }
     writable_.at(index) = false;
     refresh();
+    return unread;
 }
 
 // 退く子の枠へ移す。上限に達していれば最も古い退く子を先に殺して片付ける（待たない）。
@@ -303,28 +379,11 @@ void Win32LanguageServer::error_read_completed(std::size_t index)
     issue_error_read(index);
 }
 
-// 合図を出さずに積む（2026-11-22 の追補）。列の最後が同じ席の塊なら繋ぎ、上限を超えた分は古い
-// バイトから捨てる。列が空でも合図は出さない（次の本文か子の終わりと一緒に集められる）。
+// 合図を出さずに積む（2026-11-22 の追補）。列が空でも合図は出さない（次の本文か子の終わりと
+// 一緒に集められる）。
 void Win32LanguageServer::post_error_output(std::size_t index, std::string_view bytes)
 {
-    if (bytes.empty())
-    {
-        return;
-    }
-    const LanguageServerSlot slot = application::language_server_slots.at(index);
-    auto *last = events_.empty() || events_.back().slot != slot
-                     ? nullptr
-                     : std::get_if<ServerErrorOutput>(&events_.back().event);
-    if (last == nullptr)
-    {
-        events_.push_back(LanguageServerEvent{.slot = slot, .event = ServerErrorOutput{}});
-        last = &std::get<ServerErrorOutput>(events_.back().event);
-    }
-    last->bytes.append(bytes);
-    if (last->bytes.size() > language_server_error_queue_bytes)
-    {
-        last->bytes.erase(0, last->bytes.size() - language_server_error_queue_bytes);
-    }
+    queue_error_output(events_, application::language_server_slots.at(index), bytes);
 }
 
 // 出ている標準エラーの読みが完了していれば回収して次を出す（子の終わりで、終わる前に書かれた分を

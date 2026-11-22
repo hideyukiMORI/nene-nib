@@ -77,7 +77,7 @@ void verify_status_demand()
         // 言語サーバーの進み具合は件数と同じ欄（ADR 0160 の 2026-11-22 の追補）。枠は増えない。
         const auto progress =
             core::status_bar_layout(core::to_pixels(900, dpi), core::to_pixels(450, dpi), dpi,
-                                    core::StatusServerItem::progress);
+                                    core::StatusServerItem::server);
         const auto with_progress =
             demand_in(progress, dpi, StatusLeftState::mode, core::GuideContext::other);
         expect(with_progress <= win32::status_layout_capacity,

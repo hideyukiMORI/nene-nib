@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <optional>
 #include <utility>
 
 namespace nenenib::core
@@ -27,9 +26,10 @@ constexpr std::int32_t segment_radius_dips = 4;
 constexpr std::array<std::int32_t, status_item_count> item_width_dips{96, 72, 36, 72};
 // 診断の件数の幅（ADR 0161 の決定 4）。E と W の和は上限の 1,000 件なので「E500 W500+」まで入る幅。
 constexpr std::int32_t diagnostics_width_dips = 96;
-// 言語サーバーの進み具合と起動中の 1 行の幅（ADR 0160 の 2026-11-22 の追補）。
-// 「cpp: indexing 12/345 3%」ほどまで入る幅で、長い文は renderer が欄で切る。
-constexpr std::int32_t progress_width_dips = 168;
+// 言語サーバーの受けている文書の欄の幅（ADR 0160 の 2026-11-22 の追補）。件数と進み具合を並べ、
+// 「cpp: indexing 12/345 3%」ほどまで入る幅で、長い文は renderer が欄の右で切る（件数は前にあり
+// 切れない）。進み具合の有無で変えない（#1950 のレビュー R3）。
+constexpr std::int32_t server_width_dips = 168;
 // 表示形式の印（ADR 0140 の決定 3）。最初の項目の左 2 DIP から 24 DIP。案内は最初の項目の左
 // 28 DIP で終わるので重ならない。
 constexpr std::int32_t display_gap_dips = 2;
@@ -91,30 +91,35 @@ fitted_item_rects(std::int32_t right, const LayoutRect &band, std::uint32_t dpi)
     return reaches(items, dpi) ? items : item_rects(right, band, dpi, true);
 }
 
-// 件数の矩形と右の 4 項目（ADR 0161 の決定 4 の追補・R3-1）。件数はいちばん右で、出さないときは
-// 右端 edge の幅 0 の矩形で間の余白も取らない。畳む順は言語 → 件数で、件数を置いて言語を畳んでも
-// 入力欄が届かなければ件数も幅 0 にする。
-[[nodiscard]] std::int32_t server_item_dips(StatusServerItem item) noexcept
+// 欄の幅の候補（広い順・0 は候補なし）。server は入らなければ件数の幅で試す（窓の幅だけで決まり、
+// 進み具合の有無では変わらない）。
+[[nodiscard]] std::array<std::int32_t, 2> server_item_dips(StatusServerItem item) noexcept
 {
     switch (item)
     {
     case StatusServerItem::none:
-        return 0;
+        return {0, 0};
     case StatusServerItem::counts:
-        return diagnostics_width_dips;
-    case StatusServerItem::progress:
-        return progress_width_dips;
+        return {diagnostics_width_dips, 0};
+    case StatusServerItem::server:
+        return {server_width_dips, diagnostics_width_dips};
     }
-    return 0;
+    return {0, 0};
 }
 
+// 件数の矩形と右の 4 項目（ADR 0161 の決定 4 の追補・R3-1）。件数はいちばん右で、出さないときは
+// 右端 edge の幅 0 の矩形で間の余白も取らない。畳む順は言語 → 件数で、件数を置いて言語を畳んでも
+// 入力欄が届かなければ件数も幅 0 にする。
 [[nodiscard]] std::pair<LayoutRect, std::array<LayoutRect, status_item_count>>
 counted_item_rects(std::int32_t edge, const LayoutRect &band, std::uint32_t dpi,
                    StatusServerItem item) noexcept
 {
-    const std::int32_t item_dips = server_item_dips(item);
-    if (item_dips > 0)
+    for (const std::int32_t item_dips : server_item_dips(item))
     {
+        if (item_dips <= 0)
+        {
+            break;
+        }
         const LayoutRect diagnostics{edge - to_pixels(item_dips, dpi), band.top, edge, band.bottom};
         const auto items =
             fitted_item_rects(diagnostics.left - to_pixels(item_gap_dips, dpi), band, dpi);
@@ -127,12 +132,11 @@ counted_item_rects(std::int32_t edge, const LayoutRect &band, std::uint32_t dpi,
 }
 } // namespace
 
-StatusServerItem status_server_item(const DiagnosticCounts &counts,
-                                    const std::optional<DisplayText> &status) noexcept
+StatusServerItem status_server_item(const DiagnosticCounts &counts, bool served) noexcept
 {
-    if (status.has_value())
+    if (served)
     {
-        return StatusServerItem::progress;
+        return StatusServerItem::server;
     }
     return counted(counts) ? StatusServerItem::counts : StatusServerItem::none;
 }
@@ -140,7 +144,7 @@ StatusServerItem status_server_item(const DiagnosticCounts &counts,
 StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
                                   const DiagnosticCounts &counts) noexcept
 {
-    return status_bar_layout(width, height, dpi, status_server_item(counts, std::nullopt));
+    return status_bar_layout(width, height, dpi, status_server_item(counts, false));
 }
 
 StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height, std::uint32_t dpi,
