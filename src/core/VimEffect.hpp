@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PaneSizing.hpp"
 #include "VimConfirmSubstitute.hpp"
 #include "VimDiagnosticCommand.hpp"
 #include "VimInsertAt.hpp"
@@ -36,5 +37,5 @@ using VimEffect =
                  VimInsertString, VimNewLine, VimInsertAt, VimReplaceRange, VimRemoveBlock,
                  VimReplaceBlock, VimInsertBlock, VimUndo, VimRedo, VimOpenCommandLine,
                  VimOpenSearch, VimReplay, VimSwitchTab, VimWindowCommand, VimConfirmSubstitute,
-                 VimLanguageQuery, VimDiagnosticCommand>;
+                 VimLanguageQuery, VimDiagnosticCommand, PaneSizing>;
 } // namespace nenenib::core

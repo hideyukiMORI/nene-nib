@@ -4,6 +4,7 @@
 #include "LayoutRect.hpp"
 #include "StatusBarHit.hpp"
 #include "StatusItems.hpp"
+#include "StatusServerItem.hpp"
 
 #include <array>
 #include <cstdint>
@@ -22,7 +23,9 @@ struct StatusBarLayout
     std::array<LayoutRect, status_item_count> items;
     // 診断の件数（ADR 0161 の決定 4）。言語の右のいちばん右で、件数を出さないとき（0 件・言語を
     // 畳んでも `:` の入力欄の最小幅に届かない狭い窓）は右端の幅 0 の矩形（ほかの項目は件数が
-    // 無いときの位置・間の余白も取らない）。
+    // 無いときの位置・間の余白も取らない）。言語サーバーの受けている文書では件数と進み具合か起動中
+    // の 1 行を同じ欄に件数より広い一定の幅で出す（ADR 0160 の 2026-11-22
+    // の追補・StatusServerItem）。
     LayoutRect diagnostics;
     // 表示形式の印（ADR 0140 の決定 3）。items の最初の項目の左隣で、案内の右端（items の最初の
     // 左から 28 DIP）より右に収まる幅。右寄せで書く。
@@ -35,6 +38,17 @@ struct StatusBarLayout
 [[nodiscard]] StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
                                                 std::uint32_t dpi,
                                                 const DiagnosticCounts &counts) noexcept;
+
+// 言語サーバーの欄の形（ADR 0160 の 2026-11-22 の追補・#1950 のレビュー R3）。言語サーバーが
+// アクティブな文書を受けていれば（served）進み具合の有無を問わず server、受けていなければ件数が
+// あるときだけ counts。frame を描く renderer とステータスバーの hit test が同じ値を引く。
+[[nodiscard]] StatusServerItem status_server_item(const DiagnosticCounts &counts,
+                                                  bool served) noexcept;
+
+// 言語サーバーの欄の形で配置する（追補）。欄は件数と同じ右端の 1 つで、server は件数より広く、
+// 入らなければ件数の幅で試す。畳む順は件数のときと同じ（言語 → 欄）。
+[[nodiscard]] StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,
+                                                std::uint32_t dpi, StatusServerItem item) noexcept;
 
 // 件数の項目を出さないときの配置（帯の高さだけを読む所と、診断を持たない試験）。
 [[nodiscard]] StatusBarLayout status_bar_layout(std::int32_t width, std::int32_t height,

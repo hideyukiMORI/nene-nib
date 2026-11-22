@@ -33,6 +33,10 @@ std::string_view lsp_language_id(Language language, std::string_view path) noexc
         return "ini";
     case Language::cs:
         return "csharp";
+    case Language::make:
+        return "makefile";
+    case Language::batch:
+        return "bat";
     case Language::javascript:
         return ends_with_extension(path, ".jsx") ? "javascriptreact" : "javascript";
     case Language::typescript:
@@ -56,6 +60,20 @@ std::string_view lsp_language_id(Language language, std::string_view path) noexc
     case Language::sql:
     case Language::lua:
     case Language::dockerfile:
+    case Language::java:
+    case Language::kotlin:
+    case Language::dart:
+    case Language::zig:
+    case Language::terraform:
+    case Language::ruby:
+    case Language::swift:
+    case Language::scala:
+    case Language::haskell:
+    case Language::elixir:
+    case Language::r:
+    case Language::perl:
+    case Language::vue:
+    case Language::svelte:
         return language_name(language);
     }
     return language_name(language);

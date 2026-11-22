@@ -18,6 +18,10 @@
 // は「fake<番号>」）・--hover（textDocument/hover に markdown の
 // MarkupContent・囲みの行つき）・--definition <path>（textDocument/definition に path の Location
 // 1 つ・range は 0 行目の 0〜4）。引数の無い要求には result: null で答える。
+// 記録と進み具合の引数（#1942・ADR 0160 の 2026-11-22 の追補）: --stderr <text>（起きてすぐ標準
+// エラーへ text と改行を書く）・--progress（initialize に答えた後、`window/workDoneProgress/create`
+// の要求（id "p1"・token "fake"）と `$/progress` の begin（題 "indexing"・0%）と
+// `window/logMessage`（type 4・"fake log"）を書く）。
 #include <windows.h>
 
 #include <algorithm>
@@ -281,6 +285,17 @@ std::string request_result(Arguments arguments, std::string_view body)
     return "null";
 }
 
+// --progress の 3 通（initialize の答えの後）。
+void write_progress()
+{
+    write_all(frame(
+        R"({"jsonrpc":"2.0","id":"p1","method":"window/workDoneProgress/create","params":{"token":"fake"}})"));
+    write_all(frame(
+        R"({"jsonrpc":"2.0","method":"$/progress","params":{"token":"fake","value":{"kind":"begin","title":"indexing","percentage":0}}})"));
+    write_all(frame(
+        R"({"jsonrpc":"2.0","method":"window/logMessage","params":{"type":4,"message":"fake log"}})"));
+}
+
 void answer(Arguments arguments, std::string_view body)
 {
     const std::string id(request_id(body));
@@ -289,6 +304,10 @@ void answer(Arguments arguments, std::string_view body)
         write_all(frame(
             R"({"jsonrpc":"2.0","id":)" + id +
             R"(,"result":{"capabilities":{"positionEncoding":"utf-8","textDocumentSync":2,"completionProvider":{"triggerCharacters":["."]},"hoverProvider":true,"definitionProvider":true}}})"));
+        if (has(arguments, "--progress"))
+        {
+            write_progress();
+        }
     }
     else if (calls(body, "shutdown"))
     {
@@ -349,6 +368,14 @@ int main(int argc, char **argv)
                             [&](std::string_view name) { return has(arguments, name); }))
     {
         return mixed_exit_code;
+    }
+    const auto error_text = text_after(arguments, "--stderr");
+    if (error_text.has_value())
+    {
+        const std::string line = std::string(error_text.value()) + "\n";
+        DWORD transferred = 0;
+        WriteFile(GetStdHandle(STD_ERROR_HANDLE), line.data(), static_cast<DWORD>(line.size()),
+                  &transferred, nullptr);
     }
     const auto big = number_after(arguments, "--big");
     if (big.has_value())

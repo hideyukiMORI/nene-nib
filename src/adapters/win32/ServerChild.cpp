@@ -23,6 +23,9 @@ using application::ServerFailure;
 
 // パイプの中の置き場（両向き）。大きな didOpen は書きの行列が分けて流す。
 constexpr DWORD pipe_buffer_bytes = 64 * 1024;
+// 標準エラーの 1 回の ReadFile で受ける量（ADR 0160 の 2026-11-22 の追補）。記録は席ごとに 256 KiB
+// までなので、行の塊を受けるには足りる。
+constexpr std::size_t error_read_bytes = std::size_t{16} * 1024;
 // Job Object で殺したときの終了コード。
 constexpr UINT killed_exit_code = 1;
 
@@ -191,13 +194,12 @@ std::expected<void, ServerFailure> ServerChild::spawn(const application::ServerL
     {
         return checked;
     }
-    KernelHandle child_input;
-    KernelHandle child_output;
-    if (!connect(child_input, child_output))
+    ChildEnds ends;
+    if (!connect(ends))
     {
         return std::unexpected(ServerFailure::pipe_failed);
     }
-    return create(executable, launch, child_input, child_output);
+    return create(executable, launch, ends);
 }
 
 HANDLE ServerChild::process() const noexcept
@@ -208,6 +210,11 @@ HANDLE ServerChild::process() const noexcept
 PipeRead &ServerChild::reader() noexcept
 {
     return *reader_;
+}
+
+PipeRead &ServerChild::error_reader() noexcept
+{
+    return *error_reader_;
 }
 
 PipeWrite &ServerChild::writer() noexcept
@@ -221,6 +228,8 @@ void ServerChild::close_pipes() noexcept
     input_.close();
     reader_.reset();
     output_.close();
+    error_reader_.reset();
+    error_.close();
 }
 
 void ServerChild::terminate() noexcept
@@ -231,38 +240,43 @@ void ServerChild::terminate() noexcept
     }
 }
 
-// 入力（子が読む）と出力（子が書く）のパイプを作り、子の端を開いて繋ぐ。
-bool ServerChild::connect(KernelHandle &child_input, KernelHandle &child_output)
+// 入力（子が読む）・出力（子が書く）・標準エラー（子が書く・2026-11-22 の追補）のパイプを作り、
+// 子の端を開いて繋ぐ。
+bool ServerChild::connect(ChildEnds &ends)
 {
+    auto &[child_input, child_output, child_error] = ends;
     const std::wstring input_name = pipe_name();
     const std::wstring output_name = pipe_name();
+    const std::wstring error_name = pipe_name();
     input_.reset(server_pipe(input_name, PIPE_ACCESS_OUTBOUND));
     output_.reset(server_pipe(output_name, PIPE_ACCESS_INBOUND));
-    if (!input_.valid() || !output_.valid())
+    error_.reset(server_pipe(error_name, PIPE_ACCESS_INBOUND));
+    if (!input_.valid() || !output_.valid() || !error_.valid())
     {
         return false;
     }
     child_input.reset(inheritable_file(input_name.c_str(), GENERIC_READ));
     child_output.reset(inheritable_file(output_name.c_str(), GENERIC_WRITE));
-    if (!child_input.valid() || !child_output.valid() || !connected(input_.get()) ||
-        !connected(output_.get()))
+    child_error.reset(inheritable_file(error_name.c_str(), GENERIC_WRITE));
+    if (!child_input.valid() || !child_output.valid() || !child_error.valid() ||
+        !connected(input_.get()) || !connected(output_.get()) || !connected(error_.get()))
     {
         return false;
     }
     writer_ = std::make_unique<PipeWrite>(input_.get());
     reader_ = std::make_unique<PipeRead>(output_.get(), read_bytes_);
-    return writer_->valid() && reader_->valid();
+    error_reader_ = std::make_unique<PipeRead>(error_.get(), error_read_bytes);
+    return writer_->valid() && reader_->valid() && error_reader_->valid();
 }
 
 std::expected<void, ServerFailure> ServerChild::create(const std::wstring &executable,
                                                        const application::ServerLaunch &launch,
-                                                       const KernelHandle &child_input,
-                                                       const KernelHandle &child_output)
+                                                       const ChildEnds &ends)
 {
-    const KernelHandle child_error(inheritable_file(L"NUL", GENERIC_WRITE));
+    const auto &[child_input, child_output, child_error] = ends;
     job_.reset(CreateJobObjectW(nullptr, nullptr));
     const InheritedHandles inherited({child_input.get(), child_output.get(), child_error.get()});
-    if (!child_error.valid() || !job_.valid() || !kill_on_close(job_.get()) || !inherited.valid())
+    if (!job_.valid() || !kill_on_close(job_.get()) || !inherited.valid())
     {
         return std::unexpected(ServerFailure::cannot_start);
     }

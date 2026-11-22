@@ -106,7 +106,7 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         preview_link_pressed_.reset();
         link_card_pressed_.reset();
         lose_completion_press(message);
-        over_explorer_divider_ = false;
+        forget_divider_hover();
         hover_explorer_line(std::nullopt);
         hover_table_bar_of(std::nullopt);
         hover(std::nullopt);
@@ -129,11 +129,11 @@ LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
         lose_completion_press(message);
         end_minimap_drag(message);
         static_cast<void>(release_table_bar());
-        lose_explorer_divider();
+        lose_dividers();
         end_selection_drag();
         return 0;
     case WM_SETCURSOR:
-        return explorer_divider_cursor(data) ? TRUE : DefWindowProcW(window_, message, word, data);
+        return divider_cursor(data) ? TRUE : DefWindowProcW(window_, message, word, data);
     default:
         break;
     }
@@ -154,8 +154,8 @@ void EditorWindow::press_left_button(UINT message, LPARAM data)
     // 境の上は既定の幅へ戻す（D78）。面の上は面のダブルクリック（ADR 0162）。ほかは 2
     // 回目の押しで、本文なら語を選ぶ（#1250）。
     // 設定の面が開いている間は面の押しの道だけ（全幅の面の下のエクスプローラーへ渡さない）。
-    if (!controller_.settings_open() &&
-        (reset_explorer_width(data) || point_explorer(WM_LBUTTONDBLCLK, data)))
+    if (!controller_.settings_open() && (reset_explorer_width(data) || reset_split_share(data) ||
+                                         point_explorer(WM_LBUTTONDBLCLK, data)))
     {
         last_clicks_ = application::PointerClicks::single;
         return;
@@ -182,7 +182,9 @@ void EditorWindow::move_pointer(LPARAM data)
         return;
     }
     drag_explorer_divider(data);
+    drag_split_divider(data);
     hover_explorer_divider(data);
+    hover_split_divider(data);
     drag_selection(data);
     hover_explorer_row(data);
     hover_table_bar(data);
@@ -217,7 +219,7 @@ void EditorWindow::release_left(LPARAM data)
         return;
     }
     // 境を押していたら、離したのは境のドラッグの終わりだけ（面の行・帯・本文の離しにしない・D78）。
-    if (release_explorer_divider(data))
+    if (release_explorer_divider(data) || release_split_divider(data))
     {
         return;
     }
@@ -634,8 +636,9 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
     }
     RECT client{};
     GetClientRect(window_, &client);
-    const auto layout =
-        core::status_bar_layout(client.right, client.bottom, dpi_, controller_.diagnostic_counts());
+    const auto item = core::status_server_item(controller_.diagnostic_counts(),
+                                               controller_.language_server_served());
+    const auto layout = core::status_bar_layout(client.right, client.bottom, dpi_, item);
     const bool in_status = core::contains(layout.band, low_word_of(data), high_word_of(data));
     if (controller_.command_line_active() && in_status)
     {
@@ -650,7 +653,8 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
         send(application::CancelCommand{});
         return;
     }
-    if (press_explorer_divider(data) || point_explorer(WM_LBUTTONDOWN, data) || press_minimap(data))
+    if (press_explorer_divider(data) || point_explorer(WM_LBUTTONDOWN, data) ||
+        press_minimap(data) || press_split_divider(data))
     {
         return;
     }
@@ -701,7 +705,7 @@ void EditorWindow::click_body(LPARAM data, application::PointerClicks clicks)
     }
     const auto settings = controller_.delivery().settings;
     const auto other =
-        core::other_pane_layout(body_panes(settings), controller_.split().active_side);
+        core::other_pane_layout(body_panes(settings.font_size), controller_.split().active_side);
     if (other.has_value() &&
         core::contains(other.value().band, low_word_of(data), high_word_of(data)))
     {
@@ -970,7 +974,7 @@ bool EditorWindow::over_other_pane(LPARAM data) const
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
-    const auto other = core::other_pane_layout(body_panes(controller_.delivery().settings),
+    const auto other = core::other_pane_layout(body_panes(controller_.font_size()),
                                                controller_.split().active_side);
     return other.has_value() && core::contains(other.value().band, point.x, point.y);
 }

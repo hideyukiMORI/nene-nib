@@ -10,6 +10,7 @@
 #include "Milestone.hpp"
 #include "OpenDocument.hpp"
 #include "ResolvedLanguage.hpp"
+#include "ServerSearch.hpp"
 #include "SystemFontFamilies.hpp"
 #include "TemporaryFiles.hpp"
 #include "UiMessage.hpp"
@@ -29,7 +30,9 @@
 #include "Win32FontCollationAdapter.hpp"
 #include "Win32HistoryAdapter.hpp"
 #include "Win32ImageAdapter.hpp"
+#include "Win32LanguageRootAdapter.hpp"
 #include "Win32LanguageServer.hpp"
+#include "Win32LanguageServerSearch.hpp"
 #include "Win32LinkOpenAdapter.hpp"
 #include "Win32MarkdownAdapter.hpp"
 #include "Win32PreviewAdapter.hpp"
@@ -302,7 +305,8 @@ last_resort_for(nenenib::application::EditorController &controller)
 // 窓ができてから合図を結ぶ（bind_work_signal）。
 // Markdown の解析（ADR 0155 の決定 5・壊れる順は folders と同じ）と探して見る面のプレビューの窓
 // （ADR 0189 の決定 4）とエクスプローラーで場所を開く口（ADR 0078 の追補 #1790）と
-// プレビューのリンクを OS に渡す口（#1869 の段 L2）も同じワーカーを借りる。
+// プレビューのリンクを OS に渡す口（#1869 の段 L2）と、設定の面を開いたときに言語サーバーを
+// 探す口（#1945）も同じワーカーを借りる。
 // 起動画面の履歴とブックマークの 1 回の読み（ADR 0172 の決定 3）も同じワーカーを借り、
 // 頼むのは最初の frame の合図のときだけ。履歴と明示登録（ADR 0063）の adapter はその仕事が
 // 借りるので、ワーカーより先に作って後に壊す。
@@ -312,10 +316,10 @@ last_resort_for(nenenib::application::EditorController &controller)
 // 起動引数の読み込みと復号の後（Issue #19）。
 // 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
 // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
+// 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
 int run(HINSTANCE instance)
 {
     const std::vector<std::wstring> given = command_arguments();
-    // 節目の受け手は常に居る。--measure が無ければ何も積まない状態のまま（決定 2）。
     nenenib::adapters::win32::Win32TimingAdapter timing;
     bind_measure(timing, given);
     nenenib::adapters::win32::Win32AppearanceAdapter appearance;
@@ -350,15 +354,16 @@ int run(HINSTANCE instance)
     nib_adapters::Win32PreviewAdapter previews(worker, code_pages);
     nib_adapters::Win32RevealAdapter reveal(worker);
     nib_adapters::Win32LinkOpenAdapter links(worker);
+    nib_adapters::Win32LanguageRootAdapter language_roots(worker);
+    nib_adapters::Win32LanguageServerSearch servers(worker, nib_adapters::system_search_places);
     nenenib::application::EditorController controller(
         nenenib::application::EditorPorts{
-            appearance,      clipboard,   files,        code_pages,
-            settings,        themes,      session,      history,
-            folders,         bookmarks,   text_layouts, autosave,
-            fonts,           bell,        markdown,     reads,
-            language_server, wall_clock,  printer,      shell_registration,
-            images,          start_lists, ui_language,  project_search,
-            previews,        reveal,      links},
+            appearance,   clipboard,       files,          code_pages,     settings,
+            themes,       session,         history,        folders,        bookmarks,
+            text_layouts, autosave,        fonts,          bell,           markdown,
+            reads,        language_server, wall_clock,     printer,        shell_registration,
+            images,       start_lists,     ui_language,    project_search, previews,
+            reveal,       links,           language_roots, servers},
         nib_adapters::current_distribution(), initial_documents(given));
     const auto last_resort = last_resort_for(controller);
     timing.mark(nenenib::core::Milestone::document_opened);
@@ -370,7 +375,7 @@ int run(HINSTANCE instance)
     }
     bind_window_handle(*window.value(), clipboard, language_server);
     bind_work_signal(*window.value(), folders, autosave, markdown, reads, images, start_lists,
-                     project_search, previews, reveal, links);
+                     project_search, previews, reveal, links, language_roots, servers);
     pump_messages(*window.value(), warmup, language_server);
     return window.value()->rendering_failed() ? 1 : 0;
 }

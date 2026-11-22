@@ -932,22 +932,29 @@ void verify_settings_lsp_commands()
            "a second line for the same language is refused");
     // 表に無い名前の行（後の版が足す言語）は v5 では形だけ見て持ち、書き戻す（ADR 0170 の
     // 2026-11-20 の追補・#1897）。v4 は 1.0.0 と同じく拒む（D91）。
-    const std::string later = plain + "lsp.java.command=C:\\jdtls\\jdtls.exe\n"
+    const std::string later = plain + "lsp.nim.command=C:\\nim\\nimlangserver.exe\n"
                                       "lsp.c++_x-1.command=y\n"
                                       "lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n";
     const auto kept = decode_settings(later, SettingsVersion::v5);
-    expect(kept && kept.value().lsp_commands.size() == 3 &&
-               encode_settings(kept.value())
-                   .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
-                              "lsp.c++_x-1.command=y\nlsp.java.command=C:\\jdtls\\jdtls.exe\n"),
-           "v5 keeps command rows for languages it does not know and writes them back");
     expect(
-        !decode_settings(plain + "lsp.java.command=x\nlsp.java.command=y\n", SettingsVersion::v5),
-        "a second row for an unknown name is refused too");
-    const auto v4 = decode_settings(std::string(released_v4_settings) + "lsp.java.command=x\n",
-                                    SettingsVersion::v4);
-    expect(!v4 && v4.error() == SettingsFailure::malformed,
-           "v4 still refuses a command row for a language 1.0.0 does not know");
+        kept && kept.value().lsp_commands.size() == 3 &&
+            encode_settings(kept.value())
+                .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
+                           "lsp.c++_x-1.command=y\nlsp.nim.command=C:\\nim\\nimlangserver.exe\n"),
+        "v5 keeps command rows for languages it does not know and writes them back");
+    expect(!decode_settings(plain + "lsp.nim.command=x\nlsp.nim.command=y\n", SettingsVersion::v5),
+           "a second row for an unknown name is refused too");
+    // Java と Svelte は 1.0.0 の後に表へ足した言語（ADR 0154 の 2026-11-20 の追補）。v4 の読みは
+    // 1.0.0 の 26 言語のまま緩めない。
+    for (const std::string_view name : {"nim", "java", "svelte"})
+    {
+        const auto v4 = decode_settings(
+            std::format("{}lsp.{}.command=x\n", released_v4_settings, name), SettingsVersion::v4);
+        expect(!v4 && v4.error() == SettingsFailure::malformed,
+               "v4 still refuses a command row for a language 1.0.0 does not know");
+    }
+    expect(decode_settings(plain + "lsp.java.command=x\n", SettingsVersion::v5).has_value(),
+           "v5 reads a command row for a language added after 1.0.0");
     const auto old =
         decode_settings(std::string(v3_settings) + "lsp.cpp.command=x\n", SettingsVersion::v3);
     expect(!old && old.error() == SettingsFailure::malformed, "v3 rejects command lines");
@@ -1665,6 +1672,30 @@ void verify_v4_migration(Win32FileAdapter &files)
            "with v5 and v4 both present v5 wins");
 }
 
+// v4 だけの profile で設定の「言語サーバー」の節の「使う」を押して閉じた（#1945 のレビュー）:
+// 「使う」 は c と cpp の命令の行を置くだけなので、保存は v4 → v5 の移行の道に乗り、v5 だけを書いて
+// v4 を bytes のまま残す。v5 は置いた命令の行（空白のパスは `"` で囲んだ形）をそのまま持つ。
+void verify_v4_migration_with_language_server_use(Win32FileAdapter &files)
+{
+    reset_settings(files, std::nullopt);
+    expect(files.write(settings_paths().released, released_v4_settings).has_value(),
+           "prepare a profile with only the 1.0.0 v4");
+    Win32SettingsAdapter store(files, settings_paths());
+    const auto reading = store.read();
+    auto used = reading.value_or(std::nullopt).value_or(default_editor_settings());
+    const std::string clangd = R"("C:\Program Files\LLVM\bin\clangd.exe")";
+    used.lsp_commands = {{"c", clangd}, {"cpp", clangd}};
+    expect(reading && reading.value().has_value() && store.write(used).has_value(),
+           "Use on a v4-only profile saves on close");
+    const auto saved = decode_settings(
+        read_text(files, settings_paths().current, 4096).value_or(""), SettingsVersion::v5);
+    expect(saved && same_settings(saved.value(), used) &&
+               saved.value().lsp_commands == used.lsp_commands &&
+               read_text(files, settings_paths().released, 4096).value_or("") ==
+                   released_v4_settings,
+           "the Use lines go to v5 and v4 stays byte for byte");
+}
+
 // v4 に v5 の鍵が在れば拒否し、1.0.0 が読込の後に v4 を変えたら古い写しで書かず、v4 の lock は
 // 待たずに断り、壊れた v5 は v4 へ戻らない（ADR 0170 の 2026-11-16 の追補の 2・3・6）。
 void verify_v4_conflicts(Win32FileAdapter &files)
@@ -1734,6 +1765,7 @@ void verify_oversized_settings(Win32FileAdapter &files)
 void verify_settings_migration(Win32FileAdapter &files)
 {
     verify_v4_migration(files);
+    verify_v4_migration_with_language_server_use(files);
     verify_v4_conflicts(files);
     verify_v3_migration(files);
     verify_v3_conflicts(files);

@@ -53,6 +53,8 @@ void verify_transient_tab_property_scope();
 // SplitTests.cpp
 void verify_split_contracts();
 void verify_split_scope();
+// SplitResizeTests.cpp
+void verify_split_resize_contracts();
 
 // SessionTests.cpp
 void verify_session_contracts();
@@ -117,6 +119,7 @@ void verify_minimap_scope();
 void verify_feature_costs_scope();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
+void verify_language_server_candidates_scope();
 // MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
 void verify_minimap_property_scope();
 // MinimapPointerTests.cpp（#1371・ミニマップのクリックとドラッグ）
@@ -170,6 +173,9 @@ void verify_lsp_sync_property_scope();
 void verify_language_server_contracts();
 // 席の部分（LanguageServerSlotTests.cpp・LSP 段 S2）。verify_language_server_contracts から呼ぶ。
 void verify_language_server_slots();
+// 記録と進み具合の部分（LanguageServerLogTests.cpp・LSP 段 S8）。verify_language_server_contracts
+// から呼ぶ。
+void verify_language_server_log();
 void verify_language_server_scope();
 
 // UtfPropertyTests.cpp / PrintPagesPropertyTests.cpp / ShellRegistrationPropertyTests.cpp（#1289・
@@ -239,6 +245,7 @@ void verify_link_card_scope();
 void verify_preview_table_scope();
 // PreviewScrollTests.cpp（#1894・プレビューの縦の送りを要素の中まで画素で）
 void verify_preview_scroll_scope();
+void verify_language_root_scope();
 
 // PointerTests.cpp（#1250・本文のダブルクリックの語とトリプルクリックの行・通常の選択と Vim の
 // VISUAL）

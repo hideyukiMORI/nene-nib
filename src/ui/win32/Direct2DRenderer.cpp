@@ -1803,6 +1803,17 @@ void Direct2DRenderer::draw_toggle(const application::EditorFrame &frame,
 
 namespace
 {
+// ステータスバーの配置（診断の件数と言語サーバーの 1 行で右端の欄の形が決まる・ADR 0160 の
+// 2026-11-22 の追補）。
+[[nodiscard]] core::StatusBarLayout status_layout_of(const application::EditorFrame &frame,
+                                                     std::int32_t width, std::int32_t height,
+                                                     std::uint32_t dpi)
+{
+    const auto item =
+        core::status_server_item(frame.diagnostic_counts, frame.language_server_served);
+    return core::status_bar_layout(width, height, dpi, item);
+}
+
 // 文の幅（物理画素・切り上げ）。測れなければ 0（測らない配置のまま・#1658）。
 [[nodiscard]] std::int32_t text_extent(IDWriteTextLayout *text)
 {
@@ -1843,12 +1854,19 @@ std::int32_t Direct2DRenderer::draw_status_bar(const application::EditorFrame &f
         write_status(frame.status_items.at(index).text(), status_format_.Get(),
                      layout.items.at(index), frame.palette.muted);
     }
-    // 診断の件数（言語の右・ADR 0161 の決定 4）。0 件なら項目も幅も無く、枠も使わない。
-    const auto counted = core::diagnostic_count_item(frame.diagnostic_counts);
+    // 診断の件数（言語の右・ADR 0161 の決定 4）。0 件なら項目も幅も無く、枠も使わない。言語サーバー
+    // の受けている文書では件数の後ろに進み具合か起動中の 1 行を並べ（core::status_server_text）、
+    // 一定の幅の欄に左から書いて右で切る（件数は切れない・#1950 のレビュー R2 / R3・枠は 1 つの
+    // まま）。左寄せの書式は同じ字体・大きさの guide_status_format_。
+    const auto counted =
+        core::status_server_text(frame.diagnostic_counts, frame.language_server_status);
     if (counted.has_value() && core::width_of(layout.diagnostics) > 0)
     {
-        write_status(counted.value().text(), status_format_.Get(), layout.diagnostics,
-                     frame.palette.muted);
+        auto *const format =
+            frame.language_server_served ? guide_status_format_.Get() : status_format_.Get();
+        context_->PushAxisAlignedClip(to_rect(layout.diagnostics), D2D1_ANTIALIAS_MODE_ALIASED);
+        write_status(counted.value().text(), format, layout.diagnostics, frame.palette.muted);
+        context_->PopAxisAlignedClip();
     }
     // 表示形式の印（ADR 0140 の決定 3）。文字は core の表、右寄せは write_right の 1 本。
     const auto mark = core::display_form_label(frame.display);
@@ -2503,7 +2521,7 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     const auto width = static_cast<std::int32_t>(size.width);
     const auto height = static_cast<std::int32_t>(size.height);
     const auto title = core::title_bar_layout(application::title_bar_input(frame, width, dpi_));
-    const auto status = core::status_bar_layout(width, height, dpi_, frame.diagnostic_counts);
+    const auto status = status_layout_of(frame, width, height, dpi_);
     // 面が出ていれば本文の枠は面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2・
     // ADR 0148 の 1 本はそのまま）。面が消えていれば body は client のまま。
     const auto explorer = core::explorer_layout(
@@ -2513,8 +2531,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // minimap_layout は最初の 1 行で返り、配置を計算しない（決定 1 の追補・早い return）。
     const auto minimap = core::minimap_layout(explorer.body, dpi_, frame.settings.font_size,
                                               frame.minimap.has_value());
-    const auto panes =
-        core::pane_layouts(minimap.body, dpi_, frame.settings.font_size, frame.layout);
+    const auto panes = core::pane_layouts(minimap.body, dpi_, frame.settings.font_size,
+                                          core::PaneSplit{frame.layout, frame.share});
     const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(guide_request(frame), body, status, dpi_);
     draw_title_bar(frame, title);

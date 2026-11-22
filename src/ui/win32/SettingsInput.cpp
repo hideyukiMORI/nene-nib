@@ -84,13 +84,55 @@ constexpr unsigned char continuation_mark = 0x80;
     return {application::StepSettings{down}};
 }
 
-// 行のクリックは焦点を置き、スイッチの行はどこを押しても切り替える。選ぶ欄は欄を押すと次の値、
-// 段の上下は − と ＋。
+// 見えている行 row が「ほかの N 言語を見る」の 1 行か（行のどこを押しても開く・#1945）。
+[[nodiscard]] bool folds(const application::SettingsView &view, std::size_t row) noexcept
+{
+    return view.servers_hidden > 0 && row == view.rows.size() + view.servers.size();
+}
+
+// 部品 part が行の一部（index が見えている行の位置）か。
+[[nodiscard]] bool on_row(core::SettingsPart part) noexcept
+{
+    switch (part)
+    {
+    case core::SettingsPart::outside:
+    case core::SettingsPart::panel:
+    case core::SettingsPart::search:
+    case core::SettingsPart::close:
+    case core::SettingsPart::close_button:
+    case core::SettingsPart::chip:
+    case core::SettingsPart::preset:
+    case core::SettingsPart::revert:
+        return false;
+    case core::SettingsPart::row:
+    case core::SettingsPart::row_value:
+    case core::SettingsPart::row_minus:
+    case core::SettingsPart::row_plus:
+        return true;
+    }
+    std::unreachable();
+}
+
+// 部品 target が「言語サーバー」の節の行なら、その行の身元（ほかの部品と行では空）。
+[[nodiscard]] std::string server_under(core::SettingsTarget target,
+                                       const application::SettingsView &view)
+{
+    if (!on_row(target.part) || target.index < view.rows.size() ||
+        target.index - view.rows.size() >= view.servers.size())
+    {
+        return {};
+    }
+    return view.servers.at(target.index - view.rows.size()).language;
+}
+
+// 行のクリックは焦点を置き、スイッチの行と畳みの行はどこを押しても切り替える。選ぶ欄は欄を押すと
+// 次の値、段の上下は − と ＋、言語サーバーの行の「使う」「外す」はボタンを押したときだけ。
 [[nodiscard]] SettingsIntents row_clicked(core::SettingsTarget target,
                                           const application::SettingsView &view)
 {
     SettingsIntents intents{application::FocusSettingsRow{target.index}};
-    if (target.part != core::SettingsPart::row || toggles(view, target.index))
+    if (target.part != core::SettingsPart::row || toggles(view, target.index) ||
+        folds(view, target.index))
     {
         intents.emplace_back(
             application::ChangeSetting{target.part != core::SettingsPart::row_minus});
@@ -228,22 +270,24 @@ SettingsIntents settings_character_intents(wchar_t unit, bool control, wchar_t &
     return {application::FilterSettings{view.query + core::to_utf8(wide).value_or(std::string{})}};
 }
 
-std::pair<std::optional<core::SettingsTarget>, SettingsIntents>
-settings_press_step(core::SettingsTarget target)
+std::pair<std::optional<SettingsPress>, SettingsIntents>
+settings_press_step(core::SettingsTarget target, const application::SettingsView &view)
 {
     if (target.part == core::SettingsPart::outside)
     {
         return {std::nullopt, SettingsIntents{application::CloseSettings{}}};
     }
-    return {target, SettingsIntents{}};
+    return {SettingsPress{target, server_under(target, view)}, SettingsIntents{}};
 }
 
-SettingsIntents settings_release_intents(std::optional<core::SettingsTarget> pressed,
+SettingsIntents settings_release_intents(const std::optional<SettingsPress> &pressed,
                                          core::SettingsTarget released,
                                          const application::SettingsView &view)
 {
-    // 押した部品と離した部品が同じときだけ動かす（ADR 0056 の決定 9 と同じ考え）。
-    if (!pressed.has_value() || !(pressed.value() == released))
+    // 押した部品と離した部品が同じで、言語サーバーの行なら同じ身元の行のときだけ動かす（ADR 0056 の
+    // 決定 9 と同じ考え・押している間に行がずれたら捨てる・#1945 のレビュー R2）。
+    if (!pressed.has_value() || !(pressed.value().target == released) ||
+        pressed.value().server != server_under(released, view))
     {
         return {};
     }

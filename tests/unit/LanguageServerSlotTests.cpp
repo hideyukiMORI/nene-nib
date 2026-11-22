@@ -231,6 +231,8 @@ void verify_slot_yield()
     opened_running(editing, go_path, Slot::fourth);
     applied(editing.controller(), app::SwitchTab{0});
     applied(editing.controller(), app::OpenDocument{path_of(lua_path)});
+    // root を探した答えの合図で起こすかを決める（段 S3）。
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     const auto python = server.sent_to(Slot::second);
     expect(server.launches().size() == 4 && count_method(python, "shutdown") == 1 &&
                count_method(python, "textDocument/didClose") == 1 &&
@@ -278,8 +280,9 @@ void verify_filetype_change()
 }
 
 // 受ける席の root の鍵は、席が実際に起きた root と今の文書に対していま決まる root（#1916 の
-// レビュー M1）。同じフォルダの `:set root=.` では同じ席が受け続け、別のフォルダの root では
-// その root の席が起きて文書を受け、root を消せば両方の席が残ったまま最後に使った席が受ける。
+// レビュー M1）。同じフォルダの `:set root=.` では同じ席が受け続け、文書を含む別のフォルダの root
+// ではその root の席が起きて文書を受け、root を消せば両方の席が残ったまま文書のフォルダの席へ戻る
+// （段 S3: 設定の root を使うのは文書がその下にあるときだけ・root が無ければ印か文書のフォルダ）。
 void verify_root_key()
 {
     Editing editing(slot_settings());
@@ -290,9 +293,9 @@ void verify_root_key()
     expect(count_method(server.sent_to(Slot::first), "textDocument/didClose") == 0 &&
                server.launches().size() == 1 && editing.controller().request_hover(),
            "set root=. on the folder the server started in keeps the same server");
-    static_cast<void>(run_ex(editing.controller(), "set root=C:\\other"));
+    static_cast<void>(run_ex(editing.controller(), "set root=C:\\"));
     expect(server.launches().size() == 2 && server.started_slots().back() == Slot::second &&
-               server.launches().back().root.text() == "C:\\other" &&
+               server.launches().back().root.text() == "C:\\" &&
                count_method(server.sent_to(Slot::first), "textDocument/didClose") == 1,
            "a root in another folder starts a server there and closes the document on the old one");
     server.serve(Slot::second, app::ServerStarted{});
@@ -306,10 +309,11 @@ void verify_root_key()
     static_cast<void>(run_ex(editing.controller(), "set root="));
     applied(editing.controller(), app::InsertText{"z"});
     expect(server.launches().size() == 2 && server.stops() == 0 &&
-               count_method(server.sent_to(Slot::second), "textDocument/didClose") == 0 &&
-               count_method(server.sent_to(Slot::first), "textDocument/didOpen") == 1 &&
-               count_method(server.sent_to(Slot::second), "textDocument/didChange") == 1,
-           "clearing the root keeps both servers and the last used one keeps the document");
+               count_method(server.sent_to(Slot::second), "textDocument/didClose") == 1 &&
+               count_method(server.sent_to(Slot::first), "textDocument/didOpen") == 2 &&
+               count_method(server.sent_to(Slot::first), "textDocument/didChange") == 1,
+           "clearing the root keeps both servers and the server of the document's own root "
+           "takes the document back");
 }
 
 // 答え（補完・hover・定義）を消すのは、アクティブな文書を受ける席を止めたときだけ（#1916 の

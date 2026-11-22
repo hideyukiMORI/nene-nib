@@ -10,6 +10,7 @@ core::BodyLayout full_preview_body(const core::LayoutRect &area, std::uint32_t d
                                    core::FontSize font_size) noexcept
 {
     return core::active_pane_layout(
-        core::pane_layouts(area, dpi, font_size, core::SplitLayout::none), core::PaneSide::first);
+        core::pane_layouts(area, dpi, font_size, core::PaneSplit{core::SplitLayout::none}),
+        core::PaneSide::first);
 }
 } // namespace nenenib::ui::win32
