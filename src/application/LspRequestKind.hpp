@@ -13,6 +13,8 @@ enum class LspRequestKind : std::uint8_t
     shutdown,
     completion,
     hover,
-    definition
+    definition,
+    // 参照（#1947・ADR 0191 の決定 1）。
+    references
 };
 } // namespace nenenib::application

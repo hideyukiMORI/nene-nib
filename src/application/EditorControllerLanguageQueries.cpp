@@ -39,11 +39,16 @@ void EditorController::accept(const QueryLanguage &intent)
     {
         return;
     }
-    if (!query_language(intent.kind))
+    if (query_language(intent.kind))
     {
-        state_ = state_.with_command_message(
-            ui_notice(core::UiMessage::notice_language_server_not_running));
+        return;
     }
+    // 参照は、動いている言語サーバーが答えないことを分けて知らせる（ADR 0191 の決定 2）。
+    const bool unsupported = intent.kind == core::LanguageQueryKind::references &&
+                             lacks_ability(&ServerAbilities::references);
+    state_ = state_.with_command_message(
+        ui_notice(unsupported ? core::UiMessage::notice_references_not_supported
+                              : core::UiMessage::notice_language_server_not_running));
 }
 
 // `gd` `K`。出せなければ何もしない（engine の歩は表に行が無かったときと同じ失敗のまま）。
@@ -63,6 +68,9 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
     case core::LanguageQueryKind::hover:
         drop_hover();
         return request_hover();
+    case core::LanguageQueryKind::references:
+        definition_anchor_ = state_.selection().anchor;
+        return request_references();
     }
     std::unreachable();
 }
@@ -128,6 +136,9 @@ void EditorController::settle_language_answers(LspRequestKind kind)
         return;
     case LspRequestKind::definition:
         settle_definition_answer();
+        return;
+    case LspRequestKind::references:
+        settle_references_answer();
         return;
     }
 }
@@ -238,13 +249,18 @@ void EditorController::land_definition(const LanguageDefinition &definition)
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_definition_first_of,
                                                        {std::to_string(locations.size())}));
     }
-    project_landing_ =
-        ProjectHitLanding{file.value(), LspLanding{.at = locations.front().range.start,
-                                                   .encoding = definition.encoding}};
+    land_location(file.value(),
+                  LspLanding{.at = locations.front().range.start, .encoding = definition.encoding});
+}
+
+// 定義と参照の跳び（ADR 0190 の決定 7・ADR 0191 の決定 4）。全文検索の当たりと同じ着地の 1 本。
+void EditorController::land_location(const core::FilePath &file, const LspLanding &at)
+{
+    project_landing_ = ProjectHitLanding{file, at};
     const auto &path = state_.document().path;
-    if (!path.has_value() || !ports_.files.same_file(path.value(), file.value()))
+    if (!path.has_value() || !ports_.files.same_file(path.value(), file))
     {
-        open_listed(file.value(), std::nullopt, OpenedAs::pinned);
+        open_listed(file, std::nullopt, OpenedAs::pinned);
     }
     land_project_hit();
 }

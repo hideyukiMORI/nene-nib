@@ -202,3 +202,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0188](0188-vim-mode-sees-the-body-without-the-final-line-break.md) | Vim のモードは、最後の改行を除いた本文を見る（改行で終わる本文の行の数を Vim に揃える・旗は開いたときと Vim に入ったときに決める・画面も同じ） | 受理（施主決定 D94・2026-11-15）・#1739 |
 | [0189](0189-finder-preview-pane-and-waiting-effect.md) | 探して見る面: プレビュー欄は面の配置の 1 つの値で、中身は worker が読む窓。待ちの間の演出は合図で進む純関数 | 受理（施主決定 D95 / D96・実装は段 P1〜P3・D41） |
 | [0190](0190-language-server-completion-hover-and-definition-share-one-request-table.md) | 言語サーバーの補完・hover・定義へは、id で結んだ要求と文脈つきの答えで、面は ADR 0169 の補完の面と小さな札（通常モードは Ctrl+Space・F12、Vim は Ctrl-n の面・`K`・`gd`） | 提案（設計席・2026-11-18）・#1821 |
+| [0191](0191-language-server-references-symbols-signature-help-and-formatting.md) | 言語サーバーの参照・記号・引数の情報・整形は、ADR 0190 の要求の表に種類を足し、一覧は Ctrl+P・札は hover の札・整形は 1 回の置き換え（参照 `grr`・Shift+F12、記号 `gO`、引数の情報と整形は鍵なし） | 提案（実装席 E・2026-11-22）・#1947 |

@@ -143,6 +143,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_show_diagnostic_description, "在提示框中显示光标处诊断的全部内容"},
     {UiMessage::operation_list_diagnostics_name, "诊断列表"},
     {UiMessage::operation_list_diagnostics_description, "在 Ctrl+P 列表中查看已打开标签页的诊断"},
+    {UiMessage::operation_list_references_name, "引用列表"},
+    {UiMessage::operation_list_references_description,
+     "向语言服务器查询光标处名称的使用位置，并在 Ctrl+P 列表中查看"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -385,5 +388,8 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_mark_diagnostics, "诊断"},
     {UiMessage::notice_no_diagnostics, "没有诊断"},
     {UiMessage::notice_no_diagnostic_here, "光标处没有诊断"},
+    {UiMessage::palette_mark_references, "引用"},
+    {UiMessage::notice_references_not_found, "找不到引用"},
+    {UiMessage::notice_references_not_supported, "此语言服务器不提供引用"},
 }};
 } // namespace nenenib::core

@@ -87,6 +87,7 @@
 #include "LandingPlace.hpp"
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
+#include "LanguageDefinition.hpp"
 #include "LanguageQueryKind.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
@@ -98,6 +99,7 @@
 #include "LineView.hpp"
 #include "LinkCardView.hpp"
 #include "LspCompletionList.hpp"
+#include "LspLanding.hpp"
 #include "LspLocation.hpp"
 #include "LspNotification.hpp"
 #include "LspPosition.hpp"
@@ -117,6 +119,7 @@
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteProjectSearch.hpp"
+#include "PaletteReference.hpp"
 #include "PaneSide.hpp"
 #include "PaneSource.hpp"
 #include "PendingLspContext.hpp"
@@ -377,6 +380,8 @@ class EditorController final
                                           std::optional<std::string_view> trigger = std::nullopt);
     [[nodiscard]] bool request_hover();
     [[nodiscard]] bool request_definition();
+    // 参照（#1947・ADR 0191 の決定 4）。`includeDeclaration: true`。
+    [[nodiscard]] bool request_references();
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // アクティブな文書を受ける席の、`initialize` の答えから読んだサーバーの能力（決定 3）。段 B の
@@ -1030,6 +1035,17 @@ class EditorController final
     [[nodiscard]] std::optional<PaletteDiagnostic>
     palette_diagnostic_of(const core::CommandChoice &choice) const;
     void land_palette_diagnostic(const core::CommandChoice &choice);
+    // 参照の一覧（#1947・ADR 0191 の決定 4・EditorControllerReferences.cpp）。答えは
+    // held_references_ に控えて Ctrl+P の一覧を記号 `&` で開き、面を開くときに
+    // append_reference_choices が候補と palette_references_ を 1 回作る。選ぶと定義と同じ着地の 1
+    // 本（land_location）。
+    void settle_references_answer();
+    void append_reference_choices(std::vector<core::CommandChoice> &entries);
+    [[nodiscard]] std::optional<PaletteReference>
+    palette_reference_of(const core::CommandChoice &choice) const;
+    void land_palette_reference(const core::CommandChoice &choice);
+    // 言語サーバーは動いているが、アクティブな文書を受ける席がその能力を持たない（決定 2）。
+    [[nodiscard]] bool lacks_ability(bool ServerAbilities::*ability) const;
     // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2・EditorControllerLinkCard.cpp）。
     // 開くのは ClickPreviewLink、閉じるのは札の意図と入口の close_link_card_before（札の意図と
     // 使う人の操作でない意図のほか）。web と mail は LinkOpenPort、document は open_listed の 1
@@ -1065,6 +1081,8 @@ class EditorController final
     void settle_hover_answer();
     void settle_definition_answer();
     void land_definition(const LanguageDefinition &definition);
+    // file の at へ跳ぶ 1 本（定義と参照・開いていなければ開いてから・`''` を置く）。
+    void land_location(const core::FilePath &file, const LspLanding &at);
     // 答えを使ってよい状態か（#1843 のレビュー R1〜R3）。faces_closed は入力行・面・右クリックの
     // メニュー・IME の変換・補完の面が開いていない。awaits_nothing
     // は問いを出したときと同じ「何も待って いない」状態（Vim は NORMAL
@@ -1816,6 +1834,10 @@ class EditorController final
     std::optional<ProjectHitLanding> project_landing_;
     // 面を開いたときに控えた診断の候補の指す所（#1939）。候補の command がこの列の位置。
     std::vector<PaletteDiagnostic> palette_diagnostics_;
+    // 最後に届いた参照の答え（#1947・次の答えまで `&` の一覧に出す）と、面を開いたときに控えた
+    // 参照の候補の指す所（候補の command がこの列の位置）。
+    std::optional<LanguageDefinition> held_references_;
+    std::vector<PaletteReference> palette_references_;
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;

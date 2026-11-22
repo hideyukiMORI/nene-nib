@@ -187,6 +187,11 @@ EditorController::preview_target(const core::CommandChoice &choice) const
             const auto views = detail::tab_views(state_, active_document_view());
             return {views.at(target.value().tab).path, target.value().tab};
         }
+        // 参照の候補はファイルと、同じファイルを開いているタブ（#1947）。
+        if (const auto target = palette_reference_of(choice); target.has_value())
+        {
+            return {target.value().file, open_tab_of(target.value().file)};
+        }
         return {};
     case core::CommandChoiceKind::fill:
     case core::CommandChoiceKind::operate:
@@ -202,6 +207,10 @@ EditorController::preview_anchor_of(const core::CommandPalette &palette,
                                     const core::CommandChoice &choice) const
 {
     if (const auto target = palette_diagnostic_of(choice); target.has_value())
+    {
+        return target.value().anchor;
+    }
+    if (const auto target = palette_reference_of(choice); target.has_value())
     {
         return target.value().anchor;
     }

@@ -101,6 +101,9 @@ enum class EditorOperation : std::uint8_t
     next_diagnostic,
     previous_diagnostic,
     show_diagnostic,
-    list_diagnostics
+    list_diagnostics,
+    // 参照の一覧（#1947・ADR 0191 の決定 4）。Shift+F12 で両モード（VS Code と同じ・Vim の NORMAL
+    // の `grr` と同じ問い）。答えは Ctrl+P の一覧の記号 `&` で開く。
+    list_references
 };
 } // namespace nenenib::core

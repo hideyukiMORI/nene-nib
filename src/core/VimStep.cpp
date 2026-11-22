@@ -2060,6 +2060,11 @@ namespace
         return detail::diagnostic_commanded(state, DiagnosticCommand::show,
                                             escaped_or_refused(state, key));
     }
+    // `gr`（#1947）。次の 1 鍵を待つ（`grr` が参照の問い）。
+    if (action.value() == VimAction::prefix_g_references)
+    {
+        return started_prefix(state, VimPrefix::g_references);
+    }
     return completed_prefix(state, view, action.value());
 }
 
@@ -2219,6 +2224,19 @@ namespace
                                         escaped_or_refused(state, key));
 }
 
+// `gr` の後ろの 1 鍵（#1947・ADR 0191 の決定 4）。`r` は表に行が無かったときと同じ失敗の歩に参照の
+// 問いの効果を添え（`gd` と同じ）、ほかの鍵は失敗する。Esc は鳴らさずに打ち消すだけ。
+[[nodiscard]] VimStep g_references_step(const VimState &state, const VimKey &key)
+{
+    const auto *const character = std::get_if<VimCharacter>(&key);
+    if (character == nullptr || character->code != U'r')
+    {
+        return escaped_or_refused(state, key);
+    }
+    return detail::language_queried(state, LanguageQueryKind::references,
+                                    escaped_or_refused(state, key));
+}
+
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,
                                    VimPrefix prefix, VimKey key)
 {
@@ -2252,6 +2270,8 @@ namespace
         return detail::leader_step(state, view, key);
     case VimPrefix::leader_leader:
         return detail::leader_leader_step(state, view, key);
+    case VimPrefix::g_references:
+        return g_references_step(state, key);
     }
     std::unreachable();
 }

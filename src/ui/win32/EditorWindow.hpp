@@ -539,6 +539,8 @@ class EditorWindow final
     void run_previous_diagnostic();
     void run_show_diagnostic();
     void run_list_diagnostics();
+    // 参照の一覧（#1947）。
+    void run_list_references();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

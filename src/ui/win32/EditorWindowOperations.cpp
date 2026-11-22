@@ -506,6 +506,7 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::previous_diagnostic, &EditorWindow::run_previous_diagnostic},
         {core::EditorOperation::show_diagnostic, &EditorWindow::run_show_diagnostic},
         {core::EditorOperation::list_diagnostics, &EditorWindow::run_list_diagnostics},
+        {core::EditorOperation::list_references, &EditorWindow::run_list_references},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -795,6 +796,12 @@ void EditorWindow::run_show_diagnostic()
 void EditorWindow::run_list_diagnostics()
 {
     send(application::RunDiagnosticCommand{core::DiagnosticCommand::list});
+}
+
+// 参照の一覧（#1947・ADR 0191 の決定 4）。Vim の `grr` と同じ問い。
+void EditorWindow::run_list_references()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::references});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

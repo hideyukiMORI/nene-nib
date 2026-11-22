@@ -979,7 +979,7 @@ void verify_abilities()
     expect(
         contains(
             server.sent().front(),
-            R"("textDocument":{"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true}})"),
+            R"("textDocument":{"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{}})"),
         "initialize offers completion without snippets, hover text and definition links");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.completion && abilities.hover && abilities.definition &&

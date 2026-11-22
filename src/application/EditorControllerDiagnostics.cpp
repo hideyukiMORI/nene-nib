@@ -224,7 +224,8 @@ void EditorController::append_tab_diagnostics(std::size_t tab, std::string_view 
 std::optional<PaletteDiagnostic>
 EditorController::palette_diagnostic_of(const core::CommandChoice &choice) const
 {
-    if (choice.kind != core::CommandChoiceKind::land)
+    if (choice.kind != core::CommandChoiceKind::land ||
+        choice.origin != std::optional{core::PaletteOrigin::diagnostic})
     {
         return std::nullopt;
     }

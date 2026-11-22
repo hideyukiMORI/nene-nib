@@ -162,6 +162,9 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_list_diagnostics_name, "List diagnostics"},
     {UiMessage::operation_list_diagnostics_description,
      "See the diagnostics of the open tabs in the Ctrl+P list"},
+    {UiMessage::operation_list_references_name, "List references"},
+    {UiMessage::operation_list_references_description,
+     "Ask the language server where the name at the caret is used and see it in the Ctrl+P list"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -439,5 +442,8 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::palette_mark_diagnostics, "Diagnostics"},
     {UiMessage::notice_no_diagnostics, "No diagnostics"},
     {UiMessage::notice_no_diagnostic_here, "No diagnostic at the caret"},
+    {UiMessage::palette_mark_references, "References"},
+    {UiMessage::notice_references_not_found, "No references found"},
+    {UiMessage::notice_references_not_supported, "This language server does not answer references"},
 }};
 } // namespace nenenib::core

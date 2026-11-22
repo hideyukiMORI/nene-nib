@@ -133,3 +133,7 @@
 ## 追補（2026-11-22・#1939）: `^` 診断
 
 記号の表（決定 2）に `^`（`PaletteScope::diagnostics`・案内の名前「診断」）を 1 行足す。`!` は全文検索（ADR 0167）が使っているので、警告の三角に見える `^` にした。候補の印は `PaletteOrigin::diagnostic` で、`files`（記号の無い入力）には混ぜない（ファイルの候補ではない・`in_scope` の 1 本）。候補を作るのは controller の `append_diagnostic_choices`（面を開くときに 1 回）、確定は `CommandChoiceKind::land`。中身は ADR 0161 の同じ日の追補。
+
+## 追補（2026-11-22・#1947）: `&` 参照
+
+記号の表（決定 2）に `&`（`PaletteScope::references`・案内の名前「参照」）を 1 行足す。C++ の参照の印。候補の印は `PaletteOrigin::reference` で、`files` には混ぜない。候補を作るのは controller の `append_reference_choices`（面を開くときに 1 回・最後に届いた言語サーバーの参照の答えから）、確定は診断と同じ `CommandChoiceKind::land`（出どころで分ける）。中身は ADR 0191 の決定 4。
