@@ -53,7 +53,7 @@ constexpr std::string_view unconverted_notice = "HTML を変換できないの�
 // 言語・HTML の有無 → 貼り方（決定 1）。
 using KindCase = std::tuple<Language, bool, PasteKind>;
 
-constexpr std::array<KindCase, 11> kind_cases{{
+constexpr std::array<KindCase, 14> kind_cases{{
     {Language::markdown, true, PasteKind::markdown_from_html},
     {Language::markdown, false, PasteKind::text},
     {Language::html, true, PasteKind::html_as_is},
@@ -65,6 +65,10 @@ constexpr std::array<KindCase, 11> kind_cases{{
     {Language::cpp, true, PasteKind::text},
     {Language::xml, true, PasteKind::text},
     {Language::plain, false, PasteKind::text},
+    // #1917 で足した言語は表の「ほか」（ADR 0157 の追補・施主決定 2026-10-22）。
+    {Language::vue, true, PasteKind::text},
+    {Language::svelte, true, PasteKind::text},
+    {Language::java, true, PasteKind::text},
 }};
 
 [[nodiscard]] core::FilePath path_of(std::string_view text)

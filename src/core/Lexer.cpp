@@ -24,70 +24,102 @@
 #include "LexToml.hpp"
 #include "LexYaml.hpp"
 
+#include <array>
+#include <cstddef>
 #include <utility>
 
 namespace nenenib::core
 {
 namespace
 {
-// 言語を足すと switch が落ちる（CPP-002）。字句器を持たない言語は区間なしで状態をそのまま残す。
-// lex_line と lex_state はここを共有し、違うのは cursor が区間を残すかだけ。字句器は void を返し、
-// 分岐を 1 行ずつにするため `return lex_…(…);` で書く（関数長 60 行・#860）。
+// 言語ごとの字句の関数（#1917・CPP-012 の表）。i 行目が i 番目の Language で、下の static_assert が
+// 行の言語を値の順と数で縛る（値を足すと行が足りず、既定の {plain, nullptr} の行の言語が順に合わず
+// に落ちる）。字句器を持たない言語は nullptr（区間なしで状態をそのまま残す）。字句器の有無は欄が
+// nullptr かで決め、関数の番地を比べない（`/OPT:ICF` が同じ機械語の関数を畳んでも狂わない）。
+// lex_line と lex_state はここを共有し、違うのは cursor が区間を残すかだけ。
+using LanguageLexer = void (*)(LexCursor &, const LexState &, Language);
+
+template <void (*lex)(LexCursor &, const LexState &)>
+void lex_alone(LexCursor &cursor, const LexState &in, Language /*language*/)
+{
+    lex(cursor, in);
+}
+
+using LanguageLexerRow = std::pair<Language, LanguageLexer>;
+
+constexpr std::array<LanguageLexerRow, language_count()> language_lexers{{
+    {Language::plain, nullptr},
+    {Language::markdown, lex_alone<lex_markdown>},
+    {Language::html, lex_html},
+    {Language::c, lex_alone<lex_cpp>},
+    {Language::cpp, lex_alone<lex_cpp>},
+    {Language::python, lex_alone<lex_python>},
+    {Language::json, lex_alone<lex_json>},
+    {Language::javascript, lex_javascript},
+    {Language::typescript, lex_javascript},
+    {Language::yaml, lex_alone<lex_yaml>},
+    {Language::toml, lex_alone<lex_toml>},
+    {Language::xml, lex_html},
+    {Language::css, lex_alone<lex_css>},
+    {Language::powershell, lex_alone<lex_powershell>},
+    {Language::shell, lex_alone<lex_shell>},
+    {Language::cmake, lex_alone<lex_cmake>},
+    {Language::gdscript, lex_alone<lex_gdscript>},
+    {Language::dosini, lex_ini},
+    {Language::gdresource, lex_ini},
+    {Language::cs, lex_alone<lex_csharp>},
+    {Language::rust, lex_alone<lex_rust>},
+    {Language::go, lex_alone<lex_go>},
+    {Language::php, lex_alone<lex_php>},
+    {Language::sql, lex_alone<lex_sql>},
+    {Language::lua, lex_alone<lex_lua>},
+    {Language::dockerfile, lex_alone<lex_dockerfile>},
+    {Language::java, nullptr},
+    {Language::kotlin, nullptr},
+    {Language::dart, nullptr},
+    {Language::zig, nullptr},
+    {Language::terraform, nullptr},
+    {Language::make, nullptr},
+    {Language::batch, nullptr},
+    {Language::ruby, nullptr},
+    {Language::swift, nullptr},
+    {Language::scala, nullptr},
+    {Language::haskell, nullptr},
+    {Language::elixir, nullptr},
+    {Language::r, nullptr},
+    {Language::perl, nullptr},
+    {Language::vue, nullptr},
+    {Language::svelte, nullptr},
+}};
+
+[[nodiscard]] consteval bool lexers_in_order() noexcept
+{
+    for (std::size_t index = 0; index < language_lexers.size(); ++index)
+    {
+        if (std::to_underlying(language_lexers.at(index).first) != index)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static_assert(lexers_in_order(), "language_lexers has one row for every Language in order");
+
+[[nodiscard]] LanguageLexer lexer_of(Language language) noexcept
+{
+    return language_lexers.at(std::to_underlying(language)).second;
+}
+
 void lex_language(Language language, LexCursor &cursor, const LexState &in)
 {
-    switch (language)
+    const LanguageLexer lexer = lexer_of(language);
+    if (lexer == nullptr)
     {
-    case Language::c:
-    case Language::cpp:
-        return lex_cpp(cursor, in);
-    case Language::json:
-        return lex_json(cursor, in);
-    case Language::python:
-        return lex_python(cursor, in);
-    case Language::markdown:
-        return lex_markdown(cursor, in);
-    case Language::javascript:
-    case Language::typescript:
-        return lex_javascript(cursor, in, language);
-    case Language::html:
-    case Language::xml:
-        return lex_html(cursor, in, language);
-    case Language::css:
-        return lex_css(cursor, in);
-    case Language::yaml:
-        return lex_yaml(cursor, in);
-    case Language::toml:
-        return lex_toml(cursor, in);
-    case Language::gdscript:
-        return lex_gdscript(cursor, in);
-    case Language::dosini:
-    case Language::gdresource:
-        return lex_ini(cursor, in, language);
-    case Language::cs:
-        return lex_csharp(cursor, in);
-    case Language::rust:
-        return lex_rust(cursor, in);
-    case Language::go:
-        return lex_go(cursor, in);
-    case Language::php:
-        return lex_php(cursor, in);
-    case Language::sql:
-        return lex_sql(cursor, in);
-    case Language::lua:
-        return lex_lua(cursor, in);
-    case Language::dockerfile:
-        return lex_dockerfile(cursor, in);
-    case Language::powershell:
-        return lex_powershell(cursor, in);
-    case Language::shell:
-        return lex_shell(cursor, in);
-    case Language::cmake:
-        return lex_cmake(cursor, in);
-    case Language::plain:
         cursor.leave(in);
         return;
     }
-    std::unreachable();
+    lexer(cursor, in, language);
 }
 } // namespace
 
@@ -107,38 +139,7 @@ LexState lex_state(Language language, const LexState &in, std::string_view line)
 
 bool has_lexer(Language language) noexcept
 {
-    switch (language)
-    {
-    case Language::c:
-    case Language::cpp:
-    case Language::python:
-    case Language::json:
-    case Language::markdown:
-    case Language::javascript:
-    case Language::typescript:
-    case Language::html:
-    case Language::yaml:
-    case Language::toml:
-    case Language::xml:
-    case Language::css:
-    case Language::gdscript:
-    case Language::dosini:
-    case Language::gdresource:
-    case Language::cs:
-    case Language::rust:
-    case Language::go:
-    case Language::php:
-    case Language::sql:
-    case Language::lua:
-    case Language::dockerfile:
-    case Language::powershell:
-    case Language::shell:
-    case Language::cmake:
-        return true;
-    case Language::plain:
-        return false;
-    }
-    std::unreachable();
+    return lexer_of(language) != nullptr;
 }
 
 LexState lex_start_state(Language language, bool from_first_line) noexcept
@@ -172,6 +173,22 @@ LexState lex_start_state(Language language, bool from_first_line) noexcept
     case Language::powershell:
     case Language::shell:
     case Language::cmake:
+    case Language::java:
+    case Language::kotlin:
+    case Language::dart:
+    case Language::zig:
+    case Language::terraform:
+    case Language::make:
+    case Language::batch:
+    case Language::ruby:
+    case Language::swift:
+    case Language::scala:
+    case Language::haskell:
+    case Language::elixir:
+    case Language::r:
+    case Language::perl:
+    case Language::vue:
+    case Language::svelte:
         return LexState{};
     }
     std::unreachable();
@@ -212,6 +229,22 @@ std::size_t syntax_backfill_lines(Language language) noexcept
     case Language::markdown:
         return 500;
     case Language::plain:
+    case Language::java:
+    case Language::kotlin:
+    case Language::dart:
+    case Language::zig:
+    case Language::terraform:
+    case Language::make:
+    case Language::batch:
+    case Language::ruby:
+    case Language::swift:
+    case Language::scala:
+    case Language::haskell:
+    case Language::elixir:
+    case Language::r:
+    case Language::perl:
+    case Language::vue:
+    case Language::svelte:
         return 0;
     }
     std::unreachable();

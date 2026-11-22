@@ -728,7 +728,7 @@ std::string markdown_tabled(Random &random)
 // 囲みのコードの色の族（#1858）: 言語つきの囲みの中に断片を置く（断片の ``` が囲みを早く閉じても
 // よい・知らない言語と大文字の名前も混ぜる）。
 constexpr std::array<std::string_view, 8> fence_languages{
-    {"cpp", "Python", "json", "js", "c++", "sh", "zig", "rust title=\"x\""}};
+    {"cpp", "Python", "json", "js", "c++", "sh", "nim", "rust title=\"x\""}};
 
 std::string markdown_fenced(Random &random)
 {

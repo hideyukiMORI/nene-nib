@@ -1966,7 +1966,7 @@ void verify_unknown_command_rows_unused()
 {
     auto settings = core::default_editor_settings();
     settings.lsp = true;
-    settings.lsp_commands = {{"java", R"(C:\jdtls\jdtls.exe)"}};
+    settings.lsp_commands = {{"nim", R"(C:\nim\nimlangserver.exe)"}};
     Editing editing(SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}});
     hold_documents(editing);
     applied(editing.controller(), app::OpenDocument{path_of(source_path)});
