@@ -877,8 +877,7 @@ void EditorController::accept(const WorkCompleted &)
     request_explorer_folder();
     // 退避 → フォルダ → Markdown の順（ADR 0155 の決定 6）。プレビューが閉じていれば呼ばない。
     collect_preview();
-    // プレビューの画像は解析の結果の後（新しい結果が引き継いだ entry の券で採る・ADR 0155 の追補 50
-    // ）。
+    // プレビューの画像は解析の結果の後（ADR 0155 の追補 50・新しい結果が引き継いだ券で採る）。
     collect_preview_images();
     // 言語サーバーの root を探した答え（ADR 0161 の 2026-11-22 の追補・段 S3）。頼んでいなければ
     // 呼ばない。答えで起きた子の出来事を同じ合図で読むよう、言語サーバーの集めより前。
@@ -887,8 +886,7 @@ void EditorController::accept(const WorkCompleted &)
     collect_language_server();
     // 起動画面の履歴とブックマーク（ADR 0172 の決定 3）。頼んでいなければ呼ばない。
     collect_start_lists();
-    // 全文検索（ADR 0167 の決定 4）。頼んでいなければ呼ばない。面の当たりを足すので、下の面を読む
-    // 前に呼ぶ。
+    // 全文検索（ADR 0167 の決定 4）。面の当たりを足すので、下の面を読む前に呼ぶ。
     collect_project_search();
     // プレビュー欄の窓（ADR 0189 の決定 4）。頼んでいなければ呼ばない。
     collect_finder_preview();

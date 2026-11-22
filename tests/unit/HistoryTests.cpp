@@ -409,43 +409,21 @@ void verify_quiet_start_with_files()
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
     ScriptedLanguageRoots language_roots;
-    ScriptedLanguageServerSearch language_server_search;
+    ScriptedLanguageServerSearch searches;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
     ScriptedDocumentReads reads{files, code_pages};
     ScriptedLanguageServer language_server;
-    EditorController controller(EditorPorts{appearance,
-                                            clipboard,
-                                            files,
-                                            code_pages,
-                                            settings,
-                                            themes,
-                                            session,
-                                            history,
-                                            folders,
-                                            bookmarks,
-                                            text_layouts,
-                                            autosave,
-                                            fonts,
-                                            bell,
-                                            markdown,
-                                            reads,
-                                            language_server,
-                                            wall_clock,
-                                            printer,
-                                            shell_registration,
-                                            images,
-                                            start_lists,
-                                            ui_language,
-                                            project_search,
-                                            previews,
-                                            reveal,
-                                            links,
-                                            language_roots,
-                                            language_server_search},
-                                nenenib::core::Distribution::unpackaged,
-                                {work_open('a'), work_open('b')});
+    EditorController controller(
+        EditorPorts{
+            appearance,   clipboard,       files,          code_pages,     settings,
+            themes,       session,         history,        folders,        bookmarks,
+            text_layouts, autosave,        fonts,          bell,           markdown,
+            reads,        language_server, wall_clock,     printer,        shell_registration,
+            images,       start_lists,     ui_language,    project_search, previews,
+            reveal,       links,           language_roots, searches},
+        nenenib::core::Distribution::unpackaged, {work_open('a'), work_open('b')});
     // 最初の frame の合図でも、起動画面が出ていなければ起動画面の読みを頼まない（ADR 0172 の決定
     // 3）。
     applied(controller, nenenib::application::FirstFramePresented{});
@@ -456,7 +434,7 @@ void verify_quiet_start_with_files()
                wall_clock.calls() == 0 && printer.jobs().empty() &&
                shell_registration.touches() == 0 && images.touches() == 0 &&
                start_lists.touches() == 0 && previews.touches() == 0 && links.touches() == 0 &&
-               language_roots.touches() == 0 && language_server_search.touches() == 0,
+               language_roots.touches() == 0 && searches.touches() == 0,
            "starting with file arguments never touches the history, the folder, autosave, the "
            "bell, the clock, the printer, the shell registration, the preview images nor the "
            "start screen lists");
