@@ -261,7 +261,7 @@ records in `docs/quality/`.
   [Interactive color study](docs/design/colorschemes.html) (open the downloaded HTML locally).
   Syntax colors cover 25 languages chosen by file extension: C, C++, C#, Rust, Go, Python, JavaScript,
   TypeScript, JSON, YAML, TOML, INI, XML, HTML, CSS, Markdown, PHP, SQL, Lua, PowerShell, shell, CMake,
-  Dockerfile, GDScript and Godot resources. *New in 1.1.0*, Java, Kotlin, Dart, Zig, Terraform, Makefile,
+  Dockerfile, GDScript and Godot resources. Java, Kotlin, Dart, Zig, Terraform, Makefile,
   Batch, Ruby, Swift, Scala, Haskell, Elixir, R, Perl, Vue and Svelte are recognized as languages
   (status bar, `:set ft=`, `lsp.<language>.command`) and stay uncolored for now. The language shows at the right of the status bar;
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document

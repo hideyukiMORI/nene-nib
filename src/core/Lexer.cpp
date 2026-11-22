@@ -33,9 +33,10 @@ namespace nenenib::core
 namespace
 {
 // 言語ごとの字句の関数（#1917・CPP-012 の表）。i 行目が i 番目の Language で、下の static_assert が
-// 行の言語を値の順と数で縛る（値を足すと行が足りずに落ちる）。字句器を持たない言語は lex_nothing
-// （区間なしで状態をそのまま残す）。lex_line と lex_state はここを共有し、違うのは cursor が区間を
-// 残すかだけ。
+// 行の言語を値の順と数で縛る（値を足すと行が足りず、既定の {plain, nullptr} の行の言語が順に合わず
+// に落ちる）。字句器を持たない言語は nullptr（区間なしで状態をそのまま残す）。字句器の有無は欄が
+// nullptr かで決め、関数の番地を比べない（`/OPT:ICF` が同じ機械語の関数を畳んでも狂わない）。
+// lex_line と lex_state はここを共有し、違うのは cursor が区間を残すかだけ。
 using LanguageLexer = void (*)(LexCursor &, const LexState &, Language);
 
 template <void (*lex)(LexCursor &, const LexState &)>
@@ -44,15 +45,10 @@ void lex_alone(LexCursor &cursor, const LexState &in, Language /*language*/)
     lex(cursor, in);
 }
 
-void lex_nothing(LexCursor &cursor, const LexState &in, Language /*language*/)
-{
-    cursor.leave(in);
-}
-
 using LanguageLexerRow = std::pair<Language, LanguageLexer>;
 
 constexpr std::array<LanguageLexerRow, language_count()> language_lexers{{
-    {Language::plain, lex_nothing},
+    {Language::plain, nullptr},
     {Language::markdown, lex_alone<lex_markdown>},
     {Language::html, lex_html},
     {Language::c, lex_alone<lex_cpp>},
@@ -78,30 +74,29 @@ constexpr std::array<LanguageLexerRow, language_count()> language_lexers{{
     {Language::sql, lex_alone<lex_sql>},
     {Language::lua, lex_alone<lex_lua>},
     {Language::dockerfile, lex_alone<lex_dockerfile>},
-    {Language::java, lex_nothing},
-    {Language::kotlin, lex_nothing},
-    {Language::dart, lex_nothing},
-    {Language::zig, lex_nothing},
-    {Language::terraform, lex_nothing},
-    {Language::make, lex_nothing},
-    {Language::batch, lex_nothing},
-    {Language::ruby, lex_nothing},
-    {Language::swift, lex_nothing},
-    {Language::scala, lex_nothing},
-    {Language::haskell, lex_nothing},
-    {Language::elixir, lex_nothing},
-    {Language::r, lex_nothing},
-    {Language::perl, lex_nothing},
-    {Language::vue, lex_nothing},
-    {Language::svelte, lex_nothing},
+    {Language::java, nullptr},
+    {Language::kotlin, nullptr},
+    {Language::dart, nullptr},
+    {Language::zig, nullptr},
+    {Language::terraform, nullptr},
+    {Language::make, nullptr},
+    {Language::batch, nullptr},
+    {Language::ruby, nullptr},
+    {Language::swift, nullptr},
+    {Language::scala, nullptr},
+    {Language::haskell, nullptr},
+    {Language::elixir, nullptr},
+    {Language::r, nullptr},
+    {Language::perl, nullptr},
+    {Language::vue, nullptr},
+    {Language::svelte, nullptr},
 }};
 
 [[nodiscard]] consteval bool lexers_in_order() noexcept
 {
     for (std::size_t index = 0; index < language_lexers.size(); ++index)
     {
-        if (std::to_underlying(language_lexers.at(index).first) != index ||
-            language_lexers.at(index).second == nullptr)
+        if (std::to_underlying(language_lexers.at(index).first) != index)
         {
             return false;
         }
@@ -118,7 +113,13 @@ static_assert(lexers_in_order(), "language_lexers has one row for every Language
 
 void lex_language(Language language, LexCursor &cursor, const LexState &in)
 {
-    lexer_of(language)(cursor, in, language);
+    const LanguageLexer lexer = lexer_of(language);
+    if (lexer == nullptr)
+    {
+        cursor.leave(in);
+        return;
+    }
+    lexer(cursor, in, language);
 }
 } // namespace
 
@@ -138,7 +139,7 @@ LexState lex_state(Language language, const LexState &in, std::string_view line)
 
 bool has_lexer(Language language) noexcept
 {
-    return lexer_of(language) != lex_nothing;
+    return lexer_of(language) != nullptr;
 }
 
 LexState lex_start_state(Language language, bool from_first_line) noexcept

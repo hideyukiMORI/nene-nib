@@ -17,6 +17,8 @@
 #include "SyntaxRole.hpp"
 #include "TestSupport.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -244,6 +246,14 @@ void verify_mark_roles()
                !role("CMakeLists.txt").has_value() && !role("main.rs").has_value() &&
                !role("Makefile").has_value(),
            "plain and the other languages are muted");
+    // #1917 で足した 16 言語は印を持たない（字句器が無い・ADR 0154 の 2026-11-20 の追補）。
+    expect(std::ranges::none_of(
+               std::array<std::string_view, 16>{"Main.java", "Build.kt", "main.dart", "main.zig",
+                                                "main.tf", "rules.mk", "build.bat", "app.rb",
+                                                "main.swift", "App.scala", "Main.hs", "app.ex",
+                                                "plot.r", "tool.pl", "App.vue", "Page.svelte"},
+               [&role](std::string_view name) { return role(name).has_value(); }),
+           "the languages added without a lexer are muted");
     expect(core::header_of_path("C:\\proj\\a.hpp") && !core::header_of_path("a.ipp") &&
                !core::header_of_path("hpp") && !core::header_of_path("a.cpp"),
            "headers are the h, hh, hpp and hxx extensions only");
