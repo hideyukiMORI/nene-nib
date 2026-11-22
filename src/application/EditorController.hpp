@@ -1414,12 +1414,18 @@ class EditorController final
     void close_completion_before(const EditorIntent &intent);
     // 出口の 1 か所（apply）。成り立たなくなった面を閉じ、届いた答えを足し、打った分で絞り直す。
     void settle_completion();
-    // 通常モードで `triggerCharacters` の 1 つを打ち終えたら開く。呼ぶのは言語サーバーが running の
-    // ときだけ（accept(InsertText) の 1 か所）。
+    // 使う人が打った文字が本文に入った後の言語サーバーの入口（#1962）。通常モードの InsertText と
+    // Vim の INSERT の 1 文字（typed_vim_character）の両方がここを通る。呼ぶ側は「言語サーバーが
+    // 起きている」の真偽の後ろで呼ぶ（ADR 0190 の決定 10）。typed は今打った文字。
+    void typed_for_language(std::string_view typed);
+    // `triggerCharacters` の 1 つを打ち終えたら開く（通常モードと Vim の INSERT・#1962）。呼ぶのは
+    // 言語サーバーが running のときだけ（typed_for_language の 1 か所）。
     void open_triggered_completion(std::string_view typed);
     // 面を開く 1 か所。trigger が無ければ手で開いた面、あれば自動の面。
     void start_completion(std::optional<std::string_view> trigger);
-    [[nodiscard]] bool completion_startable() const;
+    // 面を開ける状態か。triggered は打鍵で自動に開く面（Vim の INSERT
+    // で開けるのはこれだけ・#1962）。
+    [[nodiscard]] bool completion_startable(bool triggered) const;
     [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
     void refresh_completion(CompletionSession &session);
     [[nodiscard]] bool take_completion_answer(CompletionSession &session);
@@ -1439,6 +1445,20 @@ class EditorController final
     // Vim の INSERT の補完（#1845・ADR 0169 の決定 3）。engine が形を持ち、controller は補完を
     // 始める鍵の直前に候補の写しを置き（offer）、鍵の後に engine の状態を面へ写す（follow）。
     void offer_vim_completion(const core::VimKey &key);
+    // 自動で開いた面が出ている間の Ctrl-n / Ctrl-p で、面の候補を engine の写しにする（#1962）。
+    // 写せる候補が無ければ偽（呼ぶ側は ADR 0169 の本文の語の道へ落ちる）。
+    [[nodiscard]] bool offer_auto_vim_completion();
+    [[nodiscard]] std::optional<std::string>
+    vim_auto_completion_text(core::Offset origin, const core::CompletionEntry &entry) const;
+    // 言語サーバーが起きている窓で打った Vim の鍵（#1962）。accept(VimKeyPress) が「起きている」の
+    // 真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、鍵を流した後に typed_vim_character。
+    void typed_vim_key_with_language(const core::VimKey &key);
+    // 自動で開いた面が出ている間の Ctrl-y / Ctrl-e は面を閉じるだけで Vim に渡さない（真）。
+    // 文字・Backspace・Ctrl-n / Ctrl-p・Esc 以外の鍵は面を閉じてから Vim に渡す（偽）。
+    [[nodiscard]] bool auto_vim_completion_took(const core::VimKey &key);
+    // INSERT で打った鍵 key の 1 文字が、鍵の前のキャレット before の直後に入ったなら
+    // typed_for_language へ渡す（貼り付け・1 鍵の引数・`map` の右辺で入った文字は渡さない）。
+    void typed_vim_character(const core::VimKey &key, core::Offset before);
     void follow_vim_completion();
     void choose_vim_completion(std::optional<std::size_t> row);
     void settle_vim_completion(CompletionSession &session);

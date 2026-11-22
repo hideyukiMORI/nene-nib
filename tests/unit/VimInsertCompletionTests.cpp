@@ -31,6 +31,7 @@
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "TestSupport.hpp"
+#include "TextBuffer.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 #include "VimInsertCompletion.hpp"
@@ -459,6 +460,151 @@ void verify_text_edit_range()
            "a text edit that starts at the word start puts in its whole text");
 }
 
+// 送った補完の要求の数（打鍵が自動に開く面の試験・#1962）。
+[[nodiscard]] std::size_t completion_requests(Editing &editing)
+{
+    return editing.language_server().requests(completion_method).size();
+}
+
+// #1962: INSERT で triggerCharacters の 1 文字を打つと、自動の形（triggerKind 2）の要求が 1
+// 通出て、 答えで面が開く（どの行も選ばず本文を変えない）。語の文字で絞り、Ctrl-n
+// で選ぶたびに本文へ入れ （ADR 0169 の形）、Esc で確定して NORMAL へ。`.` の記録は打った文字 ＋
+// 確定した語、undo は 1 単位。
+void verify_triggered_face()
+{
+    Editing editing(lsp_settings());
+    capable(editing);
+    const auto waiting = pressed(editing, "ox.");
+    const auto &sent = editing.language_server().sent();
+    expect(completion_requests(editing) == 1 && !waiting.completion.has_value() &&
+               editing.controller().completion_open() && !completing(editing) &&
+               contains(sent.back(), R"("context":{"triggerKind":2,"triggerCharacter":"."})") &&
+               body(editing) == "int main() {}\nx.\n",
+           "a trigger character typed in INSERT asks the server once and waits for the answer");
+    const auto shown =
+        answered(editing, R"([{"label":"size"},{"label":"swap"},{"label":"empty"}])");
+    expect(rows(shown) == std::vector<std::string>{"empty", "size", "swap"} &&
+               chosen(shown) == "<none>" && !completing(editing) &&
+               face_of(shown).rows.front().source == core::CompletionSource::language_server &&
+               body(editing) == "int main() {}\nx.\n",
+           "the answer opens the face with no row chosen and the text untouched");
+    const auto narrowed = pressed(editing, "s");
+    expect(rows(narrowed) == std::vector<std::string>{"size", "swap"} &&
+               chosen(narrowed) == "<none>" && completion_requests(editing) == 1 &&
+               body(editing) == "int main() {}\nx.s\n",
+           "a word character narrows the face by the prefix");
+    const auto stepped = pressed(editing, "<C-n>");
+    expect(chosen(stepped) == "size" && completing(editing) &&
+               body(editing) == "int main() {}\nx.size\n",
+           "Ctrl-n chooses the first row and puts it into the text");
+    const auto next = pressed(editing, "<C-n>");
+    expect(chosen(next) == "swap" && body(editing) == "int main() {}\nx.swap\n",
+           "the next Ctrl-n replaces the word with the next row");
+    const auto escaped = pressed(editing, "<Esc>");
+    expect(!escaped.completion.has_value() && !editing.controller().completion_open() &&
+               editing.controller().vim_state().mode == core::VimMode::normal &&
+               body(editing) == "int main() {}\nx.swap\n",
+           "Esc accepts the chosen word and leaves INSERT");
+    expect(dot_record_is(editing.controller().vim_state(), std::nullopt, "ox.swap<Esc>"),
+           "the dot record holds the typed characters and the accepted word");
+    static_cast<void>(pressed(editing, "u"));
+    expect(body(editing) == "int main() {}\n", "the insert with its completion is one undo unit");
+}
+
+// #1962: 何も選んでいない面の Ctrl-e と Ctrl-y は本文を変えずに面を閉じ、INSERT のまま。Enter は
+// Vim のまま改行を入れて面を閉じ、語の文字でない文字は閉じる。2 文字の trigger（`->`）でも開く。
+void verify_triggered_keys()
+{
+    Editing editing(lsp_settings());
+    capable(editing);
+    static_cast<void>(pressed(editing, "ox."));
+    static_cast<void>(answered(editing, R"([{"label":"size"}])"));
+    const std::size_t revision = editing.controller().history().revision();
+    const auto cancelled = pressed(editing, "<C-e>");
+    expect(!cancelled.completion.has_value() && !editing.controller().completion_open() &&
+               editing.controller().vim_state().mode == core::VimMode::insert &&
+               editing.controller().history().revision() == revision &&
+               body(editing) == "int main() {}\nx.\n",
+           "Ctrl-e on a face with no chosen row closes it without touching the text");
+    static_cast<void>(pressed(editing, "<BS>."));
+    static_cast<void>(answered(editing, R"([{"label":"size"}])"));
+    const auto accepted = pressed(editing, "<C-y>");
+    expect(!accepted.completion.has_value() && completion_requests(editing) == 2 &&
+               editing.controller().vim_state().mode == core::VimMode::insert &&
+               body(editing) == "int main() {}\nx.\n",
+           "Ctrl-y on a face with no chosen row closes it without touching the text");
+    static_cast<void>(pressed(editing, "."));
+    static_cast<void>(answered(editing, R"([{"label":"size"}])"));
+    const auto entered = pressed(editing, "<CR>");
+    expect(!entered.completion.has_value() && !editing.controller().completion_open() &&
+               body(editing) == "int main() {}\nx..\n\n",
+           "Enter breaks the line as in Vim and closes the face");
+    static_cast<void>(pressed(editing, "y."));
+    static_cast<void>(answered(editing, R"([{"label":"size"}])"));
+    const auto spaced = pressed(editing, " ");
+    expect(!spaced.completion.has_value() && !editing.controller().completion_open() &&
+               body(editing) == "int main() {}\nx..\ny. \n",
+           "a character that is not a word character closes the face");
+    static_cast<void>(pressed(editing, "p->"));
+    expect(completion_requests(editing) == 5 && editing.controller().completion_open(),
+           "a two-character trigger opens the face when its last character is typed");
+}
+
+// #1962: 答えを待つ間の鍵は Vim のまま。Ctrl-n は待っていた要求を取り消して本文の語の補完を開き、
+// INSERT を抜けると待っていた要求を取り消す。
+void verify_triggered_waiting()
+{
+    Editing editing(lsp_settings());
+    capable(editing);
+    auto &server = editing.language_server();
+    static_cast<void>(pressed(editing, "omain x."));
+    const auto waited = server.requests(completion_method).back();
+    static_cast<void>(pressed(editing, "<C-n>"));
+    expect(!server.cancelled().empty() && server.cancelled().back() == waited &&
+               completing(editing) && completion_requests(editing) == 2,
+           "Ctrl-n while the triggered request waits cancels it and opens the buffer completion");
+    static_cast<void>(pressed(editing, "<C-e><Esc>A."));
+    const auto left = server.requests(completion_method).back();
+    static_cast<void>(pressed(editing, "<Esc>"));
+    expect(server.cancelled().back() == left && !editing.controller().completion_open(),
+           "leaving INSERT cancels the triggered request");
+}
+
+// #1962: 再生（`.` `@`）と :normal!（press_vim_keys）の鍵では要求を出さず面を開かない。録るのは
+// 打った鍵だけで、再生の結果は言語サーバーに依らない。
+void verify_triggered_replays()
+{
+    Editing editing(lsp_settings());
+    capable(editing);
+    static_cast<void>(pressed(editing, "ox.<Esc>"));
+    expect(completion_requests(editing) == 1, "the typed trigger asks once");
+    static_cast<void>(pressed(editing, "."));
+    expect(completion_requests(editing) == 1 && !editing.controller().completion_open() &&
+               body(editing) == "int main() {}\nx.\nx.\n",
+           "the dot command repeats the text without asking the server");
+    static_cast<void>(pressed(editing, "qaoy.<Esc>q"));
+    expect(completion_requests(editing) == 2, "the trigger typed while recording asks once");
+    static_cast<void>(pressed(editing, "@a"));
+    expect(completion_requests(editing) == 2 && !editing.controller().completion_open(),
+           "replaying the macro asks nothing and opens no face");
+    expect(editing.controller().text().text() == "int main() {}\nx.\nx.\ny.\ny.\n",
+           "replaying the macro puts the recorded text in");
+    static_cast<void>(editing.controller().press_vim_keys(vim_keys_of("oz.")));
+    expect(completion_requests(editing) == 2 && !editing.controller().completion_open(),
+           "keys fed as :normal! ask nothing");
+}
+
+// #1962: LSP がオフの文書では、同じ鍵の列が言語サーバーの port に触れず、面を開かない。
+void verify_triggered_off()
+{
+    Editing editing;
+    open_vim_document(editing, "a");
+    static_cast<void>(pressed(editing, "ox.y<Esc>"));
+    expect(editing.language_server().touches() == 0 && !editing.controller().completion_open() &&
+               body(editing) == "a\nx.y",
+           "with the language server off a trigger character only inserts itself");
+}
+
 // 面の配置: 選んでいる行が無い（rows 以上）ときは先頭から出す。
 void verify_layout_without_choice()
 {
@@ -485,5 +631,10 @@ void verify_vim_insert_completion()
     verify_waiting();
     verify_text_edit_range();
     verify_layout_without_choice();
+    verify_triggered_face();
+    verify_triggered_keys();
+    verify_triggered_waiting();
+    verify_triggered_replays();
+    verify_triggered_off();
 }
 } // namespace nenenib::tests

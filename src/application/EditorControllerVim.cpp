@@ -580,6 +580,12 @@ void EditorController::accept(const VimKeyPress &intent)
     {
         return;
     }
+    // 言語サーバーが起きていなければ、足すのは真偽 1 つの読みだけ（ADR 0190 の決定 10・#1962）。
+    if (language_servers_.awake != 0)
+    {
+        typed_vim_key_with_language(intent.key);
+        return;
+    }
     static_cast<void>(typed_vim_key(intent.key));
 }
 
