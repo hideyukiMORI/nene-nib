@@ -1,5 +1,7 @@
 #include "EditorController.hpp"
 
+#include "CaretMove.hpp"
+#include "CaretUnit.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
 #include "CommandPalette.hpp"
@@ -11,6 +13,8 @@
 #include "ExPaletteRequest.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageHover.hpp"
+#include "LanguageServerSlot.hpp"
+#include "LspRequestKind.hpp"
 #include "NoticeLine.hpp"
 #include "PaletteDiagnostic.hpp"
 #include "PaletteOrigin.hpp"
@@ -18,7 +22,9 @@
 #include "PlaceCaret.hpp"
 #include "PreviewAnchor.hpp"
 #include "RunDiagnosticCommand.hpp"
+#include "SharedDiagnostics.hpp"
 #include "SwitchTab.hpp"
+#include "TextPosition.hpp"
 #include "UiMessage.hpp"
 #include "VimDiagnosticCommand.hpp"
 
@@ -72,66 +78,89 @@ void EditorController::accept(const RunDiagnosticCommand &intent)
     {
         return;
     }
-    run_diagnostic_command(intent.command, 1);
+    // IME の変換中の F8 / Shift+F8 は何もしない（変換の文字を確定させずに跳ばない・一覧と同じ）。
+    if (state_.composition().has_value())
+    {
+        return;
+    }
+    static_cast<void>(run_diagnostic_command(intent.command, 1));
 }
 
-// `]d` `[d` `gl`。engine の歩は表に行が無かったときと同じ失敗のまま。
+// `]d` `[d` `gl`。engine の歩は表に行が無かったときと同じ失敗のまま返り、跳べた・札を出せたら
+// stepped_vim が成功の歩に読み替える（#1939 のレビュー R3 の推奨 3）。
 void EditorController::perform(const core::VimDiagnosticCommand &effect)
 {
-    run_diagnostic_command(effect.command, effect.count);
+    vim_effect_landed_ = run_diagnostic_command(effect.command, effect.count);
 }
 
-void EditorController::run_diagnostic_command(core::DiagnosticCommand command, std::size_t count)
+bool EditorController::run_diagnostic_command(core::DiagnosticCommand command, std::size_t count)
 {
     switch (command)
     {
     case core::DiagnosticCommand::next:
-        step_diagnostic(true, count);
-        return;
+        return step_diagnostic(true, count);
     case core::DiagnosticCommand::previous:
-        step_diagnostic(false, count);
-        return;
+        return step_diagnostic(false, count);
     case core::DiagnosticCommand::show:
         if (!show_diagnostic_tip(state_.selection().caret))
         {
             state_ = state_.with_command_message(ui_notice(
                 state_.diagnostics().empty() ? core::UiMessage::notice_no_diagnostics
                                              : core::UiMessage::notice_no_diagnostic_here));
+            return false;
         }
-        return;
+        return true;
     case core::DiagnosticCommand::list:
         open_diagnostic_list();
-        return;
+        return true;
     }
     std::unreachable();
 }
 
 // 次・前の診断の始まりへ跳ぶ（`''` とジャンプの列に前の位置を置く・Neovim と同じ）。跳んだ先の
-// 診断の文の全部を札で見せる。診断が無ければ 1 行知らせる。
-void EditorController::step_diagnostic(bool forward, std::size_t count)
+// 診断の文の全部を札で見せる。診断が無ければ 1 行知らせて偽。Vim の鍵の効果の中では、クリックの
+// 道（PlaceCaret の INSERT の割り込みと始め直し）を通らず、VimMoveTo と同じく置いて NORMAL の
+// 寄せだけを掛ける（INSERT の `Ctrl-o` の始め直しは鍵の出口が 1 回だけ行う・レビュー R3 の推奨
+// 4）。
+bool EditorController::step_diagnostic(bool forward, std::size_t count)
 {
     const auto landing =
         core::diagnostic_landing(state_.diagnostics(), state_.selection().caret, forward, count);
     if (!landing.has_value())
     {
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_no_diagnostics));
-        return;
+        return false;
     }
     set_context_mark();
-    accept(
-        PlaceCaret{state_.text().position_of(landing.value()), core::SelectionAnchoring::collapse});
+    const core::TextPosition position = state_.text().position_of(landing.value());
+    if (in_vim_effect_)
+    {
+        move_caret_to(core::placed_caret(state_.text(), position, core::CaretUnit::code_point),
+                      core::SelectionAnchoring::collapse);
+        settle_vim_caret();
+    }
+    else
+    {
+        accept(PlaceCaret{position, core::SelectionAnchoring::collapse});
+    }
     // 札の文は着地の位置の診断（Vim の NORMAL が行末の改行の上から 1 字戻しても同じ診断を見せる）。
     static_cast<void>(show_diagnostic_tip(landing.value()));
+    return true;
 }
 
 // at の上の診断の札を hover の札と同じ欄に置く（文脈は今のキャレット・次の操作で消える・ADR 0190
-// の決定 6）。置けたら真。
+// の決定 6）。置けたら真。出ている hover の要求は取り消す（後から届いた古い答えが札を消したり
+// 上書きしたりしない・#1939 のレビュー R3 の推奨 1）。
 bool EditorController::show_diagnostic_tip(core::Offset at)
 {
     std::string text = core::diagnostic_tip_text(state_.diagnostics(), at);
     if (text.empty())
     {
         return false;
+    }
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        cancel_lsp_requests(slot, LspRequestKind::hover);
     }
     LanguageAnswers answers = state_.language_answers();
     answers.hover = LanguageHover{request_context(), std::move(text)};
@@ -176,31 +205,36 @@ void EditorController::append_diagnostic_choices(std::vector<core::CommandChoice
     }
 }
 
-// 帯の位置 tab の文書の診断（アクティブ・読み込み済みの脇の束）。まだ読んでいない文書は無し。
-const std::vector<core::Diagnostic> *EditorController::tab_diagnostics(std::size_t tab) const
+// 帯の位置 tab の文書の診断（アクティブ・読み込み済みの脇の束）。まだ読んでいない文書は空。
+std::span<const core::Diagnostic> EditorController::tab_diagnostics(std::size_t tab) const
 {
     if (tab == state_.active_tab())
     {
-        return &state_.diagnostics();
+        return state_.diagnostics();
     }
     const DocumentState *bundle = state_.parked_bundle_at(tab);
-    return bundle == nullptr ? nullptr : &bundle->diagnostics;
+    return bundle == nullptr ? std::span<const core::Diagnostic>{}
+                             : diagnostics_of(bundle->diagnostics);
 }
 
 // 1 つの文書の候補（行 → 桁 → 重さ）。行は「重さの印 ファイル名:行:桁」と、補足に文の最初の行。
 void EditorController::append_tab_diagnostics(std::size_t tab, std::string_view name,
                                               std::vector<core::CommandChoice> &entries)
 {
-    const std::vector<core::Diagnostic> *diagnostics = tab_diagnostics(tab);
+    const std::span<const core::Diagnostic> diagnostics = tab_diagnostics(tab);
+    if (diagnostics.empty())
+    {
+        return;
+    }
     const auto text = tab_text_at(tab);
-    if (diagnostics == nullptr || !text.has_value())
+    if (!text.has_value())
     {
         return;
     }
     const core::TextBuffer &body = *text.value().first;
-    for (const std::size_t index : core::diagnostic_order(*diagnostics))
+    for (const std::size_t index : core::diagnostic_order(diagnostics))
     {
-        const core::Diagnostic &diagnostic = diagnostics->at(index);
+        const core::Diagnostic &diagnostic = diagnostics[index];
         const core::TextPosition at = body.position_of(diagnostic.range.begin);
         auto label = core::clipped_display_text(
             std::string(core::diagnostic_severity_mark(diagnostic.severity)) + " " +

@@ -12,6 +12,7 @@
 #include "LineNumber.hpp"
 #include "PreviewTableScrolls.hpp"
 #include "Selection.hpp"
+#include "SharedDiagnostics.hpp"
 #include "TextBuffer.hpp"
 #include "VimCount.hpp"
 #include "VimEndOfLine.hpp"
@@ -59,8 +60,9 @@ struct DocumentState
     // 言語サーバーの診断（ADR 0161 の決定 2・3）。文書の値で、脇に置いても保つ。diagnostics
     // は本文の 位置で、編集でずらすのは controller の編集の 1 本（replace・undo・redo）だけ。
     // diagnostics_version は置いた診断が届いたときの版、diagnostics_count は上限で打ち切ったか
-    // （件数に `+` を付ける・決定 2）。開いた文書・新しいタブは空。
-    std::vector<core::Diagnostic> diagnostics{};
+    // （件数に `+` を付ける・決定 2）。開いた文書・新しいタブは空。列は不変の値を指す参照で、束を
+    // 写しても文は写さない（#1939 のレビュー R3）。
+    SharedDiagnostics diagnostics{};
     std::uint64_t diagnostics_version = 0;
     core::DiagnosticsCount diagnostics_count = core::DiagnosticsCount::complete;
     // Vim の eol に当たる旗（ADR 0188 の決定 1）。空は「まだ決めていない」で、読んだ文書の束は空の

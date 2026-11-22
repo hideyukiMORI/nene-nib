@@ -984,7 +984,10 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     // Vim が changed_* に渡した位置は engine の印が持つ（ADR 0181 の追補 #1374）。u と Ctrl-r は
     // 効果を写すときに戻した行を足す（note_vim_undone）。
     vim_changed_from_ = changed_position_of(step);
+    const bool outer_landed = std::exchange(vim_effect_landed_, false);
     applied_vim_step(step, before);
+    // 診断の鍵は跳べたら成功の歩（engine の失敗を読み替える・#1939 のレビュー R3 の推奨 3）。
+    const bool landed = std::exchange(vim_effect_landed_, outer_landed);
     const core::Offset command_caret = settle_vim_step(
         step, before,
         held.has_value() && !requests_window(step, held.value().second) ? held : std::nullopt);
@@ -992,7 +995,7 @@ std::optional<core::VimRepeatFailure> EditorController::stepped_vim(const VimSte
     check_vim_marks();
     restart_due_vim_insert(command_caret);
     // 再生（`.` `@`）の中の鍵が失敗したら、再生を返した鍵の失敗にする（Issue #983）。
-    return step_failure(step.failure, replay_failure_);
+    return step_failure(landed ? std::nullopt : step.failure, replay_failure_);
 }
 
 // INSERT の `Ctrl-o` の命令が終わった鍵の後に始め直す（ADR 0182 の決定 2）。効果を写して NORMAL の

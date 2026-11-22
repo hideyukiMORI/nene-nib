@@ -181,18 +181,30 @@ EditorController::preview_target(const core::CommandChoice &choice) const
     case core::CommandChoiceKind::execute:
         return {std::nullopt, untitled_position(choice.command)};
     case core::CommandChoiceKind::land:
-        // 診断の候補は開いているタブの文書（手元の本文から窓を作る・#1939）。
-        if (const auto target = palette_diagnostic_of(choice); target.has_value())
-        {
-            const auto views = detail::tab_views(state_, active_document_view());
-            return {views.at(target.value().tab).path, target.value().tab};
-        }
-        return {};
+        // 診断の候補は開いているタブの文書（手元の本文から窓を作る・#1939）。開いている間に裏で
+        // 読めなかったタブが帯から外れると位置が帯の外になり得るので、そのときは無し（ARC-010）。
+        return diagnostic_preview_target(choice);
     case core::CommandChoiceKind::fill:
     case core::CommandChoiceKind::operate:
         return {};
     }
     std::unreachable();
+}
+
+std::pair<std::optional<core::FilePath>, std::optional<std::size_t>>
+EditorController::diagnostic_preview_target(const core::CommandChoice &choice) const
+{
+    const auto target = palette_diagnostic_of(choice);
+    if (!target.has_value())
+    {
+        return {};
+    }
+    const auto views = detail::tab_views(state_, active_document_view());
+    if (target.value().tab >= views.size())
+    {
+        return {};
+    }
+    return {views[target.value().tab].path, target.value().tab};
 }
 
 // 全文検索の当たりは面の index 番目の当たり（open_project_hit と同じ対応）、診断は控えた候補の

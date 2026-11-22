@@ -654,6 +654,8 @@ class EditorController final
     // 候補が指すファイル（パスの無い候補は無し）と、それを開いているタブの帯の位置。
     [[nodiscard]] std::pair<std::optional<core::FilePath>, std::optional<std::size_t>>
     preview_target(const core::CommandChoice &choice) const;
+    [[nodiscard]] std::pair<std::optional<core::FilePath>, std::optional<std::size_t>>
+    diagnostic_preview_target(const core::CommandChoice &choice) const;
     // 全文検索の当たりの候補なら窓の中心（ほかは無し）。
     [[nodiscard]] std::optional<PreviewAnchor>
     preview_anchor_of(const core::CommandPalette &palette, const core::CommandChoice &choice) const;
@@ -1017,14 +1019,15 @@ class EditorController final
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
     // 札は hover の札と同じ欄（LanguageAnswers の hover）に置き、同じ道（settle_hover）で消える。
     // 一覧は面を開くときに append_diagnostic_choices が候補と palette_diagnostics_ を 1 回作る。
+    // run_diagnostic_command は跳べた・札を出せた・一覧を開いたときに真（Vim の鍵の成功の歩）。
     void accept(const RunDiagnosticCommand &intent);
     void perform(const core::VimDiagnosticCommand &effect);
-    void run_diagnostic_command(core::DiagnosticCommand command, std::size_t count);
-    void step_diagnostic(bool forward, std::size_t count);
+    [[nodiscard]] bool run_diagnostic_command(core::DiagnosticCommand command, std::size_t count);
+    [[nodiscard]] bool step_diagnostic(bool forward, std::size_t count);
     [[nodiscard]] bool show_diagnostic_tip(core::Offset at);
     void open_diagnostic_list();
     void append_diagnostic_choices(std::vector<core::CommandChoice> &entries);
-    [[nodiscard]] const std::vector<core::Diagnostic> *tab_diagnostics(std::size_t tab) const;
+    [[nodiscard]] std::span<const core::Diagnostic> tab_diagnostics(std::size_t tab) const;
     void append_tab_diagnostics(std::size_t tab, std::string_view name,
                                 std::vector<core::CommandChoice> &entries);
     [[nodiscard]] std::optional<PaletteDiagnostic>
@@ -1781,6 +1784,10 @@ class EditorController final
     // engine の効果を写している間か（ADR 0182 の決定 8）。replace はこの間の編集を割り込みと
     // 数えず、外の道（通常モードの意図）の編集だけが INSERT の `Ctrl-o` の印を捨てる。
     bool in_vim_effect_ = false;
+    // 流している鍵の効果を controller が果たせたか（`]d` `[d` で跳べた・`gl` で札を出せた・#1939 の
+    // レビュー R3 の推奨 3）。engine は診断を知らないので歩は失敗のまま返し、stepped_vim がこれで
+    // 成功の歩に読み替える（Neovim の `]d` は跳べれば成功・マクロと map の右辺の残りが流れる）。
+    bool vim_effect_landed_ = false;
     // 流している鍵で Vim が changed_* に渡した位置（engine の印 VimStep.change の位置・undo / redo
     // は戻した行の行頭）。stepped_vim が鍵の始めに置き、先頭を前の鍵から引き継ぐかの判定
     // （vim_top_still_valid）だけが読む（#1374・ADR 0181 の決定 6 と追補）。

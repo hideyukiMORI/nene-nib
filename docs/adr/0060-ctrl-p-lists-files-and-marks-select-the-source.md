@@ -132,4 +132,4 @@
 
 ## 追補（2026-11-22・#1939）: `^` 診断
 
-記号の表（決定 2）に `^`（`PaletteScope::diagnostics`・案内の名前「診断」）を 1 行足す。`!` は全文検索（ADR 0167）が使っているので、警告の三角に見える `^` にした。候補の印は `PaletteOrigin::diagnostic` で、`files`（記号の無い入力）には混ぜない（ファイルの候補ではない・`in_scope` の 1 本）。候補を作るのは controller の `append_diagnostic_choices`（面を開くときに 1 回）、確定は `CommandChoiceKind::land`。中身は ADR 0161 の同じ日の追補。
+記号の表（決定 2）に `^`（`PaletteScope::diagnostics`・案内の名前「診断」）を 1 行足す。`!` は全文検索（ADR 0167）が使っているので、警告の三角に見える `^` にした。候補の印は `PaletteOrigin::diagnostic` で、`files`（記号の無い入力）には混ぜない（ファイルの候補ではない・`in_scope` の 1 本）。候補を作るのは controller の `append_diagnostic_choices`（面を開くときに 1 回）、確定は `CommandChoiceKind::land`。中身は ADR 0161 の同じ日の追補。診断の候補もほかの出どころと同じく、どの記号で開いても開くときに 1 回作る（決定の形のまま・診断 1,000 件で開く 1 回が約 2 ms の目安なので `^` のときだけに絞らない・#1946 のレビュー R3）。
