@@ -1632,7 +1632,7 @@ void check_code_colors()
     const auto target = wic_target(bitmap);
     const auto catalog = core::ThemeCatalog::builtins();
     const auto theme = catalog.find(core::ThemeName::parse("ubuntu-aubergine").value());
-    const auto parsed = core::parse_markdown("```cpp\n// c\nint x = 1;\n```\n\n```zig\n// c\n```\n",
+    const auto parsed = core::parse_markdown("```cpp\n// c\nint x = 1;\n```\n\n```nim\n// c\n```\n",
                                              core::MarkdownStop::never());
     if (!parsed || parsed.value().blocks.size() != 2U)
     {

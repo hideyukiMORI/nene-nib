@@ -84,3 +84,7 @@
 
 - **識別子の表引きは表ごとの門を先に通す。** `LexScan.hpp` の `lex_in<表>` / `lex_folded_in<表>` が、表そのものから `consteval` で作る門 `LexWordGate`（先頭バイトの 256 ビットのマスク・語の長さの最小と最大・大小を問わない表は先頭バイトを ASCII の小文字に畳む）で当たる見込みの無い語を二分探索の前に落とす。門の別の表を書かない。偽陽性は許し偽陰性は無い（表の全語が門を通ることを `lex_in` の中の `static_assert` が表ごとに守る）。語ごとに複数の表を引く字句器は表ごとの門をそれぞれ通し、引く順は変えない。分類の振る舞いは不変（JS の `/` の判定の `expression_keywords` は #864 の所なので二分探索のまま）。
 - **門の守りは `static_assert`。** 表の全語が門を通ることは `lex_in` / `lex_folded_in` の中の `static_assert` が表ごとに守る（単体の試験は合成の表 2 つ）。表を足して門の作りと食い違えば、最初の落ち方はコンパイルエラーになる。
+
+## 追補（2026-11-20・#1917）: 言語 → 字句の関数は `switch` から表へ
+
+- 言語を 16 足す（ADR 0154 の 2026-11-20 の追補・字句器は無し）と、`lex_language` の `switch`（言語ごとに 1 行の `case`）が関数長 60 行（`readability-function-size`）を越える。言語 → 字句の関数は `Lexer.cpp` の表 `language_lexers`（i 行目が i 番目の `Language`・CPP-012）にし、行の言語を `static_assert` が値の順と数で縛る（数は `Language.hpp` の `language_count()`・`LanguageTable.cpp` の名前の表と `LexerPropertyTests.cpp` の上限も同じ 1 本を読む）。字句器を持たない言語の行は `nullptr`（`lex_language` が区間なしで状態をそのまま残す）で、`has_lexer` は「行の関数が `nullptr` でない」の 1 回の表引き（関数の番地どうしを比べると、Release の `/OPT:ICF` が同じ機械語の関数を畳んだときに狂うので比べない・#1943 のレビュー）（決定 14 の「plain の道の費用は 0」は `switch` 1 回が表引き 1 回になるだけで変わらない）。`lex_javascript` `lex_html` `lex_ini` のように言語の印を読む字句器は表の行に直接置き、印を読まない字句器は `lex_alone<…>` で包む。`lex_start_state` と `syntax_backfill_lines` は `switch` のまま（値の違う枝が少なく 60 行に収まる）。

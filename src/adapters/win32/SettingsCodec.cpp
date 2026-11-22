@@ -6,6 +6,7 @@
 #include "FinderPreview.hpp"
 #include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
+#include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "SettingsFields.hpp"
 
@@ -303,8 +304,17 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
                                });
 }
 
+// 1.0.0 が知る言語の名前か（Language の先頭から dockerfile までの 26 値・D91）。後の版が足した
+// 言語（Java など・ADR 0154 の 2026-11-20 の追補）の名前は v4 では受けない（v4 の読みを緩めない）。
+[[nodiscard]] bool released_language_name(std::string_view name) noexcept
+{
+    const auto language = core::language_of_name(name);
+    return language.has_value() &&
+           std::to_underlying(language.value()) <= std::to_underlying(core::Language::dockerfile);
+}
+
 // `lsp.<language>.command=<値>` の行。同じ名前の 2 行目は重複、値は空でないことだけを見る（絶対
-// パスかは使う所が見る）。v4 は言語を LanguageTable の名前だけ受ける（1.0.0 と同じ厳しさ・D91）。
+// パスかは使う所が見る）。v4 は言語を 1.0.0 の LanguageTable の名前だけ受ける（同じ厳しさ・D91）。
 // v5 は名前の形だけを厳密に読み、表に無い名前の行も持って書き戻す（後の版が足した言語の行を
 // 1.1.0 が読めて消さない・使うのは表の名前の行だけ・ADR 0170 の 2026-11-20
 // の追補）。並びは名前の順。
@@ -314,8 +324,10 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     std::vector<std::pair<std::string, std::string>> commands;
     for (const auto &[name, value] : fields.lsp_commands)
     {
-        const bool named = core::language_of_name(name).has_value() ||
-                           (version == SettingsVersion::v5 && command_name_shaped(name));
+        const bool named =
+            version == SettingsVersion::v5
+                ? core::language_of_name(name).has_value() || command_name_shaped(name)
+                : released_language_name(name);
         if (!named || value.empty() ||
             std::ranges::any_of(commands, [name](const auto &row) { return row.first == name; }))
         {

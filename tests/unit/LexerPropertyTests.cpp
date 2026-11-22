@@ -24,10 +24,12 @@
 #include "TestSupport.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -377,115 +379,47 @@ constexpr auto dockerfile_samples = std::to_array<std::string_view>({
     "ENV A=\"b\" C=${D}",
 });
 
-// Language の値か（LanguageTable.cpp の is_language と同じ形）。値を足すとこの switch
-// が落ち、足した後は 下の数え上げが 1 つ増えて last_language の static_assert が落ちる。
-[[nodiscard]] consteval bool is_language(Language language) noexcept
-{
-    switch (language)
-    {
-    case Language::plain:
-    case Language::markdown:
-    case Language::html:
-    case Language::c:
-    case Language::cpp:
-    case Language::python:
-    case Language::json:
-    case Language::javascript:
-    case Language::typescript:
-    case Language::yaml:
-    case Language::toml:
-    case Language::xml:
-    case Language::css:
-    case Language::powershell:
-    case Language::shell:
-    case Language::cmake:
-    case Language::gdscript:
-    case Language::dosini:
-    case Language::gdresource:
-    case Language::cs:
-    case Language::rust:
-    case Language::go:
-    case Language::php:
-    case Language::sql:
-    case Language::lua:
-    case Language::dockerfile:
-        return true;
-    }
-    return false;
-}
-
-// 値は 0 から連続して並ぶので、最初に値でなくなる所までが値の数。
-[[nodiscard]] consteval std::size_t language_count() noexcept
-{
-    std::size_t count = 0;
-    while (is_language(static_cast<Language>(count)))
-    {
-        ++count;
-    }
-    return count;
-}
-
 // 言語のループの上限。Language の最後の値でなくなったらコンパイルが落ちる。
-constexpr Language last_language = Language::dockerfile;
-static_assert(std::to_underlying(last_language) + 1U == language_count(),
+constexpr Language last_language = Language::svelte;
+static_assert(std::to_underlying(last_language) + 1U == core::language_count(),
               "last_language is the last value of Language");
 
-// 見本の行の供給元。新しい言語の値で switch が落ちる（CPP-002）。plain は見本を持たない。
-[[nodiscard]] Lines samples_of(Language language)
+// 見本の行の供給元（字句器を持つ言語ごとに 1 行・#1917 で言語が 42 になり switch を表にした）。
+// 字句器を持つのに行が無い言語は verify_lexer_property_scope の試験が落とす。
+using SampleRow = std::pair<Language, Lines>;
+
+constexpr std::array<SampleRow, 25> sample_rows{{
+    SampleRow{Language::markdown, markdown_samples},
+    SampleRow{Language::html, html_samples},
+    SampleRow{Language::xml, html_samples},
+    SampleRow{Language::c, c_samples},
+    SampleRow{Language::cpp, c_samples},
+    SampleRow{Language::python, python_samples},
+    SampleRow{Language::json, json_samples},
+    SampleRow{Language::javascript, javascript_samples},
+    SampleRow{Language::typescript, javascript_samples},
+    SampleRow{Language::yaml, yaml_samples},
+    SampleRow{Language::toml, toml_samples},
+    SampleRow{Language::css, css_samples},
+    SampleRow{Language::powershell, powershell_samples},
+    SampleRow{Language::shell, shell_samples},
+    SampleRow{Language::cmake, cmake_samples},
+    SampleRow{Language::gdscript, gdscript_samples},
+    SampleRow{Language::dosini, dosini_samples},
+    SampleRow{Language::gdresource, gdresource_samples},
+    SampleRow{Language::cs, cs_samples},
+    SampleRow{Language::rust, rust_samples},
+    SampleRow{Language::go, go_samples},
+    SampleRow{Language::php, php_samples},
+    SampleRow{Language::sql, sql_samples},
+    SampleRow{Language::lua, lua_samples},
+    SampleRow{Language::dockerfile, dockerfile_samples},
+}};
+
+[[nodiscard]] std::optional<Lines> samples_of(Language language)
 {
-    switch (language)
-    {
-    case Language::plain:
-        return {};
-    case Language::markdown:
-        return markdown_samples;
-    case Language::html:
-    case Language::xml:
-        return html_samples;
-    case Language::c:
-    case Language::cpp:
-        return c_samples;
-    case Language::python:
-        return python_samples;
-    case Language::json:
-        return json_samples;
-    case Language::javascript:
-    case Language::typescript:
-        return javascript_samples;
-    case Language::yaml:
-        return yaml_samples;
-    case Language::toml:
-        return toml_samples;
-    case Language::css:
-        return css_samples;
-    case Language::powershell:
-        return powershell_samples;
-    case Language::shell:
-        return shell_samples;
-    case Language::cmake:
-        return cmake_samples;
-    case Language::gdscript:
-        return gdscript_samples;
-    case Language::dosini:
-        return dosini_samples;
-    case Language::gdresource:
-        return gdresource_samples;
-    case Language::cs:
-        return cs_samples;
-    case Language::rust:
-        return rust_samples;
-    case Language::go:
-        return go_samples;
-    case Language::php:
-        return php_samples;
-    case Language::sql:
-        return sql_samples;
-    case Language::lua:
-        return lua_samples;
-    case Language::dockerfile:
-        return dockerfile_samples;
-    }
-    return {};
+    const auto found = std::ranges::find(sample_rows, language, &SampleRow::first);
+    return found == sample_rows.end() ? std::nullopt : std::optional{found->second};
 }
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
@@ -754,7 +688,8 @@ void verify_language(Language language, Random &random)
     run_document(language, random_document(random), false, faults);
     run_document(language, fragment_document(random), true, faults);
     run_document(language, fragment_document(random), false, faults);
-    run_document(language, mutated_document(random, samples_of(language)), true, faults);
+    run_document(language, mutated_document(random, samples_of(language).value_or(Lines{})), true,
+                 faults);
     run_document(language, long_document(random, short_long_line), true, faults);
     expect(faults == 0U, "lexer property: every generated line keeps invariants 1-4");
 }
@@ -793,6 +728,8 @@ void verify_lexer_property_scope()
          ++value)
     {
         const auto language = static_cast<Language>(value);
+        expect(core::has_lexer(language) == samples_of(language).has_value(),
+               "lexer property: every language with a lexer has sample lines");
         if (core::has_lexer(language))
         {
             verify_language(language, random);
