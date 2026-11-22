@@ -534,6 +534,11 @@ class EditorWindow final
     void run_copy_file_name();
     void run_close_other_tabs();
     void run_close_right_tabs();
+    // 診断の 4 つ（#1939）。
+    void run_next_diagnostic();
+    void run_previous_diagnostic();
+    void run_show_diagnostic();
+    void run_list_diagnostics();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

@@ -283,13 +283,7 @@ void EditorController::land_project_hit()
     if (path.has_value() && ports_.files.same_file(path.value(), landing.file))
     {
         project_landing_.reset();
-        // 飛ぶ前の位置を `''` に置く（Vim の setpcmark・`m'` と同じ 1 本）。
-        const auto from = core::vim_mark_position_of(state_.text(), state_.selection().caret);
-        auto marks = core::vim_mark_set(state_.vim_marks(), U'\'', from);
-        if (marks.has_value())
-        {
-            state_ = state_.with_vim_marks(std::move(marks).value());
-        }
+        set_context_mark();
         accept(PlaceCaret{landed_position(landing.at), core::SelectionAnchoring::collapse});
         return;
     }
@@ -298,6 +292,18 @@ void EditorController::land_project_hit()
                              { return ports_.files.same_file(reading.path, landing.file); }))
     {
         project_landing_.reset();
+    }
+}
+
+// 飛ぶ前の位置を `''` に置き、ジャンプの列にも積む（Vim の setpcmark・`m'` と同じ 1 本）。
+// 全文検索の当たり・定義・診断の跳び（#1939）が使う。
+void EditorController::set_context_mark()
+{
+    const auto from = core::vim_mark_position_of(state_.text(), state_.selection().caret);
+    auto marks = core::vim_mark_set(state_.vim_marks(), U'\'', from);
+    if (marks.has_value())
+    {
+        state_ = state_.with_vim_marks(std::move(marks).value());
     }
 }
 

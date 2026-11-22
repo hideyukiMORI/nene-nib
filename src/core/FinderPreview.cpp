@@ -62,6 +62,7 @@ bool palette_previews(PaletteScope scope) noexcept
     case PaletteScope::history:
     case PaletteScope::folder:
     case PaletteScope::project_hits:
+    case PaletteScope::diagnostics:
         return true;
     case PaletteScope::commands:
     case PaletteScope::operations:

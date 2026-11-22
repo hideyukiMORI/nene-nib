@@ -8,7 +8,7 @@ namespace nenenib::core
 // いるタブ、history は閉じたファイルの履歴、folder は今のファイルと同じフォルダ（ADR 0062 の
 // 決定 11）、commands は Ex の設定のコマンド、operations は操作の一覧（ADR 0078 の決定 6）、
 // project_hits はプロジェクトの全文検索の当たり（ADR 0167 の決定 1・入力は絞り込みではなく
-// 検索語）。
+// 検索語）、diagnostics は開いているタブの診断（#1939・ADR 0060 の表の追記・files には混ぜない）。
 // 値が増えたら写す switch が落ちる（CPP-002）。
 enum class PaletteScope : std::uint8_t
 {
@@ -19,6 +19,7 @@ enum class PaletteScope : std::uint8_t
     folder,
     commands,
     operations,
-    project_hits
+    project_hits,
+    diagnostics
 };
 } // namespace nenenib::core

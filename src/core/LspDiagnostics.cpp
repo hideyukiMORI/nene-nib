@@ -4,10 +4,12 @@
 #include "DiagnosticSeverity.hpp"
 #include "DiagnosticsCount.hpp"
 #include "JsonNull.hpp"
+#include "JsonNumber.hpp"
 #include "JsonValue.hpp"
 #include "LspJsonRead.hpp"
 #include "LspPosition.hpp"
 #include "Offset.hpp"
+#include "Utf8.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -46,15 +48,43 @@ constexpr std::uint64_t highest_severity = 4;
     return static_cast<DiagnosticSeverity>(value.value() - lowest_severity);
 }
 
-// 最初の改行（LF か CR）の前まで。走査は自前で書く（STL の検索は core の外へシンボルを出す）。
-[[nodiscard]] std::string first_line(std::string_view message)
+// 文の全部を上限のバイトまで（code point を割らない・#1939）。JSON の文字列は検証済みの UTF-8。
+[[nodiscard]] std::string bounded_message(std::string_view message)
 {
-    std::size_t end = 0;
-    while (end < message.size() && message[end] != '\n' && message[end] != '\r')
+    if (message.size() <= lsp_diagnostic_message_limit)
     {
-        ++end;
+        return std::string{message};
     }
-    return std::string{message.substr(0, end)};
+    std::size_t cut = lsp_diagnostic_message_limit;
+    while (cut > 0 && !is_boundary(message, Offset{cut}))
+    {
+        --cut;
+    }
+    return std::string{message.substr(0, cut)};
+}
+
+// 欄 key の短い文字列（source）。無い・文字列でない・上限を越えるなら空。
+[[nodiscard]] std::string label_member(const JsonObject &object, std::string_view key)
+{
+    const std::string *text = json_text_member(object, key);
+    return text != nullptr && text->size() <= lsp_diagnostic_label_limit ? *text : std::string{};
+}
+
+// code の欄（LSP 3.17 は integer | string）。整数（負も・JSON の数が整数として読めるとき）は 10
+// 進の 文字列、文字列はそのまま（上限を越えたら空）、それ以外は空。
+[[nodiscard]] std::string code_member(const JsonObject &object)
+{
+    const Member found = json_member(object, "code");
+    if (!found.has_value())
+    {
+        return {};
+    }
+    if (const auto *number = std::get_if<JsonNumber>(&found.value().get().value);
+        number != nullptr && number->integer.has_value())
+    {
+        return std::to_string(number->integer.value());
+    }
+    return label_member(object, "code");
 }
 
 [[nodiscard]] std::optional<Diagnostic>
@@ -77,8 +107,11 @@ diagnostic_of(const JsonValue &value, const TextBuffer &text, LspPositionEncodin
     {
         return std::nullopt;
     }
-    return Diagnostic{
-        .range = placed.value(), .severity = severity.value(), .message = first_line(*message)};
+    return Diagnostic{.range = placed.value(),
+                      .severity = severity.value(),
+                      .message = bounded_message(*message),
+                      .source = label_member(*object, "source"),
+                      .code = code_member(*object)};
 }
 
 // version の欄。無いか null なら値なし、0 以上の整数なら値、それ以外は不正。

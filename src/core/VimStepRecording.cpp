@@ -476,6 +476,12 @@ namespace
     return false;
 }
 
+// `]d` `[d` `gl` も本文を変えない（#1939）。
+[[nodiscard]] bool changes_text(const VimDiagnosticCommand &) noexcept
+{
+    return false;
+}
+
 // `:s` の族は `.` の記録に積まない（ADR 0168 の追補 6）。`c` の問いの答えも同じ。
 [[nodiscard]] bool changes_text(const VimConfirmSubstitute &) noexcept
 {

@@ -23,6 +23,7 @@
 #include "ContextMenuView.hpp"
 #include "DetectedText.hpp"
 #include "Diagnostic.hpp"
+#include "DiagnosticCommand.hpp"
 #include "DiagnosticsCount.hpp"
 #include "DisplayLanguage.hpp"
 #include "Distribution.hpp"
@@ -113,6 +114,7 @@
 #include "OpenRequest.hpp"
 #include "OpenedAs.hpp"
 #include "OpenedDocument.hpp"
+#include "PaletteDiagnostic.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteProjectSearch.hpp"
@@ -166,6 +168,7 @@
 #include "VimChange.hpp"
 #include "VimCharacter.hpp"
 #include "VimConfirmSubstitute.hpp"
+#include "VimDiagnosticCommand.hpp"
 #include "VimEditorView.hpp"
 #include "VimEffect.hpp"
 #include "VimKey.hpp"
@@ -652,6 +655,8 @@ class EditorController final
     // 候補が指すファイル（パスの無い候補は無し）と、それを開いているタブの帯の位置。
     [[nodiscard]] std::pair<std::optional<core::FilePath>, std::optional<std::size_t>>
     preview_target(const core::CommandChoice &choice) const;
+    [[nodiscard]] std::pair<std::optional<core::FilePath>, std::optional<std::size_t>>
+    diagnostic_preview_target(const core::CommandChoice &choice) const;
     // 全文検索の当たりの候補なら窓の中心（ほかは無し）。
     [[nodiscard]] std::optional<PreviewAnchor>
     preview_anchor_of(const core::CommandPalette &palette, const core::CommandChoice &choice) const;
@@ -682,6 +687,8 @@ class EditorController final
     // 開いた当たりの文書がアクティブならキャレットを置く（`''` を置いてから
     // PlaceCaret）。開く要求が 消えていれば（開けなかった）置く先を捨てる。
     void land_project_hit();
+    // 飛ぶ前の位置を `''` とジャンプの列に置く 1 本（全文検索の当たり・定義・診断の跳び）。
+    void set_context_mark();
     // 着地の位置 → アクティブな本文の行と桁（選択肢ごとの写し先を std::visit で引く・言語
     // サーバーの Position は lsp_offset_of の 1 本）。
     [[nodiscard]] core::TextPosition landed_position(const LandingPlace &place) const;
@@ -1023,6 +1030,24 @@ class EditorController final
     void settle_hover(const EditorIntent &intent);
     void drop_hover();
     [[nodiscard]] std::optional<std::string> shown_hover() const;
+    // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
+    // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
+    // 札は hover の札と同じ欄（LanguageAnswers の hover）に置き、同じ道（settle_hover）で消える。
+    // 一覧は面を開くときに append_diagnostic_choices が候補と palette_diagnostics_ を 1 回作る。
+    // run_diagnostic_command は跳べた・札を出せた・一覧を開いたときに真（Vim の鍵の成功の歩）。
+    void accept(const RunDiagnosticCommand &intent);
+    void perform(const core::VimDiagnosticCommand &effect);
+    [[nodiscard]] bool run_diagnostic_command(core::DiagnosticCommand command, std::size_t count);
+    [[nodiscard]] bool step_diagnostic(bool forward, std::size_t count);
+    [[nodiscard]] bool show_diagnostic_tip(core::Offset at);
+    void open_diagnostic_list();
+    void append_diagnostic_choices(std::vector<core::CommandChoice> &entries);
+    [[nodiscard]] std::span<const core::Diagnostic> tab_diagnostics(std::size_t tab) const;
+    void append_tab_diagnostics(std::size_t tab, std::string_view name,
+                                std::vector<core::CommandChoice> &entries);
+    [[nodiscard]] std::optional<PaletteDiagnostic>
+    palette_diagnostic_of(const core::CommandChoice &choice) const;
+    void land_palette_diagnostic(const core::CommandChoice &choice);
     // プレビューのリンクの札（施主決定 D105・D106・#1869 の段 L2・EditorControllerLinkCard.cpp）。
     // 開くのは ClickPreviewLink、閉じるのは札の意図と入口の close_link_card_before（札の意図と
     // 使う人の操作でない意図のほか）。web と mail は LinkOpenPort、document は open_listed の 1
@@ -1774,6 +1799,10 @@ class EditorController final
     // engine の効果を写している間か（ADR 0182 の決定 8）。replace はこの間の編集を割り込みと
     // 数えず、外の道（通常モードの意図）の編集だけが INSERT の `Ctrl-o` の印を捨てる。
     bool in_vim_effect_ = false;
+    // 流している鍵の効果を controller が果たせたか（`]d` `[d` で跳べた・`gl` で札を出せた・#1939 の
+    // レビュー R3 の推奨 3）。engine は診断を知らないので歩は失敗のまま返し、stepped_vim がこれで
+    // 成功の歩に読み替える（Neovim の `]d` は跳べれば成功・マクロと map の右辺の残りが流れる）。
+    bool vim_effect_landed_ = false;
     // 流している鍵で Vim が changed_* に渡した位置（engine の印 VimStep.change の位置・undo / redo
     // は戻した行の行頭）。stepped_vim が鍵の始めに置き、先頭を前の鍵から引き継ぐかの判定
     // （vim_top_still_valid）だけが読む（#1374・ADR 0181 の決定 6 と追補）。
@@ -1807,6 +1836,8 @@ class EditorController final
     bool project_draining_ = false;
     // 当たりを開いた後にキャレットを置く先（決定 5）。置いた・開けなかったら消す。
     std::optional<ProjectHitLanding> project_landing_;
+    // 面を開いたときに控えた診断の候補の指す所（#1939）。候補の command がこの列の位置。
+    std::vector<PaletteDiagnostic> palette_diagnostics_;
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
     // 「…」の行と行の外を押したときは値なし（離しても何もしない）。
     std::optional<core::FilePath> explorer_pressed_;

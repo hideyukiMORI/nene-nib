@@ -162,12 +162,15 @@ namespace
         return PaletteScope::files;
     case PaletteOrigin::project_hit:
         return PaletteScope::project_hits;
+    case PaletteOrigin::diagnostic:
+        return PaletteScope::diagnostics;
     }
     std::unreachable();
 }
 
-// 出どころで絞るのはこの 1 つ（ADR 0060 の決定 3）。files は印のある候補の全部、commands と
-// operations の候補は列に無い（Ex のコマンドは palette_choices、操作は operation_choices が作る）。
+// 出どころで絞るのはこの 1 つ（ADR 0060 の決定 3）。files は印のある候補の全部（診断は除く・
+// ファイルの候補ではない・#1939）、commands と operations の候補は列に無い（Ex のコマンドは
+// palette_choices、操作は operation_choices が作る）。
 [[nodiscard]] bool in_scope(const std::optional<PaletteOrigin> &origin, PaletteScope scope) noexcept
 {
     if (!origin.has_value())
@@ -177,7 +180,7 @@ namespace
     switch (scope)
     {
     case PaletteScope::files:
-        return true;
+        return origin.value() != PaletteOrigin::diagnostic;
     case PaletteScope::bookmarks:
         return origin.value() == PaletteOrigin::bookmark ||
                origin.value() == PaletteOrigin::bookmarked_tab;
@@ -187,6 +190,7 @@ namespace
     case PaletteScope::commands:
     case PaletteScope::operations:
     case PaletteScope::project_hits:
+    case PaletteScope::diagnostics:
         return scope_of(origin.value()) == scope;
     }
     std::unreachable();
@@ -487,6 +491,8 @@ namespace
         return UiMessage::palette_origin_document_format;
     case PaletteOrigin::project_hit:
         return UiMessage::palette_mark_project;
+    case PaletteOrigin::diagnostic:
+        return UiMessage::palette_mark_diagnostics;
     }
     std::unreachable();
 }

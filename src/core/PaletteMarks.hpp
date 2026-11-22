@@ -15,7 +15,7 @@ namespace nenenib::core
 {
 // 出どころの記号の表（ADR 0060 の決定 2）。載せるのは実装した出どころだけで、出どころを足すときは
 // ここに 1 行を足す。表に無い記号で始まる入力は files のただの検索の文字。
-inline constexpr std::array<PaletteMark, 7> palette_marks{{
+inline constexpr std::array<PaletteMark, 8> palette_marks{{
     {'#', PaletteScope::tabs, UiMessage::palette_mark_tabs},
     {'*', PaletteScope::bookmarks, UiMessage::label_bookmarks},
     {'@', PaletteScope::history, UiMessage::label_history},
@@ -23,6 +23,8 @@ inline constexpr std::array<PaletteMark, 7> palette_marks{{
     {':', PaletteScope::commands, UiMessage::palette_mark_settings},
     {'?', PaletteScope::operations, UiMessage::palette_mark_operations},
     {'!', PaletteScope::project_hits, UiMessage::palette_mark_project},
+    // 開いているタブの診断（#1939）。`!` は全文検索が使っているので、警告の三角に見える `^`。
+    {'^', PaletteScope::diagnostics, UiMessage::palette_mark_diagnostics},
 }};
 
 // 入力の先頭の 1 文字を表で引く。表にあればその出どころと残りの文字、無ければ files と入力の全体。
@@ -33,8 +35,8 @@ inline constexpr std::array<PaletteMark, 7> palette_marks{{
 [[nodiscard]] std::string palette_input_for(const PaletteQuery &query);
 
 // 検索欄の案内（`# タブ　* ブックマーク　@ 履歴　/ フォルダ　: 設定　? 操作　!
-// 全文`）。記号と名前の間は半角の空白、項目の間は表の区切り palette_mark_separator（日本語は全角の
-// 空白 U+3000）。名前と区切りは language の文（#1019）。
+// 全文　^ 診断`）。記号と名前の間は半角の空白、項目の間は表の区切り
+// palette_mark_separator（日本語は全角の 空白 U+3000）。名前と区切りは language の文（#1019）。
 [[nodiscard]] DisplayText palette_mark_hint(DisplayLanguage language);
 
 // 案内の文（palette_mark_hint）の中で、各組（記号 ＋ 名前）が始まるバイトの位置（表の順・#1640）。
