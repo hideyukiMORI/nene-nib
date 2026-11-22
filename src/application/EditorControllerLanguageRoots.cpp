@@ -2,6 +2,7 @@
 
 #include "FileFolder.hpp"
 #include "FilePath.hpp"
+#include "HeldLanguageRoot.hpp"
 #include "Language.hpp"
 #include "LanguageRootAnswer.hpp"
 #include "LanguageRootGap.hpp"
@@ -55,6 +56,51 @@ EditorController::document_root(core::Language language) const
         return std::unexpected(LanguageRootGap::seeking);
     }
     return known->found.value_or(request.folder);
+}
+
+// held が今の（言語・文書のパス・設定の root・覚えの改訂）と同じ鍵か。
+bool EditorController::holds_language_root(core::Language language) const
+{
+    const auto &held = language_servers_.held;
+    const auto &path = state_.document().path;
+    return held.has_value() && path.has_value() && held.value().language == language &&
+           held.value().answers == language_servers_.answers && held.value().path == path.value() &&
+           held.value().configured == state_.settings().root;
+}
+
+// 1 回決めた root が今も同じ鍵なら読み、違えば決め直す（打鍵ごとの費用は鍵の比べだけ・L1）。
+std::expected<core::FilePath, LanguageRootGap>
+EditorController::held_root(core::Language language) const
+{
+    const auto &held = language_servers_.held;
+    if (held.has_value() && holds_language_root(language))
+    {
+        return held.value().root;
+    }
+    return document_root(language);
+}
+
+// reconcile の入口。鍵が変わったときだけ document_root で決め直して持つ（パスの無い文書と、まだ
+// 決まらない文書は持たない）。
+void EditorController::hold_language_root(core::Language language)
+{
+    if (holds_language_root(language))
+    {
+        return;
+    }
+    auto &held = language_servers_.held;
+    held.reset();
+    const auto &path = state_.document().path;
+    auto root = document_root(language);
+    if (!path.has_value() || !root.has_value())
+    {
+        return;
+    }
+    held = HeldLanguageRoot{.language = language,
+                            .path = path.value(),
+                            .configured = state_.settings().root,
+                            .answers = language_servers_.answers,
+                            .root = std::move(root).value()};
 }
 
 // 設定に language の命令の行があるか（命令の無い言語のためには root を探さない）。
@@ -113,6 +159,7 @@ void EditorController::collect_language_roots()
         }
         servers.roots.push_back(std::move(answer));
     }
+    ++servers.answers;
     servers.considered.reset();
     reconcile_language_server();
 }

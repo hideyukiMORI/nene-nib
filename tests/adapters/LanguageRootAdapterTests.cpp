@@ -20,6 +20,7 @@
 #include <optional>
 #include <semaphore>
 #include <stop_token>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -103,6 +104,50 @@ void verify_on_disk()
            "after the stop request nothing is looked at");
 }
 
+// 今のフォルダ（一時フォルダ）の絶対の経路を UTF-8 で。取れなければ空。
+std::string current_folder_utf8()
+{
+    std::wstring wide(MAX_PATH * 4, L'\0');
+    const DWORD length = GetCurrentDirectoryW(static_cast<DWORD>(wide.size()), wide.data());
+    if (length == 0 || length >= wide.size())
+    {
+        return {};
+    }
+    wide.resize(length);
+    const int bytes = WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()),
+                                          nullptr, 0, nullptr, nullptr);
+    std::string text(static_cast<std::size_t>(bytes > 0 ? bytes : 0), '\0');
+    if (bytes > 0)
+    {
+        WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), text.data(),
+                            bytes, nullptr, nullptr);
+    }
+    return text;
+}
+
+// `\\?\` の経路でも同じ印を見つける（#1944 のレビュー R1）。上る列の根で止まるかは core の純関数
+// の試験（--language-root の verify_climb_floor）が UNC と `\\?\` の文字で確かめる。
+void verify_long_prefix()
+{
+    const std::string here = current_folder_utf8();
+    expect(!here.empty() && here.size() > 2 && here[1] == ':',
+           "the temporary folder has a drive path");
+    if (here.empty() || here.size() <= 2 || here[1] != ':')
+    {
+        return;
+    }
+    const std::string base = "\\\\?\\" + here + "\\roots";
+    const std::stop_source running;
+    const auto rust = adapters::language_root_on_disk(path_of(base + "\\crate\\src\\deep"),
+                                                      core::Language::rust, running.get_token());
+    expect(rust.has_value() && rust.value().text() == base + "\\crate",
+           "a \\\\?\\ path finds the folder of Cargo.toml");
+    const auto plain = adapters::language_root_on_disk(path_of(base + "\\crate\\src"),
+                                                       core::Language::cs, running.get_token());
+    expect(plain.has_value() && plain.value().text() == base,
+           "a \\\\?\\ path finds the folder of .git");
+}
+
 void verify_on_worker()
 {
     adapters::Win32Worker worker;
@@ -142,6 +187,7 @@ int main()
     }
     make_tree();
     verify_on_disk();
+    verify_long_prefix();
     verify_on_worker();
     std::printf("Language root adapter: %zu checks, %zu failures\n", checks(), failures());
     nenenib::tests::remove_temporary_test_directory(directory.value());

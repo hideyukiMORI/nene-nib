@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FilePath.hpp"
+#include "HeldLanguageRoot.hpp"
 #include "Language.hpp"
 #include "LanguageRootAnswer.hpp"
 #include "LanguageRootRequest.hpp"
@@ -31,7 +32,9 @@ inline constexpr std::size_t language_root_memory = 64;
 // は used の 印の通し番号、idle は受ける席が無いときに読む空のつながり（能力も文書も無い）。roots
 // は印を 探した答えの覚え（（フォルダ・言語）ごとに 1 つ・窓を閉じるまで・上限 language_root_memory
 // で 古い方から捨てる・段 S3）、seeking は頼んでまだ答えの来ない（フォルダ・言語）（同じ頼みを 2 回
-// 出さない・空なら collect を呼ばない）。公開 aggregate（CPP-003）。
+// 出さない・空なら collect を呼ばない）。answers は roots を書き換えた回数（held の鍵）、held は
+// アクティブな文書について reconcile が 1 回決めた root（#1944 のレビュー L1）。公開 aggregate
+// （CPP-003）。
 struct LanguageServers
 {
     std::array<LanguageServerLink, language_server_slot_limit> links = {};
@@ -46,5 +49,7 @@ struct LanguageServers
     LanguageServerLink idle = {};
     std::vector<LanguageRootAnswer> roots = {};
     std::vector<LanguageRootRequest> seeking = {};
+    std::uint64_t answers = 0;
+    std::optional<HeldLanguageRoot> held = std::nullopt;
 };
 } // namespace nenenib::application

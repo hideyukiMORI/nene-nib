@@ -16,34 +16,52 @@ namespace nenenib::core
 // 段目に数える。
 inline constexpr std::size_t lsp_root_search_depth = 32;
 
-// 言語サーバーの root を探す印の表の唯一の写し（ADR 0161 の 2026-11-22 の追補・段 S3）。言語ごとの
-// 印の列の後ろに全言語に共通の最後の印 `.git` が付く（列は空でない）。中身は nvim-lspconfig の
-// `root_markers` に照らした。glob の印（`*.sln`）は持たない。OS に触れない。
-[[nodiscard]] std::span<const std::string_view> lsp_root_markers(Language language) noexcept;
+// 同じ優先の印の組（どれか 1 つがあれば当たり）。
+using LspRootTier = std::span<const std::string_view>;
 
-// folder とその上のフォルダを近い順に（folder が 1 つ目・上限 lsp_root_search_depth・ドライブや
-// 共有の根で止まる）。
+// 言語サーバーの root を探す印の表の唯一の写し（ADR 0161 の 2026-11-22 の追補・段 S3）。組の列は
+// 優先の順（Neovim の `vim.fs.root` と同じ意味）で、空でない。中身と順は nvim-lspconfig の
+// `lsp/<server>.lua` に照らした。glob の印（`*.sln`）は持たない。OS に触れない。
+[[nodiscard]] std::span<const LspRootTier> lsp_root_markers(Language language) noexcept;
+
+// folder とその上のフォルダを近い順に（folder が 1 つ目・上限 lsp_root_search_depth）。ドライブの根
+// （`C:\`・`\\?\C:\`）と共有の根（`\\server\share`・`\\?\UNC\server\share`）より上へは行かない。
 [[nodiscard]] std::vector<FilePath> lsp_root_folders(const FilePath &folder);
 
 // folder の下の印 marker の経路（区切りは folder の末尾に無ければ `\` を 1 つ）。
 [[nodiscard]] FilePath lsp_root_marker_path(const FilePath &folder, std::string_view marker);
 
-// folder から上へ、印のどれか（present が「ある」と答える経路）がある最初のフォルダ（段 S3）。
-// フォルダごとに表の順に見る。見つからなければ値なし。ファイルに触れるのは present を渡す側
-// （adapter・試験の替え玉）だけ（std::function を core に持ち込まないよう、写しはこの 1
-// 本の雛形）。
+// folders（近い順）のうち、組 tier の印のどれかがある最初のフォルダの位置（無ければ終わり）。
+template <typename Present>
+[[nodiscard]] std::vector<FilePath>::const_iterator
+lsp_root_tier_found(const std::vector<FilePath> &folders, LspRootTier tier, const Present &present)
+{
+    return std::ranges::find_if(folders,
+                                [tier, &present](const FilePath &here)
+                                {
+                                    return std::ranges::any_of(
+                                        tier, [&here, &present](std::string_view marker)
+                                        { return present(lsp_root_marker_path(here, marker)); });
+                                });
+}
+
+// 印の組を優先の順に 1 つずつ、folder から上へ当て（present が「ある」と答える経路）、最初に
+// 当たったフォルダ（段 S3）。どの組も当たらなければ値なし。確かめは多くて（印の数 × 上る段の
+// 数）回。ファイルに触れるのは present を渡す側（adapter・試験の替え玉）だけ（std::function を
+// core に持ち込まないよう、写しはこの 1 本の雛形）。
 template <typename Present>
 [[nodiscard]] std::optional<FilePath> lsp_root_found(const FilePath &folder, Language language,
                                                      const Present &present)
 {
-    const auto markers = lsp_root_markers(language);
-    const auto marked = [&markers, &present](const FilePath &here)
+    const auto folders = lsp_root_folders(folder);
+    for (const LspRootTier tier : lsp_root_markers(language))
     {
-        return std::ranges::any_of(markers, [&here, &present](std::string_view marker)
-                                   { return present(lsp_root_marker_path(here, marker)); });
-    };
-    auto folders = lsp_root_folders(folder);
-    const auto found = std::ranges::find_if(folders, marked);
-    return found != folders.end() ? std::optional{*found} : std::nullopt;
+        const auto found = lsp_root_tier_found(folders, tier, present);
+        if (found != folders.end())
+        {
+            return *found;
+        }
+    }
+    return std::nullopt;
 }
 } // namespace nenenib::core

@@ -321,6 +321,7 @@ void EditorController::reconcile_language_server()
         return;
     }
     const core::Language language = state_.language();
+    hold_language_root(language);
     auto serving = serving_slot(language);
     if (!serving.has_value())
     {
@@ -347,7 +348,7 @@ void EditorController::reconcile_language_server()
 // のまま）。 2 つ以上なら最後に使った席。
 std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language language) const
 {
-    const auto root = document_root(language);
+    const auto root = held_root(language);
     if (!root.has_value() && root.error() == LanguageRootGap::seeking)
     {
         return std::nullopt;
@@ -358,7 +359,8 @@ std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language 
     {
         const LanguageServerLink &link = links.at(slot_index(slot));
         if (!serving_phase(link.phase) || link.language != std::optional{language} ||
-            (root.has_value() && link.root != std::optional{root.value()}))
+            (root.has_value() &&
+             !(link.root.has_value() && same_language_root(link.root.value(), root.value()))))
         {
             continue;
         }
@@ -432,12 +434,10 @@ void EditorController::consider_language_server(core::Language language)
         return;
     }
     servers.considered = std::move(key);
-    if (language_server_given_up(language))
-    {
-        return;
-    }
+    // 諦めた言語でも root は探す（同じ言語の生きている別の root の席が受けられる文書を受ける・#1944
+    // のレビュー R3）。止めるのは新しい子を起こすことだけ。
     auto launch = wanted_language_server(language);
-    if (!launch.has_value())
+    if (!launch.has_value() || language_server_given_up(language))
     {
         return;
     }

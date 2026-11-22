@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AsciiCase.hpp"
 #include "FilePath.hpp"
 #include "Language.hpp"
 
@@ -13,9 +14,17 @@ struct LanguageRootRequest
     core::Language language;
 };
 
+// 同じ root のフォルダか（Windows のパスとして ASCII の大小を区別しない・folder_contains と同じ
+// 畳み方・ファイルに触れない・#1944 のレビュー L4）。席の鍵と覚えの鍵が使う。
+[[nodiscard]] inline bool same_language_root(const core::FilePath &left,
+                                             const core::FilePath &right) noexcept
+{
+    return core::ascii_equal_ignoring_case(left.text(), right.text());
+}
+
 [[nodiscard]] inline bool same_language_root_request(const LanguageRootRequest &left,
                                                      const LanguageRootRequest &right) noexcept
 {
-    return left.language == right.language && left.folder.text() == right.folder.text();
+    return left.language == right.language && same_language_root(left.folder, right.folder);
 }
 } // namespace nenenib::application
