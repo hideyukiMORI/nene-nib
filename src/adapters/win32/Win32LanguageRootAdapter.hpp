@@ -17,9 +17,9 @@
 namespace nenenib::adapters::win32
 {
 // 頼みのフォルダから上へ（頼みの上限があればそれより上へは出ない・#1960）、言語の印のどれかがある
-// 最初のフォルダ（段 S3）。印の有る無しは GetFileAttributesW の 1
-// 回ずつで見る（ファイルでもフォルダ でもよい・`.git` は worktree ではファイル）。stop
-// が来たら以後は見ずに値なし。ワーカーのスレッドで 呼ぶ。
+// 最初のフォルダ（段 S3）。印の有る無しは GetFileAttributesW の 1 回ずつで見る（ファイルでも
+// フォルダでもよい・`.git` は worktree ではファイル）。stop が来たら以後は見ずに値なし。
+// ワーカーのスレッドで呼ぶ。
 [[nodiscard]] std::optional<core::FilePath>
 language_root_on_disk(const application::LanguageRootRequest &request, const std::stop_token &stop);
 

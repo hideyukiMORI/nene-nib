@@ -298,6 +298,15 @@ void verify_folder_contains()
     expect(!core::folder_contains(path_of("C:\\repo"), path_of("C:\\repository\\a.rs")) &&
                !core::folder_contains(path_of("C:\\repo\\src"), path_of("C:\\repo\\a.rs")),
            "a sibling with a longer name or a parent is not inside");
+    expect(core::folder_contains(path_of("C:\\repo\\"), path_of("C:\\repo")) &&
+               core::folder_contains(path_of("C:\\"), path_of("C:\\repo")) &&
+               core::same_folder(path_of("C:\\Repo\\"), path_of("c:/repo")) &&
+               core::same_folder(path_of("C:\\"), path_of("c:/")) &&
+               !core::same_folder(path_of("C:\\"), path_of("C:")) &&
+               !core::same_folder(path_of("C:\\repo"), path_of("C:\\repo\\src")) &&
+               core::folder_spelling(path_of("C:\\")) == "C:\\" &&
+               core::folder_spelling(path_of("\\\\srv\\share\\")) == "\\\\srv\\share",
+           "a trailing separator is folded away except on a root (#1963 review M1)");
 }
 
 // `repo\src\main.rs` の root は `Cargo.toml` のある `repo`。答えの前は子を起こさない。同じ木の
@@ -421,6 +430,8 @@ void verify_climb_ceiling()
     expect(climbed_under("C:\\work\\a\\b", "C:\\work") == "C:\\work\\a\\b;C:\\work\\a;C:\\work" &&
                climbed_under("C:\\work\\a", "c:\\WORK\\") == "C:\\work\\a;C:\\work" &&
                climbed_under("C:\\work", "C:\\work") == "C:\\work" &&
+               climbed_under("C:\\work", "C:\\work\\") == "C:\\work" &&
+               climbed_under("C:\\work", "c:/WORK/") == "C:\\work" &&
                climbed_under("C:\\work\\a", "C:\\") == "C:\\work\\a;C:\\work;C:\\",
            "the walk stops at the ceiling folder and still looks at it");
     expect(climbed_under("C:\\other\\a", "C:\\work") == "C:\\other\\a;C:\\other;C:\\",
@@ -436,6 +447,48 @@ void verify_climb_ceiling()
                app::same_language_root_request(capped, folded) &&
                !app::same_language_root_request(capped, lower),
            "the remembered key holds the ceiling, folded like the folder");
+}
+
+// 設定の root の書き方（末尾の区切り・`/`）が違っても、直下の文書は探さずに設定の root（#1963 の
+// レビュー M1 / R1）。上に印があっても設定の root より上へ出ない。
+void verify_configured_root_spelling()
+{
+    for (const std::string_view root : {"C:\\work\\", "C:/work"})
+    {
+        Editing editing(root_settings(true));
+        editing.files().hold_at("C:\\work\\top.rs", Bytes{std::string("x\n")});
+        editing.language_roots().place("C:\\.git");
+        static_cast<void>(run_ex(editing.controller(), "set root=" + std::string(root)));
+        applied(editing.controller(), app::OpenDocument{path_of("C:\\work\\top.rs")});
+        applied(editing.controller(), app::WorkCompleted{});
+        expect(editing.language_roots().requests().empty() &&
+                   editing.language_server().launches().size() == 1 && last_root(editing) == root,
+               "a document right in the configured root, spelled with a trailing or a forward "
+               "separator, starts there without searching");
+    }
+}
+
+// 答えを待つ間に設定の root を変えたら、新しい上限で頼み直し、古い上限の答えを使わない（#1963 の
+// レビュー R3・覚えの鍵の上限の比べ）。
+void verify_ceiling_changed_while_waiting()
+{
+    Editing editing(root_settings(true, "C:\\work"));
+    editing.files().hold_at(std::string(nested_rs), Bytes{std::string("x\n")});
+    auto &roots = editing.language_roots();
+    roots.place("C:\\work\\Cargo.toml");
+    roots.hold();
+    applied(editing.controller(), app::OpenDocument{path_of(nested_rs)});
+    static_cast<void>(run_ex(editing.controller(), "set root=C:\\work\\evidence"));
+    expect(roots.requests().size() == 2 &&
+               roots.requests().back().ceiling.value_or(path_of("C:\\none")).text() ==
+                   "C:\\work\\evidence" &&
+               editing.language_server().launches().empty(),
+           "changing the configured root while waiting asks again with the new ceiling");
+    roots.release();
+    applied(editing.controller(), app::WorkCompleted{});
+    expect(editing.language_server().launches().size() == 1 &&
+               last_root(editing) == "C:\\work\\evidence",
+           "the answer for the old ceiling is not used for the new one");
 }
 
 // 答えを待つ間に同じ（フォルダ・言語）を開き直しても 2 回頼まない。答えが来れば起きる。
@@ -573,6 +626,8 @@ void verify_language_root_scope()
     verify_configured_root();
     verify_project_inside_configured_root();
     verify_climb_ceiling();
+    verify_configured_root_spelling();
+    verify_ceiling_changed_while_waiting();
     verify_waiting();
     verify_quiet();
 }

@@ -66,8 +66,9 @@ EditorController::document_root(core::Language language) const
         return std::unexpected(LanguageRootGap::untitled);
     }
     // 文書が設定の root の直下にあれば、印があってもなくても root は設定の root（探さない）。
+    // 直下かは core の same_folder（folder_contains と同じ畳み方・`C:\work\` `C:/work` も直下）。
     const auto &ceiling = request.value().ceiling;
-    if (ceiling.has_value() && same_language_root(ceiling.value(), request.value().folder))
+    if (ceiling.has_value() && core::same_folder(ceiling.value(), request.value().folder))
     {
         return ceiling.value();
     }
@@ -158,10 +159,9 @@ void EditorController::seek_language_root(core::Language language)
     ports_.language_roots.find(std::move(request));
 }
 
-// WorkCompleted の道。頼んでいなければ port
-// を呼ばない。答えは（フォルダ・言語・探す上限）で覚え（数の上限を
-// 超えたら古い方から捨てる）、起こすかを決め直す。言語サーバーの出来事を集めるより前に呼ぶので、
-// 答えで起きた子の最初の出来事は同じ合図で読む。
+// WorkCompleted の道。頼んでいなければ port を呼ばない。答えは（フォルダ・言語・探す上限）で
+// 覚え（数の上限を超えたら古い方から捨てる）、起こすかを決め直す。言語サーバーの出来事を集める
+// より前に呼ぶので、答えで起きた子の最初の出来事は同じ合図で読む。
 void EditorController::collect_language_roots()
 {
     auto &servers = language_servers_;

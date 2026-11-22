@@ -261,9 +261,10 @@ std::span<const LspRootTier> lsp_root_markers(Language language) noexcept
 
 namespace
 {
-// 上れる下限の長さに、folder を含む ceiling の長さ（末尾の区切り 1 つを除く）を重ねる（#1960）。
-// ceiling は folder の前の部分で区切りの境目にある（folder_contains）ので、上る列は ceiling の
-// フォルダで止まる。根の `C:\` のように区切りを除くと根より短くなるものは根の下限のまま。
+// 上れる下限の長さに、folder を含む ceiling の長さ（folder_spelling: 末尾の区切り 1 つを除く・根は
+// 根のまま）を重ねる（#1960・#1963 のレビュー M1）。ceiling は folder の前の部分で区切りの境目に
+// ある（folder_contains と同じ畳み方）ので、上る列は ceiling のフォルダで止まる。根の下限より短く
+// ならない。
 [[nodiscard]] std::size_t ceiling_floor(const FilePath &folder,
                                         const std::optional<FilePath> &ceiling) noexcept
 {
@@ -272,10 +273,7 @@ namespace
     {
         return floor;
     }
-    const std::string_view text = ceiling.value().text();
-    const std::size_t trimmed =
-        !text.empty() && separator(text.back()) ? text.size() - 1 : text.size();
-    return std::max(floor, trimmed);
+    return std::max(floor, folder_spelling(ceiling.value()).size());
 }
 } // namespace
 
