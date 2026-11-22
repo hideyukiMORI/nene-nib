@@ -1,9 +1,10 @@
 # 1.1.0 の公開（2026-11-17・下書き）
 
 公開の記録の下書き（席 REL・#1815・節立ては [release-1.0.0-2026-11-14.md](release-1.0.0-2026-11-14.md) と同じ）。この PR で埋めたのは「範囲」「公開元」の分かる所・「根拠」・「既知の限界」の候補だけで、**「梱包」「GitHub の公開」「Microsoft Store の提出」「公開の結果」は設計席が本番の梱包と公開の後に埋める**（`<<…>>` は埋め残しの印）。**この記録を置いた時点では、1.1.0 はまだ梱包も公開も申請もしていない**（公開版は 1.0.0・公開元 `80fd7a53`）。
-1.1.0 は Microsoft Store の 2 回目の申請（「更新」）で、施主の決め「46 で区切る」（2026-11-19 夜・まとめ枝 41 を区切りにした 2026-11-17 夜の決めを改めた）のとおり、まとめ枝 46 を区切りにする（区切りを合わせ直したのは席 REL2・#1891）。GitHub は同じ exe の ZIP を tag `v1.1.0` で出し、**題に「Beta」を付けず pre-release の印も付けない**（題 `NeNe Nib 1.1.0`・2026-11-17 夜の施主の決め・1.0.0 は `NeNe Nib 1.0.0 Beta`・pre-release）。手順の正本は [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の節、Store の欄は [submission.md](../store/submission.md) の「1.1.0 の更新の申請」と [msix.md](../store/msix.md)、リポジトリの外の手順と道具は `D:/NeNeNib/evidence/v1.1.0-release/`。
+**2026-11-21 の追記（席 REL4・#1930）**: 公開元 `4fcf258c` で本番を梱包し、施主の実機の確かめと WACK を通し、Microsoft Store に更新を申請した（Submission 2・2026-11-21 18:30 ごろ JST）。この追記で「公開元」の残り・(d)・「梱包」「Microsoft Store の提出」を埋めた。**いまは Store の認定待ちで、GitHub の tag `v1.1.0` と Release はまだ出していない**（1.0.0 と同じく Store の認定の後）。「GitHub の公開」「公開の結果」は認定の後に設計席が埋める（`<<…>>` のまま）。
+1.1.0 は Microsoft Store の 2 回目の申請（「更新」）で、施主の決め「Store に出す区切りは機能の区切り。1.1.0 はまとめ枝 46 ＋ 47」（2026-11-20 夜・まとめ枝 46 を区切りにした 2026-11-19 夜の決め「46 で区切る」と、その前の 2026-11-17 夜の「41 で行こう」を改めた）のとおり、まとめ枝 47 までを区切りにする（区切りを 46 に合わせ直したのは席 REL2・#1891、47 に合わせ直したのは席 REL3・#1924）。その後の機能（言語サーバーを言語ごとに #1909・本文の行の端数の送り #1898・対応言語 #1917）は次の版。2026-11-19 に公開元 `fd9d29f0`（まとめ枝 46 まで）で作った本番の梱包は使わず、公開元を移して同じ 1.1.0 のまま作り直す（その梱包の照合は `D:/NeNeNib/evidence/v1.1.0-release/final-verification-int46.md`）。GitHub は同じ exe の ZIP を tag `v1.1.0` で出し、**題に「Beta」を付けず pre-release の印も付けない**（題 `NeNe Nib 1.1.0`・2026-11-17 夜の施主の決め・1.0.0 は `NeNe Nib 1.0.0 Beta`・pre-release）。手順の正本は [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) の公開の節、Store の欄は [submission.md](../store/submission.md) の「1.1.0 の更新の申請」と [msix.md](../store/msix.md)、リポジトリの外の手順と道具は `D:/NeNeNib/evidence/v1.1.0-release/`。
 
-**範囲**: 1.0.0 の公開元 `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6` から、まとめ枝 46（PR #1889・main `2277217c`）と文書の PR #1890（#1880・main `8d4be38d`・区切りを合わせ直した PR #1891 の起点）までの main。`git log --oneline 80fd7a53..8d4be38d` は 87 本、`git diff --shortstat 80fd7a53 8d4be38d -- src` は 579 ファイル（+38,372 / −1,978）。うちまとめ枝 41 の後（版を上げた `a5a85072` から `8d4be38d`）は 28 本・`src` の 357 ファイル（+23,532 / −1,314）。製品の変更は次のまとめ枝で入った（日付は JST）。
+**範囲**: 1.0.0 の公開元 `80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6` から、まとめ枝 47（PR #1922・main `0b700ee76528e956308870c3eb7bf6c5ed17304f`・区切りを 47 に合わせ直すこの PR の起点）までの main。`git log --oneline 80fd7a53..0b700ee7` は 98 本、`git diff --shortstat 80fd7a53 0b700ee7 -- src` は 602 ファイル（+39,403 / −2,099）。うちまとめ枝 41 の後（版を上げた `a5a85072` から `0b700ee7`）は 39 本・`src` の 383 ファイル（+24,567 / −1,439）、2026-11-19 の梱包の公開元 `fd9d29f0` の後（まとめ枝 47 と文書の PR #1893 #1918）は 10 本・`src` の 53 ファイル（+1,076 / −166）。製品の変更は次のまとめ枝で入った（日付は JST）。
 
 | まとめ枝 | PR（merge） | 製品の変更（Issue / 元の PR） |
 | --- | --- | --- |
@@ -18,27 +19,28 @@
 | 44（#1875） | PR #1878（2026-11-19 13:10 rebase merge・main `73b3b856`・5 commit） | 設定の面を閉じる 5 つの道の変換の取り消しを数える試験（#1854 / PR #1870・製品の順と回数は同じ）・語の表を最初に作る 1 回の probe（#1868 / PR #1871）・Markdown のリンクの宛先と種類 `link_destination`（#1869 段 L1 / PR #1873・この段では何も開かない）・語の表を作る道の高速化（#1872 / PR #1874）・タブの右クリックのメニュー（#1790 / PR #1813・D98 の (2)・ADR 0078 の追補） |
 | 45（#1879） | PR #1882（2026-11-19 15:33 rebase merge・main `f000c42c`・2 commit） | 長い囲みのコードを 128 行ごとの切れに分けて色を保つ（#1863 / PR #1877）・プレビューのリンクを札で確かめてから開く・写す（#1869 段 L2 / PR #1876・D106・`LinkOpenPort`） |
 | 46（#1887） | PR #1889（2026-11-19 21:55 rebase merge・main `2277217c`・2 commit）。同じ木の枝 `…20261119e` は commit の本文に `Closes` の行が無く merge の道具が断ったので、本文だけ直した `…20261119f` で出した（`outputs/20261119/merge-1888.log`） | `#見出し` のリンクでその見出しへ跳ぶ（#1869 段 L3 / PR #1881・`third_party/github-slugger` の `regex.js` から生成した表）・枠より広い表の横の送り（#1883 / PR #1884・D107） |
+| 47（#1915） | PR #1922（2026-11-21 15:08 rebase merge・main `0b700ee7`・8 commit）。最初の枝 `chore/1915-integration-20261120a`（`c5ba0f9b`）の後に main へ日報の commit `a3fa249f` が入り、上の 2 commit の本文に `Closes` の行が無かったので、main `a3fa249f` の上に同じ 8 commit を積み直した `chore/1915-integration-20261121a`（`a0df78e1`）で出した（木の差は文書 4 ファイルだけ・`D:/NeNeNib/outputs/20261121/merge-int47.log`） | 言語サーバーを仕様どおりに話す（#1897 / PR #1907・languageId の名前・サーバーの同期の種類と保存の後の `didSave`・診断の URI の照合・起動の失敗の知らせ 3 種・`.cmd` `.bat` を起こさず断る・`settings.v5` の表に無い言語の `lsp.<name>.command` の行を書き戻しで残す・ADR 0160 / 0161 / 0170 の追補）・窓を出さない本文のスクロールの probe `nib_scroll_probe`（#1905 / PR #1908・試験の道具）・描く前に作った本文の layout を行ごとに残し、Vim の 1 画面の送りで同じ行を 2 回組まない（#1902 / PR #1911・ADR 0114 の追補）・nowrap の長い行のホイールで表示文字列を作り直さない（#1899 / PR #1912）・プレビューの縦の送りを要素の中まで画素で動かす（#1894 / PR #1910・ADR 0155 の追補 決定 76〜81）・長い囲みのコードの切れを 128 行から 64 行に（#1913 / PR #1914・ADR 0151 の追補）・表の数え直しと画面の文の件数の期待値（#1915） |
 
-製品の外: 道具の直し（#1719 #1769 #1780 #1784）・CI の上限（#1752）・文書。版を 1.1.0 に上げたのは #1815 の PR #1818（main `a5a85072`・`CMakeLists.txt` の `project()` の 1 行・MSIX の版は `1.1.0.0`）で、まとめ枝 42〜46 はどれもその上で作って測った。
+製品の外: 道具の直し（#1719 #1769 #1780 #1784）・CI の上限（#1752）・文書。版を 1.1.0 に上げたのは #1815 の PR #1818（main `a5a85072`・`CMakeLists.txt` の `project()` の 1 行・MSIX の版は `1.1.0.0`）で、まとめ枝 42〜47 はどれもその上で作って測った。
 
-**この版が書く設定の版と鍵の集合**（ADR 0170 の 2026-11-16 の追補の 4）: 1.1.0 は `settings.v5` を書く最初の公開版で、v5 の鍵の集合はここで閉じる。鍵は v4 の全部（`version` `colorscheme` `font_family` `font_size` `guide` `wrap` `ui_language` `lsp` `explorer` `root` `features` `mapleader` `ignorecase` `smartcase` `relativenumber` `scrolloff` `explorer_width`）に `autoindent`（#1086・既定 off）と `finder_preview`（#1793・既定 `auto`・ADR 0189）を足したもの、と `lsp.<language>.command` と `map.<mode>.<lhs>` の行（`src/adapters/win32/SettingsCodec.cpp` の `field_names` と接頭辞・試験 `verify_released_v4_settings` の `released_as_v5`）。ADR 0170 の追補の「足した鍵の記録（v5）」にも 2 つを書いた（#1815 の PR で `finder_preview` を足した）。1.1.0 の後は `settings.v5` に鍵を足さない（足すなら `settings.v6`・CLAUDE.md §2）。`session.v2` `history.v1` `bookmarks.v1` `autosave.v1` の codec は 1.0.0 から変わっていない（`git diff 80fd7a53 8d4be38d -- src/adapters/win32/{Session,History,Bookmark,Autosave}Codec.*` は空）。まとめ枝 42〜46 は設定の鍵を足していない（設定の面は閉じるときに `settings.v5` の今の鍵で 1 回保存する・`git diff a5a85072 8d4be38d -- src/adapters/win32/SettingsCodec.*` は空）。
+**この版が書く設定の版と鍵の集合**（ADR 0170 の 2026-11-16 の追補の 4）: 1.1.0 は `settings.v5` を書く最初の公開版で、v5 の鍵の集合はここで閉じる。鍵は v4 の全部（`version` `colorscheme` `font_family` `font_size` `guide` `wrap` `ui_language` `lsp` `explorer` `root` `features` `mapleader` `ignorecase` `smartcase` `relativenumber` `scrolloff` `explorer_width`）に `autoindent`（#1086・既定 off）と `finder_preview`（#1793・既定 `auto`・ADR 0189）を足したもの、と `lsp.<language>.command` と `map.<mode>.<lhs>` の行（`src/adapters/win32/SettingsCodec.cpp` の `field_names` と接頭辞・試験 `verify_released_v4_settings` の `released_as_v5`）。ADR 0170 の追補の「足した鍵の記録（v5）」にも 2 つを書いた（#1815 の PR で `finder_preview` を足した）。1.1.0 の後は `settings.v5` に鍵を足さない（足すなら `settings.v6`・CLAUDE.md §2）。`session.v2` `history.v1` `bookmarks.v1` `autosave.v1` の codec は 1.0.0 から変わっていない（`git diff 80fd7a53 0b700ee7 -- src/adapters/win32/{Session,History,Bookmark,Autosave}Codec.*` は空）。まとめ枝 42〜47 は設定の鍵を足していない（設定の面は閉じるときに `settings.v5` の今の鍵で 1 回保存する・`git diff a5a85072 8d4be38d -- src/adapters/win32/SettingsCodec.*` は空）。まとめ枝 47（#1897）は `SettingsCodec.cpp` の `lsp_commands_from` だけを変えた: `settings.v5` の `lsp.<name>.command` の名前を形（ASCII の小文字・数字・`+` `-` `_` の 1〜32 字）で厳密に読み、言語の表に無い名前の行は使わずに持って書き戻す（後の版が足した言語の行を 1.1.0 が読めて消さない）。`lsp.<name>.command` は 1.1.0 の前から在る行の族で、鍵の集合は変わらない。`settings.v4` の読みは今までどおり表の名前だけを受ける（D91・ADR 0170 の 2026-11-20 の追補）。
 
-Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 の `a5a85072` の 6,781 件から 111 件増えた・増えた分は INSERT の補完の `insert-complete-` の 111 件と同じ数）、折り返しの窓の `tests/vim/wrap-fixtures.json` は 402 件のまま（`8d4be38d` で数えた）。
+Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 の `a5a85072` の 6,781 件から 111 件増えた・増えた分は INSERT の補完の `insert-complete-` の 111 件と同じ数・まとめ枝 47 では増えていない）、折り返しの窓の `tests/vim/wrap-fixtures.json` は 402 件のまま（`0b700ee7` で数えた）。
 
 ## 公開元
 
 | 項目 | 値 |
 | --- | --- |
-| 公開元の commit（main） | `<<公開元>>`（まとめ枝 46 と文書の PR #1890 と、区切りを合わせ直したこの PR（#1891）が main に入った後の commit。40 桁は `git rev-parse origin/main` から写す） |
+| 公開元の commit（main） | `4fcf258c065216bd2a6106e90593fdbd70fbcd2a`（まとめ枝 47（PR #1922・main `0b700ee7`）の上に、区切りを 47 に合わせ直した PR #1925（#1924）が入った main の commit。`package.json` と `msix.json` の `commit` と同じ。2026-11-19 の梱包の公開元 `fd9d29f0`（まとめ枝 46 ＋ #1892）は使わない） |
 | 前の公開 | `v1.0.0`（`80fd7a5371de9f09bfacc12b7ed5f40ff13f6ba6`・GitHub 2026-11-17 20:53 JST・Store で公開済み・[記録](release-1.0.0-2026-11-14.md)） |
 | 版（`project()`） | `1.1.0`（PR #1818・#1815・main `a5a85072`） |
-| 梱包の作業木 | `<<公開元の detached 作業木（HEAD = origin/main = 公開元・未追跡 0）>>` |
+| 梱包の作業木 | `D:/NeNeNib/worktrees/v1.1.0`（detached・HEAD = 公開元・`git status --porcelain` 0 行・2026-11-21） |
 
 ## 根拠（再利用する検証）
 
-製品の変更は、まとめ枝ごとの (a)〜(c) と、各 PR の独立レビューで受けた。版の 1 行（`CMakeLists.txt`・PR #1818）はまとめ枝 42 より前に main に入っていて、42〜46 のゲートと CI はその版の木で回った。区切りを合わせ直したこの PR（#1891）は文書と掲載文だけで、製品と梱包の道具は変えていない。
+製品の変更は、まとめ枝ごとの (a)〜(c) と、各 PR の独立レビューで受けた。版の 1 行（`CMakeLists.txt`・PR #1818）はまとめ枝 42 より前に main に入っていて、42〜47 のゲートと CI はその版の木で回った。区切りを 46 に合わせ直した PR（#1891）と 47 に合わせ直したこの PR（#1924）は文書と掲載文だけで、製品と梱包の道具は変えていない。
 
-- (a) 速さのゲート（QLT-014・5 runs）。36〜43・45・46 は **8 benches checked・0 regression・0 unmeasurable**。**44 だけは 2 本が上限を越えた**（下の表の 44 の行・同じ時間帯の main との A/B で機械の状態と示して入れた）:
+- (a) 速さのゲート（QLT-014・5 runs）。36〜43・45〜47 は **8 benches checked・0 regression・0 unmeasurable**。**44 だけは 2 本が上限を越えた**（下の表の 44 の行・同じ時間帯の main との A/B で機械の状態と示して入れた）:
 
   | まとめ枝の木 | 記録 | 起動 / 窓 / 単打（中央値 ms） |
   | --- | --- | --- |
@@ -54,8 +56,9 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 �
   | 44 `c2a0bb4a`（枝 `a` の Release。merge した枝 `b` `aa85409f` との木の差は試験の `OperationChoiceProbe.cpp` だけ） | `D:/NeNeNib/outputs/20261119/gate-int44.log` と `-load.txt`（負荷 7 / 3 / 3%）。**8 benches checked・2 regression(s)**: 起動 53.227 ms > 上限 52.357・16 MiB を開く 63.719 ms > 上限 62.236（標本の幅は起動 43.9〜73.5 ms）。合格まで測り直さず、同じ時間帯に main `8f5b1924` の Release と交互に A B B A × 2 で測った（`D:/NeNeNib/scripts/20261119/ab-startup.sh`・判定なし・`outputs/20261119/ab-startup.log`）: 起動の中央値 main 47.8 / 47.3 / 48.5 / 39.3 ms 対 まとめ枝 53.6 / 46.6 / 48.2 / 46.7 ms、16 MiB を開く main 60.6 / 56.3 / 56.8 / 47.3 ms 対 まとめ枝 58.2 / 56.2 / 55.1 / 55.3 ms。main も同じ時間帯に基準値（起動 41.9・open 49.8 ms）より遅く、差は揺れの中なので、2 本は機械の状態によるもので製品の悪化は無いと判断して入れた（ADR 0075・D41・数字は PR #1878 の本文のまま） | 53.227 / 39.077 / 0.535（63.719） |
   | 45 `43c7bbb8` | `…/20261119/gate-int45.log`（負荷 8 / 6 / 8%） | 50.420 / 36.810 / 0.564（60.042） |
   | 46 `4373ea5b`（木 `e939c19b` は merge した `7f01cf0e` と main `2277217c` と同じ） | `…/20261119/gate-int46.log`（2026-11-19 21:12・負荷 10 / 2 / 1%・施主に確かめてから） | 44.991 / 33.218 / 0.628（51.071） |
+  | 47 `c5ba0f9b`（最初の枝の木。merge した `a0df78e1` との差は main の文書 4 ファイルだけ） | `D:/NeNeNib/outputs/20261121/gate-int47.log` と `-load.txt`（2026-11-21 14:00〜14:02・直前の負荷 9 / 4 / 1%・施主に確かめてから（hide「今静かだと思うよ」）・Release の exe は `D:/NeNeNib/worktrees/int42/build-release`） | 45.726 / 35.061 / 0.474（52.242） |
 
-  公開元の木と最後にゲートを測った木（まとめ枝 46 `4373ea5b`）の製品の入力の差: `git diff 4373ea5b 8d4be38d -- src third_party tests CMakeLists.txt eng` は空（席 REL2 が確かめた・`8d4be38d` はこの PR の起点）。この PR（#1891）は文書と掲載文だけなので、公開元でも空のはず → `<<設計席が公開元で確かめる>>`。梱包の exe では測らない（1.0.0 と同じ形）。
+  公開元の木と最後にゲートを測った木（まとめ枝 47 `c5ba0f9b`）の製品の入力の差: `git diff c5ba0f9b 0b700ee7 -- src third_party tests CMakeLists.txt eng` は空（設計席と席 REL3 が確かめた・`0b700ee7` はこの PR の起点）。この PR（#1924）は文書と掲載文だけなので、公開元でも空のはず → 公開元で `git diff c5ba0f9b 4fcf258c -- src tests eng third_party CMakeLists.txt` は空（設計席が確かめた・2026-11-21・`D:/NeNeNib/evidence/v1.1.0-release/final-verification.md`）。梱包の exe では測らない（1.0.0 と同じ形）。
 - (b) 独立レビュー（読むだけの席・所在の `review.md` が正本・無いものは席の返事が正本で走り書きに要約）:
 
   | PR | レビュー | 判定（その後） |
@@ -81,11 +84,16 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 �
   | #1870 #1873 #1874 #1813（まとめ枝 44） | `outputs/20261119/review-1870.md`・`review-1873.md`・`review-1874.md`・`review-1813.md` | #1870 必須 0・#1873 必須 3 → 直して再確認で必須 1 → 直した・#1874 必須 0（Vim の fixture の全件の再生で differing 0）・#1813 必須 0（推奨 4 を直した）。#1871（probe）は設計席が差分を読んだ |
   | #1876 #1877（まとめ枝 45） | `outputs/20261119/review-1876.md`・`review-1877.md` | どちらも必須 0（推奨 2 と 3 を直した）。段 L1 の安全のレビューは `review-1873.md` |
   | #1881 #1884（まとめ枝 46） | `outputs/20261119/review-1881.md`・`review-1884.md` | #1881 必須 3 → 直して再確認で必須 0・#1884 必須 1 → 直して、再確認の必須 2 も直した（最後の直し `5dd74e75` は設計席が差分を読んだ） |
+  | #1907 #1908 #1910 #1911 #1912（まとめ枝 47） | `D:/NeNeNib/outputs/20261120/review-1907.md`・`review-1910.md`・`review-1908-1911-1912.md` | #1907 必須 1 → 直した・#1910 必須 1（同じ `source_begin` を持つ要素の並びで錨を取り違える）→ 直した・#1908 #1911 #1912 必須 0。#1914（#1913・定数 1 つと試験）は独立レビューに出さず、設計席が差分を読んだ（日報 11-20 の「失敗と学び」） |
 
-- (c) CI（merge の道具の run・どれも `check` と `build-and-test` が success）: まとめ枝 36 [43798044246](https://github.com/hideyukiMORI/nene-nib/actions/runs/43798044246)・37 [43990290226](https://github.com/hideyukiMORI/nene-nib/actions/runs/43990290226)・38 [44005218509](https://github.com/hideyukiMORI/nene-nib/actions/runs/44005218509)・39 [44036071609](https://github.com/hideyukiMORI/nene-nib/actions/runs/44036071609)・40 [44069448664](https://github.com/hideyukiMORI/nene-nib/actions/runs/44069448664)（1 回目は `nib_adapters_preview` の 1 件で failure・試験の見本 `nul.bin` が windows-2022 で予約名の装置に当たった → #1797 で直して 2 回目）・41 [44108583088](https://github.com/hideyukiMORI/nene-nib/actions/runs/44108583088)（success・2026-11-18 00:4x）・42 [44278776412](https://github.com/hideyukiMORI/nene-nib/actions/runs/44278776412)（PR #1856。PR #1855 の [44270543208](https://github.com/hideyukiMORI/nene-nib/actions/runs/44270543208) は `check` が GIT-002 で failure・`build-and-test` は success）・43 [44323317610](https://github.com/hideyukiMORI/nene-nib/actions/runs/44323317610)・44 [44451977589](https://github.com/hideyukiMORI/nene-nib/actions/runs/44451977589)・45 [44466594582](https://github.com/hideyukiMORI/nene-nib/actions/runs/44466594582)・46 [44521791145](https://github.com/hideyukiMORI/nene-nib/actions/runs/44521791145)（42〜46 はどれも merge の道具のログ `outputs/2026111{8,9}/merge-*.log` の `verifiedCI` が success）。#1805 の付け直しの道は Windows 10 / Server 2022 でだけ働くので、意味のある証拠は CI（windows-2022）の `nib_adapters_long_paths`（PR #1812 の本文）。
-- (d) 施主の試用（D41）: 1.1.0 の機能はまだ施主が試していない（実機の絵は日報 11-17 のとおり席と設計席が撮って送った）。まとめ枝 42〜46 の機能（補完・hover・定義へ・設定の面・表と alert・囲みのコードの色・タブのメニュー・リンクの札・見出しへ跳ぶ・広い表の送り）は、席の試験と独立レビューとまとめ枝の検証の上で入れたもので、実機（本物の言語サーバー・ブラウザ・エクスプローラー・IME・タッチパッド）では見ていない（各まとめ枝の PR の「残るリスク」）。本番の MSIX と ZIP で `D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md` を通す → `<<結果>>`。packaged の起動・Store 版で F1 の一覧に登録の操作が出ないこと・WACK もそこで見る。
+- (c) CI（merge の道具の run・どれも `check` と `build-and-test` が success）: まとめ枝 36 [43798044246](https://github.com/hideyukiMORI/nene-nib/actions/runs/43798044246)・37 [43990290226](https://github.com/hideyukiMORI/nene-nib/actions/runs/43990290226)・38 [44005218509](https://github.com/hideyukiMORI/nene-nib/actions/runs/44005218509)・39 [44036071609](https://github.com/hideyukiMORI/nene-nib/actions/runs/44036071609)・40 [44069448664](https://github.com/hideyukiMORI/nene-nib/actions/runs/44069448664)（1 回目は `nib_adapters_preview` の 1 件で failure・試験の見本 `nul.bin` が windows-2022 で予約名の装置に当たった → #1797 で直して 2 回目）・41 [44108583088](https://github.com/hideyukiMORI/nene-nib/actions/runs/44108583088)（success・2026-11-18 00:4x）・42 [44278776412](https://github.com/hideyukiMORI/nene-nib/actions/runs/44278776412)（PR #1856。PR #1855 の [44270543208](https://github.com/hideyukiMORI/nene-nib/actions/runs/44270543208) は `check` が GIT-002 で failure・`build-and-test` は success）・43 [44323317610](https://github.com/hideyukiMORI/nene-nib/actions/runs/44323317610)・44 [44451977589](https://github.com/hideyukiMORI/nene-nib/actions/runs/44451977589)・45 [44466594582](https://github.com/hideyukiMORI/nene-nib/actions/runs/44466594582)・46 [44521791145](https://github.com/hideyukiMORI/nene-nib/actions/runs/44521791145)・47 [44869832725](https://github.com/hideyukiMORI/nene-nib/actions/runs/44869832725)（PR #1922・積み直した枝 `a0df78e1`）（42〜47 はどれも merge の道具のログ `outputs/2026111{8,9}/merge-*.log` と `outputs/20261121/merge-int47.log` の `verifiedCI` が success）。
+  まとめ枝 47 の手元の全件の検証（木 `c5ba0f9b`・作業木 `D:/NeNeNib/worktrees/int42`・`out/verify-int47b/check.log` と `out/verify-int47c/`）: conformance 0・Debug の全 target・`symbols.py` 0・CTest 24 / 24・`prove-gates.py` 33・`git diff --check` は成功。**既存の失敗が 2 つ残っている（どちらもまとめ枝 47 が原因ではない・CI はどちらも回さない）**: (1) `eng/probe-smoke.ps1` の 286 本のうち 10 本が `warmup result differs from the fixed workload` で落ちる（`palette-choice-*` 2 本・`vim-lh-after-*` `vim-x-after-*` 6 本・`frame-after-*` 2 本・2026-11-19 のビルドでも同じ・Issue #1920）。**10 本とも probe の期待値が古かっただけで、製品の誤りではない**: 8 本（`frame-after-{1,16000}-pieces`・`vim-lh-after-{1000,4000,16000}-edits`・`vim-x-after-{1000,4000,16000}-edits`）は #1741（`3d642d5b`・2026-11-17・改行で終わる本文を Vim のモードで Vim と同じ行の数にする）で `total_lines` が 1 減ったのに期待値が古かった。2 本（`palette-choice-builtin-all-512`・`palette-choice-custom-all-128`）は #1527（`cd0faa8f`・2026-11-15）で `=` で終わる候補のうち空の値を Ex が受けない物が「埋める」種類になったのに、probe の種類の写しが 2 つのままだった。直しは PR #1923（`tests/performance` の 3 ファイルだけ・`src` は不変・席の確認で probe-smoke 286 / 286）で、2026-11-21 16:26 に main `94a0b301` へ入った（CI [44876045800](https://github.com/hideyukiMORI/nene-nib/actions/runs/44876045800) success・Issue #1920 は閉じた）。**公開元 `4fcf258c` より後の commit なので、公開元には入っていない**。変えたのは `tests/performance` の 3 ファイル（`EditedHistoryProbe.cpp` `PaletteChoiceProbe.cpp` `PieceListProbe.cpp`）だけで、公開元の製品の入力（exe を作るソース）には関係しない。(2) `eng/coverage.py` が `NENENIB_APP_VERSION` を渡さず測定用のコンパイルで落ちる（#1677 から・Issue #1921・未解決）ので、QLT-009 のカバレッジは 2026-11-14 から判定できていない。まとめ枝 36〜46 の検証は段を 1 つずつ回していて、probe-smoke とカバレッジの記録は無い。#1805 の付け直しの道は Windows 10 / Server 2022 でだけ働くので、意味のある証拠は CI（windows-2022）の `nib_adapters_long_paths`（PR #1812 の本文）。
+- (d) 施主の試用（D41）: 2026-11-19 22:25 から、hide が 2026-11-19 の梱包（公開元 `fd9d29f0`・まとめ枝 46 まで）の MSIX に試し用の印を付けて手順書 `D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md` を 6-B-14 まで通した（日報 11-19 の「施主の実機の確かめ」）: 1〜5 節・6-A・6-B の 13 より前は手順書のとおり。6-B-13 で長い囲みのコードのホイールが 128 行の切れの境で止まって跳ぶ（前からの振る舞い・#1894 → まとめ枝 47 で直した）。6-B-14 の 5 で、タブを往復するとプレビューの縦の位置が本文の位置に合わせ直される（前からの振る舞い・#1895・決め待ちで 1.1.0 には入らない）。まとめ枝 47 の物（プレビューのホイールが要素の中まで動く・64 行の継ぎ目・nowrap の長い行と Vim の 1 画面の送り・言語サーバーの保存の後の診断と起動の失敗の知らせ）は実機では見ていない（PR #1922 の「残るリスク」）。hide の PC には試し用の印の 1.1.0（46 の物）が入ったままなので、作り直した本番の MSIX を入れ直して、6-A・直した所（6-B-13）・47 の物・残り（6-B-15 から）を見る。
+  **2026-11-21 の結果**: 2026-11-21 16:4x〜18:0x に、hide が作り直した本番の MSIX（公開元 `4fcf258c`）に試し用の印を付けて入れ直し、手順書の「入れ直すとき」から通した: 手順 1（指紋 `E289F532…84E010` が一致）・4（署名）・5（46 の物 `Version 1.1.0.0`・`SignatureKind Developer` を外して入れ直し・`Status Ok`）・6-A・6-B-13・6-B-15〜18・6-C（Store 版だけの所）・6-D・6-E-1〜5・7（外す）・8（WACK・掛けたのは本番の MSIX・hide「そのはず」・下の「Microsoft Store の提出」）・9（試し用の印を消す・hide「９消したよ」）。hide の言葉は「全部OKだったよ」「このリリースはこれでいいと思う」。設計席が個別に聞けた合格は、保存の後の診断（6-E-3 の 11〜12・`E1` → `E2` → `E1`）・`.cmd` の知らせ（6-E-4）・nowrap の長い行と Vim の 1 画面の送り（6-E-5・hide「動作は問題ない」）・front matter の箱（想定どおり）。6-A・6-B-13・6-B-15〜18・6-C・6-D・6-E-1 は個別には聞いていない（hide「全部OKだったよ」でまとめた）。まとめ枝 47 の中身は、その前に int42 の Release の exe で試して hide「良くなってるよ！」。設計席が 2026-11-21 18:4x に機械の状態を読んで確かめた: 試し用に入れた Store 版は外れている（`Get-AppxPackage HideyukiMori.NeNeNib` が空）・試し用の印 `A60DFF16…` は `Cert:\CurrentUser\My` と `Cert:\LocalMachine\TrustedPeople` に無い・`D:\NeNeNib\temp\nib-signed.msix` と `nib-msix-test.cer` も無い。6-F（試し用のフォルダの片付け）は 2026-11-21 18:5x に設計席が済ませた（hide の了承「推しで」の後・`D:\NeNeNib\temp\` の `nib-compat` `nib-110-md` `nib-110-lsp` を中身を見てから消した・ふだんの設定の控え `nib-settings-before-1.1.0` は Store の 1.1.0 で問題なく使えると分かるまで残す・置き場を戻す 1 行は窓を閉じれば済むので打っていない）。手順 12 の紙は設計席が hide の貼った出力と言葉から書いた（hide「１２も書いておいて」）: `D:/NeNeNib/evidence/v1.1.0-release/hide-results-20261121.md`（項目ごとの根拠の区別（出力・言葉・まとめ・設計席）はこのファイルが正本）。
+  確かめの中で分かったこと（どれも製品の不具合ではない）: (1) 手順 4 の署名の長い 1 行は、貼ると途中で改行されて割れた。PowerShell を開き直すと `$cert` が空で `Invalid SHA1 hash format` になった → 手順書を 3 行に分けた（設計席）。(2) hide の写しの設定には `settings.v5` と `lsp.cpp.command`（Build Tools の clangd ＋ `--compile-commands-dir=…\NeNeNib\build-release`）が最初からあり、確かめ用の `a.cpp` の `area` に Nib の `/WX` の集合が当たって最初から `E1` だった（そのため 6-E-3 の 11〜12 は `E1` → `E2` → `E1` で見た）。(3) Ctrl+W でタブが閉じるのは通常モードだけ（仕様・Vim のモードでは Ctrl+F4）。手順書の 6-D・6-E-3・6-E-4・6-E-5 に、次に使う人のための読み替えを足した（席 REL4）。
 - (e) 梱包の道具の試験と、この PR の検証: 席 REL が版を上げた木で `eng/test-package-release.py` 10 件 OK・`tests.conformance.test_package_msix` 18 件 OK・Debug の全 target 警告 0・`nib_tests` の既定の実行 2,423,869 checks・`--version-info` 19・`--start-screen` 246・`nib_adapter_tests` 1,358・conformance 0（2026-11-17）。main に載せ直した木は設計席が conformance 0 を確かめ、CI は merge のときに回る（`eng/test-package-release.py` と `tests.conformance.test_package_msix`・Debug の全 target・`nib_tests`・adapters の試験・conformance）。
   区切りを合わせ直したこの PR（#1891・文書と掲載文だけ）は、`python eng/conformance.py` 0 violation・`git diff --check` 差なし・掲載文の道具（`D:/NeNeNib/scripts/20261117/1815/extract-store-listing.py`）の字数がどの欄も上限の内（`D:/NeNeNib/evidence/v1.1.0-release/store-listing/counts.md`）。製品を変えないのでビルドと試験は回していない（`eng/format-check.ps1` は C++ のファイルだけを見るので当たらない）。
+  区切りを 47 に合わせ直したこの PR（#1924・文書と掲載文だけ）の検証は PR の本文（`python eng/conformance.py`・掲載文の道具の字数 `counts.md`）。梱包の道具（`eng/package-release.{ps1,py}` `eng/package-msix.{ps1,py}`）は 2026-11-19 の梱包から変わっていない（`git diff fd9d29f0 0b700ee7 -- eng` は `eng/architecture.json`（`tests/preview` の依存に `unit_tests` を足した 1 行・`nib_scroll_probe` の足場）と `eng/probe-smoke.ps1`（`wrap-wheel3` の 1 刻み）の 2 ファイルだけ・#1905）。
 
 ## 既知の限界
 
@@ -103,27 +111,51 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 �
 - 言語サーバーの補完・hover・定義へ（ADR 0190・状態は提案のまま）: 自動の import・候補の詳しい読み込み・スニペットの跳び先・引数の案内・参照の一覧・名前の変更は無い。hover はマウスを載せては出ず、通常モードには鍵が無い（F1 の「情報を表示」から・鍵は試用の後に決める）。定義へ移って別のファイルを開いたとき `''` で元のファイルへは戻らない。言語サーバーが動いていない文書の `gd` `K` は今までどおり何もしない（Vim の局所の定義へ跳ぶ `gd`・`keywordprg` の `K` ではない）。
 - Vim の INSERT の補完（ADR 0169 の追補・ADR 0190 の決定 5）: 候補が出ていない間の Ctrl+P はファイルの一覧（逆向きの補完は始まらない）。候補が出ている間の Backspace は確定して 1 文字消し、候補を閉じる（端末の Vim は続ける）。Ctrl-x Ctrl-o は無い。ほかのタブの語の順は Vim と違うことがある。補完の語は 1 MiB を超える文書ではキャレットの前後 256 KiB だけ（と、ほかのタブ・言語サーバーの候補）。
 - Markdown の表と alert と打ち消し線（ADR 0151 の 2026-11-18 と 2026-11-19 の追補）: 段落の直後（空行なし）の表は表にならない。升の中のコードの `\|` は `\` が残る。広い表は鍵では送れず、選択のドラッグで自動に送らない。溝を押し続けても 1 回だけ送る（#1886）。升の中で折り返さない。エスケープした印（`> \[!NOTE]`）・印の後ろが Tab の行・リストの中の引用は alert にならない。`~` 1 つは打ち消しにしない（`10時~12時` を守る）。`~` の間が画像だけのときは打ち消しのまま。
-- 囲みのコードの色（ADR 0151 の #1862・#1863 の追補）: 知らない言語と言語を書いていない囲みは 1 色。`:syntax off` はプレビューの色を消さない（D105）。不正な UTF-8 を含む行は色の位置がずれることがある。1 行に 2,500 を超える色の区切りがある切れ（128 行）は 1 色。1.1.0 の途中（まとめ枝 43）の「300〜500 行より長い囲みは 1 色」は #1863（まとめ枝 45）で直ったので外す。
+- 囲みのコードの色（ADR 0151 の #1862・#1863 の追補）: 知らない言語と言語を書いていない囲みは 1 色。`:syntax off` はプレビューの色を消さない（D105）。不正な UTF-8 を含む行は色の位置がずれることがある。色の区間が 2,500 を超える切れ（64 行・#1913 で 128 行から 64 行にした）は 1 色。5,000 行か 512 KiB を超える囲みは全部 1 色（`PreviewCodeColors.hpp` の上限）。1.1.0 の途中（まとめ枝 43）の「300〜500 行より長い囲みは 1 色」は #1863（まとめ枝 45）で直ったので外す。切れの数が倍になったので、長い囲みは文字組みの保持（256）を前より多く使う（PR #1914 の「残るリスク」）。
+- プレビューの縦の送り（ADR 0155 の 2026-11-20 の追補・#1894）: 1.0.0 からの「枠の上端の要素が替わったときしか絵が動かない」（長い囲みのコードで 43 刻み止まって 128 行跳ぶ）は直ったので外す。文書が書き換わって錨の要素の高さが変わると、同じ画素の所に別の文字が来る（錨の要素は外れない）。追従中に囲みのコードの中の行を枠の上端に置くことはしない。タブを往復するとプレビューの縦の位置は本文への追従に戻る（前からの振る舞い・#1895 は決め待ち）。
+- 言語サーバーの同期（ADR 0160 / 0161 の 2026-11-20 の追補・#1897）: 同期の種類が none のサーバーでは、診断を didOpen の版の本文で写す（ずらさない）。`.cmd` `.bat` の命令は起こさず断る（`node.exe` とスクリプトで書く）。tsx / jsx の languageId は実物のサーバーで確かめていない。言語サーバーは同時に 1 本（言語ごとに持ち、タブの切り替えで止めないのは次の版・#1909）。
 - リンクと見出しのリンク（ADR 0151 段 L1〜L3 の限界）: リンクの上でカーソルの形は変わらない。国際化ドメイン名のリンクは開かない（punycode の綴りは開く）。`file:` の URL はこの PC の物（host が空か `localhost`）だけ。ほかの文書の見出し（`other.md#sec`）は文書を開くだけで見出しへは跳ばない。英字以外の大文字（ギリシャ・キリル・全角の英字）を含む見出しは、小文字で書いたリンクから跳べないことがある（GitHub の実物とは未照合）。
 - 設定の面（ADR 0170 の 2026-11-18 の追補 2）: 切れない機能（括弧の相手の強調など）にはスイッチが無い（「常にオン」の行か、面に出ない）。
 - 公開の文に書かない候補（使う人に見えにくい・稀）: 長い囲みの再解析のたびの字句解析・空の行だけの長い囲みの位置の対応のずれ（#1877 のレビュー L1）・見出しの重複の数え O(H²)・升の保持の上限を超える表を毎 frame 作り直す（正しく描くが遅い・巨大な表だけ）・広い表のドラッグの途中で表の数が変わると止まる。最後から 2 つ目は速さに関わるので、書くかは `<<設計席が決める>>`。
 - 表示言語は日本語・英語・中国語（簡体字）のまま。韓国語・スペイン語・ドイツ語は後の版（施主決定 D100・D88 と FR-029 の「1.1.0」を改めた）。
 - 予約名の直し（#1805）: 装置の名前そのもの（`NUL` `nul.`）は装置のまま。言語サーバーの `CreateProcessW` の実行ファイルの経路は `native_path` を通らない（PR #1812 の「残るリスク」）。
 - 各レビューの「後続」と「軽い指摘」のうち公開の文に書く物は `<<設計席が決める>>`。
+- 施主が 2026-11-21 の実機の確かめで気になった所（1.1.0 は止めない・次の版）:
+  - 設定の面の値の行（配色など）はクリックで次へ送るだけで、前へ戻れない（#1926）。
+  - 設定の面の文字の大きさは 1 刻みで、下限の 8 に当たると端数（10.5 など）が消えて整数の列に移る（#1927）。
+  - 日本語の画面の文の「面」（設定の節の見出し・探す面・設定の面）が使う人に通じにくい（#1928・置き換えの語は決まった）。
+  - 設定の面の候補の一覧で、焦点の行の色がほかの行とほとんど変わらず見分けにくい（どのテーマでも・#1929）。
+
+## 残るリスク（公開の前・まとめ枝 47 の区切りで）
+
+- probe-smoke の 10 本（Issue #1920・閉じた）: 10 本とも probe の期待値が古かっただけで、製品の誤りではない（(c)）。直しの PR #1923 は 2026-11-21 に main `94a0b301` へ入った（CI 44876045800 success）が、**公開元 `4fcf258c` より後の commit**で、変えたのは `tests/performance` の 3 ファイルだけ。公開元の製品の入力には関係しない（公開元の木の probe の期待値は古いまま）。
+- カバレッジ（Issue #1921・未着手）: QLT-009 は 2026-11-14 から判定できていない。
+- まとめ枝 47 の物は、2026-11-21 に hide が本番の MSIX で見た（(d)・hide「全部OKだったよ」）。個別に聞けた合格は (d) の 4 つだけ。速さの数字（日報 11-20 の表）は WIC のソフトウェアの描画先で、ほかの席が動いている機械の値。
+- 2026-11-19 の梱包（`fd9d29f0`・exe `0367dad6…`）は使わない。作り直す前に `D:/NeNeNib/releases/v1.1.0-int46/` へ退けた（設計席・2026-11-21）。
+- Store の認定の結果はまだ（下の「Microsoft Store の提出」）。
 
 ## 梱包
 
-`<<本番の物（公開元・作業木・置き場 D:/NeNeNib/releases/v1.1.0/）の表と照合 7 項目。形は 1.0.0 の記録と同じ>>`
+本番の物（公開元 `4fcf258c065216bd2a6106e90593fdbd70fbcd2a`・作業木 `D:/NeNeNib/worktrees/v1.1.0`・置き場 `D:/NeNeNib/releases/v1.1.0/`・2026-11-21 16:10）。ログ `D:/NeNeNib/outputs/20261121/package-v1.1.0.log`（zip exit=0・msix exit=0）。値は設計席の照合 `D:/NeNeNib/evidence/v1.1.0-release/final-verification.md`（2026-11-21 16 時台）から写した（bytes と SHA-256 は席 REL4 が `stat` と `sha256sum` で読み直して同じ値・2 つの `SHA256SUMS` は席 REL4 が読んだ値）。2026-11-19 の梱包（公開元 `fd9d29f0`）は `D:/NeNeNib/releases/v1.1.0-int46/` に退けて上げていない。
 
 | 物 | 名前 | bytes | SHA-256 |
 | --- | --- | --- | --- |
-| exe | `NeNeNib.exe` | `<<>>` | `<<>>` |
-| ZIP | `NeNeNib-1.1.0-windows-x64.zip` | `<<>>` | `<<>>` |
-| ZIP の `SHA256SUMS` | `SHA256SUMS` | `<<>>` | `<<>>` |
-| MSIX（Store 用・署名なし） | `NeNeNib-1.1.0.0-windows-x64-store.msix` | `<<>>` | `<<>>` |
-| MSIX の `SHA256SUMS` | `SHA256SUMS` | `<<>>` | `<<>>` |
+| exe（`build/release-4fcf258/NeNeNib.exe`） | `NeNeNib.exe` | 4,571,648 | `661abdb664c618924224702cdfd935c290a6a5bb60e2545ecb63a5a19f0aeafb` |
+| ZIP | `NeNeNib-1.1.0-windows-x64.zip` | 1,872,609 | `eb582d88d9bcb215550c76857ff89b10f5f38fba7523cec73f521768ea660381` |
+| ZIP の `SHA256SUMS` | `SHA256SUMS`（1 行・CRLF） | 97 | `f8a75a6932d0dc5493074294dacb30cd43173f3ea09673e03172c84e537b47db` |
+| MSIX（Store 用・署名なし） | `NeNeNib-1.1.0.0-windows-x64-store.msix` | 2,005,431 | `e289f53223904be9c0a35fa17fc19da0278034ad1bef9fc91d3d516b1784e010` |
+| MSIX の `SHA256SUMS` | `SHA256SUMS`（1 行・CRLF） | 106 | `ddb3b600d3e4e797bd91668c5f52eb5aad76b78a6031384152a503bfab272821` |
 
-照合: `<<package.json と msix.json の commit が公開元・version 1.1.0・packageVersion 1.1.0.0・store true・executableMatches・Resources の順・entries の数・短い起動>>`
+照合:
+
+- [x] `package.json` と `msix.json` の `commit` が公開元 `4fcf258c065216bd2a6106e90593fdbd70fbcd2a`（作業木の HEAD も同じで `git status --porcelain` 0 行）・`package.json` の `verification.path` がこの記録
+- [x] `package.json` の `productVersion` と `version` が `1.1.0`、`metadata` の `fileVersion` `1.1.0.0` と `productVersion` `1.1.0`
+- [x] `msix.json` の `executable.sha256` が ZIP の中の exe と同じ（`zip.executableMatches`・`package.json` の `extractedBytesMatch` も true）。設計席が別に確かめた: ZIP の中と MSIX の中の `NeNeNib.exe` の SHA-256 がどちらも上の exe の値
+- [x] `msix.json` の `packageVersion` が `1.1.0.0`・`store` が true・`AppxManifest.xml` の `Identity` が `HideyukiMori.NeNeNib`・`Version="1.1.0.0"`・x64
+- [x] manifest の `Resources` が `en-US` `ja-JP` `zh-Hans` の順
+- [x] `msix.json` の `entries` が 32 個（1.0.0 と 2026-11-19 の梱包と同じ数・`unpackedMatches` true）。ZIP は `NeNeNib.exe` `README.txt` `LICENSE` `THIRD_PARTY_NOTICES.txt` の 4 個。Release のビルドの warning 0（`zip/build.log`）・import は 15 個
+- [x] 展開した exe の短い起動（`release-smoke.py`・隔離 profile・施主に確かめてから 1 回）: 2026-11-21 16:14・`"result": "pass"`・exit 0・`documentUnchanged true`・題 `release-launch.txt - NeNe Nib`・DPI 120・結果 `D:/NeNeNib/evidence/v1.1.0-smoke-4fcf258c/result.json`（根拠の全文は `final-verification.md`）
+- [x] 製品の入力は速さのゲートを測った木と同じ（`git diff c5ba0f9b 4fcf258c -- src tests eng third_party CMakeLists.txt` が空・「根拠」の (a)）
 
 ## GitHub の公開
 
@@ -131,7 +163,16 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 �
 
 ## Microsoft Store の提出
 
-`<<提出した MSIX・手順書と WACK の結果（hide）・更新の申請（Submission 2）の日時・認定と公開>>`
+提出した物は MSIX `NeNeNib-1.1.0.0-windows-x64-store.msix`（2,005,431 bytes・SHA-256 `e289f53223904be9c0a35fa17fc19da0278034ad1bef9fc91d3d516b1784e010`・上の「梱包」と同じ・hide が手順 1 で指紋の一致を確かめた）。
+
+| 順 | 誰 | 状態 | 日時・記録 |
+| --- | --- | --- | --- |
+| 手順書（「入れ直すとき」から 6-A〜6-E・7・9） | hide | hide「全部OKだったよ」「このリリースはこれでいいと思う」 | 2026-11-21 16:4x〜18:5x（上の「根拠」の (d)）。6-F の片付けは設計席が 18:5x に済ませた（(d)）。紙（手順 12）は設計席が書いた `D:/NeNeNib/evidence/v1.1.0-release/hide-results-20261121.md` |
+| WACK（手順 8） | hide | `OVERALL_RESULT="PASS"` | 本番の MSIX に掛けた（hide「そのはず」）・2026-11-21 18:01:42・`APP_NAME="HideyukiMori.NeNeNib"`・`APP_VERSION="1.1.0.0"`・`APP_TYPE="Centennial"`・WACK `10.0.26100.7705`・OS `10.0.26300.0`・報告 `D:/NeNeNib/releases/v1.1.0/wack/report.xml`（ID `c463cbf48bac04e89f6c095b38670ca3`） |
+| 更新の申請（Submission 2） | hide | 提出 | 2026-11-21 18:30 ごろ（JST・hide「あってる」）・Partner Center。パッケージは「新しいのを一つ上げると古いのは消えるっぽいよ」（hide・1.0.0.0 のパッケージを外す操作は要らない見込み・更新の入口のボタンの名前は未確認）。申請の後の画面は Certification status（Submission → Pre-processing → Certification → Publishing・認定を通りしだい公開を始める） |
+| 認定・Store で公開 | Microsoft | `<<認定の結果と公開の日時>>` | まだ（2026-11-21 の夜の時点） |
+
+GitHub の tag `v1.1.0` と Release は Store の認定の後に出す（1.0.0 と同じ順・設計席が hide に伝えた）。
 
 ## 公開の結果
 

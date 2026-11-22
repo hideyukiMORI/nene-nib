@@ -194,12 +194,15 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
     return static_cast<std::size_t>(std::ranges::count_if(
         text, [](char unit) { return (static_cast<unsigned char>(unit) & 0xC0U) != 0x80U; }));
 }
-// 埋める候補は「set fontsize=」と「set guifont=」そのものだけ（CommandChoice.cpp の choice_of）。
+// 埋める候補は、空の値を Ex が受けない「=」で終わる 6 つ（CommandChoice.cpp の choice_of・#1527）。
+// 空の値に意味がある `set clipboard=` `set root=` は実行する。
 [[nodiscard]] core::CommandChoiceKind kind_of(std::string_view command)
 {
-    return command == "set fontsize=" || command == "set guifont="
-               ? core::CommandChoiceKind::fill
-               : core::CommandChoiceKind::execute;
+    constexpr std::array<std::string_view, 6> fills{
+        "set fontsize=", "set guifont=", "set scrolloff=",
+        "set filetype=", "set ft=",      "let mapleader="};
+    return std::ranges::find(fills, command) != fills.end() ? core::CommandChoiceKind::fill
+                                                            : core::CommandChoiceKind::execute;
 }
 [[nodiscard]] bool catalog_equal(const core::ThemeCatalog &catalog,
                                  const PaletteChoiceSample &sample)

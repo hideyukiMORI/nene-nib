@@ -17,6 +17,9 @@
   区切りをまとめ枝 46 に移したとき（#1891）、設定の面・補完・言語サーバーの情報と定義へ・Markdown の表と alert と
   囲みのコードの色とリンクの札・タブの右クリックのメニューを説明と製品の機能に足し、「まだ無い」と書いていた
   「ご注意」の 2 行（言語サーバーは診断だけ・設定の画面とタブのメニュー）を消した。
+  区切りをまとめ枝 47 に移したとき（#1924）、説明の Markdown プレビューの段にホイールの 1 文を足し、「新機能」に
+  スクロールの行と言語サーバーの保存の後の診断（日本語と中国語は起動の失敗の知らせも）を足した。英語の「新機能」は
+  1,500 文字に収めるために、ほかの行の言い回しを詰め、本文とタブの右クリックのメニューを 1 行にまとめた。
 - F1「Windows の右クリックに登録する」は掲載文に書かない。Store 版（MSIX）ではエクスプローラーに出ないことを 1.0.0 で
   実機で確かめ（submission.md の「packaged の実機の確かめ」）、1.1.0 から Store 版の F1 の一覧に出さない（#1809）。
 - 説明の欄には HTML・コード例・URL を入れない（Microsoft の文書）。サポートとプライバシーの URL は専用の欄に入れる。
@@ -25,7 +28,7 @@
 - **貼る前の確かめ**: 「表示は日本語・英語・中国語（簡体字）」の文は 1.0.0 で確かめた。1.1.0 でも表示言語は同じ 3 つ
   （韓国語・スペイン語・ドイツ語は後の版・施主決定 D100）。
   新しく足した文（全文検索・プレビュー欄・右クリックのメニュー・イージーモーション・設定の面・補完・言語サーバー・
-  Markdown の表とリンク）は、申請する 1.1.0 の exe で動くことを
+  Markdown の表とリンク・プレビューのホイール）は、申請する 1.1.0 の exe で動くことを
   施主の試用（`D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md`）で確かめてから貼る。
 - 「通常」の言い方は施主決定 D89（画面の名前は英語 `Basic`・中国語 `标准`）。中国語の文は画面と同じ `标准编辑` と書き、`普通` を使わない（Vim の「普通模式」と紛れる）。英語の説明の文は画面の名前を引かない所なので ordinary editing のまま。
 - 端末の表示からではなく、このファイルをエディタで開いてコピーする（端末からは折り返しの位置に改行が入る）。
@@ -69,7 +72,7 @@ NeNe Nib は、Windows 11 のための軽いテキストエディタです。1 �
 メモ帳と同じ感覚の普通の操作（検索・置換・行へ移動・印刷・日時の挿入）と、Vim の操作を Ctrl+Shift+Space かステータスバーのクリックで切り替えます。Vim の操作は本物の Vim 9.1 の動きと照らし合わせて作っています。移動・オペレータ・テキストオブジェクト・検索・マーク・ジャンプの列・ドットの繰り返し・マクロ・レジスタ・矩形の選択・map に対応します。
 
 ■ Markdown プレビュー
-Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します。もう一度押すと全面の表示、さらに押すと閉じます。端末の中の画像（PNG・JPEG・GIF の最初のコマ・BMP）を本文の流れの中に表示し、タスクリストのチェックボックスはクリックで切り替えられます。表と GitHub の alert（NOTE・TIP など）・打ち消し線も表示し、枠より広い表は横に送れます。囲みのコードには本文と同じ構文の色が付きます。リンクをクリックすると本当の宛先を小さな札で見せ、確かめてから既定のブラウザやメールで開きます。#見出し のリンクはその見出しへ跳びます。
+Ctrl+Shift+M で、編集中の Markdown を隣の欄に整えて表示します。もう一度押すと全面の表示、さらに押すと閉じます。端末の中の画像（PNG・JPEG・GIF の最初のコマ・BMP）を本文の流れの中に表示し、タスクリストのチェックボックスはクリックで切り替えられます。表と GitHub の alert（NOTE・TIP など）・打ち消し線も表示し、枠より広い表は横に送れます。囲みのコードには本文と同じ構文の色が付きます。ホイールは 1 刻みごとに動き、長いコードや画像の中でも止まりません。リンクをクリックすると本当の宛先を小さな札で見せ、確かめてから既定のブラウザやメールで開きます。#見出し のリンクはその見出しへ跳びます。
 
 ■ プロジェクトの全文検索とプレビュー
 Ctrl+Shift+F で、エクスプローラーの起点のフォルダ（無ければ開いている文書のフォルダ）の下のファイルを全文検索します。打つたびに探し直し、見つかった行が届いた順に並びます。Enter でそのファイルのその行を開きます。Ctrl+P の一覧では、選んだ候補の中身を右か下のプレビュー欄に表示します（Ctrl+Shift+P で右・下・なしを切り替え）。
@@ -151,8 +154,9 @@ Markdown
 ・Ctrl+P の一覧にプレビュー欄: 選んだ候補の中身を右か下に表示します。Ctrl+Shift+P で右・下・なしを切り替えます。
 ・設定の面: Ctrl+, で窓の右に開き、配色・字体・文字の大きさなどを探して切り替えると、その場で本文に効きます。閉じると保存します。
 ・補完: 通常モードでは Ctrl+Space（Ctrl+I でも）、Vim の INSERT では Ctrl-n で、打っている語の候補を出します。
-・言語サーバー（既定はオフ）: 補完の候補に加えて、Vim の K で情報を表示し、gd か F12 で定義へ移動します。
+・言語サーバー（既定はオフ）: 補完の候補に加えて、Vim の K で情報を表示し、gd か F12 で定義へ移動します。保存の後に診断が更新されます。起動できない命令（実行ファイルが無い・.cmd や .bat）は起こさずに 1 行で知らせます。
 ・Markdown プレビュー: 表と GitHub の alert（NOTE・TIP など）、打ち消し線を表示します。広い表は横に送れます。囲みのコードに本文と同じ構文の色が付きます。リンクはクリックすると宛先を札で見せ、確かめてから開きます。#見出し のリンクはその見出しへ跳びます。
+・スクロール: Markdown プレビューのホイールが、長いコード・長い段落・画像の中でも 1 刻みごとに動くようにしました。折り返さない長い行のスクロールと、Vim の Ctrl-f などの 1 画面の送りを軽くしました。
 ・タブの右クリックのメニュー: エクスプローラーで場所を開く・パスをコピー・ファイル名をコピー・保存・ほかのタブを閉じる・右のタブを閉じるなど。
 ・本文の右クリックのメニュー: 切り取り・コピー・貼り付け・削除・すべて選択・検索・置換。Shift+F10 とメニューキーでも開き、Vim のモードでも使えます。
 ・Vim のイージーモーション: バックスラッシュを 2 回打ってから w・b・e・j・k・l や f・F・s と文字を打つと、見えている跳び先に小さな札が出て、札の文字でそこへ跳びます。
@@ -190,7 +194,7 @@ Ordinary editing or Vim editing
 Switch between ordinary editing, which works like Notepad (find, replace, go to line, print, insert date and time), and Vim editing with Ctrl+Shift+Space or a click on the status bar. The Vim editing is built from scratch and checked against the real Vim 9.1. It covers motions, operators, text objects, search, marks, the jump list, dot repeat, macros, registers, blockwise selection and map.
 
 Markdown preview
-Press Ctrl+Shift+M to see the Markdown you are editing, rendered in the next pane. Press it again for a full view, and once more to close it. Local images (PNG, JPEG, the first frame of a GIF, BMP) appear in the text, and task-list checkboxes can be clicked. Tables, GitHub alerts (NOTE, TIP and more) and strikethrough are drawn too, and a table wider than the pane scrolls sideways. Fenced code gets the editor's syntax colors. A click on a link shows its real destination in a small card, and it opens in the default browser or mail app only after you confirm. A #heading link jumps to that heading.
+Press Ctrl+Shift+M to see the Markdown you are editing, rendered in the next pane. Press it again for a full view, and once more to close it. Local images (PNG, JPEG, the first frame of a GIF, BMP) appear in the text, and task-list checkboxes can be clicked. Tables, GitHub alerts (NOTE, TIP and more) and strikethrough are drawn too, and a table wider than the pane scrolls sideways. Fenced code gets the editor's syntax colors. The wheel moves the preview on every notch, even inside long code and images. A click on a link shows its real destination in a small card, and it opens in the default browser or mail app only after you confirm. A #heading link jumps to that heading.
 
 Project-wide search with a preview
 Press Ctrl+Shift+F to search the files under the explorer's root folder, or under the folder of the document you are editing. Every change to the search text starts a new search, the matching lines arrive as they are found, and Enter opens the file at that line. In the Ctrl+P list, a preview pane shows the chosen entry's text to the right or below (Ctrl+Shift+P switches between right, below and off).
@@ -268,18 +272,18 @@ Markdown preview
 Left blank for the first submission (1.0.0, Microsoft's guidance). The text for 1.1.0 (up to 1,500 characters):
 
 ```text
-• Project-wide search: Ctrl+Shift+F (or :grep in Vim) searches the files under the explorer's root or the document's folder.
+• Project-wide search: Ctrl+Shift+F (or :grep in Vim) searches files under the explorer's root or the document's folder.
 • A preview pane in the Ctrl+P list (Ctrl+Shift+P: right, below or off).
-• Settings: Ctrl+, opens a drawer at the right. Changes apply at once and are saved on closing.
+• Settings: Ctrl+, opens a drawer; changes apply at once, saved on closing.
 • Completion: Ctrl+Space (or Ctrl+I), or Ctrl-n in Vim INSERT.
-• Language server (off by default): completion, K for information, gd or F12 to go to a definition.
-• Markdown preview: tables, GitHub alerts, strikethrough, sideways scrolling for wide tables, syntax colors in fenced code; a link shows its real destination in a small card before it opens; #heading links jump.
-• Tabs: a right-click menu (Reveal in File Explorer, Copy Path, Close Other Tabs and more) and the full path on hover.
-• A right-click menu in the text (also Shift+F10 and the menu key, in Vim too): cut, copy, paste, delete, select all, find, replace.
-• Vim easymotion: backslash twice, then w, b, e, j, k, l, or f, F, s and a character; typing a label jumps there.
-• Vim: :set autoindent, :s with the c flag, :d, :y, :g, :v, \zs and \ze, NORMAL s and S, Ctrl+U and Ctrl+W on the : and / lines; line counts match Vim for files that end with a line break.
-• Fixes: stalls on a long Markdown paragraph or a giant line in the grid display; before Windows 11, a file named like nul.txt could lose its text.
-• In the Store version, F1 no longer lists the two Windows right-click menu operations (they cannot work there).
+• Language server (off by default): completion, K for information, gd or F12 to go to a definition; diagnostics update on save.
+• Markdown preview: tables, GitHub alerts, strikethrough, sideways scrolling for wide tables, syntax colors in fenced code; links show their real destination before opening; #heading links jump.
+• Smoother preview wheel, even inside long code; lighter scrolling for long unwrapped lines and Vim page moves.
+• Right-click menus in the text (cut, copy, paste and more; also Shift+F10, in Vim too) and on tabs (Reveal in File Explorer, Copy Path, Close Other Tabs and more); a tab shows its full path on hover.
+• Vim easymotion: \\ then w, b, e, j, k, l, or f, F, s and a character; type a label to jump.
+• Vim: :set autoindent, :s with the c flag, :d, :y, :g, :v, \zs and \ze, NORMAL s and S, Ctrl+U and Ctrl+W on the : and / lines; line counts match Vim for files ending in a line break.
+• Fixes: stalls on long Markdown paragraphs and giant lines in the grid display; before Windows 11, a file named like nul.txt could lose its text.
+• Store version: F1 hides the two Windows right-click menu operations, which do not work there.
 ```
 
 ---
@@ -313,7 +317,7 @@ NeNe Nib 是一款适用于 Windows 11 的轻量文本编辑器。只有一个�
 按 Ctrl+Shift+Space 或点击状态栏，即可在标准编辑（与记事本相同的操作：查找、替换、转到行、打印、插入日期和时间）和 Vim 编辑之间切换。Vim 编辑从零开始实现，并与真正的 Vim 9.1 进行对照验证。支持移动、操作符、文本对象、搜索、标记、跳转列表、点号重复、宏、寄存器、块选择和 map。
 
 Markdown 预览
-按 Ctrl+Shift+M，即可在旁边的窗格中查看正在编辑的 Markdown 的排版效果。再按一次切换为全屏显示，再按一次关闭。本地图片（PNG、JPEG、GIF 的第一帧、BMP）显示在正文中，任务列表的复选框可以点击切换。还会显示表格、GitHub 的 alert（NOTE、TIP 等）和删除线，较宽的表格可以横向滚动。围栏代码块使用与正文相同的语法着色。点击链接时，先在小卡片中显示真正的目标，确认后才用默认的浏览器或邮件应用打开。#标题 链接会跳转到该标题。
+按 Ctrl+Shift+M，即可在旁边的窗格中查看正在编辑的 Markdown 的排版效果。再按一次切换为全屏显示，再按一次关闭。本地图片（PNG、JPEG、GIF 的第一帧、BMP）显示在正文中，任务列表的复选框可以点击切换。还会显示表格、GitHub 的 alert（NOTE、TIP 等）和删除线，较宽的表格可以横向滚动。围栏代码块使用与正文相同的语法着色。滚轮每滚动一格预览都会移动，在长代码和图片中也不会停住。点击链接时，先在小卡片中显示真正的目标，确认后才用默认的浏览器或邮件应用打开。#标题 链接会跳转到该标题。
 
 项目全文搜索与预览
 按 Ctrl+Shift+F，即可搜索资源管理器的根文件夹（没有时为正在编辑的文档所在的文件夹）下的文件。每次修改搜索文字都会重新搜索，找到的行按到达的顺序列出，按 Enter 即可打开该文件的该行。在 Ctrl+P 的列表中，预览窗格会在右侧或下方显示所选项的内容（按 Ctrl+Shift+P 在右侧、下方和关闭之间切换）。
@@ -395,8 +399,9 @@ Markdown 预览
 • Ctrl+P 的列表新增预览窗格，在右侧或下方显示所选项的内容。按 Ctrl+Shift+P 在右侧、下方和关闭之间切换。
 • 设置：按 Ctrl+, 在窗口右侧打开设置面板。搜索并切换配色、字体、字号等，正文会立即生效。关闭时保存。
 • 补全：标准模式下按 Ctrl+Space（也可用 Ctrl+I），Vim 的 INSERT 中按 Ctrl-n，显示正在输入的单词的候选。
-• 语言服务器（默认关闭）：除补全候选外，可在 Vim 中按 K 显示信息，按 gd 或 F12 转到定义。
+• 语言服务器（默认关闭）：除补全候选外，可在 Vim 中按 K 显示信息，按 gd 或 F12 转到定义。保存后诊断会更新。无法启动的命令（可执行文件不存在、.cmd 或 .bat）不会启动，并以一行提示告知。
 • Markdown 预览：显示表格、GitHub 的 alert（NOTE、TIP 等）和删除线。较宽的表格可以横向滚动。围栏代码块使用与正文相同的语法着色。点击链接时先在小卡片中显示目标，确认后再打开。#标题 链接会跳转到该标题。
+• 滚动：Markdown 预览的滚轮每滚动一格都会移动，在长代码、长段落和图片中也是如此。不自动换行的长行的滚动，以及 Vim 中 Ctrl-f 等整屏翻页变得更轻快。
 • 标签页的右键菜单：在文件资源管理器中显示、复制路径、复制文件名、保存、关闭其他标签页、关闭右侧的标签页等。
 • 正文的右键菜单：剪切、复制、粘贴、删除、全选、查找和替换。也可用 Shift+F10 和菜单键打开，Vim 编辑中也可使用。
 • Vim 的 easymotion：连按两次反斜杠后输入 w、b、e、j、k、l，或输入 f、F、s 加一个字符，可见的跳转目标上会出现小标签，输入标签即可跳到该处。
@@ -425,4 +430,4 @@ Markdown 预览
     （`startup-first-frame` 41.886 ms・`key-to-frame-single` 0.641 ms・`open-large-file-16mib` 49.789 ms）。
     測った機械は施主の PC（Intel Core i9-10850K・NVIDIA GeForce RTX 3090・表示の倍率 125%）、
     Release の exe（main `b3e6f01`）、道具は `eng/measure-speed.py`。速さのゲートはこの値を基準に退行を落とす（QLT-014）。
-    ほかの機械では違う値になる。申請する版の exe で値が大きく変わったら、この文を測り直した値に直す（1.1.0 のまとめ枝のゲートは、44 の起動と 16 MiB を開くの 2 本が上限を越えて同じ時間帯の main との A/B で機械の状態と示したほかは 8 本とも 0 regression・46 は起動 44.991 ms・16 MiB を開く 51.071 ms・公開の記録 `release-1.1.0-2026-11-17.md`）。
+    ほかの機械では違う値になる。申請する版の exe で値が大きく変わったら、この文を測り直した値に直す（1.1.0 のまとめ枝のゲートは、44 の起動と 16 MiB を開くの 2 本が上限を越えて同じ時間帯の main との A/B で機械の状態と示したほかは 8 本とも 0 regression・46 は起動 44.991 ms・16 MiB を開く 51.071 ms・47 は起動 45.726 ms・16 MiB を開く 52.242 ms・公開の記録 `release-1.1.0-2026-11-17.md`）。
