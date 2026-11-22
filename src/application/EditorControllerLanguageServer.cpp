@@ -422,7 +422,7 @@ std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language 
         const LanguageServerLink &link = links.at(slot_index(slot));
         if (!serving_phase(link.phase) || link.language != std::optional{language} ||
             (root.has_value() &&
-             !(link.root.has_value() && same_language_root(link.root.value(), root.value()))))
+             !(link.root.has_value() && core::same_folder(link.root.value(), root.value()))))
         {
             continue;
         }

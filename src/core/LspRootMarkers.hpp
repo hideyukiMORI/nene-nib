@@ -26,7 +26,10 @@ using LspRootTier = std::span<const std::string_view>;
 
 // folder とその上のフォルダを近い順に（folder が 1 つ目・上限 lsp_root_search_depth）。ドライブの根
 // （`C:\`・`\\?\C:\`）と共有の根（`\\server\share`・`\\?\UNC\server\share`）より上へは行かない。
-[[nodiscard]] std::vector<FilePath> lsp_root_folders(const FilePath &folder);
+// ceiling（設定の root・#1960）が folder を含めば、ceiling のフォルダを最後の 1 つにしてそれより
+// 上へは行かない（ceiling 自身は列に入る）。folder を含まない ceiling は無いのと同じ。
+[[nodiscard]] std::vector<FilePath> lsp_root_folders(const FilePath &folder,
+                                                     const std::optional<FilePath> &ceiling);
 
 // folder の下の印 marker の経路（区切りは folder の末尾に無ければ `\` を 1 つ）。
 [[nodiscard]] FilePath lsp_root_marker_path(const FilePath &folder, std::string_view marker);
@@ -46,14 +49,15 @@ lsp_root_tier_found(const std::vector<FilePath> &folders, LspRootTier tier, cons
 }
 
 // 印の組を優先の順に 1 つずつ、folder から上へ当て（present が「ある」と答える経路）、最初に
-// 当たったフォルダ（段 S3）。どの組も当たらなければ値なし。確かめは多くて（印の数 × 上る段の
-// 数）回。ファイルに触れるのは present を渡す側（adapter・試験の替え玉）だけ（std::function を
-// core に持ち込まないよう、写しはこの 1 本の雛形）。
+// 当たったフォルダ（段 S3）。ceiling は上る上限（lsp_root_folders・#1960）。どの組も当たらなければ
+// 値なし。確かめは多くて（印の数 × 上る段の数）回。ファイルに触れるのは present を渡す側（adapter・
+// 試験の替え玉）だけ（std::function を core に持ち込まないよう、写しはこの 1 本の雛形）。
 template <typename Present>
-[[nodiscard]] std::optional<FilePath> lsp_root_found(const FilePath &folder, Language language,
-                                                     const Present &present)
+[[nodiscard]] std::optional<FilePath> lsp_root_found(const FilePath &folder,
+                                                     const std::optional<FilePath> &ceiling,
+                                                     Language language, const Present &present)
 {
-    const auto folders = lsp_root_folders(folder);
+    const auto folders = lsp_root_folders(folder, ceiling);
     for (const LspRootTier tier : lsp_root_markers(language))
     {
         const auto found = lsp_root_tier_found(folders, tier, present);
