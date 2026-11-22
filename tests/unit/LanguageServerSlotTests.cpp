@@ -282,7 +282,8 @@ void verify_filetype_change()
 // 受ける席の root の鍵は、席が実際に起きた root と今の文書に対していま決まる root（#1916 の
 // レビュー M1）。同じフォルダの `:set root=.` では同じ席が受け続け、文書を含む別のフォルダの root
 // ではその root の席が起きて文書を受け、root を消せば両方の席が残ったまま文書のフォルダの席へ戻る
-// （段 S3: 設定の root を使うのは文書がその下にあるときだけ・root が無ければ印か文書のフォルダ）。
+// （段 S3: 設定の root を使うのは文書がその下にあるときだけ・root が無ければ印か文書のフォルダ。
+// #1960: 下の文書は設定の root を上限に印を探し、直下の文書は探さない）。
 void verify_root_key()
 {
     Editing editing(slot_settings());
@@ -294,6 +295,8 @@ void verify_root_key()
                server.launches().size() == 1 && editing.controller().request_hover(),
            "set root=. on the folder the server started in keeps the same server");
     static_cast<void>(run_ex(editing.controller(), "set root=C:\\"));
+    // 設定の root の下の文書は設定の root を上限に印を探す（#1960）。答えの合図の後に起きる。
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     expect(server.launches().size() == 2 && server.started_slots().back() == Slot::second &&
                server.launches().back().root.text() == "C:\\" &&
                count_method(server.sent_to(Slot::first), "textDocument/didClose") == 1,

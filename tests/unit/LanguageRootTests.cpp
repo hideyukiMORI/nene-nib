@@ -9,6 +9,7 @@
 #include "FilePath.hpp"
 #include "InsertText.hpp"
 #include "Language.hpp"
+#include "LanguageRootRequest.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageTable.hpp"
 #include "LspRootMarkers.hpp"
@@ -169,21 +170,22 @@ void verify_priority()
         { return std::ranges::find(placed, path.text()) != placed.end(); };
     };
     const auto php =
-        core::lsp_root_found(path_of("C:\\repo\\pkg"), core::Language::php,
+        core::lsp_root_found(path_of("C:\\repo\\pkg"), std::nullopt, core::Language::php,
                              present_in({"C:\\repo\\.git", "C:\\repo\\pkg\\composer.json"}));
     expect(php.has_value() && php.value().text() == "C:\\repo",
            "intelephense looks for .git before composer.json");
     const auto submodule = core::lsp_root_found(
-        path_of("C:\\repo\\third\\sub"), core::Language::cpp,
+        path_of("C:\\repo\\third\\sub"), std::nullopt, core::Language::cpp,
         present_in({"C:\\repo\\compile_commands.json", "C:\\repo\\third\\sub\\.git"}));
     expect(submodule.has_value() && submodule.value().text() == "C:\\repo",
            "compile_commands.json above wins over a nearer submodule .git");
-    const auto work = core::lsp_root_found(path_of("C:\\ws\\mod\\cmd"), core::Language::go,
-                                           present_in({"C:\\ws\\go.work", "C:\\ws\\mod\\go.mod"}));
+    const auto work =
+        core::lsp_root_found(path_of("C:\\ws\\mod\\cmd"), std::nullopt, core::Language::go,
+                             present_in({"C:\\ws\\go.work", "C:\\ws\\mod\\go.mod"}));
     expect(work.has_value() && work.value().text() == "C:\\ws",
            "go.work above wins over a nearer go.mod");
     const auto lua =
-        core::lsp_root_found(path_of("C:\\a\\b"), core::Language::lua,
+        core::lsp_root_found(path_of("C:\\a\\b"), std::nullopt, core::Language::lua,
                              present_in({"C:\\a\\.emmyrc.json", "C:\\a\\b\\.luarc.json"}));
     expect(lua.has_value() && lua.value().text() == "C:\\a\\b",
            "markers of one tier are equal and the nearest folder wins");
@@ -193,7 +195,7 @@ void verify_priority()
         deep += "\\d";
     }
     std::size_t looked = 0;
-    static_cast<void>(core::lsp_root_found(path_of(deep), core::Language::python,
+    static_cast<void>(core::lsp_root_found(path_of(deep), std::nullopt, core::Language::python,
                                            [&looked](const core::FilePath &)
                                            {
                                                ++looked;
@@ -207,7 +209,7 @@ void verify_priority()
 [[nodiscard]] std::string climbed(std::string_view folder)
 {
     std::string text;
-    for (const core::FilePath &here : core::lsp_root_folders(path_of(folder)))
+    for (const core::FilePath &here : core::lsp_root_folders(path_of(folder), std::nullopt))
     {
         text += text.empty() ? "" : ";";
         text += here.text();
@@ -229,12 +231,13 @@ void verify_climb_floor()
                "\\\\?\\UNC\\srv\\share\\a;\\\\?\\UNC\\srv\\share",
            "a \\\\?\\UNC path stops at the share root");
     std::vector<std::string> asked;
-    const auto found = core::lsp_root_found(path_of("\\\\srv\\share\\a"), core::Language::rust,
-                                            [&asked](const core::FilePath &path)
-                                            {
-                                                asked.emplace_back(path.text());
-                                                return path.text() == "\\\\srv\\share\\.git";
-                                            });
+    const auto found =
+        core::lsp_root_found(path_of("\\\\srv\\share\\a"), std::nullopt, core::Language::rust,
+                             [&asked](const core::FilePath &path)
+                             {
+                                 asked.emplace_back(path.text());
+                                 return path.text() == "\\\\srv\\share\\.git";
+                             });
     expect(
         found.has_value() && found.value().text() == "\\\\srv\\share" &&
             std::ranges::none_of(asked,
@@ -253,16 +256,17 @@ void verify_walk()
 {
     const auto present_at = [](std::string_view wanted)
     { return [wanted](const core::FilePath &path) { return path.text() == wanted; }; };
-    const auto found = core::lsp_root_found(path_of("C:\\repo\\src\\a"), core::Language::rust,
-                                            present_at("C:\\repo\\Cargo.toml"));
+    const auto found =
+        core::lsp_root_found(path_of("C:\\repo\\src\\a"), std::nullopt, core::Language::rust,
+                             present_at("C:\\repo\\Cargo.toml"));
     expect(found.has_value() && found.value().text() == "C:\\repo",
            "the first folder upward with a marker is the root");
-    const auto drive =
-        core::lsp_root_found(path_of("C:\\repo"), core::Language::rust, present_at("C:\\.git"));
+    const auto drive = core::lsp_root_found(path_of("C:\\repo"), std::nullopt, core::Language::rust,
+                                            present_at("C:\\.git"));
     expect(drive.has_value() && drive.value().text() == "C:\\",
            "a marker at the drive root joins without a doubled separator");
     std::size_t asked = 0;
-    const auto none = core::lsp_root_found(path_of("C:\\a\\b"), core::Language::cs,
+    const auto none = core::lsp_root_found(path_of("C:\\a\\b"), std::nullopt, core::Language::cs,
                                            [&asked](const core::FilePath &)
                                            {
                                                ++asked;
@@ -275,7 +279,7 @@ void verify_walk()
         deep += "\\d";
     }
     std::size_t looked = 0;
-    static_cast<void>(core::lsp_root_found(path_of(deep), core::Language::cs,
+    static_cast<void>(core::lsp_root_found(path_of(deep), std::nullopt, core::Language::cs,
                                            [&looked](const core::FilePath &)
                                            {
                                                ++looked;
@@ -337,7 +341,8 @@ void verify_marker_root()
            "switching between known trees neither searches nor starts again");
 }
 
-// 設定の root は文書がその下にあるときだけ使い、探さない。外の文書は印で探す。
+// 設定の root の下の文書も印を探し、設定の root より上へは出ない（#1960）。印が無ければ設定の
+// root。外の文書は上限なしで印で探す。
 void verify_configured_root()
 {
     Editing editing(root_settings(true, "C:\\work"));
@@ -345,13 +350,92 @@ void verify_configured_root()
     auto &roots = editing.language_roots();
     roots.place("C:\\repo\\Cargo.toml");
     applied(editing.controller(), app::OpenDocument{path_of(cpp_file)});
-    expect(roots.touches() == 0 && editing.language_server().launches().size() == 1 &&
-               last_root(editing) == "C:\\work",
-           "a document under the configured root starts there without searching");
+    expect(roots.requests().size() == 1 && editing.language_server().launches().empty() &&
+               roots.requests().back().folder.text() == "C:\\work\\a" &&
+               roots.requests().back().ceiling.value_or(path_of("C:\\none")).text() == "C:\\work",
+           "a document under the configured root asks for markers up to the configured root");
+    applied(editing.controller(), app::WorkCompleted{});
+    expect(editing.language_server().launches().size() == 1 && last_root(editing) == "C:\\work",
+           "without a marker inside, the configured root is the root");
     applied(editing.controller(), app::OpenDocument{path_of(main_rs)});
     applied(editing.controller(), app::WorkCompleted{});
-    expect(roots.requests().size() == 1 && last_root(editing) == "C:\\repo",
-           "a document outside the configured root searches for its markers");
+    expect(roots.requests().size() == 2 && !roots.requests().back().ceiling.has_value() &&
+               last_root(editing) == "C:\\repo",
+           "a document outside the configured root searches for its markers without a ceiling");
+}
+
+constexpr std::string_view nested_rs = "C:\\work\\evidence\\hello\\src\\main.rs";
+constexpr std::string_view flat_rs = "C:\\work\\src\\lib.rs";
+
+// 開いたフォルダの中のプロジェクト（#1960 の再現）: 設定の root が `C:\work` で、文書が
+// `C:\work\evidence\hello\Cargo.toml` の下なら root は `hello`。設定の root の直下に印がある普通の
+// 形は設定の root のまま。印が設定の root より上にだけあれば設定の root（上へ出ない）。
+void verify_project_inside_configured_root()
+{
+    Editing editing(root_settings(true, "C:\\work"));
+    editing.files().hold_at(std::string(nested_rs), Bytes{std::string("x\n")});
+    auto &roots = editing.language_roots();
+    roots.place("C:\\work\\evidence\\hello\\Cargo.toml");
+    roots.place("C:\\.git");
+    applied(editing.controller(), app::OpenDocument{path_of(nested_rs)});
+    applied(editing.controller(), app::WorkCompleted{});
+    expect(last_root(editing) == "C:\\work\\evidence\\hello",
+           "a project inside the configured root starts at the folder of its Cargo.toml");
+    Editing flat(root_settings(true, "C:\\work"));
+    flat.files().hold_at(std::string(flat_rs), Bytes{std::string("x\n")});
+    flat.language_roots().place("C:\\work\\Cargo.toml");
+    applied(flat.controller(), app::OpenDocument{path_of(flat_rs)});
+    applied(flat.controller(), app::WorkCompleted{});
+    expect(last_root(flat) == "C:\\work",
+           "a marker right in the configured root keeps the configured root");
+    Editing above(root_settings(true, "C:\\work"));
+    above.files().hold_at(std::string(flat_rs), Bytes{std::string("x\n")});
+    above.language_roots().place("C:\\Cargo.toml");
+    above.language_roots().place("C:\\.git");
+    applied(above.controller(), app::OpenDocument{path_of(flat_rs)});
+    applied(above.controller(), app::WorkCompleted{});
+    expect(last_root(above) == "C:\\work",
+           "markers only above the configured root leave the configured root");
+    Editing direct(root_settings(true, "C:\\work"));
+    direct.files().hold_at("C:\\work\\top.rs", Bytes{std::string("x\n")});
+    applied(direct.controller(), app::OpenDocument{path_of("C:\\work\\top.rs")});
+    expect(direct.language_roots().touches() == 0 && last_root(direct) == "C:\\work",
+           "a document right in the configured root starts there without searching");
+}
+
+// 上る列は上限のフォルダ自身で止まる（大小と末尾の区切りを畳む）。上限が文書を含まなければ無いのと
+// 同じ。覚えの鍵は上限が違えば別の頼み（設定の root を変えたら古い答えを使わない・#1960）。
+void verify_climb_ceiling()
+{
+    const auto climbed_under = [](std::string_view folder, std::string_view ceiling)
+    {
+        std::string text;
+        for (const core::FilePath &here :
+             core::lsp_root_folders(path_of(folder), std::optional{path_of(ceiling)}))
+        {
+            text += text.empty() ? "" : ";";
+            text += here.text();
+        }
+        return text;
+    };
+    expect(climbed_under("C:\\work\\a\\b", "C:\\work") == "C:\\work\\a\\b;C:\\work\\a;C:\\work" &&
+               climbed_under("C:\\work\\a", "c:\\WORK\\") == "C:\\work\\a;C:\\work" &&
+               climbed_under("C:\\work", "C:\\work") == "C:\\work" &&
+               climbed_under("C:\\work\\a", "C:\\") == "C:\\work\\a;C:\\work;C:\\",
+           "the walk stops at the ceiling folder and still looks at it");
+    expect(climbed_under("C:\\other\\a", "C:\\work") == "C:\\other\\a;C:\\other;C:\\",
+           "a ceiling that does not contain the folder is ignored");
+    const app::LanguageRootRequest open{path_of("C:\\work\\a"), core::Language::rust, std::nullopt};
+    const app::LanguageRootRequest capped{path_of("C:\\work\\a"), core::Language::rust,
+                                          path_of("C:\\work")};
+    const app::LanguageRootRequest folded{path_of("c:\\WORK\\a"), core::Language::rust,
+                                          path_of("c:\\Work")};
+    const app::LanguageRootRequest lower{path_of("C:\\work\\a"), core::Language::rust,
+                                         path_of("C:\\work\\a")};
+    expect(!app::same_language_root_request(open, capped) &&
+               app::same_language_root_request(capped, folded) &&
+               !app::same_language_root_request(capped, lower),
+           "the remembered key holds the ceiling, folded like the folder");
 }
 
 // 答えを待つ間に同じ（フォルダ・言語）を開き直しても 2 回頼まない。答えが来れば起きる。
@@ -487,6 +571,8 @@ void verify_language_root_scope()
     verify_folder_contains();
     verify_marker_root();
     verify_configured_root();
+    verify_project_inside_configured_root();
+    verify_climb_ceiling();
     verify_waiting();
     verify_quiet();
 }

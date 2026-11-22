@@ -968,8 +968,9 @@ class EditorController final
     void consider_language_server(core::Language language);
     void yield_language_server();
     [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language);
-    // root（2026-11-22 の追補・段 S3）: document_root はアクティブな文書の root（設定の root →
-    // 印を探した答え → 文書のフォルダ・まだ分からなければ理由）、seek は印を探す頼みを 1 回だけ
+    // root（2026-11-22 の追補・段 S3・#1960）: document_root はアクティブな文書の root（設定の root
+    // を上限に印を探した答え → 設定の root か文書のフォルダ・まだ分からなければ理由）、seek は印を
+    // 探す頼みを 1 回だけ
     // 出し、collect は答えを覚えて決め直す（頼んでいなければ port を呼ばない）。held_root は
     // reconcile が hold_language_root で 1 回決めた値が今も同じ鍵なら読み、違えば document_root
     // （#1944 のレビュー L1）。

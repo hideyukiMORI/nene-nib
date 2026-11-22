@@ -13,11 +13,10 @@
 
 namespace nenenib::adapters::win32
 {
-std::optional<core::FilePath> language_root_on_disk(const core::FilePath &folder,
-                                                    core::Language language,
+std::optional<core::FilePath> language_root_on_disk(const application::LanguageRootRequest &request,
                                                     const std::stop_token &stop)
 {
-    return core::lsp_root_found(folder, language,
+    return core::lsp_root_found(request.folder, request.ceiling, request.language,
                                 [&stop](const core::FilePath &candidate)
                                 {
                                     if (stop.stop_requested())
@@ -53,7 +52,7 @@ void Win32LanguageRootAdapter::find(application::LanguageRootRequest request)
     worker_.post(
         [shelf = shelf_, request = std::move(request)](const std::stop_token &stop)
         {
-            auto found = language_root_on_disk(request.folder, request.language, stop);
+            auto found = language_root_on_disk(request, stop);
             if (stop.stop_requested())
             {
                 return;
