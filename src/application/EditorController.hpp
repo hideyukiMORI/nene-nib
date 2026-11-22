@@ -1110,7 +1110,7 @@ class EditorController final
     palette_diagnostic_of(const core::CommandChoice &choice) const;
     void land_palette_diagnostic(const core::CommandChoice &choice);
     // 参照の一覧（#1947・ADR 0191 の決定 4・EditorControllerReferences.cpp）。答えは
-    // held_references_ に控えて Ctrl+P の一覧を記号 `&` で開き、面を開くときに
+    // held_references_ に控えて Ctrl+P の一覧を記号 `&` で開き、`&` を見せるときに
     // append_reference_choices が候補と palette_references_ を 1 回作る。選ぶと定義と同じ着地の 1
     // 本（land_location）。
     void settle_references_answer();
@@ -1123,6 +1123,8 @@ class EditorController final
     // held_symbols_ に控えて記号 `%` で開き、候補の指す所は参照と同じ形の
     // palette_symbols_（選ぶ道と プレビュー欄は palette_reference_of が出どころで列を選ぶ 1 本）。
     void settle_symbols_answer();
+    void use_symbols_answer(LanguageSymbols answered, bool listing);
+    void keep_symbols_answer(LanguageSymbols answered);
     void append_symbol_choices(std::vector<core::CommandChoice> &entries);
     // 参照と記号の候補は、その記号を見せるときにだけ作り、同じ一覧の間は 1 回だけ作って持つ
     // （#1958 のレビュー R1）。`%` は今の文書の今の改訂の答えだけを見せ、違えば頼み直す（決め 4）。

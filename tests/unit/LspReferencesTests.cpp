@@ -17,6 +17,7 @@
 #include "EditorSettings.hpp"
 #include "FilePath.hpp"
 #include "FileUri.hpp"
+#include "GiantLine.hpp"
 #include "InsertText.hpp"
 #include "JsonParse.hpp"
 #include "KeyChord.hpp"
@@ -423,6 +424,35 @@ void verify_encodings_and_wide_lines()
            "a server that counts UTF-8 bytes lands on the same name");
 }
 
+// 開いているタブの巨大な行（バイト数が giant_line_threshold を超える）の参照は行だけの当たり。
+// 題名は「相対パス:行」（偽の桁を付けない）・行の文は無い・選ぶと名前に着地する（#1958 の確かめ
+// レビュー M1・R2）。行はコードポイントでは閾値の内側なので、格子表示を聞かずに開く。
+void verify_giant_line_reference()
+{
+    constexpr std::size_t wide_characters = 6000;
+    static_assert(wide_characters * 3 > core::giant_line_threshold);
+    std::string giant = "int main() {}\n";
+    for (std::size_t index = 0; index < wide_characters; ++index)
+    {
+        giant += "\xE3\x81\x82";
+    }
+    giant += " main();\n";
+    Editing editing(lsp_on());
+    started_with(editing, R"({"textDocumentSync":2,"referencesProvider":true})", giant,
+                 second_text);
+    static_cast<void>(asked(editing));
+    const auto listed = answered(
+        editing, "[" + reference_at("file:///C:/work/main.cpp", 1, wide_characters + 1) + "]");
+    const bool shown =
+        listed.command_palette.has_value() && !listed.command_palette.value().rows.empty();
+    expect(shown && listed.command_palette.value().rows.front().label.text() == "main.cpp:2" &&
+               !listed.command_palette.value().rows.front().detail.has_value(),
+           "a reference on a giant line of an open tab shows only file:line");
+    expect(caret_on(editing.controller().apply_frame(app::ActivateCommandChoice{0}), 2,
+                    wide_characters + 2),
+           "choosing it lands on the name");
+}
+
 // `grr` は頼めたら成功の歩に読み替わり、マクロの続きが走る（#1954 のレビュー R4）。
 void verify_grr_keeps_the_macro()
 {
@@ -563,6 +593,17 @@ void verify_subject_empty_line_and_lazy_hits()
     applied(editing.controller(), app::CancelCommand{});
     expect(editing.controller().listed_hits_made() == shown,
            "a Ctrl+P list under another mark makes no hit of the held references");
+    // 同じ一覧の中で `&` → `#` → `&` と戻っても作り直さない（#1958 の確かめレビュー L4）。
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"&"}));
+    const std::size_t once = editing.controller().listed_hits_made();
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"#"}));
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"&"}));
+    applied(editing.controller(), app::CancelCommand{});
+    expect(once == shown + 3 && editing.controller().listed_hits_made() == once,
+           "& then # then & in one list makes the hits once");
 }
 } // namespace
 
@@ -576,6 +617,7 @@ void verify_lsp_references_scope()
     verify_vim_keys();
     verify_limit_and_foreign();
     verify_encodings_and_wide_lines();
+    verify_giant_line_reference();
     verify_grr_keeps_the_macro();
     verify_reopen_after_edit();
     verify_inactive_window();

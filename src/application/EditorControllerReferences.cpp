@@ -30,6 +30,7 @@
 #include "ProjectHitRow.hpp"
 #include "ProjectHitRows.hpp"
 #include "ProjectSearchRules.hpp"
+#include "ServerAbilities.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 #include "Utf8.hpp"
@@ -73,10 +74,14 @@ namespace
 {
     const core::Offset end_of_text{text.size_bytes()};
     const core::Offset begin = core::lsp_offset_of(text, at.start, encoding).value_or(end_of_text);
-    const core::Offset end = core::lsp_offset_of(text, at.end, encoding).value_or(begin);
     const core::TextPosition position = text.position_of(begin);
     const std::size_t start = text.line_start(position.line).value;
     const std::size_t line_end = text.line_end(position.line).value;
+    // 終わりが別の行なら変換せず行末に切る（終わりの行が巨大な行でも写さない・#1958 の確かめ
+    // レビュー L1）。
+    const core::Offset end = at.end.line == at.start.line
+                                 ? core::lsp_offset_of(text, at.end, encoding).value_or(begin)
+                                 : core::Offset{line_end};
     const std::size_t window_end = std::min(line_end, start + core::project_hit_text_bytes);
     std::string line = text.text_range(core::Offset{start}, core::Offset{window_end});
     line.resize(core::whole_code_points(line));
@@ -123,6 +128,15 @@ constexpr std::string_view vim_symbols_keys = "gO";
 {
     const auto chord = core::shown_chord(operation, core::EditMode::ordinary);
     return chord.has_value() ? core::key_chord_label(chord.value()) : std::string{};
+}
+
+// 参照（references）か記号の能力と、席がそれを持たないときの知らせ。
+[[nodiscard]] std::pair<bool ServerAbilities::*, core::UiMessage> refusal_of(bool references)
+{
+    return references ? std::pair{&ServerAbilities::references,
+                                  core::UiMessage::notice_references_not_supported}
+                      : std::pair{&ServerAbilities::document_symbols,
+                                  core::UiMessage::notice_symbols_not_supported};
 }
 
 // 参照の候補の題名。開いているタブは「相対パス:行:桁」、開いていないファイルは「相対パス:行」。
@@ -223,7 +237,8 @@ void EditorController::forget_listed_answers(AutosaveId document)
     }
 }
 
-// 面を開くときに 1 回だけ作る参照の候補（ADR 0062 の決定 15）。答えの順のまま。`file:` でない場所は
+// `&` を見せるときに 1 回だけ作る参照の候補（同じ一覧の間は作り直さない・settle_listed_answers・
+// #1958 のレビュー R1）。答えの順のまま。`file:` でない場所は
 // 外す。ルートは 1 回、ファイル・タブ・本文は URI ごとに 1 回だけ引く（#1954 のレビュー R1・1,000
 // 件 × タブ 20 で 1 件ごとに引くと Debug で 1 回 約 70 ms）。
 void EditorController::append_reference_choices(std::vector<core::CommandChoice> &entries)
@@ -245,9 +260,14 @@ void EditorController::append_reference_choices(std::vector<core::CommandChoice>
         }
         const core::FilePath &file = listed.first.value();
         ++listed_hits_made_;
-        const core::ProjectHit hit = listed_hit(location.range, listed.second, encoding);
-        core::CommandChoice choice = reference_choice(
-            file, core::project_hit_row(root.value_or(file), file, hit), listed.second != nullptr);
+        // 巨大な行かを 1 回だけ判定し、当たりと題名の両方に同じ値を渡す（巨大な行は開いていても
+        // 行だけの当たりで「相対パス:行」・#1958 の確かめレビュー M1）。
+        const bool exact =
+            listed.second != nullptr && !giant_answer_line(*listed.second, location.range);
+        const core::ProjectHit hit = exact ? opened_hit(*listed.second, location.range, encoding)
+                                           : unopened_hit(location.range);
+        core::CommandChoice choice =
+            reference_choice(file, core::project_hit_row(root.value_or(file), file, hit), exact);
         choice.command = std::to_string(palette_references_.size());
         choice.kind = core::CommandChoiceKind::land;
         choice.origin = core::PaletteOrigin::reference;
@@ -284,7 +304,9 @@ EditorController::ListedFile EditorController::listed_file_of(const std::string 
 
 // 記号の答え（決定 5）も 1 回使って消す。使える条件・窓が非アクティブのとき・知らせは参照と同じ。
 // 答えた文書を控え、一覧はその文書の記号だけ。Ctrl+P の一覧が `%` で開いている間に届いた答え
-// （手で `%` を打って頼み直した答え・#1958）は、その一覧の候補にする。
+// （手で `%` を打って頼み直した答え・#1958）は、その一覧の候補にする。一覧が開いていて記号が `%`
+// でない間（打ち直しの途中）に届いた答えも、照合（文書と改訂番号）は通っているので見せずに控える
+// （`%` に戻れば held_symbols_current が通って出る・#1958 の確かめレビュー R1）。
 void EditorController::settle_symbols_answer()
 {
     auto answers = state_.language_answers();
@@ -298,8 +320,19 @@ void EditorController::settle_symbols_answer()
     const bool listing = palette_scope_is(core::PaletteScope::symbols);
     const bool usable = listing || (faces_closed() && awaits_nothing());
     definition_anchor_.reset();
+    if (!usable)
+    {
+        keep_symbols_answer(std::move(answered));
+        return;
+    }
+    use_symbols_answer(std::move(answered), listing);
+}
+
+// 使える記号の答え（settle_symbols_answer の続き）。空なら知らせ、でなければ控えて見せる。
+void EditorController::use_symbols_answer(LanguageSymbols answered, bool listing)
+{
     const auto &path = state_.document().path;
-    if (!usable || !path.has_value())
+    if (!path.has_value())
     {
         return;
     }
@@ -322,6 +355,21 @@ void EditorController::settle_symbols_answer()
             state_.with_command_message(ui_notice(core::UiMessage::notice_symbols_first_of,
                                                   {std::to_string(listed), std::to_string(total)}));
     }
+}
+
+// 今は見せられない記号の答え。Ctrl+P の一覧が開いていれば（記号が `%` でない打ち直しの途中）、
+// 照合は通っているので見せずに控える（空の答えは控えない・知らせない）。一覧が閉じていれば捨てる。
+void EditorController::keep_symbols_answer(LanguageSymbols answered)
+{
+    const auto &input = state_.command_input();
+    const bool palette =
+        input.has_value() && std::holds_alternative<core::CommandPalette>(input.value());
+    const auto &path = state_.document().path;
+    if (!palette || !path.has_value() || answered.symbols.empty())
+    {
+        return;
+    }
+    held_symbols_ = std::pair{path.value(), std::move(answered)};
 }
 
 // 控えた記号を見せる。開いている `%` の一覧（listing）なら、前に見せていた記号の候補を捨ててから
@@ -453,7 +501,7 @@ EditorController::held_references_subject(core::PaletteScope scope) const
 }
 
 // 言語サーバーの出どころの候補が 0 のときの 1 行（#1958 の決め 2）。LSP がオフならそれを、参照と
-// 記号は頼み方を、診断は「診断はありません」。鍵は操作の表から引く（文に鍵を直書きしない）。
+// 記号は頼み方を（席が能力を持たなければ「答えません」）、診断は「診断はありません」。鍵は操作の表から引く（文に鍵を直書きしない）。
 std::optional<core::DisplayText>
 EditorController::palette_empty_line(core::PaletteScope scope) const
 {
@@ -472,6 +520,13 @@ EditorController::palette_empty_line(core::PaletteScope scope) const
     if (diagnostics)
     {
         return ui_notice(core::UiMessage::notice_no_diagnostics);
+    }
+    // 動いている席が能力を持たなければ、頼み方の代わりに鍵で頼んだときと同じ「答えません」
+    // （#1958 の確かめレビュー L2）。
+    const auto [ability, refusal] = refusal_of(references);
+    if (lacks_ability(ability))
+    {
+        return ui_notice(refusal);
     }
     if (references)
     {

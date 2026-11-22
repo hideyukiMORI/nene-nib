@@ -433,7 +433,7 @@ enum class UiMessage : std::uint16_t
     palette_empty_language_server_off,
     palette_empty_references,
     palette_empty_symbols,
-    // 参照の一覧が何を頼んだ答えか（#1958・{0} は頼んだ名前か「相対パス:行」）。
+    // 参照の一覧が何を頼んだ答えか（#1958・{0} は頼んだ所の「相対パス:行」）。
     palette_references_subject,
 };
 
