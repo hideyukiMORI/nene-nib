@@ -381,20 +381,20 @@ void verify_catalog_restore(adapters::Win32FileAdapter &files, const core::Theme
     const auto encoded = adapters::encode_settings(settings);
     expect(encoded.find("colorscheme=my-theme\n") != std::string::npos,
            "settings store only canonical name");
-    const auto decoded = adapters::decode_settings(encoded, adapters::SettingsVersion::v5, catalog);
+    const auto decoded = adapters::decode_settings(encoded, adapters::SettingsVersion::v6, catalog);
     expect(decoded && core::same_settings(decoded.value(), settings),
            "settings restore user choice from catalog");
-    const auto path = catalog_path("settings.v5");
+    const auto path = catalog_path("settings.v6");
     adapters::Win32SettingsAdapter store(
-        files,
-        adapters::SettingsPaths{path, catalog_path("settings.v4"), catalog_path("settings.v3"),
-                                catalog_path("settings.v2"), catalog_path("settings.v1")});
+        files, adapters::SettingsPaths{path, catalog_path("settings.v5"),
+                                       catalog_path("settings.v4"), catalog_path("settings.v3"),
+                                       catalog_path("settings.v2"), catalog_path("settings.v1")});
     expect(store.read(catalog).has_value() && store.write(settings).has_value(),
            "adapter saves selected theme");
     adapters::Win32SettingsAdapter restarted(
-        files,
-        adapters::SettingsPaths{path, catalog_path("settings.v4"), catalog_path("settings.v3"),
-                                catalog_path("settings.v2"), catalog_path("settings.v1")});
+        files, adapters::SettingsPaths{path, catalog_path("settings.v5"),
+                                       catalog_path("settings.v4"), catalog_path("settings.v3"),
+                                       catalog_path("settings.v2"), catalog_path("settings.v1")});
     expect(core::same_settings(
                restarted.read(catalog).value().value_or(core::default_editor_settings()), settings),
            "new adapter restores same user data");
@@ -404,8 +404,9 @@ void verify_catalog_restore(adapters::Win32FileAdapter &files, const core::Theme
     {
         adapters::Win32SettingsAdapter blocked(
             files,
-            adapters::SettingsPaths{path, catalog_path("settings.v4"), catalog_path("settings.v3"),
-                                    catalog_path("settings.v2"), catalog_path("settings.v1")});
+            adapters::SettingsPaths{path, catalog_path("settings.v5"), catalog_path("settings.v4"),
+                                    catalog_path("settings.v3"), catalog_path("settings.v2"),
+                                    catalog_path("settings.v1")});
         const auto reading = blocked.read(bad);
         expect(!reading && std::get<core::ThemeLookupFailure>(reading.error()).name == name_of(),
                "missing or broken saved theme returns its name");
@@ -415,7 +416,8 @@ void verify_catalog_restore(adapters::Win32FileAdapter &files, const core::Theme
         const auto preserved = files.read(path, 4096);
         expect(preserved.value().view() == encoded, "blocked write preserves original bytes");
     }
-    remove_fixture("settings.v5");
+    remove_fixture("settings.v6");
+    remove_fixture("settings.v6.lock");
     remove_fixture("settings.v5.lock");
     remove_fixture("settings.v4.lock");
     remove_fixture("settings.v3.lock");
