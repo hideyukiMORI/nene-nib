@@ -331,6 +331,34 @@ void EditorController::accept(const ScrollPane &intent)
     state_ = state_.with_other_scrolled(moved.value().line, moved.value().row);
 }
 
+// 境界が動いた後のもう 1 つの枠（追補の決定 5）。操作中の枠の clamp_scroll と同じく先頭の論理行と
+// 画面行を保ち、その枠の寸法と行数で constrained に収める。プレビューの枠・寸法が届く前・問いの
+// 答えを待つ文書は触らない。
+void EditorController::clamp_other_scroll()
+{
+    const auto pane = other_pane_viewed();
+    if (!pane.has_value() || other_geometry().width <= 0 ||
+        display_pending(pane.value().display_inquiry()))
+    {
+        return;
+    }
+    const EditorState &state = pane.value();
+    VisualTextView view(state, ports_.text_layouts, other_geometry());
+    const ScrollState &scroll = state.scroll();
+    const auto within =
+        view.constrained(core::VisualPosition{scroll.first_visible, scroll.first_row},
+                         scroll_extent_for(state_.mode()));
+    if (!within)
+    {
+        layout_failure_ = within.error();
+        return;
+    }
+    if (within.value().line != scroll.first_visible || within.value().row != scroll.first_row)
+    {
+        state_ = state_.with_other_scrolled(within.value().line, within.value().row);
+    }
+}
+
 core::TitleBarInput EditorController::title_bar_input() const
 {
     return title_bar_input(state_.title_bar_width(), core::reference_dpi);

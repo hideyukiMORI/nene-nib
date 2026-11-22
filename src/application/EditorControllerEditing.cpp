@@ -17,6 +17,7 @@
 #include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
 #include "Selection.hpp"
+#include "SplitExtent.hpp"
 #include "UiMessage.hpp"
 #include "Utf8.hpp"
 #include "VimBlockRange.hpp"
@@ -251,6 +252,17 @@ edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const 
         return core::marks_adjusted(marks, before, edit);
     }
     std::unreachable();
+}
+
+// 境界が動いたか（同じ向き・同じ帯の長さで first の長さが違う）。帯の長さが違えば窓の大きさ・面の
+// 幅の変更で、境界を動かしたとは数えない。寸法が届く前（値なし）も数えない。
+[[nodiscard]] bool split_divider_moved(const std::optional<core::SplitExtent> &before,
+                                       const std::optional<core::SplitExtent> &after) noexcept
+{
+    return before.has_value() && after.has_value() &&
+           before.value().dimension == after.value().dimension &&
+           before.value().available == after.value().available &&
+           before.value().first != after.value().first;
 }
 } // namespace
 
@@ -802,16 +814,16 @@ void EditorController::accept(const VisibleLines &intent)
     window_width_ = intent.window_width;
     window_height_ = intent.window_height;
     explorer_lines_ = intent.explorer_lines;
+    // 境界が動いた（帯の長さが同じで first の長さが違う・ドラッグと鍵）ときだけ、もう 1 つの枠も
+    // 操作中の枠と同じ規則（先頭の行を保って収める）で収め直す。窓の大きさの変更では main のまま
+    // 触らない（ADR 0148 の 2026-11-22 の追補の決定 5・レビュー R4 の R2）。
+    const bool divider_moved = split_divider_moved(split_extent_, intent.split);
     split_extent_ = intent.split;
-    // もう 1 つの枠の幅が変わったら、先頭の論理行を保って画面行を行の頭へ戻す（折り返しが変わる・
-    // ADR 0148 の 2026-11-22 の追補の決定 5）。
-    const auto other_width = other_geometry().width;
     other_geometry_ = intent.other_geometry;
     other_lines_ = intent.other_lines;
-    if (const PaneView *other = state_.other_pane();
-        other != nullptr && other->first_row > 0 && other_geometry().width != other_width)
+    if (divider_moved)
     {
-        state_ = state_.with_other_scrolled(other->first_visible, 0);
+        clamp_other_scroll();
     }
     state_ = state_.with_vim(core::vim_after_resize(state_.vim(), previous, lines));
     auto scroll = state_.scroll();

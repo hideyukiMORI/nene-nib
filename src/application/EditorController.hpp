@@ -1494,6 +1494,9 @@ class EditorController final
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
     void clamp_scroll();
+    // もう 1 つの枠の先頭の行を、その枠の寸法で clamp_scroll と同じ規則で収める（境界が動いたとき・
+    // ADR 0148 の 2026-11-22 の追補の決定 5）。
+    void clamp_other_scroll();
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();

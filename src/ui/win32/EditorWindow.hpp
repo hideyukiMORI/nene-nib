@@ -47,6 +47,7 @@
 #include "SessionEnd.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsTarget.hpp"
+#include "SplitGrab.hpp"
 #include "SplitLayout.hpp"
 #include "SplitShare.hpp"
 #include "StartPress.hpp"
@@ -483,9 +484,8 @@ class EditorWindow final
     [[nodiscard]] bool take_minimap_escape(LPARAM data);
     [[nodiscard]] bool explorer_divider_cursor(LPARAM data) const;
     // 2 枠の境界のドラッグ（EditorWindowSplit.cpp・ADR 0148 の 2026-11-22 の追補の決定 3）。
-    [[nodiscard]] bool split_divider_at(std::int32_t x, std::int32_t y) const;
-    [[nodiscard]] std::int32_t split_coordinate(LPARAM data) const;
-    [[nodiscard]] std::optional<core::SplitShare> split_share_at(std::int32_t coordinate) const;
+    [[nodiscard]] std::optional<std::int32_t> split_divider_start(LPARAM point) const;
+    [[nodiscard]] std::optional<core::SplitShare> step_split(UINT message, LPARAM data);
     [[nodiscard]] bool press_split_divider(LPARAM data);
     void drag_split_divider(LPARAM data);
     [[nodiscard]] bool release_split_divider(LPARAM data);
@@ -493,7 +493,6 @@ class EditorWindow final
     [[nodiscard]] bool cancel_split_divider();
     [[nodiscard]] bool take_split_escape(LPARAM data);
     void settle_split_divider(LPARAM point);
-    [[nodiscard]] bool split_divider_under(LPARAM point) const;
     [[nodiscard]] bool reset_split_share(LPARAM data);
     void hover_split_divider(LPARAM data);
     [[nodiscard]] bool split_divider_cursor(LPARAM data) const;
@@ -634,13 +633,11 @@ class EditorWindow final
     bool minimap_escape_held_ = false;
     // 最後の WM_MOUSEMOVE の点が境の上だったか（カーソルを左右の矢印にする・D78）。
     bool over_explorer_divider_ = false;
-    // 2 枠の境界を押してから離すまで（ADR 0148 の 2026-11-22 の追補の決定 3）。値は押した点と境界の
-    // 始まりのずれ（分割の向きの物理画素）。grab_at は押した点（同じ点の WM_MOUSEMOVE を動かしたと
-    // 数えない）、dragged は押した点から動いたか、pressed_share は押す前の比（Esc で戻す）。
-    std::optional<std::int32_t> split_grab_offset_;
-    std::int32_t split_grab_at_ = 0;
-    bool split_dragged_ = false;
-    core::SplitShare split_pressed_share_{};
+    // 2 枠の境界を押してから離すまで（ADR 0148 の 2026-11-22 の追補の決定 3）。値があるのは窓が
+    // 捕まえている間だけ。次の値は split_step の 1 本（SplitPress.hpp）。
+    std::optional<SplitGrab> split_grab_;
+    // 捕まえている間の最後の点（Esc で取り消した時点のカーソルをこの点で決め直す・面の境と同じ）。
+    LPARAM split_drag_point_ = 0;
     bool split_escape_held_ = false;
     // 最後の WM_MOUSEMOVE の点が境界の上だったか（カーソルを矢印にする）。
     bool over_split_divider_ = false;

@@ -8,6 +8,7 @@
 #include "EditorFrame.hpp"
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
+#include "OpenDocument.hpp"
 #include "PaneDimension.hpp"
 #include "PaneFrame.hpp"
 #include "PaneLayouts.hpp"
@@ -15,10 +16,13 @@
 #include "PaneSide.hpp"
 #include "PaneSizing.hpp"
 #include "PaneSplit.hpp"
+#include "PreviewFrame.hpp"
 #include "ResizePane.hpp"
 #include "ResizeSplit.hpp"
 #include "Scopes.hpp"
+#include "ScriptedFiles.hpp"
 #include "ScrollLines.hpp"
+#include "ScrollPane.hpp"
 #include "SplitExtent.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
@@ -26,6 +30,7 @@
 #include "SwitchPane.hpp"
 #include "TestSupport.hpp"
 #include "TextViewGeometry.hpp"
+#include "TogglePreview.hpp"
 #include "VimKey.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
@@ -35,7 +40,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 
 namespace nenenib::tests
@@ -363,6 +370,190 @@ void verify_resize_pane_intent()
     applied(controller, app::ResizePane{PaneSizing{PaneResize::even, PaneDimension::width, 1}});
     expect(first_of(controller) == 500, "ResizePane even splits evenly again");
 }
+
+// ---------------------------------------------------------------- 上下の分割（レビュー R4 の R3）
+
+constexpr core::SplitExtent stacked_extent{PaneDimension::height, 0, 600, 300, 70};
+
+// 上下の分割の寸法（帯の高さ 600・最小 70・行の高さ 20）。
+app::VisibleLines stacked_view_of(std::size_t lines)
+{
+    app::VisibleLines view{lines, core::TextViewGeometry{480, 20, 96, 10.0F}};
+    view.split = stacked_extent;
+    view.other_geometry = core::TextViewGeometry{480, 20, 96, 10.0F};
+    view.other_lines = lines;
+    return view;
+}
+
+[[nodiscard]] std::int32_t top_of(const app::EditorController &controller)
+{
+    return core::split_first_length(stacked_extent, controller.pane_split().share);
+}
+
+void verify_stacked_resize_keys()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    static_cast<void>(window_keys(controller, "", "s"));
+    applied(controller, stacked_view_of(10));
+    static_cast<void>(window_keys(controller, "", "+"));
+    expect(top_of(controller) == 320, "Ctrl-w + makes the upper pane one line taller");
+    static_cast<void>(window_keys(controller, "3", "+"));
+    expect(top_of(controller) == 380, "3 Ctrl-w + makes it three lines taller");
+    static_cast<void>(window_keys(controller, "", "-"));
+    static_cast<void>(window_keys(controller, "2", "-"));
+    expect(top_of(controller) == 320, "Ctrl-w - and 2 Ctrl-w - make it shorter");
+    static_cast<void>(window_keys(controller, "", ">"));
+    static_cast<void>(window_keys(controller, "", "|"));
+    expect(top_of(controller) == 320, "the width keys do nothing on a stacked split");
+    static_cast<void>(window_keys(controller, "", "_"));
+    expect(top_of(controller) == 530, "Ctrl-w _ makes the operated pane the tallest");
+    static_cast<void>(window_keys(controller, "4", "_"));
+    expect(top_of(controller) == 80, "4 Ctrl-w _ sets the operated pane to four lines");
+    static_cast<void>(window_keys(controller, "", "="));
+    static_cast<void>(window_keys(controller, "", "j"));
+    static_cast<void>(window_keys(controller, "", "+"));
+    expect(top_of(controller) == 280, "Ctrl-w + in the lower pane moves the divider up");
+}
+
+void verify_stacked_ex_resize()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    static_cast<void>(window_keys(controller, "", "s"));
+    applied(controller, stacked_view_of(10));
+    static_cast<void>(run_ex(controller, "resize 5"));
+    expect(top_of(controller) == 100, ":resize 5 sets the height to five lines");
+    static_cast<void>(run_ex(controller, "res +2"));
+    expect(top_of(controller) == 140, ":res +2 makes it two lines taller");
+    static_cast<void>(run_ex(controller, "resize -1"));
+    expect(top_of(controller) == 120, ":resize -1 makes it one line shorter");
+    static_cast<void>(run_ex(controller, "vertical resize 20"));
+    expect(top_of(controller) == 120, ":vertical resize changes nothing on a stacked split");
+    static_cast<void>(run_ex(controller, "resize"));
+    expect(top_of(controller) == 530, ":resize without a number makes it the tallest");
+    static_cast<void>(run_ex(controller, "resize 0"));
+    expect(top_of(controller) == 70, ":resize 0 makes it the shortest");
+}
+
+// `Ctrl-w` の後ろの回数（Vim と同じ・前の回数と掛ける・実測 2026-11-22）。
+void verify_counts_after_window_key()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    static_cast<void>(window_keys(controller, "", "v"));
+    applied(controller, view_of(10, 10));
+    static_cast<void>(window_keys(controller, "", "5>"));
+    expect(first_of(controller) == 550, "Ctrl-w 5 > widens by five columns like 5 Ctrl-w >");
+    static_cast<void>(window_keys(controller, "", "="));
+    static_cast<void>(window_keys(controller, "2", "3>"));
+    expect(first_of(controller) == 560, "2 Ctrl-w 3 > multiplies the two counts");
+    static_cast<void>(window_keys(controller, "", "12|"));
+    expect(first_of(controller) == 120, "Ctrl-w 12 | sets twelve columns");
+    static_cast<void>(window_keys(controller, "", "10<"));
+    expect(first_of(controller) == 100, "a zero after a digit is a digit");
+    static_cast<void>(window_keys(controller, "", "="));
+    static_cast<void>(window_keys(controller, "", "l"));
+    static_cast<void>(window_keys(controller, "", "2>"));
+    expect(first_of(controller) == 480, "Ctrl-w 2 > in the right pane widens the right pane");
+}
+
+// 大きさの鍵は本文を変えない（undo の単位を作らない・`.`
+// に入らない）が、マクロでは再生される（録画は 打った鍵の道 vim_replay で流す）。
+void verify_resize_keys_leave_history()
+{
+    Editing editing;
+    open_vim_document(editing, "abcdef");
+    auto &controller = editing.controller();
+    static_cast<void>(window_keys(controller, "", "v"));
+    applied(controller, view_of(10, 10));
+    vim_normal(controller, "x");
+    static_cast<void>(window_keys(controller, "3", ">"));
+    vim_normal(controller, ".");
+    expect(vim_body(controller.frame()) == "cdef" && first_of(controller) == 530,
+           ". repeats the last change, not the size key");
+    vim_normal(controller, "uu");
+    expect(vim_body(controller.frame()) == "abcdef" && first_of(controller) == 530,
+           "two u undo both changes because the size key left no undo unit");
+    static_cast<void>(window_keys(controller, "", "="));
+    vim_replay(controller, "qa2<C-w>>q");
+    expect(first_of(controller) == 520, "a size key runs while a macro records");
+    vim_replay(controller, "@a");
+
+    vim_replay(controller, "@@");
+    expect(first_of(controller) == 560, "@a and @@ replay the size key");
+    vim_replay(controller, "qb<C-w>3<q@b");
+    expect(first_of(controller) == 500, "a count after Ctrl-w is recorded and replayed");
+    expect(vim_body(controller.frame()) == "abcdef", "the size keys leave the text alone");
+}
+
+// もう 1 つの枠の寸法を幅 other_width で送る（帯の長さ available・操作中の枠の first）。
+app::VisibleLines other_view_of(std::int32_t available, std::int32_t first,
+                                std::int32_t other_width)
+{
+    app::VisibleLines view{3, core::TextViewGeometry{480, 20, 96, 10.0F}};
+    view.split = core::SplitExtent{PaneDimension::width, 0, available, first, 100};
+    view.other_geometry = core::TextViewGeometry{other_width, 20, 96, 10.0F};
+    view.other_lines = 3;
+    return view;
+}
+
+// もう 1 つの枠の先頭の画面行（先頭の行の screen_row の符号を返した値）と先頭の行の番号。
+[[nodiscard]] std::pair<std::size_t, std::int64_t> other_top(app::EditorController &controller)
+{
+    const EditorFrame frame = controller.apply_frame(app::ScrollLines{0});
+    const auto *pane = pane_of(frame);
+    if (pane == nullptr || pane->lines.empty())
+    {
+        return {0, -1};
+    }
+    return {pane->lines.front().number.value, -pane->lines.front().screen_row};
+}
+
+// 窓の大きさを変えてももう 1 つの枠の先頭の画面行は main のまま。境界を動かすと操作中の枠と同じ
+// 規則（先頭の行を保って収める）で収め直す（レビュー R4 の R2）。
+void verify_other_pane_rows()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, other_view_of(1000, 500, 100));
+    applied(controller, app::InsertText{std::string(100, 'x') + "\nb\nc\nd\ne\nf\ng\nh"});
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    applied(controller, other_view_of(1000, 500, 100));
+    applied(controller, app::ScrollPane{-100});
+    applied(controller, app::ScrollPane{5});
+    expect(other_top(controller) == std::pair<std::size_t, std::int64_t>{1, 5},
+           "the other pane starts five rows into the long line");
+    applied(controller, other_view_of(1200, 600, 120));
+    expect(other_top(controller) == std::pair<std::size_t, std::int64_t>{1, 5},
+           "resizing the window keeps the other pane's first row as on main");
+    applied(controller, other_view_of(1200, 300, 480));
+    const auto [line, row] = other_top(controller);
+    expect(line == 1 && row >= 0 && row < 3,
+           "moving the divider fits the other pane's first row into the wider line");
+}
+
+// もう 1 つの枠がプレビューでも大きさは変わり、境界を動かしてもプレビューに触れない。
+void verify_preview_pane_resize()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold(Bytes{std::string{"# title\n\ntext"}});
+    applied(controller, app::VisibleLines{4});
+    applied(controller, app::OpenDocument{sample_path()});
+    applied(controller, app::TogglePreview{});
+    applied(controller, view_of(4, 4));
+    applied(controller, app::ResizePane{PaneSizing{PaneResize::grow, PaneDimension::width, 4}});
+    expect(first_of(controller) == 540, "ResizePane grows the body beside a preview");
+    const EditorFrame moved = controller.apply_frame(other_view_of(1000, 540, 450));
+    expect(moved.other.has_value() &&
+               std::holds_alternative<app::PreviewFrame>(moved.other.value()) &&
+               moved.share == controller.pane_split().share,
+           "moving the divider beside a preview keeps the preview pane");
+}
 } // namespace
 
 void verify_split_resize_contracts()
@@ -377,5 +568,11 @@ void verify_split_resize_contracts()
     verify_vim_resize_keys();
     verify_ex_resize();
     verify_resize_pane_intent();
+    verify_stacked_resize_keys();
+    verify_stacked_ex_resize();
+    verify_counts_after_window_key();
+    verify_resize_keys_leave_history();
+    verify_other_pane_rows();
+    verify_preview_pane_resize();
 }
 } // namespace nenenib::tests

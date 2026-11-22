@@ -21,7 +21,9 @@ struct SplitState
     core::PaneSide active_side = core::PaneSide::first;
     std::optional<OtherView> other;
     // 境界の位置（ADR 0148 の 2026-11-22 の追補の決定 1）。置くのは with_split_share だけで、分け
-    // る・閉じる・全面プレビューの出入りは等分（既定値）に戻る。layout == none なら読まない。
+    // る・閉じるは等分（既定値）に戻る。本文の 2 枠から全面プレビューへ出入りしても比は保つ（隠した
+    // 枠と一緒に split を残す）。横のプレビューから全面へ入る道は split を空にして配置と側だけを
+    // 覚えるので、抜けると等分。layout == none なら読まない。
     core::SplitShare share{};
 };
 
