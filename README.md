@@ -265,7 +265,7 @@ records in `docs/quality/`.
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document
   ([ADR 0156](docs/adr/0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md)).
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v5` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; limit 16 KiB). The previous v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v4` is the file 1.0.0 reads and writes. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion` and `caret_motion_time`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
@@ -282,7 +282,7 @@ records in `docs/quality/`.
   instead of twice.
 - **FR-020 file drop** — drop one or more files from Explorer onto the window to open them in tabs, in either editing mode. Unsaved tabs are kept; a file already open selects its existing tab. A file that cannot be read reports the existing error and the remaining files are still opened. Directories are not opened as documents.
 - **FR-021 language server** — off by default (D60). With `lsp=on` and a `lsp.<language>.command=` line in
-  `settings.v5`, the editor starts that server (tried with clangd) and shows its diagnostics: wavy underlines, an
+  `settings.v6`, the editor starts that server (tried with clangd) and shows its diagnostics: wavy underlines, an
   `E2 W1` count at the right of the status bar and the message under the caret. `:set lsp` / `:set nolsp`
   switches it, and untitled documents are not sent
   ([ADR 0160](docs/adr/0160-language-server-io-is-one-port-with-overlapped-pipes-and-a-core-json-rpc-framer.md),
@@ -299,7 +299,7 @@ records in `docs/quality/`.
   for, a server that asks for saves is told after each save so its diagnostics update, and diagnostics are
   matched to the file even when the drive letter or the percent-encoding of the URI differs. A command whose
   executable is missing or not written as an absolute path, or a `.cmd` / `.bat` (write `node.exe` and the script
-  instead), is reported in one line and not started. In `settings.v5`, a `lsp.<name>.command` line for a language
+  instead), is reported in one line and not started. In `settings.v6`, a `lsp.<name>.command` line for a language
   this version does not know is kept when the settings are written back.
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
@@ -327,7 +327,7 @@ records in `docs/quality/`.
 - **FR-029 display language** — the screen text is shown in Japanese, English or Simplified Chinese
   (Korean, Spanish and German come in a later version, decision D100, and show English until then). The default follows the Windows
   display language; `:set language=ja`, `en`, `zh-hans` or `system` (also from Ctrl+P `:`, or the F1
-  operation "Choose Display Language" / 「表示言語を選ぶ」) switches at once and is saved in `settings.v5`;
+  operation "Choose Display Language" / 「表示言語を選ぶ」) switches at once and is saved in `settings.v6`;
   `:set language?` shows the choice and what it resolved to. Vim messages, mode names, key names and theme
   names stay as they are. Every screen string comes from one table per language, and string literals with
   Japanese or Chinese text outside those tables fail the conformance check CNF-016
@@ -360,7 +360,7 @@ records in `docs/quality/`.
   menu with Cut, Copy, Paste, Delete, Select all, Find and Replace (decision D97); in ordinary mode it runs the
   usual operations, and in Vim NORMAL and VISUAL it runs Vim's keys for them (`"+y` `"+d` `"+p` and so on).
 - **FR-032 Vim `map`** — `:map`, `:nmap`, `:imap`, `:vmap`, `:xmap`, `:omap`, the `noremap` and `unmap` forms and
-  `:let mapleader=` are stored as `map.<mode>.<lhs>=` and `mapleader` lines in `settings.v5` and applied at the
+  `:let mapleader=` are stored as `map.<mode>.<lhs>=` and `mapleader` lines in `settings.v6` and applied at the
   window entry, in Vim mode only
   ([ADR 0176](docs/adr/0176-vim-map-is-a-settings-row-applied-by-one-key-table-at-the-window-entry.md)).
 - **FR-033 Windows right-click registration** — the F1 operation "Add to Windows Right-Click Menu"
@@ -389,9 +389,9 @@ forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=` / `autoi
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v5`. If it is absent, the editor reads `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off and `caret_motion_time` starts at 120 ms), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
-versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170). A broken new file is reported and blocks settings writes until repaired and restarted.
+versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170); in the same way, a change made in 1.1.0 after `settings.v6` exists goes to `settings.v5` and is not seen by later versions, and the other way round (ADR 0192). A broken new file is reported and blocks settings writes until repaired and restarted.
 
 The settings file format and failure behavior are specified in
 [ADR 0020](docs/adr/0020-versioned-editor-settings-and-point-font-size.md) and the migration in

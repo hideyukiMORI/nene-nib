@@ -6,7 +6,7 @@
 
 namespace nenenib::adapters::win32
 {
-// キャレットの動きの時計（ADR 0191 の決定 3）。QueryPerformanceCounter を ms に写す。読めなければ
+// キャレットの動きの時計（ADR 0192 の決定 3）。QueryPerformanceCounter を ms に写す。読めなければ
 // 0 を返し、動きは進まずに次の合図で跳ぶ（描く側は経過が時間に届くまで動かすだけ）。
 class Win32MotionClock final : public application::MotionClockPort
 {

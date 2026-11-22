@@ -1,4 +1,4 @@
-// キャレットの動きの合図（ADR 0191 の決定 3・6・#1933）。窓は描いた後に renderer が動いているかを
+// キャレットの動きの合図（ADR 0192 の決定 3・6・#1933）。窓は描いた後に renderer が動いているかを
 // 読み、動いている間だけ合図のタイマーを張って経過を CaretMotionTick で送る。四隅は core の純関数が
 // 決め、窓は時計の port で経過を測るだけ（ARC-007）。
 #include "EditorWindow.hpp"
@@ -30,10 +30,7 @@ void EditorWindow::follow_caret_motion()
     const auto moving = renderer_->caret_motion_generation();
     if (!moving.has_value())
     {
-        if (std::exchange(caret_motion_timing_, false))
-        {
-            static_cast<void>(KillTimer(window_, std::to_underlying(WindowTimer::caret_motion)));
-        }
+        stop_caret_motion();
         return;
     }
     if (moving.value() != caret_motion_generation_ || !caret_motion_timing_)
@@ -48,10 +45,30 @@ void EditorWindow::follow_caret_motion()
     }
 }
 
+void EditorWindow::stop_caret_motion()
+{
+    if (std::exchange(caret_motion_timing_, false))
+    {
+        static_cast<void>(KillTimer(window_, std::to_underlying(WindowTimer::caret_motion)));
+    }
+}
+
+// 最小化した・隠れた窓には WM_PAINT が来ないことがあり、描いた後の follow_caret_motion だけでは
+// タイマーが外れない（#1956 の R1）。見えていなければ合図を送らずにタイマーを外し、renderer の
+// 覚えを捨てる（次に見えた frame は跳ぶ）。
 void EditorWindow::send_caret_motion()
 {
     if (!caret_motion_timing_)
     {
+        return;
+    }
+    if (IsIconic(window_) != FALSE || IsWindowVisible(window_) == FALSE)
+    {
+        stop_caret_motion();
+        if (renderer_ != nullptr)
+        {
+            renderer_->settle_caret_motion();
+        }
         return;
     }
     const std::uint64_t now = clock_.milliseconds();

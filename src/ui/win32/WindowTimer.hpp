@@ -15,9 +15,9 @@ namespace nenenib::ui::win32
 // 窓の作成から壊れるまで）、preview は Markdown のプレビューの解析を頼む合図（ADR 0155・frame に
 // プレビューがある間だけ）、language_server は言語サーバーの古さの合図（ADR 0160 の決定 6・窓の
 // 作成から壊れるまで）、key_map は Vim の `map` の待ち（ADR 0176 の決定 4・左辺の途中で
-// 鍵を積んだ間だけの 1 回）、tab_tip はタブの札の待ち（#1789・タブに載せた間だけの 1
-// 回）、caret_motion は キャレットの動きの合図（ADR 0191 の決定 3・動いている間だけ）。増えたら
-// 下の switch が落ちる（CPP-002）。
+// 鍵を積んだ間だけの 1 回）、tab_tip はタブの札の待ち（#1789・タブに載せた間だけの 1 回）、
+// caret_motion はキャレットの動きの合図（ADR 0192 の決定 3・動いている間だけ）。増えたら下の
+// switch が落ちる（CPP-002）。
 enum class WindowTimer : UINT_PTR
 {
     selection = 1,
@@ -47,7 +47,7 @@ inline constexpr UINT key_map_timeout_milliseconds = 1'000;
 // Windows の既定の 400 ms。
 inline constexpr UINT default_tab_tip_milliseconds = 400;
 
-// キャレットの動きの合図の間隔（ADR 0191 の決定 3）。OS のタイマーの最小（USER_TIMER_MINIMUM）の
+// キャレットの動きの合図の間隔（ADR 0192 の決定 3）。OS のタイマーの最小（USER_TIMER_MINIMUM）の
 // 10 ms。経過は合図の間隔で数えず、時計の port で測る。
 inline constexpr UINT caret_motion_interval_milliseconds = 10;
 

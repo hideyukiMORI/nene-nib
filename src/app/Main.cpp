@@ -313,7 +313,7 @@ last_resort_for(nenenib::application::EditorController &controller)
 // 起動引数の読み込みと復号の後（Issue #19）。
 // 前回のタブの一覧は窓が閉じるときに書き、引数の無い起動で読む（ADR 0059 の決定 2・3・6）。
 // 閉じたファイルの履歴は閉じたときに書き、Ctrl+P の面を開くときに読む（ADR 0060 決定 8）。
-// 窓が controller を通さずに借りる port（ADR 0011 の決定 1・ADR 0162 の追補 #1450・ADR 0191 の
+// 窓が controller を通さずに借りる port（ADR 0011 の決定 1・ADR 0162 の追補 #1450・ADR 0192 の
 // 決定 3）。WSL の一覧の読み手と動きの時計は窓が生きている間ずっと 1 つ。
 nenenib::ui::win32::WindowPorts window_ports(nenenib::application::TimingPort &timing)
 {

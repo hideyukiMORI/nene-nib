@@ -12,7 +12,7 @@ enum class SettingsVersion
     v4,
     // v4 の全部の鍵に 1.0.0 の後の鍵を足した版（ADR 0170 の 2026-11-16 の追補・#1086）。
     v5,
-    // v5 の全部の鍵にキャレットの動きの 2 つ（caret_motion・caret_motion_time）を足した版（ADR 0191
+    // v5 の全部の鍵にキャレットの動きの 2 つ（caret_motion・caret_motion_time）を足した版（ADR 0192
     // の 決定 1・#1933）。v5 は 1.1.0 が読み書きする版で、鍵の集合は閉じた。
     v6
 };

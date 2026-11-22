@@ -546,13 +546,16 @@ class EditorWindow final
     void read_wheel_setting();
     // タブの札の待ち（#1789）に OS の載せの待ち時間を読む。起動と WM_SETTINGCHANGE の 2 か所。
     void read_hover_setting();
-    // Windows の「アニメーション効果」（SPI_GETCLIENTAREAANIMATION）を読む（ADR 0191 の決定
+    // Windows の「アニメーション効果」（SPI_GETCLIENTAREAANIMATION）を読む（ADR 0192 の決定
     // 6・起動と WM_SETTINGCHANGE）。読めなければ動かす側（既定のオン）。
     void read_animation_setting();
-    // 描いた後にキャレットの動きを追う（ADR 0191 の決定 3）。動いている間だけ合図のタイマーを張り、
+    // 描いた後にキャレットの動きを追う（ADR 0192 の決定 3）。動いている間だけ合図のタイマーを張り、
     // 動きが始まり直したら経過の起点を測り直す。止まったらタイマーを外す。
     void follow_caret_motion();
-    // 合図のタイマーが切れたら、今の動きの番号と経過を CaretMotionTick で送る。
+    // 合図のタイマーを張っていれば外す。
+    void stop_caret_motion();
+    // 合図のタイマーが切れたら、今の動きの番号と経過を CaretMotionTick で送る。窓が最小化されて
+    // いるか見えなければ送らずにタイマーを外し、renderer の覚えを捨てる（#1956 の R1）。
     void send_caret_motion();
     [[nodiscard]] application::VisibleLines body_view() const;
     [[nodiscard]] core::PaneLayouts body_panes(const core::EditorSettings &settings) const;
@@ -564,7 +567,7 @@ class EditorWindow final
     application::TimingPort &timing_;
     // フォルダ選びの箱の WSL の場所（ADR 0162 の追補 #1450）。箱を出すときだけ読む。
     application::WslDistributionPort &wsl_;
-    // キャレットの動きの経過を測る時計（ADR 0191 の決定 3）。動いている間だけ読む。
+    // キャレットの動きの経過を測る時計（ADR 0192 の決定 3）。動いている間だけ読む。
     application::MotionClockPort &clock_;
     BodyTextLayouts &text_layouts_;
     DeviceWarmup &warmup_;
@@ -615,10 +618,11 @@ class EditorWindow final
     bool over_explorer_divider_ = false;
     UINT wheel_setting_ = default_wheel_scroll_lines;
     UINT hover_setting_ = default_tab_tip_milliseconds;
-    // Windows の「アニメーション効果」がオンか（ADR 0191 の決定 6）。オフならキャレットは跳ぶ。
+    // Windows の「アニメーション効果」がオンか（ADR 0192 の決定 6）。オフならキャレットは跳ぶ。
     bool animation_setting_ = true;
-    // 今の動きの番号と、その動きが始まった時計の値（ADR 0191 の決定 3）。合図のタイマーを張って
-    // いるか。
+    // 今の動きの番号と、その動きが始まった時計の値（ADR 0192 の決定 3）。合図のタイマーを張って
+    // いるか。番号は描く前に renderer へ下限として渡す（作り直した renderer が controller に残った
+    // 古い進みと同じ番号を使わない・#1956 の R2）。
     std::uint32_t caret_motion_generation_ = 0;
     std::uint64_t caret_motion_start_ = 0;
     bool caret_motion_timing_ = false;

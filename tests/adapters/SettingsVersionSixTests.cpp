@@ -1,4 +1,4 @@
-// settings.v6 の codec の試験（ADR 0191 の決定 1・#1933）。1.1.0 の v5 を 1.1.0
+// settings.v6 の codec の試験（ADR 0192 の決定 1・#1933）。1.1.0 の v5 を 1.1.0
 // と同じ厳しさで読み、 v6 の鍵に既定を補って v6 の形で書き戻すこと、v6 の 2
 // つの鍵の往復と拒否。ファイルに触れない。
 #include "SettingsVersionSixTests.hpp"

@@ -42,8 +42,11 @@ void verify_print_render();
 void verify_diagnostic_waves();
 // matchparen の相手の括弧の枠（ADR 0164 の決定 4・#999）。
 void verify_matchparen_outline();
-// CaretMotionPaintTests.cpp（ADR 0191・#1933・動いているキャレットの 1 frame）
+// CaretMotionPaintTests.cpp（ADR 0192・#1933・動いているキャレットの 1 frame）
 void verify_caret_motion_paint();
+// CaretMotionPaintTests.cpp（ADR 0192・#1956・キャレットが見えない frame で止まる・作り直しで番号が
+// 当たらない）
+void verify_caret_motion_follow();
 // イージーモーションの印の地と字（ADR 0163 の決定 6・#1782）。
 void verify_motion_label_paint();
 // タブの札の文の切り方と地・縁・字（#1789）。

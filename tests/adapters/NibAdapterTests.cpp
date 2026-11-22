@@ -1733,7 +1733,7 @@ void verify_v4_conflicts(Win32FileAdapter &files)
 using nenenib::tests::adapters::released_v5_settings;
 using nenenib::tests::adapters::released_v5_values;
 
-// v5 → v6（ADR 0191 の決定 1）。v6 が無いときだけ 1.1.0 の v5 を読み、読むだけでは書かず、設定を
+// v5 → v6（ADR 0192 の決定 1）。v6 が無いときだけ 1.1.0 の v5 を読み、読むだけでは書かず、設定を
 // 変えたときに v6 だけを書く。v5 と v4 の bytes は残す。v5 に v6 の鍵が在れば拒否して書かない。
 void verify_v5_migration(Win32FileAdapter &files)
 {

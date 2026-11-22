@@ -4,7 +4,7 @@
 
 #include <string_view>
 
-// settings.v6 の codec の試験（ADR 0191 の決定 1・#1933）。NibAdapterTests.cpp
+// settings.v6 の codec の試験（ADR 0192 の決定 1・#1933）。NibAdapterTests.cpp
 // の長さの上限（CNF-014）のため分けた。数え方は呼び手の expect を借りる（同じ実行の件数に入る）。
 namespace nenenib::tests::adapters
 {

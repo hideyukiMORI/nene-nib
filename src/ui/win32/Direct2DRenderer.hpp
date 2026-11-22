@@ -5,9 +5,7 @@
 #include "BodyTextLayout.hpp"
 #include "BodyTextLayouts.hpp"
 #include "BodyTextPainter.hpp"
-#include "CaretMotionClock.hpp"
-#include "CaretMotionTrack.hpp"
-#include "CaretQuad.hpp"
+#include "CaretMotionFollower.hpp"
 #include "ClauseEmphasis.hpp"
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
@@ -171,12 +169,14 @@ class Direct2DRenderer final
     // PreviewPane::settled）。ui は描いた後に読んで 1 回だけ送る。
     [[nodiscard]] const std::optional<application::PreviewScrollSettled> &
     preview_settled() const noexcept;
-    // キャレットの動き（ADR 0191 の決定 3・6）。allowed は Windows
-    // の「アニメーション効果」で、窓が描く 前に毎回置く。最後の frame
-    // でキャレットがまだ動いていれば今の動きの番号、止まっていれば値なし
-    // （窓は描いた後に読み、動いている間だけ合図を送る）。
-    void allow_caret_motion(bool allowed) noexcept;
+    // キャレットの動き（ADR 0192 の決定 3・6）。allowed は Windows の「アニメーション効果」、
+    // floor は窓が最後に追った動きの番号で、窓が描く前に毎回置く（作り直した renderer でも番号を
+    // 下げない・#1956 の R2）。generation は最後の frame でキャレットがまだ動いていれば今の動きの
+    // 番号、止まっていれば値なし（窓は描いた後に読み、動いている間だけ合図を送る）。settle は
+    // 覚えを捨てる（窓が見えなくなったとき・次の frame は跳ぶ）。
+    void allow_caret_motion(bool allowed, std::uint32_t floor) noexcept;
     [[nodiscard]] std::optional<std::uint32_t> caret_motion_generation() const noexcept;
+    void settle_caret_motion() noexcept;
     // 最後に描いたリンクの札の点の下の部品（札を描いていなければ outside・#1869 の段 L2）。
     [[nodiscard]] LinkCardTarget link_card_target_at(std::int32_t x, std::int32_t y) const;
     // 最後に描いた hover の札が点（クライアントの物理画素）を覆うか（描いていなければ偽・#1884 の
@@ -389,13 +389,15 @@ class Direct2DRenderer final
                         const core::PaneLayouts &panes, const core::OperationGuideLayout &guide);
     // 操作中の枠（body は pane_layouts の active_side の側）。
     void draw_body(const application::EditorFrame &frame, const core::BodyLayout &body);
-    // キャレットの動き（ADR 0191）。begin は frame ごとに動かすかを決め（オフは欄 1
-    // つを読むだけ）、 moves
-    // は行き先の矩形で覚えを進めて「まだ動いている（ふつうのキャレットを描かない）」を返し、 finish
-    // は見えなかったキャレットの覚えを捨てて、動いていれば本文の上に多角形を重ねる。
+    // キャレットの動き（ADR 0192）。begin と finish は draw の 1 本の入口と出口（本文を描かない
+    // 全面のプレビューの frame も通る・#1956 の M1）で、begin は frame ごとに動かすかを決め（オフは
+    // 欄 1 つを読むだけ）、finish は見えなかったキャレットの覚えを捨てる。moves は行き先の矩形で
+    // 覚えを進めて「まだ動いている（ふつうのキャレットを描かない）」を返し、paint は動いていれば
+    // 本文の上に多角形を重ねる（操作中の枠を描いた直後）。
     void begin_caret_motion(const application::EditorFrame &frame, const core::BodyLayout &body);
     [[nodiscard]] bool caret_moves(std::optional<D2D1_RECT_F> box);
-    void finish_caret_motion(const application::EditorFrame &frame);
+    void paint_caret_motion(const application::EditorFrame &frame);
+    void finish_caret_motion() noexcept;
     [[nodiscard]] bool grid_caret_moves(const GridRowCanvas &canvas,
                                         const application::GridRowView &row, bool active);
     [[nodiscard]] std::optional<D2D1_RECT_F> caret_box(const application::EditorFrame &frame,
@@ -642,16 +644,9 @@ class Direct2DRenderer final
     std::size_t status_layout_cursor_ = 0;
     WaitableHandle latency_{nullptr, &::CloseHandle};
     RECT caret_rectangle_{};
-    // キャレットの動きの覚え（ADR 0191 の決定 2・3）。renderer を作り直すと空から始まる（跳ぶ）。
-    core::CaretMotionTrack caret_motion_{};
-    // この frame で動かすか・キャレットが見えたか・跳ぶか（タブが変わった）と、frame から写した値。
-    bool caret_motion_allowed_ = true;
-    bool caret_motion_on_ = false;
-    bool caret_motion_seen_ = false;
-    bool caret_motion_jump_ = false;
-    std::size_t caret_motion_tab_ = 0;
-    core::CaretMotionClock caret_motion_clock_{};
-    std::uint32_t caret_motion_time_ = 0;
+    // キャレットの動きの覚え（ADR 0192 の決定 2・3）。renderer を作り直すと空から始まる（跳ぶ・
+    // 番号は窓が allow_caret_motion で下げさせない）。
+    CaretMotionFollower caret_motion_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     // 格子の 1 升の幅（物理画素）。draw_grid_rows がその frame の書式で測る。

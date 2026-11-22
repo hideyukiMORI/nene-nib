@@ -1,4 +1,4 @@
-// キャレットの動きの純関数（ADR 0191・#1933）。時計・OS に触れない（ARC-007）。
+// キャレットの動きの純関数（ADR 0192・#1933）。時計・OS に触れない（ARC-007）。
 #include "CaretGlide.hpp"
 
 #include <algorithm>

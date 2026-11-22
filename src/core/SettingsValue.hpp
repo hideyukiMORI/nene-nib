@@ -13,7 +13,7 @@ enum class SettingsValue : std::uint8_t
     font_family,
     font_size,
     finder_preview,
-    // キャレットの動きの時間（ADR 0191・段の上下・20 ms ずつ）。
+    // キャレットの動きの時間（ADR 0192・段の上下・20 ms ずつ）。
     caret_motion_time
 };
 } // namespace nenenib::core

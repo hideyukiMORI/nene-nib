@@ -202,3 +202,4 @@ ADR は「なぜそう決めたか」「何を却下したか」を書く。
 | [0188](0188-vim-mode-sees-the-body-without-the-final-line-break.md) | Vim のモードは、最後の改行を除いた本文を見る（改行で終わる本文の行の数を Vim に揃える・旗は開いたときと Vim に入ったときに決める・画面も同じ） | 受理（施主決定 D94・2026-11-15）・#1739 |
 | [0189](0189-finder-preview-pane-and-waiting-effect.md) | 探して見る面: プレビュー欄は面の配置の 1 つの値で、中身は worker が読む窓。待ちの間の演出は合図で進む純関数 | 受理（施主決定 D95 / D96・実装は段 P1〜P3・D41） |
 | [0190](0190-language-server-completion-hover-and-definition-share-one-request-table.md) | 言語サーバーの補完・hover・定義へは、id で結んだ要求と文脈つきの答えで、面は ADR 0169 の補完の面と小さな札（通常モードは Ctrl+Space・F12、Vim は Ctrl-n の面・`K`・`gd`） | 提案（設計席・2026-11-18）・#1821 |
+| [0192](0192-caret-motion-trails-behind-the-caret.md) | キャレットの動きは尾を引く多角形を本文の上に重ね、四隅は core の純関数、進みは合図の意図が運ぶ（設定は `settings.v6` の `caret_motion` と `caret_motion_time`・既定はオフ） | 提案（実装席・2026-11-22・試用の後に受理）・#1933 |

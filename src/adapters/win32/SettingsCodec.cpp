@@ -332,7 +332,7 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
                                });
 }
 
-// v5 の鍵の集合を持つ版か（v6 は v5 の全部の鍵を同じ形で持つ・ADR 0191 の決定 1）。
+// v5 の鍵の集合を持つ版か（v6 は v5 の全部の鍵を同じ形で持つ・ADR 0192 の決定 1）。
 [[nodiscard]] bool carries_v5_fields(SettingsVersion version) noexcept
 {
     switch (version)
@@ -506,7 +506,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     return {};
 }
 
-// v6 だけの鍵（ADR 0191 の決定 1）。v5 以前に在れば未知の鍵として拒否し（v5 の読みは 1.1.0 と
+// v6 だけの鍵（ADR 0192 の決定 1）。v5 以前に在れば未知の鍵として拒否し（v5 の読みは 1.1.0 と
 // 同じ厳しさ）、無ければ既定（オフ・120 ms）のまま。v6 は後から足した鍵の形（無ければ既定・有れば
 // 厳密）で読む。時間の読みは core の caret_motion_time_of の 1 本。
 [[nodiscard]] std::expected<void, Failure> apply_v6_fields(core::EditorSettings &settings,
@@ -720,7 +720,7 @@ std::string encode_settings(const core::EditorSettings &settings)
     const auto explorer_width = settings.explorer_width.has_value()
                                     ? std::to_string(settings.explorer_width.value())
                                     : std::string{};
-    // 書くのは v6 だけ（ADR 0191 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
+    // 書くのは v6 だけ（ADR 0192 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
     // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前。
     return std::format("version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"

@@ -1092,9 +1092,9 @@ void Direct2DRenderer::draw_block_caret(const application::EditorFrame &frame,
 void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWriteTextLayout *text,
                                   const core::LayoutRect &area, const application::LineView &shown)
 {
-    // 動いている間は本文の上に多角形を重ねるので、ふつうのキャレットは描かない（ADR 0191 の決定
+    // 動いている間は本文の上に多角形を重ねるので、ふつうのキャレットは描かない（ADR 0192 の決定
     // 4）。
-    if (caret_motion_on_ && caret_moves(caret_box(frame, text, area, shown)))
+    if (caret_motion_.on() && caret_moves(caret_box(frame, text, area, shown)))
     {
         return;
     }
@@ -1127,7 +1127,7 @@ namespace
 }
 } // namespace
 
-// キャレットの行き先の矩形（ADR 0191）。縦棒は draw_bar_caret と同じ bar_of、ブロックは
+// キャレットの行き先の矩形（ADR 0192）。縦棒は draw_bar_caret と同じ bar_of、ブロックは
 // draw_block_caret と同じ block_runs の最初の矩形。引けなければ値なし（ふつうに描く）。
 std::optional<D2D1_RECT_F> Direct2DRenderer::caret_box(const application::EditorFrame &frame,
                                                        IDWriteTextLayout *text,
@@ -1559,7 +1559,7 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
         core::to_pixels(wave_thickness_dips, dpi_),
         core::to_pixels(wave_period_dips, dpi_),
         pane.role};
-    // 動いている間は格子のキャレットも描かず、本文の上に多角形を重ねる（ADR 0191 の決定 7）。
+    // 動いている間は格子のキャレットも描かず、本文の上に多角形を重ねる（ADR 0192 の決定 7）。
     canvas.caret_shown = canvas.caret_shown && !grid_caret_moves(canvas, row, active);
     context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
     const auto caret = painter.draw(row, canvas);
@@ -1570,12 +1570,12 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
     }
 }
 
-// 格子の画面行のキャレットが動いているか（操作中の枠の、キャレットの画面行だけ・ADR 0191 の決定
+// 格子の画面行のキャレットが動いているか（操作中の枠の、キャレットの画面行だけ・ADR 0192 の決定
 // 7）。
 bool Direct2DRenderer::grid_caret_moves(const GridRowCanvas &canvas,
                                         const application::GridRowView &row, bool active)
 {
-    if (!caret_motion_on_ || !active || !canvas.caret_shown || !row.caret.has_value())
+    if (!caret_motion_.on() || !active || !canvas.caret_shown || !row.caret.has_value())
     {
         return false;
     }
@@ -1586,9 +1586,8 @@ bool Direct2DRenderer::grid_caret_moves(const GridRowCanvas &canvas,
 void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
                                  const core::BodyLayout &body)
 {
-    begin_caret_motion(frame, body);
     draw_pane(frame, BodyPane{body, frame.lines, frame.grid, frame.caret, PaneRole::active});
-    finish_caret_motion(frame);
+    paint_caret_motion(frame);
 }
 
 // もう 1 つの枠と境界（ADR 0148 の決定 8・採用案の案 A）。境界は panel_border の 1 本。frame に
@@ -1659,24 +1658,29 @@ void Direct2DRenderer::draw_other(const application::EditorFrame &frame,
 
 // 本文の面（枠・もう 1 つの枠・空の文書の案内）。全面のプレビューは gutter も本文も描かず、
 // 本文の面の全部（1 枠の配置の帯）に描く。枠の配置は変えず、もう 1 つの枠と案内も描かない
-// （ADR 0155 の改訂 15）。
+// （ADR 0155 の改訂 15）。キャレットの動きの入口と出口はどちらの道も通る（全面のプレビューの frame
+// はキャレットが見えないので動きを捨てる・#1956 の M1・ADR 0192）。
 void Direct2DRenderer::draw_body_area(const application::EditorFrame &frame,
                                       const core::LayoutRect &area, const core::PaneLayouts &panes,
                                       const core::OperationGuideLayout &guide)
 {
+    const auto body = core::active_pane_layout(panes, frame.active_side);
+    begin_caret_motion(frame, body);
     if (frame.full_preview.has_value())
     {
         draw_other(frame, full_preview_body(area, dpi_, frame.settings.font_size),
                    frame.full_preview.value());
-        return;
     }
-    const auto body = core::active_pane_layout(panes, frame.active_side);
-    draw_body(frame, body);
-    draw_other_body(frame, panes);
-    // 起動画面は操作中の枠に描く。出ている frame の案内は draw の入口で hidden にしてあるので、
-    // 2 つを同時には描かない（ADR 0172 の決定 1）。
-    draw_start_screen(frame, body);
-    draw_body_guide(frame, guide);
+    else
+    {
+        draw_body(frame, body);
+        draw_other_body(frame, panes);
+        // 起動画面は操作中の枠に描く。出ている frame の案内は draw の入口で hidden にしてあるので、
+        // 2 つを同時には描かない（ADR 0172 の決定 1）。
+        draw_start_screen(frame, body);
+        draw_body_guide(frame, guide);
+    }
+    finish_caret_motion();
 }
 
 // 1 つの枠の本文。body_top_ / body_bottom_ は描いている枠の本文の上下（字形 run の間引き）で、

@@ -1,26 +1,44 @@
-// scope `--caret-motion` の単体テスト（ADR 0191・#1933）。四隅の純関数（係数の順・途中の位置・
+// scope `--caret-motion` の単体テスト（ADR 0192・#1933）。四隅の純関数（係数の順・途中の位置・
 // 時間 0 と上限・途中での行き先の変更・古い動きの進みを読まない・画面の端へ寄せる）と、時間の読みと
 // 段の送り、`:set caretmotion` `caretmotiontime=`、設定の画面の行。時計・ファイルを読まない。
 #include "Appearance.hpp"
 #include "CaretGlide.hpp"
+#include "CaretMotion.hpp"
 #include "CaretMotionClock.hpp"
 #include "CaretMotionTick.hpp"
 #include "CaretMotionTrack.hpp"
 #include "CaretQuad.hpp"
+#include "Column.hpp"
 #include "DisplayLanguage.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFeature.hpp"
+#include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
 #include "ExResult.hpp"
 #include "FeatureCosts.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "LineNumber.hpp"
+#include "MapRow.hpp"
+#include "MoveCaret.hpp"
+#include "NewTab.hpp"
+#include "PlaceCaret.hpp"
 #include "Scopes.hpp"
+#include "SelectionAnchoring.hpp"
 #include "SettingsRows.hpp"
 #include "SettingsValue.hpp"
+#include "SettleRecentTab.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TextPosition.hpp"
+#include "TextViewGeometry.hpp"
+#include "VimMode.hpp"
+#include "VimModeSet.hpp"
+#include "VimTestSupport.hpp"
+#include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 
 #include <array>
 #include <cstdint>
@@ -251,6 +269,109 @@ void verify_signal()
     expect(controller.frame().lines.front().display.text.empty(),
            "undo after the tick still undoes the typing as one unit");
 }
+
+// 以下は合図が使う人の操作の途中の状態を動かさない契約（AutosaveTick と同じ形・#1956 の R6）。
+// 合図の側に入るのは is_signal の 1 本なので、そこから外れたらここが落ちる。
+constexpr application::CaretMotionTick tick{{1, 40}};
+
+// Ctrl+Tab の歩きの途中に届いても歩きは続き、次の 1 歩は使った順の 3 つ目へ行く（ADR 0058）。
+void verify_tick_keeps_tab_walk()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, application::VisibleLines{10});
+    applied(controller, application::InsertText{"a"});
+    for (const std::string_view body : {"b", "c", "d"})
+    {
+        applied(controller, application::NewTab{});
+        applied(controller, application::InsertText{std::string(body)});
+    }
+    applied(controller, application::WalkRecentTab{core::TabStep::next});
+    applied(controller, tick);
+    expect(controller.tab_walking(), "the caret motion tick does not settle the walk");
+    const auto third = controller.apply_frame(application::WalkRecentTab{core::TabStep::next});
+    expect(!third.lines.empty() && third.lines.front().text == "b" && controller.tab_walking(),
+           "the next walk after the caret motion tick reaches the third tab in the order");
+    applied(controller, application::SettleRecentTab{});
+}
+
+// Vim の鍵を before と after に分けて打ち、間に合図を挟んだ結果が、挟まずに続けて打った結果と
+// 同じか（本文の全体・キャレット・モード・録画）。
+[[nodiscard]] bool same_with_tick(std::string_view before, std::string_view after)
+{
+    constexpr std::string_view text = "one two three four";
+    Editing plain;
+    open_vim_document(plain, std::string(text));
+    vim_replay(plain.controller(), std::string(before) + std::string(after));
+    Editing ticked;
+    open_vim_document(ticked, std::string(text));
+    vim_replay(ticked.controller(), before);
+    applied(ticked.controller(), tick);
+    vim_replay(ticked.controller(), after);
+    const auto expected = plain.controller().frame();
+    const auto actual = ticked.controller().frame();
+    return whole_vim_body(plain.controller()) == whole_vim_body(ticked.controller()) &&
+           expected.caret.position == actual.caret.position &&
+           expected.vim_mode == actual.vim_mode && expected.recording == actual.recording;
+}
+
+// Vim の待ち（オペレータ・回数・レジスタの接頭辞）・マクロの録画・`.` の記録・undo の単位。
+void verify_tick_keeps_vim_state()
+{
+    expect(same_with_tick("d", "w"), "an operator waiting for a motion goes on after the tick");
+    expect(same_with_tick("2", "dw"), "a count goes on after the tick");
+    expect(same_with_tick("\"a", "x\"ap"), "a register prefix goes on after the tick");
+    expect(same_with_tick("qa", "xq@a"), "the tick never enters a macro being recorded");
+    expect(same_with_tick("x", "."), "the tick never replaces the last change for dot");
+    expect(same_with_tick("x", "u"), "undo after the tick undoes the same change");
+    expect(same_with_tick("ia", "b<Esc>u"), "the tick never splits an insert's undo unit");
+}
+
+// `inoremap jj <Esc>` の 1 打目の待ちの途中に届いても、待ちの鍵を流さない（ADR 0176 の決定 4）。
+void verify_tick_keeps_key_map_wait()
+{
+    auto settings = core::default_editor_settings();
+    settings.maps = {
+        core::MapRow{core::VimModeSet{false, true, false, false, false}, "jj", "<Esc>", false}};
+    Editing editing(std::optional<core::EditorSettings>{settings});
+    open_vim_document(editing, "abc\n");
+    auto &controller = editing.controller();
+    vim_replay(controller, "ij");
+    applied(controller, tick);
+    expect(controller.vim_state().mode == core::VimMode::insert &&
+               vim_body(controller.frame()) == "abc\n",
+           "the tick keeps the waiting j out of the body");
+    vim_replay(controller, "j");
+    expect(controller.vim_state().mode == core::VimMode::normal &&
+               whole_vim_body(controller) == "abc\n",
+           "jj after the tick still leaves INSERT without typing either j");
+}
+
+// 上下に動くときに狙う横位置を捨てない（通常モードの wanted_x と Vim の欲しい列）。
+void verify_tick_keeps_wanted_column()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    applied(controller, application::InsertText{"abcdef\nx\nabcdef"});
+    applied(controller, application::VisibleLines{10, core::TextViewGeometry{400, 20, 96}});
+    applied(controller,
+            application::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{5}},
+                                    core::SelectionAnchoring::collapse});
+    const auto down =
+        application::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::collapse};
+    applied(controller, down);
+    applied(controller, tick);
+    expect(controller.apply_frame(down).caret.position ==
+               core::TextPosition{core::LineNumber{3}, core::Column{5}},
+           "a caret motion tick between two downward moves keeps the wanted x");
+    Editing vim;
+    open_vim_document(vim, "abcdef\nx\nabcdef");
+    vim_replay(vim.controller(), "4lj");
+    applied(vim.controller(), tick);
+    vim_replay(vim.controller(), "j");
+    expect(caret_at(vim.controller().frame(), 3, 5),
+           "a caret motion tick between two j keeps the Vim wanted column");
+}
 } // namespace
 
 void verify_caret_motion_scope()
@@ -262,5 +383,9 @@ void verify_caret_motion_scope()
     verify_track_edges();
     verify_settings_and_ex();
     verify_signal();
+    verify_tick_keeps_tab_walk();
+    verify_tick_keeps_vim_state();
+    verify_tick_keeps_key_map_wait();
+    verify_tick_keeps_wanted_column();
 }
 } // namespace nenenib::tests

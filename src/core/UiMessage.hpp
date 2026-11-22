@@ -373,7 +373,7 @@ enum class UiMessage : std::uint16_t
     notice_language_server_not_found,
     notice_language_server_not_absolute,
     notice_language_server_script,
-    // キャレットの動き（ADR 0191・#1933）の設定の画面の行。
+    // キャレットの動き（ADR 0192・#1933）の設定の画面の行。
     settings_caret_motion_name,
     settings_caret_motion_description,
     settings_caret_motion_time_name,

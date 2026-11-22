@@ -242,7 +242,7 @@ def forget_session(environment: dict) -> bool:
 
 
 # settings.v6 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3 と 2026-11-16 の追補・#1041・
-# #1380・#1668・ADR 0191 の決定 1）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は
+# #1380・#1668・ADR 0192 の決定 1）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は
 # v6 → v5 → v4 の順に読むので、道具も v6 を書く（古い版を書くと、同じ profile に残った新しい版に負けて黙って
 # 効かない・#1780）。
 SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
@@ -257,6 +257,9 @@ SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path
 # の 1 か所で、版が上がったとき（settings.v5・#1668・settings.v6・#1933）はこの名前だけを直す（#1784）。
+# 道具は今の版の 1 つだけを書くので、v6 を読まない exe（1.1.0 と #1933 より前の main）を道具で動かすと
+# 書いた設定は効かず既定のまま動く（minimap・lsp のベンチや verify-settings.py。古い exe を測る道具は
+# 今は無いので直さない・ADR 0192 の限界・#1956 の R5）。
 SETTINGS_FILE = "settings.v6"
 
 

@@ -97,9 +97,8 @@ template <typename Target, typename Layouts> class GridRowPainter final
                            static_cast<float>(canvas.area.bottom));
     }
 
-    // キャレットの矩形（物理画素）。縦棒（変換中も）は升の左端の幅
-    // caret_width、ブロックは升の範囲。 描く draw_caret と、描く前に動きの行き先を知る
-    // renderer（ADR 0191）が共用する。
+    // キャレットの矩形（物理画素）。縦棒（変換中も）は升の左端の幅 caret_width、ブロックは升の
+    // 範囲。描く draw_caret と、描く前に動きの行き先を知る renderer（ADR 0192）が共用する。
     [[nodiscard]] static D2D1_RECT_F
     caret_box(const GridRowCanvas &canvas, application::GridCellSpan caret, bool composing) noexcept
     {
@@ -141,6 +140,14 @@ template <typename Target, typename Layouts> class GridRowPainter final
             }
         }
         return colored;
+    }
+
+    // IME の候補窓の位置に置く矩形（物理画素）。格子のキャレットと、動いている間のキャレットの
+    // 行き先（ADR 0192）が共用する。
+    [[nodiscard]] static RECT rect_of(D2D1_RECT_F box) noexcept
+    {
+        return RECT{static_cast<LONG>(box.left), static_cast<LONG>(box.top),
+                    static_cast<LONG>(box.right), static_cast<LONG>(box.bottom)};
     }
 
   private:
@@ -361,12 +368,6 @@ template <typename Target, typename Layouts> class GridRowPainter final
             return;
         }
         std::unreachable();
-    }
-
-    [[nodiscard]] static RECT rect_of(D2D1_RECT_F box) noexcept
-    {
-        return RECT{static_cast<LONG>(box.left), static_cast<LONG>(box.top),
-                    static_cast<LONG>(box.right), static_cast<LONG>(box.bottom)};
     }
 
     static constexpr float full_channel = 255.0F;

@@ -181,7 +181,7 @@ struct EditorFrame
     // 設定の面（ADR 0170 の決定 5・2026-11-18 の追補 2・施主決定 D102）。開いている間だけ値を持つ。
     // renderer は値があれば右の引き出しに描く（配置は ui の工程）。
     std::optional<SettingsView> settings_panel{};
-    // キャレットの動きの進み（ADR 0191 の決定 3）。最後に届いた合図 CaretMotionTick の番号と経過。
+    // キャレットの動きの進み（ADR 0192 の決定 3）。最後に届いた合図 CaretMotionTick の番号と経過。
     // renderer は設定の caret_motion がオンのときだけ読む（オフの道は欄を読まない）。
     core::CaretMotionClock caret_motion{};
 };

@@ -822,7 +822,7 @@ constexpr std::array<std::string_view, 1> minimap_names{minimap_feature};
                     switch_message(minimap_feature, wanted)};
 }
 
-// キャレットの動き（ADR 0191 の決定 1・#1933）。`set caretmotion` `set nocaretmotion`
+// キャレットの動き（ADR 0192 の決定 1・#1933）。`set caretmotion` `set nocaretmotion`
 // `set caretmotion?` と、時間の `set caretmotiontime=N` `set caretmotiontime?` `set
 // caretmotiontime` （数の option の名前だけは問い・scrolloff と同じ）。Vim
 // に無い名前なので短い名前は無い。時間は core の caret_motion_time_of の 1
@@ -882,7 +882,7 @@ caret_motion_time_option(std::string_view option, const EditorSettings &settings
 
 // 画面の見え方の option（行番号の相対表示と追従の余白・#1041、ミニマップ・ADR 0171）と、同じ束で
 // 保存する INSERT の字下げの写し（#1086）とキャレットの動き（ADR
-// 0191）。どれにも当たらなければ無し。
+// 0192）。どれにも当たらなければ無し。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 view_option(std::string_view option, const EditorSettings &settings)
 {

@@ -69,7 +69,7 @@ struct EditorSettings
     FinderPreview finder_preview = FinderPreview::automatic;
     // キャレットの動き（尾を引く・ADR 0192・#1933・settings.v6 の鍵 `caret_motion` と
     // `caret_motion_time`）。既定はオフと 120 ms（施主の決め 2026-11-22）。時間は
-    // caret_motion_time_minimum〜caret_motion_time_maximum（CaretMotion.hpp）。
+    // caret_motion_time_minimum〜caret_motion_time_maximum（CaretGlide.hpp）。
     bool caret_motion = false;
     std::uint16_t caret_motion_time = 120;
 };

@@ -12,7 +12,7 @@
 
 namespace nenenib::core
 {
-// キャレットの動きの絵（尾を引く・ADR 0191・#1933。キーの移動の CaretMotion とは別）。四隅の
+// キャレットの動きの絵（尾を引く・ADR 0192・#1933。キーの移動の CaretMotion とは別）。四隅の
 // 位置を決めるのはこの純関数だけで、時計は読まない（ARC-007）。経過の ms は ui が時計の port で
 // 測り、合図の意図 CaretMotionTick が運ぶ。
 
@@ -45,11 +45,11 @@ inline constexpr std::array<float, 4> caret_corner_factors{0.45F, 0.6F, 0.85F, 1
 [[nodiscard]] CaretQuad caret_motion_quad(const CaretQuad &from, const CaretQuad &to,
                                           std::uint32_t elapsed, std::uint32_t duration) noexcept;
 // 四隅を bounds（左上が corners[0]・右下が corners[2] の矩形）の中へ寄せる（画面の外から来る尾は
-// 画面の端から・ADR 0191 の決定 5）。
+// 画面の端から・ADR 0192 の決定 5）。
 [[nodiscard]] CaretQuad caret_quad_clamped(const CaretQuad &quad, const CaretQuad &bounds) noexcept;
 
 // にじみの層の四隅。各隅を四隅の中心から見た側へ x と y を amount ずつ外へ広げる（平方根を使わない
-// 近似・ADR 0191 の決定 4）。中心と同じ座標の向きは動かさない。
+// 近似・ADR 0192 の決定 4）。中心と同じ座標の向きは動かさない。
 [[nodiscard]] CaretQuad caret_quad_inflated(const CaretQuad &quad, float amount) noexcept;
 
 // 跳ぶ（動かさない）ときの覚え。target が無ければ覚えを空にする（次に見えたときも跳ぶ）。

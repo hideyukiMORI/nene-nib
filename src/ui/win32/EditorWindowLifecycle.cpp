@@ -653,7 +653,7 @@ std::expected<void, RenderFailure> EditorWindow::draw_frame()
     }
     // 打鍵の道の段（#844）。frame を作り終えた直後・描く前。
     timing_.mark(core::Milestone::frame_built);
-    renderer_->allow_caret_motion(animation_setting_);
+    renderer_->allow_caret_motion(animation_setting_, caret_motion_generation_);
     const auto drawn =
         frame.layout_failure.has_value()
             ? std::expected<void, RenderFailure>{std::unexpected(RenderFailure::directwrite)}
