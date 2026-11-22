@@ -101,6 +101,11 @@ enum class EditorOperation : std::uint8_t
     next_diagnostic,
     previous_diagnostic,
     show_diagnostic,
-    list_diagnostics
+    list_diagnostics,
+    // 2 枠の操作中の枠の大きさ（ADR 0148 の 2026-11-22 の追補の決定 4）。鍵は無く（Windows に標準の
+    // 鍵が無い・D82）、両方のモードの F1 の一覧から。広げる・狭めるは分割の向きに 5 升。
+    widen_pane,
+    narrow_pane,
+    even_panes
 };
 } // namespace nenenib::core

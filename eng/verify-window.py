@@ -874,6 +874,8 @@ def pane_bands(width: int, height: int, dpi: int, split: str = "none") -> tuple[
     position order (left or top first) and the divider, each (left, top, right, bottom).
 
     Both panes get (band - divider) // 2 and the remainder goes to the divider (1 DIP at least).
+    This is the even share (core::SplitShare{}) only: the tool never drags the divider or sends
+    the resize keys, so the uneven shares of ADR 0148's 2026-11-22 addendum are not mirrored here.
     """
     title = to_pixels(TITLE_BAR_DIPS, dpi)
     bottom = max(height - to_pixels(STATUS_BAR_DIPS, dpi), title)

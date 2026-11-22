@@ -116,11 +116,14 @@ line_metrics(IDWriteTextLayout &layout)
 
 bool BodyTextLayouts::matches_style(const application::TextLayoutRequest &request) const
 {
-    // 字幅（average_advance）は書式から測る値で、書式の鍵ではない（ADR 0139）。
+    // 字幅（average_advance）は書式から測る値で、書式の鍵ではない（ADR 0139）。幅は書式には
+    // 「0 か（折り返さない）」だけが効くので、書式の鍵はそれだけを比べ、幅そのものは entry の鍵
+    // （area）で比べる。2 枠の幅が違っても描画のたびに保持を捨て合わない（ADR 0148 の 2026-11-22 の
+    // 追補の決定 6・ADR 0114 の決定 7 の鍵は変えない）。
     const auto &geometry = style_.has_value() ? style_.value().geometry : request.geometry;
     return style_.has_value() && style_.value().family == request.settings.font_family.text() &&
            style_.value().points == request.settings.font_size.points() &&
-           geometry.width == request.geometry.width &&
+           (geometry.width > 0) == (request.geometry.width > 0) &&
            geometry.line_height == request.geometry.line_height &&
            geometry.dpi == request.geometry.dpi &&
            style_.value().wrapping == request.settings.wrapping;
@@ -420,9 +423,10 @@ BodyTextLayouts::get(const application::TextLayoutRequest &request)
     {
         return std::unexpected(ready.error());
     }
-    const auto matches = [&request](const BodyTextLayout &entry)
+    const auto width = std::max(request.geometry.width, 1);
+    const auto matches = [&request, width](const BodyTextLayout &entry)
     {
-        return entry.layout && entry.form == request.form &&
+        return entry.layout && entry.area.right == width && entry.form == request.form &&
                entry.unwrapped == request.window.active && entry.text == request.text;
     };
     const auto current = std::ranges::find_if(current_, matches);
@@ -463,11 +467,13 @@ BodyTextLayouts::TextLayout BodyTextLayouts::retain(BodyTextLayout entry)
         current_.push_back(std::move(entry));
         return current_.back().layout;
     }
-    // 同じ名札（名札の無いもの同士を含む）の前の 1 本は、同じ行の古い文字列なので捨てる。
+    // 同じ名札（名札の無いもの同士を含む）で同じ幅の前の 1 本は、同じ行の古い文字列なので捨てる
+    // （幅の違う 1 本はもう 1 つの枠の行・ADR 0148 の 2026-11-22 の追補の決定 6）。
     std::erase_if(pending_,
                   [&entry](const BodyTextLayout &held)
                   {
-                      return held.line.has_value() == entry.line.has_value() &&
+                      return held.area.right == entry.area.right &&
+                             held.line.has_value() == entry.line.has_value() &&
                              (!held.line.has_value() || held.line.value() == entry.line.value());
                   });
     const auto limit = std::max<std::size_t>(current_.size(), 1);

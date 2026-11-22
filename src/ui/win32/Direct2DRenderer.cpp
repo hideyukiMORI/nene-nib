@@ -2513,8 +2513,8 @@ std::expected<void, RenderFailure> Direct2DRenderer::draw(const application::Edi
     // minimap_layout は最初の 1 行で返り、配置を計算しない（決定 1 の追補・早い return）。
     const auto minimap = core::minimap_layout(explorer.body, dpi_, frame.settings.font_size,
                                               frame.minimap.has_value());
-    const auto panes =
-        core::pane_layouts(minimap.body, dpi_, frame.settings.font_size, frame.layout);
+    const auto panes = core::pane_layouts(minimap.body, dpi_, frame.settings.font_size,
+                                          core::PaneSplit{frame.layout, frame.share});
     const auto body = core::active_pane_layout(panes, frame.active_side);
     const auto guide = core::operation_guide_layout(guide_request(frame), body, status, dpi_);
     draw_title_bar(frame, title);

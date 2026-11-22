@@ -53,6 +53,8 @@ void verify_transient_tab_property_scope();
 // SplitTests.cpp
 void verify_split_contracts();
 void verify_split_scope();
+// SplitResizeTests.cpp
+void verify_split_resize_contracts();
 
 // SessionTests.cpp
 void verify_session_contracts();

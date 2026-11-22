@@ -347,7 +347,7 @@ void verify_split_rows(SoftwareTarget &target, const ExplorerText &text)
     const auto layout = core::explorer_layout(client, dpi, core::ExplorerWidth{});
     const auto lines = core::explorer_panel_lines(client, dpi);
     const auto split = core::active_pane_layout(
-        core::pane_layouts(layout.body, dpi, font, core::SplitLayout::horizontal),
+        core::pane_layouts(layout.body, dpi, font, core::PaneSplit{core::SplitLayout::horizontal}),
         core::PaneSide::second);
     expect(layout.panel.has_value() && lines >= 4, "the explorer panel has its lines");
     if (!layout.panel.has_value() || lines < 4)
@@ -406,7 +406,7 @@ void verify_window_lines()
         const core::LayoutRect client{0, 0, 1300, height};
         const auto body = core::active_pane_layout(
             core::pane_layouts(core::explorer_layout(client, dpi, core::ExplorerWidth{}).body, dpi,
-                               font, core::SplitLayout::horizontal),
+                               font, core::PaneSplit{core::SplitLayout::horizontal}),
             core::PaneSide::first);
         const auto sent = nenenib::ui::win32::window_lines(body, client, dpi);
         expect(sent.lines == body.visible_lines && sent.window_height == height,

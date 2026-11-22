@@ -1,4 +1,7 @@
 #include "ExResult.hpp"
+#include "PaneDimension.hpp"
+#include "PaneResize.hpp"
+#include "PaneSizing.hpp"
 
 #include "ExDocumentName.hpp"
 #include "Minimap.hpp"
@@ -1824,6 +1827,68 @@ window_command(std::string_view text)
     return result;
 }
 
+// `:res[ize] [N|+N|-N]` と `:vert[ical] res[ize] ...`（ADR 0148 の 2026-11-22 の追補の決定 4・Vim
+// 9.1 の実測）。引数なしは最大、N はその数ちょうど（0 は最小）、+N / -N は足し引き。`:vertical` は
+// `resize` の前だけを受け、ほかの命令の前の `:vertical` は今までどおりどの行にも当たらない。範囲の
+// 形（`:3resize`）は unsupported_argument、読めない引数は invalid_argument。
+constexpr std::string_view resize_name = "resize";
+constexpr std::size_t resize_shortest = 3;
+constexpr std::string_view vertical_name = "vertical";
+constexpr std::size_t vertical_shortest = 4;
+
+[[nodiscard]] std::optional<PaneSizing> resize_sizing_of(std::string_view argument,
+                                                         PaneDimension dimension)
+{
+    if (argument.empty())
+    {
+        return PaneSizing{PaneResize::maximize, dimension, 1};
+    }
+    const char sign = argument.front();
+    const PaneResize resize = sign == '+'   ? PaneResize::grow
+                              : sign == '-' ? PaneResize::shrink
+                                            : PaneResize::set;
+    const std::string_view digits = resize == PaneResize::set ? argument : argument.substr(1);
+    std::int32_t cells = 0;
+    const auto *const last = digits.data() + digits.size();
+    const auto [end, error] = std::from_chars(digits.data(), last, cells);
+    if (digits.empty() || !is_digit(digits.front()) || error != std::errc{} || end != last)
+    {
+        return std::nullopt;
+    }
+    return PaneSizing{resize, dimension, cells};
+}
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+resize_command(std::string_view text)
+{
+    const std::size_t range = leading(text, is_digit);
+    std::string_view rest = text.substr(range);
+    std::size_t letters = leading(rest, is_letter);
+    PaneDimension dimension = PaneDimension::height;
+    if (abbreviates(rest.substr(0, letters), vertical_name, vertical_shortest))
+    {
+        rest = trimmed(rest.substr(letters));
+        letters = leading(rest, is_letter);
+        dimension = PaneDimension::width;
+    }
+    if (!abbreviates(rest.substr(0, letters), resize_name, resize_shortest))
+    {
+        return std::nullopt;
+    }
+    if (range > 0)
+    {
+        return std::unexpected(ExFailure::unsupported_argument);
+    }
+    const auto sizing = resize_sizing_of(trimmed(rest.substr(letters)), dimension);
+    if (!sizing.has_value())
+    {
+        return std::unexpected(ExFailure::invalid_argument);
+    }
+    ExResult result{std::nullopt, std::nullopt, std::nullopt,
+                    DisplayText::parse(resize_name).value()};
+    result.resize = sizing.value();
+    return result;
+}
 // `:ha[rdcopy]`（ADR 0177 の決定 1・最短は Vim と同じ `ha`）。アクティブな文書の印刷の要求で、
 // 設定は変えない。引数（`> file.ps` の PostScript など）・`!`・範囲の形は unsupported_argument
 // （決定 9 の後続）。名前が当たらなければ値なし（ほかの命令として扱う）。
@@ -2185,10 +2250,10 @@ nohlsearch_command(std::string_view text)
 // ここに 1 行足す（無名名前空間の関数を書き忘れると -Wunused-function で落ちる）。
 using ExCommandParser =
     std::optional<std::expected<ExResult, ExEvaluationFailure>> (*)(std::string_view);
-constexpr std::array<ExCommandParser, 12> command_parsers{
-    line_command,    nohlsearch_command, map_command,     syntax_command,
-    preview_command, tab_command,        window_command,  palette_command,
-    grep_command,    print_command,      version_command, document_command};
+constexpr std::array<ExCommandParser, 13> command_parsers{
+    line_command,  nohlsearch_command, map_command,     syntax_command,  preview_command,
+    tab_command,   window_command,     resize_command,  palette_command, grep_command,
+    print_command, version_command,    document_command};
 
 // 表のどの行にも当たらなければ unknown_command。
 [[nodiscard]] std::expected<ExResult, ExEvaluationFailure> remaining_command(std::string_view text)

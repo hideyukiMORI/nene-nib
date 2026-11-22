@@ -74,6 +74,8 @@
 #include "RefreshAppearance.hpp"
 #include "RegisterShell.hpp"
 #include "ResizeExplorer.hpp"
+#include "ResizePane.hpp"
+#include "ResizeSplit.hpp"
 #include "RestoreAutosave.hpp"
 #include "RevealTab.hpp"
 #include "RevertSettings.hpp"
@@ -146,5 +148,5 @@ using EditorIntent = std::variant<
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
     RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
-    PreviewScrollSettled, RunDiagnosticCommand>;
+    PreviewScrollSettled, RunDiagnosticCommand, ResizeSplit, ResizePane>;
 } // namespace nenenib::application
