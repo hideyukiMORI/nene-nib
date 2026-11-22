@@ -6,9 +6,11 @@
 #include "CloseTab.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandEdit.hpp"
 #include "CommandPaletteView.hpp"
 #include "CommandText.hpp"
 #include "DisplayText.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -498,6 +500,32 @@ void verify_percent_is_the_current_document()
     applied(editing.controller(), app::CancelCommand{});
 }
 
+// `%` で頼み直している間に `%` を消して打ち直しても、届いた答え（照合は通っている）を控えておき、
+// 頼み直さずに見せる（#1958 の確かめレビュー R1）。同じ一覧の中で `%` → `#` → `%`
+// と戻っても当たりを 作り直さない（L4）。
+void verify_percent_retyped_while_asking()
+{
+    Editing editing(lsp_on());
+    listing(editing);
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"%"}));
+    const std::size_t asked = editing.language_server().requests(symbols_method).size();
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(answered(editing, hierarchical));
+    const auto retyped = editing.controller().apply_frame(app::CommandText{"%"});
+    expect(retyped.command_palette.has_value() && retyped.command_palette.value().total == 3 &&
+               editing.language_server().requests(symbols_method).size() == asked,
+           "an answer that arrives after % was erased shows when % is typed again");
+    const std::size_t made = editing.controller().listed_hits_made();
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"#"}));
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"%"}));
+    expect(editing.controller().listed_hits_made() == made,
+           "% then # then % in one list makes the hits once");
+    applied(editing.controller(), app::CancelCommand{});
+}
+
 // LSP がオフの `^` `&` `%` は一覧の中に「LSP はオフです」の 1 行。案内に `^` は出ない（#1958 の
 // 決め 1・2）。頼んでいない `%` は頼み方の 1 行。
 void verify_empty_lines()
@@ -525,20 +553,43 @@ void verify_empty_lines()
            "the hint with LSP off has seven groups and no diagnostics");
     applied(off.controller(), app::CancelCommand{});
 
-    Editing plain(lsp_on());
-    started(plain, R"({"textDocumentSync":2})");
-    const auto unasked = typed_percent(plain);
+    Editing able(lsp_on());
+    listing(able);
+    const auto unasked = typed_percent(able);
     const auto line = unasked.has_value() ? unasked.value().empty_line : std::nullopt;
     expect(
         line.has_value() &&
             line.value().text() ==
                 core::ui_text_filled(
-                    core::UiMessage::palette_empty_symbols, plain.controller().display_language(),
+                    core::UiMessage::palette_empty_symbols, able.controller().display_language(),
                     {"gO", "F1",
                      core::ui_text(core::operation_text(core::EditorOperation::list_symbols).name,
-                                   plain.controller().display_language())}),
-        "% that cannot be asked says how to ask, with the keys from the tables");
-    applied(plain.controller(), app::CancelCommand{});
+                                   able.controller().display_language())}),
+        "% before the answer says how to ask, with the keys from the tables");
+    applied(able.controller(), app::CancelCommand{});
+}
+
+// LSP がオンの一覧の中の空の 1 行: 能力の無い席の `%` `&` は「答えません」、診断の無い `^` は
+// 「診断はありません」（#1958 の確かめレビュー L2・L5）。
+void verify_empty_lines_with_lsp_on()
+{
+    Editing plain(lsp_on());
+    started(plain, R"({"textDocumentSync":2})");
+    const auto line_of = [&plain](std::string_view mark)
+    {
+        static_cast<void>(plain.controller().apply(app::OpenCommandPalette{}));
+        const auto frame = plain.controller().apply_frame(app::CommandText{std::string{mark}});
+        applied(plain.controller(), app::CancelCommand{});
+        const auto empty = frame.command_palette.has_value()
+                               ? frame.command_palette.value().empty_line
+                               : std::nullopt;
+        return empty.has_value() ? std::string(empty.value().text()) : std::string{};
+    };
+    expect(line_of("%") == notice(plain, core::UiMessage::notice_symbols_not_supported) &&
+               line_of("&") == notice(plain, core::UiMessage::notice_references_not_supported),
+           "% and & on a server without the ability say it does not answer");
+    expect(line_of("^") == notice(plain, core::UiMessage::notice_no_diagnostics),
+           "^ without diagnostics says there are none");
 }
 } // namespace
 
@@ -554,6 +605,8 @@ void verify_lsp_symbols_scope()
     verify_inactive_and_closed();
     verify_error_bytes_and_cut();
     verify_percent_is_the_current_document();
+    verify_percent_retyped_while_asking();
     verify_empty_lines();
+    verify_empty_lines_with_lsp_on();
 }
 } // namespace nenenib::tests
