@@ -132,6 +132,10 @@ namespace
 {
     return caret_position(view);
 }
+[[nodiscard]] TextPosition change_position(const VimEditorView &view, const PaneSizing &)
+{
+    return caret_position(view);
+}
 [[nodiscard]] TextPosition change_position(const VimEditorView &view, const VimLanguageQuery &)
 {
     return caret_position(view);

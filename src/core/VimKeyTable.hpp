@@ -10,6 +10,7 @@
 #include "VimSpecialKey.hpp"
 #include "VimTextObject.hpp"
 #include "VimWindowCommand.hpp"
+#include "VimWindowResizeBinding.hpp"
 #include "VimWordClass.hpp"
 
 #include <optional>
@@ -43,6 +44,10 @@ namespace nenenib::core
 // `Ctrl-w` の後ろの特別な鍵 → 窓の命令。Ctrl-v と Ctrl-w は上の表の 0x16 と 0x17 の行を引き、
 // ほかの特別な鍵は nullopt。
 [[nodiscard]] std::optional<VimWindowCommand> vim_window_command_for(VimSpecialKey key) noexcept;
+
+// `Ctrl-w` の後ろの鍵 → 枠の大きさの変え方（ADR 0148 の 2026-11-22 の追補の決定 4）。
+// `> < + - = _ |` だけで、ほかは nullopt。
+[[nodiscard]] std::optional<VimWindowResizeBinding> vim_window_resize_for(char32_t key) noexcept;
 
 // Ctrl-v と Ctrl-w の文字（0x16 と 0x17・表の鍵と同じ値）。ほかの特別な鍵は nullopt。
 [[nodiscard]] std::optional<char32_t> vim_window_control_character(VimSpecialKey key) noexcept;

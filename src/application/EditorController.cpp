@@ -150,7 +150,9 @@ visual_block_of(const core::TextBuffer &text, const core::Selection &selection, 
     return PaneSource{state,
                       core::vim_visual_range(state.text(), selection.value(), visual.mode).range,
                       visual_block_of(state.text(), selection.value(), visual.mode, visual.wanted),
-                      current.pattern, current.tab};
+                      current.pattern,
+                      current.tab,
+                      current.geometry};
 }
 
 // 描く範囲。矩形のあいだだけ行ごとの範囲へ差し替わる（ADR 0035 の決定 8）。短い行の右側
@@ -221,7 +223,8 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // begin_intent にも書かない。
 // エクスプローラーの意図（ToggleExplorer・ExplorerKey・PointExplorer・ScrollExplorer・
 // ExplorerRootChosen）も使う人の操作なので、どちらにも書かない（ADR 0162 の決定 4）。面の幅の
-// ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。
+// ドラッグ（ResizeExplorer・ADR 0162 の追補 D78）も使う人の操作の側で、どちらにも書かない。2 枠の
+// 境界のドラッグ（ResizeSplit）と鍵（ResizePane・ADR 0148 の 2026-11-22 の追補）も同じ側。
 // 面の上のマウスを載せた行（HoverExplorer・#1390）は帯の hover と同じく使う人の操作ではなく、
 // not_user_operation の 1 本を経て歩きを続け、報せを消さない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
@@ -821,7 +824,7 @@ std::optional<core::VimBlockRange> EditorController::block_selection() const
 PaneSource EditorController::framed_source(const core::VimPattern *pattern) const
 {
     return drawn_source(PaneSource{state_, highlighted_range(), block_selection(), pattern,
-                                   state_.autosave_ids().at(state_.active_tab())});
+                                   state_.autosave_ids().at(state_.active_tab()), view_geometry_});
 }
 
 const std::optional<core::WordTable> &EditorController::word_table() const noexcept
@@ -1099,7 +1102,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
                    ? syntax_begin(state.text(), key, cache, lexed)
                    : std::nullopt;
     // text の表示の frame なので、構築は 1 升を port から読まない（格子でない）。
-    const VisualTextView visual(state, ports_.text_layouts, view_geometry_);
+    const VisualTextView visual(state, ports_.text_layouts, source.geometry);
     auto row = -static_cast<std::int64_t>(scroll.first_row);
     for (std::size_t number = first;
          number <= last && row < static_cast<std::int64_t>(scroll.visible_lines); ++number)
@@ -1109,7 +1112,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
                                block_row(source.block, line, source.range), caret);
         lex = colored_line(key.language, lex, shown, lexed);
         diagnosed_line(state, shown);
-        const auto count = screen_rows_of(shown);
+        const auto count = screen_rows_of(shown, source.geometry);
         if (!count)
         {
             return std::unexpected(count.error());
@@ -1124,15 +1127,16 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
 
 // 巨大な行は折り返さないので 1 画面行（ADR 0139 の決定 2）。
 std::expected<std::size_t, TextLayoutFailure>
-EditorController::screen_rows_of(const LineView &shown) const
+EditorController::screen_rows_of(const LineView &shown,
+                                 const core::TextViewGeometry &geometry) const
 {
-    if (view_geometry_.width <= 0 || shown.window.active)
+    if (geometry.width <= 0 || shown.window.active)
     {
         return 1;
     }
     return ports_.text_layouts.rows(TextLayoutRequest{presented_text(shown),
                                                       state_.settings(),
-                                                      view_geometry_,
+                                                      geometry,
                                                       core::DisplayForm::text,
                                                       {},
                                                       {},
@@ -1191,7 +1195,7 @@ EditorController::grid_visible_rows(const PaneSource &source,
                                     std::vector<GridRowView> &grid, GridTally &tally) const
 {
     const EditorState &state = source.state;
-    const VisualTextView view(state, ports_.text_layouts, view_geometry_);
+    const VisualTextView view(state, ports_.text_layouts, source.geometry);
     auto cells = view.grid_cells();
     if (!cells)
     {
@@ -1465,6 +1469,7 @@ std::optional<SyntaxStateCache> &EditorController::passive_syntax_cache() noexce
 void EditorController::add_other_pane(EditorFrame &result, const core::VimPattern *pattern)
 {
     result.layout = state_.split().layout;
+    result.share = state_.split().share;
     result.active_side = state_.split().active_side;
     // 全面の間は本文の枠ももう 1 つの枠も描かない（隠した枠は状態に保つ・ADR 0155 の改訂 15）。
     // 錨の写し方は側の枠と同じ（決定 7・11）。
@@ -1507,7 +1512,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
 void EditorController::add_other_view(EditorFrame &result, const core::VimPattern *pattern,
                                       const PaneView &view)
 {
-    const auto pane = state_.other_pane_state();
+    const auto pane = other_pane_viewed();
     if (!pane.has_value())
     {
         return;
@@ -1520,8 +1525,9 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     }
     const auto position = static_cast<std::size_t>(std::distance(ids.begin(), found));
     const EditorState &state = pane.value();
-    const PaneSource source{state, core::selection_range(state.selection()), std::nullopt, pattern,
-                            view.tab};
+    const PaneSource source{state,        core::selection_range(state.selection()),
+                            std::nullopt, pattern,
+                            view.tab,     other_geometry()};
     PaneFrame other{{},
                     CaretView{state.text().position_of(state.selection().caret), result.caret.shape,
                               state.caret_affinity()},
@@ -1534,7 +1540,7 @@ void EditorController::add_other_view(EditorFrame &result, const core::VimPatter
     // 問いの答えを待つ文書は本文を読まない（操作中の枠と同じ・ADR 0140 の決定 2）。
     const bool pending = display_pending(state.display_inquiry());
     std::optional<TextLayoutFailure> failure;
-    if (!pending && state.display() == core::DisplayForm::grid && view_geometry_.width > 0)
+    if (!pending && state.display() == core::DisplayForm::grid && other_geometry().width > 0)
     {
         GridTally tally;
         failure = grid_visible_rows(source, passive_syntax_cache(), other.grid, tally);

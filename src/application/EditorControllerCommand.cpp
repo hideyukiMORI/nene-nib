@@ -1162,6 +1162,11 @@ bool EditorController::ran_ex_request(const core::ExResult &result)
         run_window_command(result.window.value());
         return true;
     }
+    if (result.resize.has_value())
+    {
+        resize_pane(result.resize.value());
+        return true;
+    }
     if (result.palette.has_value())
     {
         run_palette_request(result.palette.value());

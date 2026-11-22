@@ -92,7 +92,7 @@ void verify_panel_lines()
            "the panel's lines are the root line and the rest of the band over 22 DIP");
     const auto split = core::active_pane_layout(
         core::pane_layouts(core::explorer_layout(client, 96, core::ExplorerWidth{}).body, 96, font,
-                           core::SplitLayout::horizontal),
+                           core::PaneSplit{core::SplitLayout::horizontal}),
         core::PaneSide::first);
     expect(split.visible_lines + 1 < lines, "a horizontal split does not halve the panel's lines");
     expect(core::explorer_panel_lines(LayoutRect{0, 0, 0, 0}, 96) == 0,
@@ -266,12 +266,14 @@ void verify_body_panes()
     const auto font = core::default_font_size();
     const LayoutRect client{0, 0, 1200, 800};
     const auto hidden = core::explorer_layout(client, 96, std::nullopt);
-    const auto plain = core::pane_layouts(client, 96, font, core::SplitLayout::none);
-    expect(core::pane_layouts(hidden.body, 96, font, core::SplitLayout::none).first.content ==
-               plain.first.content,
+    const auto plain =
+        core::pane_layouts(client, 96, font, core::PaneSplit{core::SplitLayout::none});
+    expect(core::pane_layouts(hidden.body, 96, font, core::PaneSplit{core::SplitLayout::none})
+                   .first.content == plain.first.content,
            "a hidden explorer leaves the body pane as it was");
     const auto shown = core::explorer_layout(client, 96, core::ExplorerWidth{});
-    const auto single = core::pane_layouts(shown.body, 96, font, core::SplitLayout::none).first;
+    const auto single =
+        core::pane_layouts(shown.body, 96, font, core::PaneSplit{core::SplitLayout::none}).first;
     expect(single.band.left == panel_of(shown).right && single.band.right == 1200 &&
                single.band.top == panel_of(shown).top &&
                single.band.bottom == panel_of(shown).bottom,
@@ -280,7 +282,8 @@ void verify_body_panes()
            "the gutter and the text follow the narrowed band");
     expect(single.visible_lines == plain.first.visible_lines,
            "the narrowed body keeps the same number of lines");
-    const auto split = core::pane_layouts(shown.body, 96, font, core::SplitLayout::vertical);
+    const auto split =
+        core::pane_layouts(shown.body, 96, font, core::PaneSplit{core::SplitLayout::vertical});
     expect(split.first.band.left == panel_of(shown).right && split.second.has_value() &&
                split.second.value().band.right == 1200,
            "two panes share the narrowed band");

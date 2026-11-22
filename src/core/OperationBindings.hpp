@@ -24,7 +24,7 @@ namespace nenenib::core
 // Ctrl+Shift+O）。
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
 // Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
-inline constexpr std::array<OperationBinding, 81> operation_bindings{{
+inline constexpr std::array<OperationBinding, 84> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -170,6 +170,10 @@ inline constexpr std::array<OperationBinding, 81> operation_bindings{{
      KeyChord{false, true, OperationKey::f8}},
     {EditorOperation::show_diagnostic, OperationModes::both, std::nullopt},
     {EditorOperation::list_diagnostics, OperationModes::both, std::nullopt},
+    // 枠の大きさの 3 つ（ADR 0148 の 2026-11-22 の追補）。鍵なしで両方のモードの F1 の一覧から。
+    {EditorOperation::widen_pane, OperationModes::both, std::nullopt},
+    {EditorOperation::narrow_pane, OperationModes::both, std::nullopt},
+    {EditorOperation::even_panes, OperationModes::both, std::nullopt},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

@@ -195,7 +195,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/EditingPropertyTests.cpp
     tests/unit/ControllerMixedPropertyTests.cpp
     tests/unit/SavedStatePropertyTests.cpp
-    tests/unit/SplitTests.cpp
+    tests/unit/SplitTests.cpp tests/unit/SplitResizeTests.cpp
     tests/unit/SessionTests.cpp
     tests/unit/BookmarkTests.cpp
     tests/unit/InsertCompletionTests.cpp
@@ -518,7 +518,7 @@ set_tests_properties(nib_adapters_last_resort PROPERTIES TIMEOUT 180)
 
 nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/CoverWindow.cpp src/ui/win32/DeviceWarmup.cpp src/ui/win32/Direct2DRenderer.cpp src/ui/win32/Direct2DRendererContextMenu.cpp src/ui/win32/Direct2DRendererSettings.cpp src/ui/win32/Direct2DRendererCompletion.cpp src/ui/win32/Direct2DRendererPreview.cpp src/ui/win32/Direct2DRendererTitleBar.cpp src/ui/win32/Direct2DRendererDetail.cpp src/ui/win32/Direct2DRendererMotionLabels.cpp src/ui/win32/MotionLabelBox.cpp src/ui/win32/TabTipLayout.cpp src/ui/win32/HoverTipLayout.cpp src/ui/win32/LinkCardFormats.cpp src/ui/win32/LinkCardLayout.cpp src/ui/win32/Direct2DRendererLinkCard.cpp src/ui/win32/InputLinePromptText.cpp src/ui/win32/EditorWindow.cpp src/ui/win32/EditorWindowDetail.cpp src/ui/win32/EditorWindowLifecycle.cpp src/ui/win32/EditorWindowPointer.cpp src/ui/win32/EditorWindowKeys.cpp
-    src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowSettings.cpp src/ui/win32/SettingsInput.cpp src/ui/win32/EditorWindowCompletion.cpp src/ui/win32/EditorWindowLinkCard.cpp src/ui/win32/EditorWindowTableScroll.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
+    src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowSettings.cpp src/ui/win32/SettingsInput.cpp src/ui/win32/EditorWindowCompletion.cpp src/ui/win32/EditorWindowLinkCard.cpp src/ui/win32/EditorWindowTableScroll.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorWindowSplit.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
     src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/SettingsPanelPainter.cpp src/ui/win32/SettingsPanelFormats.cpp src/ui/win32/CompletionPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
@@ -564,7 +564,8 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/LanguageTextTests.cpp tests/ui/ProjectHitPaintTests.cpp
     tests/ui/ContextMenuPaintTests.cpp tests/ui/FinderPreviewPaintTests.cpp
     tests/ui/CompletionPaintTests.cpp
-    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp tests/ui/DeliveryStepsTests.cpp)
+    tests/ui/SettingsPanelPaintTests.cpp tests/ui/SettingsInputTests.cpp tests/ui/DeliveryStepsTests.cpp
+    tests/ui/SplitPressTests.cpp)
 nenenib_link(nib_window_tests nenenib_core)
 nenenib_link(nib_window_tests nenenib_application)
 nenenib_link(nib_window_tests nenenib_window)

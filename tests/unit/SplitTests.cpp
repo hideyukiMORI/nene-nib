@@ -199,8 +199,9 @@ void verify_pane_layouts_none()
     for (const auto dpi : {96U, 120U, 144U, 192U})
     {
         const auto whole = core::body_layout(800, 600, dpi, core::default_font_size());
-        const auto panes = core::pane_layouts(core::LayoutRect{0, 0, 800, 600}, dpi,
-                                              core::default_font_size(), SplitLayout::none);
+        const auto panes =
+            core::pane_layouts(core::LayoutRect{0, 0, 800, 600}, dpi, core::default_font_size(),
+                               core::PaneSplit{SplitLayout::none});
         expect(panes.first.band == whole.band && panes.first.content == whole.content &&
                    panes.first.gutter == whole.gutter &&
                    panes.first.visible_lines == whole.visible_lines && !panes.second.has_value() &&
@@ -212,8 +213,9 @@ void verify_pane_layouts_none()
 void check_vertical(std::int32_t width, std::uint32_t dpi)
 {
     const auto whole = core::body_layout(width, 600, dpi, core::default_font_size());
-    const auto panes = core::pane_layouts(core::LayoutRect{0, 0, width, 600}, dpi,
-                                          core::default_font_size(), SplitLayout::vertical);
+    const auto panes =
+        core::pane_layouts(core::LayoutRect{0, 0, width, 600}, dpi, core::default_font_size(),
+                           core::PaneSplit{SplitLayout::vertical});
     expect(panes.second.has_value() && panes.divider.has_value(),
            "a vertical split has two panes and a divider");
     if (!panes.second.has_value() || !panes.divider.has_value())
@@ -259,11 +261,11 @@ void verify_pane_layout_sides()
 {
     const core::LayoutRect client{0, 0, 1000, 700};
     const auto font = core::default_font_size();
-    const auto one = core::pane_layouts(client, 96U, font, SplitLayout::none);
+    const auto one = core::pane_layouts(client, 96U, font, core::PaneSplit{SplitLayout::none});
     expect(core::active_pane_layout(one, PaneSide::second).band == one.first.band &&
                !core::other_pane_layout(one, PaneSide::first).has_value(),
            "one pane: the operated pane is first on either side and there is no other pane");
-    const auto two = core::pane_layouts(client, 96U, font, SplitLayout::vertical);
+    const auto two = core::pane_layouts(client, 96U, font, core::PaneSplit{SplitLayout::vertical});
     const auto other_of_first = core::other_pane_layout(two, PaneSide::first);
     const auto other_of_second = core::other_pane_layout(two, PaneSide::second);
     expect(
@@ -278,8 +280,9 @@ void verify_pane_layout_sides()
 void check_horizontal(std::int32_t height, std::uint32_t dpi)
 {
     const auto whole = core::body_layout(900, height, dpi, core::default_font_size());
-    const auto panes = core::pane_layouts(core::LayoutRect{0, 0, 900, height}, dpi,
-                                          core::default_font_size(), SplitLayout::horizontal);
+    const auto panes =
+        core::pane_layouts(core::LayoutRect{0, 0, 900, height}, dpi, core::default_font_size(),
+                           core::PaneSplit{SplitLayout::horizontal});
     expect(panes.second.has_value() && panes.divider.has_value(),
            "a horizontal split has two panes and a divider");
     if (!panes.second.has_value() || !panes.divider.has_value())

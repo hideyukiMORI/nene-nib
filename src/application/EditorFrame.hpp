@@ -31,6 +31,7 @@
 #include "SettingsIssue.hpp"
 #include "SettingsView.hpp"
 #include "SplitLayout.hpp"
+#include "SplitShare.hpp"
 #include "StartScreenView.hpp"
 #include "StatusItems.hpp"
 #include "SyntaxPalette.hpp"
@@ -131,6 +132,9 @@ struct EditorFrame
     // 枠の配置・操作中の枠の側ともう 1 つの枠（ADR 0148 の決定 8）。1 枠では none・first・値なし。
     // 描く所は pane_layouts の first / second のうち active_side の側に操作中の枠を置く。
     core::SplitLayout layout = core::SplitLayout::none;
+    // 境界の位置（ADR 0148 の 2026-11-22 の追補の決定 1）。描く所は PaneSplit{layout, share} で
+    // pane_layouts を引く。
+    core::SplitShare share{};
     core::PaneSide active_side = core::PaneSide::first;
     // 本文の枠かプレビューの枠（ADR 0155 の決定 1・11）。
     std::optional<OtherFrame> other{};

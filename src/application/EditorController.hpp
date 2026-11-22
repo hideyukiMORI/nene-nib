@@ -119,7 +119,9 @@
 #include "PaletteOrigin.hpp"
 #include "PaletteProjectSearch.hpp"
 #include "PaneSide.hpp"
+#include "PaneSizing.hpp"
 #include "PaneSource.hpp"
+#include "PaneSplit.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
 #include "PointerClicks.hpp"
@@ -135,6 +137,8 @@
 #include "ProjectSearchView.hpp"
 #include "ReplayLevel.hpp"
 #include "ReplayRounds.hpp"
+#include "ResizePane.hpp"
+#include "ResizeSplit.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEvent.hpp"
@@ -146,6 +150,7 @@
 #include "Session.hpp"
 #include "SettingsOpen.hpp"
 #include "SettingsView.hpp"
+#include "SplitExtent.hpp"
 #include "SplitState.hpp"
 #include "StartEntry.hpp"
 #include "StartLists.hpp"
@@ -337,6 +342,12 @@ class EditorController final
     // 枠の配置と操作中の枠の側（ADR 0148 の決定 8）。窓がマウスの点の下の枠と、本文の行数を
     // 数える枠（pane_layouts の片側）を引くための口で、状態の 1 欄を読むだけ。
     [[nodiscard]] const SplitState &split() const noexcept;
+    // 配置と境界の比を畳んだ値（pane_layouts の引数・ADR 0148 の 2026-11-22 の追補）。状態の 2 欄を
+    // 読むだけ。
+    [[nodiscard]] core::PaneSplit pane_split() const noexcept;
+    // 保存した字の大きさ（入力行の評価も字の大きさは重ねない・shown_settings と同じ値）。窓がマウス
+    // の動くたびに本文の枠の配置を引く口で、delivery も frame も作らない。
+    [[nodiscard]] core::FontSize font_size() const noexcept;
     // プレビューの見せ方（ADR 0155 の改訂 15）。窓が tick
     // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
     [[nodiscard]] PreviewPlacement preview_placement() const noexcept;
@@ -782,6 +793,8 @@ class EditorController final
     void accept(const ScrollExplorer &intent);
     void accept(const ExplorerRootChosen &intent);
     void accept(const ResizeExplorer &intent);
+    void accept(const ResizeSplit &intent);
+    void accept(const ResizePane &intent);
     // マウスを載せた面の行（#1390）。使う人の操作ではない（帯の PointTitleBar と同じ側）。
     void accept(const HoverExplorer &intent);
     [[nodiscard]] std::vector<core::FilePath> unsaved_files() const;
@@ -1490,6 +1503,14 @@ class EditorController final
     void perform(const core::VimSwitchTab &effect);
     // `Ctrl-w` の窓の命令（ADR 0148 の決定 7）。2 枠の意図が入るまで何もしない。
     void perform(const core::VimWindowCommand &command);
+    void perform(const core::PaneSizing &sizing);
+    // 鍵で枠の大きさを変える 1 本（ResizePane・Vim の Ctrl-w・Ex の :resize・ADR 0148 の
+    // 2026-11-22 の追補の決定 4）。窓から届いた境界の寸法と今の比から sized_share を呼ぶ。
+    void resize_pane(core::PaneSizing sizing);
+    // もう 1 つの枠の寸法（追補の決定 5・届く前は操作中の枠の値）。
+    [[nodiscard]] const core::TextViewGeometry &other_geometry() const noexcept;
+    // もう 1 つの枠を、操作中の枠の形で読む写しにその枠の行数を置いた状態。
+    [[nodiscard]] std::optional<EditorState> other_pane_viewed() const;
     // `:s///c` の 1 歩（ADR 0168 の決定 6）。置く当たりを写し、問いを開くか続けるか終える。
     void perform(const core::VimConfirmSubstitute &effect);
     // INSERT にいるあいだの編集は 1 つの undo 単位に吸収する（ADR 0015 の決定 5）。
@@ -1542,6 +1563,9 @@ class EditorController final
     [[nodiscard]] std::expected<core::TextCaret, TextLayoutFailure> caret_in_view();
     [[nodiscard]] VisualTextView visual_view();
     void clamp_scroll();
+    // もう 1 つの枠の先頭の行を、その枠の寸法で clamp_scroll と同じ規則で収める（境界が動いたとき・
+    // ADR 0148 の 2026-11-22 の追補の決定 5）。
+    void clamp_other_scroll();
     // NORMAL のキャレットは文字の上に置く。Vim の鍵のあとも、クリックと Ctrl+矢印のあとも、
     // 寄せ方はこの 1 本（決定 5）。通常モードと INSERT では何もしない。
     void settle_vim_caret();
@@ -1621,7 +1645,7 @@ class EditorController final
     visible_lines(const PaneSource &source, std::optional<SyntaxStateCache> &cache,
                   std::size_t &lexed) const;
     [[nodiscard]] std::expected<std::size_t, TextLayoutFailure>
-    screen_rows_of(const LineView &shown) const;
+    screen_rows_of(const LineView &shown, const core::TextViewGeometry &geometry) const;
     // 格子の見えている画面行（ADR 0140 の決定 5）を frame の grid と grid_scanned に書く。
     // 位置解決と同じ GridCells（本文の索引を借りる）を 1 frame に 1 つ作って切り出す。
     // 失敗は升を読めないとき。構文の色は visible_lines と同じ遡りと覚えで付ける（#839）。
@@ -1706,6 +1730,11 @@ class EditorController final
     std::int32_t window_height_ = 0;
     // エクスプローラーの面の高さに入る行数（ルート名の行を含む・#1125）。0 は寸法が届く前。
     std::size_t explorer_lines_ = 0;
+    // 2 枠の境界の寸法と、もう 1 つの枠の寸法と行数（VisibleLines が運ぶ・ADR 0148 の 2026-11-22 の
+    // 追補の決定 4・5）。other_lines_ が 0 なら操作中の枠の値を使う。
+    std::optional<core::SplitExtent> split_extent_;
+    core::TextViewGeometry other_geometry_{};
+    std::size_t other_lines_ = 0;
     std::optional<TextLayoutFailure> layout_failure_;
     // 今の意図が描き直しを要るか（EditorDelivery.repaint）。apply の入口で true に戻し、合図
     // （AutosaveTick / PreviewTick）が何も変えなかったときだけ false にする（#813）。

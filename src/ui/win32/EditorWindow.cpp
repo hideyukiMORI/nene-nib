@@ -94,11 +94,16 @@ void EditorWindow::resize()
 // エクスプローラーの面が出ていれば、面の幅だけ右へ縮めた client から求める（ADR 0162 の決定 2）。
 // ミニマップが出ていれば、さらに右端を縮める（ADR 0171 の決定 2・出ていなければ minimap_layout
 // は最初の 1 行で返る）。
-core::PaneLayouts EditorWindow::body_panes(const core::EditorSettings &settings) const
+core::PaneLayouts EditorWindow::body_panes(core::FontSize font_size) const
 {
-    const auto minimap = core::minimap_layout(explorer_frame().body, dpi_, settings.font_size,
-                                              controller_.minimap_shown());
-    return core::pane_layouts(minimap.body, dpi_, settings.font_size, controller_.split().layout);
+    return core::pane_layouts(pane_client(), dpi_, font_size, controller_.pane_split());
+}
+
+core::LayoutRect EditorWindow::pane_client() const
+{
+    return core::minimap_layout(explorer_frame().body, dpi_, controller_.font_size(),
+                                controller_.minimap_shown())
+        .body;
 }
 
 // 面の配置。出ているかと幅は controller の explorer_width（面の表示値が frame に載るのと同じ値・
@@ -114,14 +119,17 @@ core::ExplorerLayout EditorWindow::explorer_frame() const
 
 core::BodyLayout EditorWindow::active_body(const core::EditorSettings &settings) const
 {
-    return core::active_pane_layout(body_panes(settings), controller_.split().active_side);
+    return core::active_pane_layout(body_panes(settings.font_size),
+                                    controller_.split().active_side);
 }
 
-// 寸法は操作中の枠の本文（両枠の幅と高さは等しいので、もう 1 つの枠も同じ寸法・決定 1）。
+// 寸法は操作中の枠の本文。2 枠なら境界の寸法ともう 1 つの枠の寸法と行数も添える（両枠の大きさは
+// 違ってよい・ADR 0148 の 2026-11-22 の追補の決定 4・5）。
 application::VisibleLines EditorWindow::body_view() const
 {
     const auto delivered = controller_.delivery();
-    const auto body = active_body(delivered.settings);
+    const auto panes = body_panes(delivered.settings.font_size);
+    const auto body = core::active_pane_layout(panes, controller_.split().active_side);
     core::TextViewGeometry geometry{std::max(core::width_of(body.content), 1), body.line_height,
                                     dpi_};
     // 本文の書式の字幅は格子の 1 升と同じ所（BodyTextLayouts::cell）で測る。巨大な行の窓の x の
@@ -129,12 +137,22 @@ application::VisibleLines EditorWindow::body_view() const
     const auto advance = text_layouts_.cell(
         application::TextLayoutRequest{{}, delivered.settings, geometry, core::DisplayForm::text});
     geometry.average_advance = advance.has_value() ? advance.value().width : 0.0F;
+    const auto other = core::other_pane_layout(panes, controller_.split().active_side);
     // 面と補完の行数は窓全体の寸法から決める（ADR 0150 の決定 1・枠の寸法ではない）。
     RECT client{};
     GetClientRect(window_, &client);
     // 面の行数も窓全体の高さから数える（分割の枠の高さではない・#1125・ADR 0162 の追補）。
     auto sent = window_lines(body, core::LayoutRect{0, 0, client.right, client.bottom}, dpi_);
     sent.geometry = geometry;
+    if (other.has_value())
+    {
+        sent.split = core::split_extent(pane_client(), dpi_, delivered.settings.font_size,
+                                        controller_.pane_split());
+        sent.other_geometry =
+            core::TextViewGeometry{std::max(core::width_of(other.value().content), 1),
+                                   other.value().line_height, dpi_, geometry.average_advance};
+        sent.other_lines = std::max<std::size_t>(other.value().visible_lines, 1);
+    }
     return sent;
 }
 
@@ -239,7 +257,7 @@ application::EditorDelivery EditorWindow::follow_look(application::EditorDeliver
 
 void EditorWindow::deliver(const application::EditorIntent &intent)
 {
-    const auto previous_layout = controller_.split().layout;
+    const auto previous_layout = pane_arrangement();
     auto delivery = controller_.apply(intent);
     if (!survives_layout(delivery))
     {
@@ -294,7 +312,12 @@ void EditorWindow::deliver(const application::EditorIntent &intent)
 }
 
 // 後を追う 1 段を写す（順は delivery_order・要るかは delivery_step_due・#1854）。
-void EditorWindow::delivery_step(DeliveryStep step, core::SplitLayout previous_layout,
+EditorWindow::PaneArrangement EditorWindow::pane_arrangement() const noexcept
+{
+    return {controller_.pane_split(), controller_.split().active_side};
+}
+
+void EditorWindow::delivery_step(DeliveryStep step, PaneArrangement previous_layout,
                                  application::EditorDelivery &delivery)
 {
     switch (step)
@@ -372,11 +395,12 @@ void EditorWindow::stop_preview_timer()
     }
 }
 
-// 枠を分けた・閉じた（鍵・一覧・Vim の `Ctrl-w`・Ex の `:q`）ら、操作中の枠の行数と幅を
-// 送り直す（ADR 0148 の決定 8）。
-void EditorWindow::follow_split(core::SplitLayout previous, application::EditorDelivery &delivery)
+// 枠を分けた・閉じた（鍵・一覧・Vim の `Ctrl-w`・Ex の `:q`）・境界を動かした・枠を移った（両枠の
+// 大きさが違ってよい）ら、操作中の枠の行数と幅を送り直す（ADR 0148 の決定 8 と 2026-11-22 の
+// 追補の決定 3）。1 枠のままの打鍵の道は比べるだけ。
+void EditorWindow::follow_split(PaneArrangement previous, application::EditorDelivery &delivery)
 {
-    if (controller_.split().layout != previous)
+    if (pane_arrangement() != previous)
     {
         delivery = controller_.apply(body_view());
     }
