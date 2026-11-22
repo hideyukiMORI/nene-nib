@@ -45,6 +45,7 @@
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
+#include "ScriptedLanguageRoots.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScriptedPreview.hpp"
@@ -550,6 +551,7 @@ void verify_recency_ranked()
     ScriptedPreview previews;
     ScriptedReveal reveal;
     ScriptedLinkOpen links;
+    ScriptedLanguageRoots language_roots;
     ScriptedMarkdown markdown;
     ScriptedBookmarks bookmarks;
     ScriptedTextLayouts text_layouts;
@@ -562,7 +564,7 @@ void verify_recency_ranked()
                     fonts,           bell,        markdown,     reads,
                     language_server, wall_clock,  printer,      shell_registration,
                     images,          start_lists, ui_language,  project_search,
-                    previews,        reveal,      links},
+                    previews,        reveal,      links,        language_roots},
         nenenib::core::Distribution::unpackaged, initial);
     return controller.frame();
 }

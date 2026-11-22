@@ -12,4 +12,9 @@ namespace nenenib::core
 // （`C:\work\` → `C:\work`・`C:\` → `C:\`）。区切りの無い経路（名前だけ・`C:a.txt`）は無し。
 // 表示用の場所は tab_folder_for で、こちらとは別の値（DisplayText と FilePath）。
 [[nodiscard]] std::optional<FilePath> folder_of(const FilePath &path);
+
+// path が folder そのものか、その下にあるか（ADR 0161 の 2026-11-22 の追補・段 S3 の設定の root）。
+// 文字を比べるだけでファイルに触れない。ASCII の大小と区切りの `\` `/` を区別せず、folder の
+// 後ろは区切りの境目でなければならない（`C:\work` は `C:\workshop\a.cpp` を含まない）。
+[[nodiscard]] bool folder_contains(const FilePath &folder, const FilePath &path) noexcept;
 } // namespace nenenib::core

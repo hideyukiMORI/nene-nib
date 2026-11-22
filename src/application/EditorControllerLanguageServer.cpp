@@ -341,20 +341,24 @@ void EditorController::reconcile_language_server()
 }
 
 // language の文書を受ける席（段 S2 の root の鍵）。子が居て止めに向かっていない同じ言語の席で、
-// 設定に root があれば実際に起きた root がそれと同じ席だけ（今の文書に対していま決まる root と
-// 比べる・`:set root=.` が同じフォルダなら同じ席が受け続ける・#1916 のレビュー M1）。設定に root
-// が無ければ最初の文書のフォルダで起きた同じ言語の席が受ける（ADR 0161 の決定 1）。2 つ以上なら
-// 最後に使った席。
+// 実際に起きた root が今の文書に対していま決まる root（document_root・段 S3）と同じ席だけ
+// （`:set root=.` が同じフォルダなら同じ席が受け続ける・#1916 のレビュー M1）。root を探す答えを
+// 待つ間はどの席も受けない。パスも設定の root も無い文書は同じ言語のどの席も受ける（段 S2
+// のまま）。 2 つ以上なら最後に使った席。
 std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language language) const
 {
-    const auto &root = state_.settings().root;
+    const auto root = document_root(language);
+    if (!root.has_value() && root.error() == LanguageRootGap::seeking)
+    {
+        return std::nullopt;
+    }
     const auto &links = language_servers_.links;
     std::optional<LanguageServerSlot> best;
     for (const LanguageServerSlot slot : language_server_slots)
     {
         const LanguageServerLink &link = links.at(slot_index(slot));
         if (!serving_phase(link.phase) || link.language != std::optional{language} ||
-            (root.has_value() && link.root != root))
+            (root.has_value() && link.root != std::optional{root.value()}))
         {
             continue;
         }
@@ -474,17 +478,21 @@ void EditorController::yield_language_server()
     shut_language_server(*oldest);
 }
 
-// 設定に書いた命令だけを起こす（決定 7）。root は設定の root か文書のフォルダ。命令が無い・読めない
-// ・root が決まらなければ値なし。
-std::optional<ServerLaunch> EditorController::wanted_language_server(core::Language language) const
+// 設定に書いた命令だけを起こす（決定 7）。root は document_root（段 S3）。命令が無い・読めない・
+// root が決まらなければ値なしで、印を探す答えがまだなら頼みを出す（答えの合図で決め直す）。
+std::optional<ServerLaunch> EditorController::wanted_language_server(core::Language language)
 {
-    const auto &settings = state_.settings();
-    const auto &path = state_.document().path;
-    const auto root = settings.root.has_value() ? settings.root
-                      : path.has_value()        ? core::folder_of(path.value())
-                                                : std::nullopt;
+    if (!has_language_server_command(language))
+    {
+        return std::nullopt;
+    }
+    const auto root = document_root(language);
     if (!root.has_value())
     {
+        if (root.error() == LanguageRootGap::seeking)
+        {
+            seek_language_root(language);
+        }
         return std::nullopt;
     }
     return language_server_launch(language, root.value());

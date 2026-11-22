@@ -237,6 +237,7 @@ void verify_link_card_scope();
 void verify_preview_table_scope();
 // PreviewScrollTests.cpp（#1894・プレビューの縦の送りを要素の中まで画素で）
 void verify_preview_scroll_scope();
+void verify_language_root_scope();
 
 // PointerTests.cpp（#1250・本文のダブルクリックの語とトリプルクリックの行・通常の選択と Vim の
 // VISUAL）

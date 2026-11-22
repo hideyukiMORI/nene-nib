@@ -217,6 +217,9 @@ void verify_lifecycle()
     auto &server = editing.language_server();
     expect(server.touches() == 0, "nothing starts before a document with a command is active");
     applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    // root を探した答えの合図で起きる（ADR 0161 の 2026-11-22 の追補・段 S3）。
+    expect(server.launches().empty(), "nothing starts before the root is found");
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
     expect(server.launches().size() == 1 &&
                server.launches().front().executable.text() == "C:\\LLVM\\bin\\clangd.exe" &&
                server.launches().front().root.text() == "C:\\work" && server.sent().empty(),
@@ -343,7 +346,9 @@ void verify_start_refused()
     hold_documents(editing);
     auto &server = editing.language_server();
     server.refuse(app::ServerFailure::cannot_start);
-    const auto opened = editing.controller().apply_frame(app::OpenDocument{path_of(source_path)});
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    // root を探した答えの合図で起こす（段 S3）。
+    const auto opened = editing.controller().apply_frame(app::WorkCompleted{});
     expect(message(opened) == "言語サーバーを起こせませんでした: cpp" &&
                server.launches().size() == 1,
            "a refused start is told in one line");
@@ -670,6 +675,7 @@ void verify_did_close()
     languages.files().hold_at(std::string(script_path), Bytes{std::string("x = 1\n")});
     started(languages);
     applied(languages.controller(), app::OpenDocument{path_of(script_path)});
+    applied(languages.controller(), app::WorkCompleted{});
     const auto &other = languages.language_server();
     expect(other.notifications("shutdown").empty() &&
                other.notifications("textDocument/didClose").empty() &&
@@ -1949,7 +1955,8 @@ void verify_start_failure_notices()
         Editing editing(lsp_settings(true));
         hold_documents(editing);
         editing.language_server().refuse(failure);
-        return message(editing.controller().apply_frame(app::OpenDocument{path_of(source_path)}));
+        applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+        return message(editing.controller().apply_frame(app::WorkCompleted{}));
     };
     expect(
         told(app::ServerFailure::not_found) == "言語サーバーの実行ファイルがありません: cpp" &&

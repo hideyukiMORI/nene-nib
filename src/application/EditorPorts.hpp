@@ -13,6 +13,7 @@
 #include "FontFamilyPort.hpp"
 #include "HistoryPort.hpp"
 #include "ImagePort.hpp"
+#include "LanguageRootPort.hpp"
 #include "LanguageServerPort.hpp"
 #include "LinkOpenPort.hpp"
 #include "MarkdownPort.hpp"
@@ -86,5 +87,9 @@ struct EditorPorts
     // プレビューのリンク（web と mail）を OS の既定の道に渡す（施主決定 D105・#1869 の段 L2）。
     // 札で開くときと、頼んだ後の合図のときだけ呼ぶ。
     LinkOpenPort &links;
+    // 言語サーバーの root を文書のフォルダから上へ印で探す（ADR 0161 の 2026-11-22 の追補・段
+    // S3）。 lsp がオンで命令のある言語の文書の root
+    // がまだ分からないときと、頼んだ後の合図のときだけ 呼ぶ（オフなら呼ばない・D60）。
+    LanguageRootPort &language_roots;
 };
 } // namespace nenenib::application

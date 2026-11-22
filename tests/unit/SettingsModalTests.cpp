@@ -516,6 +516,8 @@ void verify_language_server_switch()
     static_cast<void>(controller.apply(app::OpenSettings{}));
     focus_on(controller, core::EditorFeature::lsp);
     static_cast<void>(controller.apply(app::ChangeSetting{true}));
+    // root を探した答えの合図で起きる（ADR 0161 の 2026-11-22 の追補・段 S3）。
+    static_cast<void>(controller.apply(app::WorkCompleted{}));
     expect(server.launches().size() == 1 && editing.settings().writes() == 0,
            "turning the server on in the panel starts it without saving");
     static_cast<void>(controller.apply(app::RevertSettings{}));

@@ -87,6 +87,7 @@
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageQueryKind.hpp"
+#include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerSlot.hpp"
@@ -925,7 +926,15 @@ class EditorController final
     void resume_language_servers();
     void consider_language_server(core::Language language);
     void yield_language_server();
-    [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language) const;
+    [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language);
+    // root（2026-11-22 の追補・段 S3）: document_root はアクティブな文書の root（設定の root →
+    // 印を探した答え → 文書のフォルダ・まだ分からなければ理由）、seek は印を探す頼みを 1 回だけ
+    // 出し、collect は答えを覚えて決め直す（頼んでいなければ port を呼ばない）。
+    [[nodiscard]] std::expected<core::FilePath, LanguageRootGap>
+    document_root(core::Language language) const;
+    void seek_language_root(core::Language language);
+    void collect_language_roots();
+    [[nodiscard]] bool has_language_server_command(core::Language language) const;
     [[nodiscard]] std::optional<ServerLaunch>
     language_server_launch(core::Language language, const core::FilePath &root) const;
     void start_language_server(LanguageServerSlot slot, core::Language language,
