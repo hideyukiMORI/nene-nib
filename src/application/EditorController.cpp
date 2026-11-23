@@ -1448,6 +1448,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.completion = completion_view();
     result.settings_panel = settings_view();
     result.caret_motion = caret_motion_clock_;
+    result.caret_sparks = caret_sparks_clock_;
+    result.typed = typed_serial_;
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

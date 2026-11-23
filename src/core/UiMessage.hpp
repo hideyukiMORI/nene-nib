@@ -446,10 +446,13 @@ enum class UiMessage : std::uint16_t
     // 引数の情報の知らせ（#1959・ADR 0191 の決定 2・6）。
     notice_signature_not_found,
     notice_signature_not_supported,
+    // 打ったときの粒（ADR 0192 の追補・#1979）の設定の画面の行。
+    settings_caret_sparks_name,
+    settings_caret_sparks_description,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_signature_not_supported) + 1U;
+    std::to_underlying(UiMessage::settings_caret_sparks_description) + 1U;
 } // namespace nenenib::core

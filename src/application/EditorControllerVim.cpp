@@ -580,8 +580,9 @@ void EditorController::accept(const VimKeyPress &intent)
     {
         return;
     }
-    // 言語サーバーが起きていなければ、足すのは真偽 1 つの読みだけ（ADR 0190 の決定 10・#1962）。
-    if (language_servers_.awake != 0)
+    // 言語サーバーが起きていなければ、足すのは真偽 1 つの読みだけ（ADR 0190 の決定 10・#1962）。打
+    // ったときの粒（ADR 0192 の追補・#1979）がオフなら、足すのはもう 1 つの真偽の読みだけ。
+    if (language_servers_.awake != 0 || state_.settings().caret_sparks)
     {
         typed_vim_key_with_language(intent.key);
         return;

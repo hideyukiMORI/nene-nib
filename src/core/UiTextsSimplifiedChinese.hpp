@@ -435,5 +435,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_references_subject, "{0} 的引用"},
     {UiMessage::notice_signature_not_found, "没有参数信息"},
     {UiMessage::notice_signature_not_supported, "此语言服务器不提供参数信息"},
+    {UiMessage::settings_caret_sparks_name, "输入火花"},
+    {UiMessage::settings_caret_sparks_description, "输入字符时，从输入处散出几颗小火花后消失"},
 }};
 } // namespace nenenib::core

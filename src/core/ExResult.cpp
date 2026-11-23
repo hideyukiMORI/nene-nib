@@ -825,32 +825,48 @@ constexpr std::array<std::string_view, 1> minimap_names{minimap_feature};
                     switch_message(minimap_feature, wanted)};
 }
 
-// キャレットの動き（ADR 0192 の決定 1・#1933）。`set caretmotion` `set nocaretmotion`
-// `set caretmotion?` と、時間の `set caretmotiontime=N` `set caretmotiontime?` `set
-// caretmotiontime` （数の option の名前だけは問い・scrolloff と同じ）。Vim
-// に無い名前なので短い名前は無い。時間は core の caret_motion_time_of の 1
-// 本で読み、範囲（40〜300）の外は E474 と同じ失敗。
+// キャレットの動き（ADR 0192 の決定 1・#1933）。`set caretmotion` `set nocaretmotion` `set
+// caretmotion?` と、時間の `set caretmotiontime=N` `set caretmotiontime?` `set caretmotiontime`（数
+// の option の名前だけは問い・scrolloff と同じ）。Vim に無い名前なので短い名前は無い。時間は core
+// の caret_motion_time_of の 1 本で読み、範囲（40〜300）の外は E474 と同じ失敗。打ったときの粒（ADR
+// 0192 の追補・#1979）も同じ形の `set caretsparks` `set nocaretsparks` `set caretsparks?`（短い名前
+// は無い）。
 constexpr std::array<std::string_view, 1> caret_motion_names{"caretmotion"};
+constexpr std::array<std::string_view, 1> caret_sparks_names{"caretsparks"};
 constexpr std::string_view caret_motion_time_name = "caretmotiontime";
 
-[[nodiscard]] std::optional<ExResult> caret_motion_option(std::string_view option,
-                                                          const EditorSettings &settings)
+// キャレットの動きと粒の切り替え（names の 1 つの名前・member は設定の真偽の欄）。
+[[nodiscard]] std::optional<ExResult>
+caret_switch_option(std::string_view option, const EditorSettings &settings,
+                    const std::array<std::string_view, 1> &names, bool EditorSettings::*member)
 {
-    const auto request = switch_request(option, caret_motion_names);
+    const auto request = switch_request(option, names);
     if (!request.has_value())
     {
         return std::nullopt;
     }
-    const std::string_view name = caret_motion_names.front();
+    const std::string_view name = names.front();
     if (!request.value().has_value())
     {
         return ExResult{std::nullopt, std::nullopt, std::nullopt,
-                        switch_message(name, settings.caret_motion)};
+                        switch_message(name, settings.*member)};
     }
     const bool wanted = request.value().value();
     EditorSettings changed = settings;
-    changed.caret_motion = wanted;
+    changed.*member = wanted;
     return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
+}
+
+[[nodiscard]] std::optional<ExResult> caret_motion_option(std::string_view option,
+                                                          const EditorSettings &settings)
+{
+    auto motion =
+        caret_switch_option(option, settings, caret_motion_names, &EditorSettings::caret_motion);
+    if (motion.has_value())
+    {
+        return motion;
+    }
+    return caret_switch_option(option, settings, caret_sparks_names, &EditorSettings::caret_sparks);
 }
 
 [[nodiscard]] DisplayText caret_motion_time_message(std::uint16_t value)
@@ -961,7 +977,7 @@ using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader
 // hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
 // wrapscan も Vim の状態（#1561）。magic と expandtab は Nib の振る舞いが固定（照合器は magic・
 // ADR 0015 の決定 9〜11 の noexpandtab）なので、変えられない行（#1561）。
-constexpr std::array<SwitchOption, 15> switch_options{{
+constexpr std::array<SwitchOption, 16> switch_options{{
     {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.wrapping == LineWrapping::wrap; }, true},
     {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -976,6 +992,8 @@ constexpr std::array<SwitchOption, 15> switch_options{{
      { return settings.autoindent; }, true},
     {"caretmotion", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.caret_motion; }, true},
+    {"caretsparks", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.caret_sparks; }, true},
     {minimap_feature, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return minimap_shown(settings); }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -2557,7 +2575,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 62> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 64> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2602,6 +2620,8 @@ constexpr std::array<std::string_view, 62> fixed_candidates{"colorscheme",
                                                             "set caretmotion",
                                                             "set nocaretmotion",
                                                             "set caretmotiontime=",
+                                                            "set caretsparks",
+                                                            "set nocaretsparks",
                                                             "set scrolloff=",
                                                             "set minimap",
                                                             "set nominimap",
