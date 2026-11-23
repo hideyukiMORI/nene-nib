@@ -2112,8 +2112,10 @@ namespace
 }
 
 // `Ctrl-w` の後ろの大きさの鍵（ADR 0148 の 2026-11-22 の追補の決定 4）→ 枠の大きさの変え方。回数は
-// 升の数（既定 1）で、`_` `|` は回数があればその数ちょうど。大きさの鍵でなければ値なし。
-[[nodiscard]] std::optional<PaneSizing> window_resize_of(const VimState &state, const VimKey &key)
+// 升の数で、回数が無ければ uncounted（既定は本物の Vim と同じ 1・設定 `pane_resize_step_vim` が on
+// なら 1 回分の升・#1972）。`_` `|` は回数があればその数ちょうど。大きさの鍵でなければ値なし。
+[[nodiscard]] std::optional<PaneSizing> window_resize_of(const VimState &state, const VimKey &key,
+                                                         std::int32_t uncounted)
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
     const auto binding = character != nullptr ? vim_window_resize_for(character->code)
@@ -2123,10 +2125,11 @@ namespace
         return std::nullopt;
     }
     const bool counted = state.count.has_value();
-    return PaneSizing{counted ? binding.value().counted : binding.value().uncounted,
-                      binding.value().dimension,
-                      static_cast<std::int32_t>(std::min<std::size_t>(
-                          count_of(state.count), std::numeric_limits<std::int32_t>::max()))};
+    return PaneSizing{
+        counted ? binding.value().counted : binding.value().uncounted, binding.value().dimension,
+        counted ? static_cast<std::int32_t>(std::min<std::size_t>(
+                      count_of(state.count), std::numeric_limits<std::int32_t>::max()))
+                : uncounted};
 }
 // `Ctrl-w` の後ろの桁（Vim の normal_cmd は `Ctrl-w` の後で count0 を opcount へ移して 0 から数え
 // 直し、命令の前に掛ける・`2<C-w>3>` は 6・実測 2026-11-22）。`0` は後ろの桁を打っている間だけ桁。
@@ -2167,7 +2170,7 @@ namespace
 // の前と後ろの積で、 大きさの鍵（2026-11-22 の追補の決定
 // 4）だけが升の数として読み、移る・分ける・閉じるは捨てる。 Esc
 // は待ちを消すだけ。表に無い鍵は失敗して後ろを打ち切る。
-[[nodiscard]] VimStep window_step(const VimState &state, VimKey key)
+[[nodiscard]] VimStep window_step(const VimState &state, const VimEditorView &view, VimKey key)
 {
     if (const auto *const special = std::get_if<VimSpecialKey>(&key);
         special != nullptr && *special == VimSpecialKey::escape)
@@ -2178,7 +2181,8 @@ namespace
     {
         return window_counted(state, digit.value());
     }
-    if (const auto resize = window_resize_of(state, key); resize.has_value())
+    if (const auto resize = window_resize_of(state, key, view.uncounted_pane_cells);
+        resize.has_value())
     {
         return VimStep{finished_input_wait(state), resize.value()};
     }
@@ -2318,7 +2322,7 @@ namespace
     case VimPrefix::z:
         return z_prefix_step(state, view, key);
     case VimPrefix::window_command:
-        return window_step(state, key);
+        return window_step(state, view, key);
     case VimPrefix::mark:
         return mark_set_step(state, view, key);
     case VimPrefix::mark_line:

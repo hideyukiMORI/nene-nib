@@ -10,6 +10,7 @@
 #include "KeyValueFields.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
+#include "PaneResizeStep.hpp"
 #include "SettingsFields.hpp"
 
 #include <algorithm>
@@ -32,7 +33,7 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4・v5・v6 だけの鍵も読むが、旧版にあれば
 // apply_v4_fields・apply_v5_fields・apply_v6_fields が拒否する。
-constexpr std::array<std::string_view, 26> field_names{"version",
+constexpr std::array<std::string_view, 28> field_names{"version",
                                                        "colorscheme",
                                                        "font_family",
                                                        "font_size",
@@ -54,11 +55,13 @@ constexpr std::array<std::string_view, 26> field_names{"version",
                                                        "caret_motion",
                                                        "caret_motion_time",
                                                        "caret_sparks",
+                                                       "pane_resize_step",
+                                                       "pane_resize_step_vim",
                                                        "indent_guide_style",
                                                        "indent_guide_colors",
                                                        "indent_guide_active",
                                                        "indent_guide_width"};
-constexpr std::array<Field, 26> field_members{&SettingsFields::version,
+constexpr std::array<Field, 28> field_members{&SettingsFields::version,
                                               &SettingsFields::colorscheme,
                                               &SettingsFields::font_family,
                                               &SettingsFields::font_size,
@@ -80,6 +83,8 @@ constexpr std::array<Field, 26> field_members{&SettingsFields::version,
                                               &SettingsFields::caret_motion,
                                               &SettingsFields::caret_motion_time,
                                               &SettingsFields::caret_sparks,
+                                              &SettingsFields::pane_resize_step,
+                                              &SettingsFields::pane_resize_step_vim,
                                               &SettingsFields::indent_guide_style,
                                               &SettingsFields::indent_guide_colors,
                                               &SettingsFields::indent_guide_active,
@@ -531,7 +536,8 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
 [[nodiscard]] bool has_v6_fields(const SettingsFields &fields) noexcept
 {
     return fields.caret_motion.has_value() || fields.caret_motion_time.has_value() ||
-           fields.caret_sparks.has_value() || fields.indent_guide_style.has_value() ||
+           fields.caret_sparks.has_value() || fields.pane_resize_step.has_value() ||
+           fields.pane_resize_step_vim.has_value() || fields.indent_guide_style.has_value() ||
            fields.indent_guide_colors.has_value() || fields.indent_guide_active.has_value() ||
            fields.indent_guide_width.has_value();
 }
@@ -580,10 +586,35 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
     return {};
 }
 
+// v6 の枠の大きさの 2 つ（ADR 0148 の 2026-11-23
+// の追補・#1972）。後から足した鍵の形（無ければ既定の 5 升と
+// off・有れば厳密）で読む。升の数の読みは core の pane_resize_step_of の 1 本。
+[[nodiscard]] std::expected<void, Failure> apply_pane_resize_fields(core::EditorSettings &settings,
+                                                                    const SettingsFields &fields)
+{
+    if (fields.pane_resize_step.has_value())
+    {
+        const auto step = core::pane_resize_step_of(fields.pane_resize_step.value());
+        if (!step.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        settings.pane_resize_step = step.value();
+    }
+    const auto follows = later_switch_from(fields.pane_resize_step_vim);
+    if (!follows)
+    {
+        return std::unexpected(follows.error());
+    }
+    settings.pane_resize_step_vim = follows.value();
+    return {};
+}
+
 // v6 だけの鍵（ADR 0192 の決定 1・ADR 0193 の決定 4）。v5 以前に在れば未知の鍵として拒否し（v5 の
 // 読みは 1.1.0 と同じ厳しさ）、無ければ既定（オフ・120 ms・インデントガイドの既定）のまま。v6 は
 // 後から足した鍵の形（無ければ既定・有れば厳密）で読む。時間の読みは core の caret_motion_time_of
-// の 1 本。打ったときの粒の caret_sparks（ADR 0192 の追補・#1979・既定オフ）も同じ形。
+// の 1 本。打ったときの粒の caret_sparks（ADR 0192 の追補・#1979・既定オフ）と枠の大きさの 2
+// つ（#1972）も同じ形。
 [[nodiscard]] std::expected<void, Failure> apply_v6_fields(core::EditorSettings &settings,
                                                            const SettingsFields &fields,
                                                            SettingsVersion version)
@@ -624,6 +655,11 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
         return std::unexpected(sparks.error());
     }
     settings.caret_sparks = sparks.value();
+    const auto panes = apply_pane_resize_fields(settings, fields);
+    if (!panes)
+    {
+        return panes;
+    }
     return apply_indent_guide_fields(settings, fields);
 }
 
@@ -803,15 +839,16 @@ std::string encode_settings(const core::EditorSettings &settings)
                                     : std::string{};
     // 書くのは v6 だけ（ADR 0192 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
     // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前
-    // （粒の `caret_sparks` とインデントガイドの 4 つは `caret_motion_time` の後ろ・ADR 0192 の
-    // 追補・ADR 0193 の決定 4）。
+    // （`caret_motion_time` の後ろに粒の `caret_sparks`・枠の大きさの 2 つ（#1972）・インデント
+    // ガイドの 4 つの順・ADR 0192 の追補・ADR 0193 の決定 4）。
     return std::format(
         "version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
         "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
         "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
         "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
-        "caret_motion_time={}\ncaret_sparks={}\nindent_guide_style={}\nindent_guide_colors={}\n"
-        "indent_guide_active={}\nindent_guide_width={}\n{}{}",
+        "caret_motion_time={}\ncaret_sparks={}\npane_resize_step={}\npane_resize_step_vim={}\n"
+        "indent_guide_style={}\nindent_guide_colors={}\nindent_guide_active={}\n"
+        "indent_guide_width={}\n{}{}",
         theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
         core::display_language_choice_name(settings.ui_language), switch_text(settings.lsp),
         switch_text(settings.explorer), root, features_text(settings.features),
@@ -819,7 +856,8 @@ std::string encode_settings(const core::EditorSettings &settings)
         switch_text(settings.relativenumber), settings.scrolloff, explorer_width,
         switch_text(settings.autoindent), core::finder_preview_name(settings.finder_preview),
         switch_text(settings.caret_motion), settings.caret_motion_time,
-        switch_text(settings.caret_sparks),
+        switch_text(settings.caret_sparks), static_cast<unsigned>(settings.pane_resize_step),
+        switch_text(settings.pane_resize_step_vim),
         core::indent_guide_style_name(settings.indent_guide_style), settings.indent_guide_colors,
         switch_text(settings.indent_guide_active), settings.indent_guide_width,
         lsp_commands_text(settings.lsp_commands), maps_text(settings));

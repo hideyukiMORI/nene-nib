@@ -454,5 +454,13 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::settings_indent_guide_width_name, "缩进宽度"},
     {UiMessage::settings_indent_guide_width_description,
      "无法从打开的文档推测缩进宽度时使用的级宽（2 / 4 / 8）"},
+    {UiMessage::settings_pane_resize_step_name, "窗格调整幅度"},
+    {UiMessage::settings_pane_resize_step_description,
+     "“扩大 / 缩小窗格”一次移动的字符宽度或行数（1〜40）"},
+    {UiMessage::settings_pane_resize_step_vim_name, "Vim 的 Ctrl-w 幅度"},
+    {UiMessage::settings_pane_resize_step_vim_description,
+     "不带次数的 Ctrl-w > < + - 移动的幅度（带次数时按次数）"},
+    {UiMessage::settings_pane_resize_step_vim_single, "1（与 Vim 相同）"},
+    {UiMessage::settings_pane_resize_step_vim_follows, "跟随窗格调整幅度"},
 }};
 } // namespace nenenib::core

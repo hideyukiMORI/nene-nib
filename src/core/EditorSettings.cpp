@@ -19,6 +19,8 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.finder_preview == right.finder_preview && left.caret_motion == right.caret_motion &&
            left.caret_motion_time == right.caret_motion_time &&
            left.caret_sparks == right.caret_sparks &&
+           left.pane_resize_step == right.pane_resize_step &&
+           left.pane_resize_step_vim == right.pane_resize_step_vim &&
            left.indent_guide_style == right.indent_guide_style &&
            left.indent_guide_colors == right.indent_guide_colors &&
            left.indent_guide_active == right.indent_guide_active &&
