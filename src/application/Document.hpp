@@ -1,10 +1,13 @@
 #pragma once
 
 #include "FilePath.hpp"
+#include "IndentGuide.hpp"
+#include "IndentUnit.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
 #include "LineEnding.hpp"
 #include "SaveState.hpp"
+#include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
 
 #include <cstddef>
@@ -28,6 +31,11 @@ struct Document
     // 未保存の印はこの 2 つで決まり、保存が成功すると両方とも値なしに戻る。
     std::optional<core::TextEncoding> saved_encoding = std::nullopt;
     std::optional<core::LineEnding> saved_line_ending = std::nullopt;
+    // インデントガイドの段の幅（ADR 0193 の決定 7）。開く道の 1
+    // か所（opened_record）が本文の先頭から
+    // 推し当てた値で、値なしは「当たらなかった・開いた文書でない」（設定の indent_guide_width を
+    // 使う）。表示だけの値で、編集・保存では推し当て直さず、設定にもタブの一覧にも入れない。
+    std::optional<core::IndentUnit> indent_unit = std::nullopt;
 };
 // saved_position は保存時点の EditHistory::content_position（本文を変えたと
 // 数える単位の数・ADR 0181 の決定 4）。履歴の位置ではないので、本文を変えない
@@ -95,7 +103,19 @@ struct Document
                                              core::TextEncoding encoding, std::size_t position)
 {
     return Document{std::move(path),      encoding,     position,
-                    document.line_ending, std::nullopt, std::nullopt};
+                    document.line_ending, std::nullopt, std::nullopt,
+                    document.indent_unit};
+}
+
+// 開いた本文から作る文書（ADR 0193 の決定 7）。開く道（open_read）とまだ読んでいない文書を読む道
+// （loaded_tab）はどちらもここを通り、段の幅の推し当てはこの 1 か所だけが行う（機能のオン・オフに
+// 依らず毎回・先頭の 64 KiB の 1 回の歩き）。
+[[nodiscard]] inline Document opened_record(core::FilePath path, core::TextEncoding encoding,
+                                            const core::TextBuffer &text)
+{
+    Document document{std::move(path), encoding, std::size_t{0}};
+    document.indent_unit = core::guessed_indent_unit(text);
+    return document;
 }
 
 // 文書のパスから決まる言語（ADR 0154 の決定 5）。名前の無い文書は plain。開く・名前が変わる保存・

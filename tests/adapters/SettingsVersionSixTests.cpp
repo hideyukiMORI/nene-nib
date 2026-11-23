@@ -6,6 +6,7 @@
 #include "DisplayLanguageChoice.hpp"
 #include "EditorSettings.hpp"
 #include "FinderPreview.hpp"
+#include "IndentGuideStyle.hpp"
 #include "SettingsCodec.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsVersion.hpp"
@@ -24,13 +25,14 @@ using nenenib::adapters::win32::SettingsVersion;
 using nenenib::application::SettingsFailure;
 
 // 1.1.0 の v5 の見本を v6 の形にした bytes（版の行を 6 にし、finder_preview の後ろに
-// caret_motion=off と caret_motion_time=120 を足す）。
+// caret_motion=off と caret_motion_time=120 とインデントガイドの 4 つの既定を足す）。
 std::string released_v5_as_v6()
 {
     std::string bytes(released_v5_settings);
     bytes.replace(0, std::string_view{"version=5"}.size(), "version=6");
     const std::string_view preview = "finder_preview=right\n";
-    bytes.insert(bytes.find(preview) + preview.size(), "caret_motion=off\ncaret_motion_time=120\n");
+    bytes.insert(bytes.find(preview) + preview.size(),
+                 "caret_motion=off\ncaret_motion_time=120\n" + std::string(indent_guide_defaults));
     return bytes;
 }
 
@@ -61,7 +63,9 @@ void verify_released_v5(Expect expect)
     expect(read && encode_settings(read.value()) == released_v5_as_v6(),
            "the 1.1.0 settings are written back in the v6 form with the caret motion keys after "
            "finder_preview and the unknown language row kept");
-    for (const auto extra : {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n"})
+    for (const auto extra : {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n",
+                             "indent_guide_style=rainbow\n", "indent_guide_colors=4\n",
+                             "indent_guide_active=on\n", "indent_guide_width=4\n"})
     {
         const auto refused =
             decode_settings(std::string(released_v5_settings) + extra, SettingsVersion::v5);
@@ -103,6 +107,49 @@ void verify_v6_keys(Expect expect)
     expect(!decode_settings(bytes + "caret_motion=on\n", SettingsVersion::v6),
            "a duplicate caret motion key is refused");
 }
+
+// インデントガイドの v6 の 4 つの鍵（ADR 0193 の決定 4）。並びは caret_motion_time の後ろ。無ければ
+// 既定、有れば厳密に読み、往復する。
+void verify_indent_guide_keys(Expect expect)
+{
+    auto settings = core::default_editor_settings();
+    settings.indent_guide_style = core::IndentGuideStyle::plain;
+    settings.indent_guide_colors = 6;
+    settings.indent_guide_active = false;
+    settings.indent_guide_width = 2;
+    const auto bytes = encode_settings(settings);
+    const auto read = decode_settings(bytes, SettingsVersion::v6);
+    expect(
+        read && core::same_settings(read.value(), settings) &&
+            bytes.find("\ncaret_motion_time=120\nindent_guide_style=plain\n"
+                       "indent_guide_colors=6\nindent_guide_active=off\nindent_guide_width=2\n") !=
+                std::string::npos,
+        "the indent guide keys follow caret_motion_time and round trip through v6");
+    std::string bare = released_v5_as_v6();
+    for (const auto key :
+         {"indent_guide_style", "indent_guide_colors", "indent_guide_active", "indent_guide_width"})
+    {
+        bare = without_key(bare, key);
+    }
+    const auto missing = decode_settings(bare, SettingsVersion::v6);
+    expect(missing && missing.value().indent_guide_style == core::IndentGuideStyle::rainbow &&
+               missing.value().indent_guide_colors == 4 && missing.value().indent_guide_active &&
+               missing.value().indent_guide_width == 4,
+           "a v6 without the indent guide keys takes the defaults");
+    for (const auto &[key, value] :
+         {std::pair{"indent_guide_style", "stripes"}, std::pair{"indent_guide_style", ""},
+          std::pair{"indent_guide_colors", "2"}, std::pair{"indent_guide_colors", "7"},
+          std::pair{"indent_guide_colors", "04"}, std::pair{"indent_guide_active", "yes"},
+          std::pair{"indent_guide_width", "3"}, std::pair{"indent_guide_width", "16"},
+          std::pair{"indent_guide_width", ""}})
+    {
+        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
+        expect(!broken && broken.error() == SettingsFailure::malformed,
+               "a malformed indent guide value is refused");
+    }
+    expect(!decode_settings(bytes + "indent_guide_width=4\n", SettingsVersion::v6),
+           "a duplicate indent guide key is refused");
+}
 } // namespace
 
 bool released_v5_values(const core::EditorSettings &settings)
@@ -113,12 +160,16 @@ bool released_v5_values(const core::EditorSettings &settings)
            settings.lsp_commands.size() == 2 && settings.mapleader == "<Space>" &&
            settings.maps.size() == 1 && settings.autoindent &&
            settings.finder_preview == core::FinderPreview::right && !settings.caret_motion &&
-           settings.caret_motion_time == 120;
+           settings.caret_motion_time == 120 &&
+           settings.indent_guide_style == core::IndentGuideStyle::rainbow &&
+           settings.indent_guide_colors == 4 && settings.indent_guide_active &&
+           settings.indent_guide_width == 4;
 }
 
 void verify_settings_v6_codec(Expect expect)
 {
     verify_released_v5(expect);
     verify_v6_keys(expect);
+    verify_indent_guide_keys(expect);
 }
 } // namespace nenenib::tests::adapters

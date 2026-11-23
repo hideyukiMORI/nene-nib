@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 EX_RESULT = ROOT / "src/core/ExResult.cpp"
 EX_RESULT_HEADER = ROOT / "src/core/ExResult.hpp"
 EX_MAP = ROOT / "src/core/ExMapCommand.cpp"
+FEATURE_COSTS = ROOT / "src/core/FeatureCosts.hpp"
 PROBE = ROOT / "tests/performance/ExCompletionProbe.cpp"
 
 STRING = re.compile(r'"([^"]*)"')
@@ -83,12 +84,24 @@ def document_candidates(text):
     return candidates
 
 
+def listed_feature_candidates():
+    """append_listed_feature_candidates: `set <name>` and `set no<name>` of every listed row of
+    feature_costs, in the table's order (ADR 0193 decision 3)."""
+    candidates = []
+    for row in rows(block(read(FEATURE_COSTS), "feature_costs{{")):
+        if "FeatureStorage::listed" in row:
+            name = STRING.search(row).group(1)
+            candidates += [f"set {name}", f"set no{name}"]
+    return candidates
+
+
 def product_candidates():
     result = read(EX_RESULT)
     names = named_strings(result, read(EX_RESULT_HEADER))
     fixed = items(block(result, "fixed_candidates{"), names)
     mapped = items(block(read(EX_MAP), "candidates{"), {})
-    return fixed + palette_candidates(result) + mapped + document_candidates(result)
+    return (fixed + listed_feature_candidates() + palette_candidates(result) + mapped +
+            document_candidates(result))
 
 
 def probe_candidates():
@@ -107,8 +120,9 @@ class ProbeCandidateTests(unittest.TestCase):
 
     def test_matching_candidates_keeps_the_order_the_probe_copies(self):
         body = function_body(read(EX_RESULT), "matching_candidates(const ThemeCatalog &themes,")
-        marks = ["fixed_candidates)", "palette_names)", "map_command_candidates())",
-                 "append_document_candidates(", "append_theme_candidates("]
+        marks = ["fixed_candidates)", "append_listed_feature_candidates(", "palette_names)",
+                 "map_command_candidates())", "append_document_candidates(",
+                 "append_theme_candidates("]
         positions = [body.find(mark) for mark in marks]
         self.assertNotIn(-1, positions, "matching_candidates no longer reads one of the tables")
         self.assertEqual(positions, sorted(positions),
@@ -116,10 +130,11 @@ class ProbeCandidateTests(unittest.TestCase):
                          "rewrite tests/performance/ExCompletionProbe.cpp to the same order")
         # A sixth source added between the marks would pass the order check above, so the places
         # that add candidates are counted too: 3 loops over the fixed / palette / map tables and
-        # 2 appends (documents, themes). A change here means the probe's copy needs a look.
+        # 3 appends (listed features, documents, themes). A change here means the probe's copy
+        # needs a look.
         added = len(re.findall(r"candidates\.(?:emplace_back|push_back)\(", body))
         appended = len(re.findall(r"\bappend_\w+\(", body))
-        self.assertEqual((added, appended), (3, 2),
+        self.assertEqual((added, appended), (3, 3),
                          "matching_candidates gained or lost a candidate source; rewrite "
                          "fixed_candidates in tests/performance/ExCompletionProbe.cpp and this "
                          "test to the new sources (#1182)")

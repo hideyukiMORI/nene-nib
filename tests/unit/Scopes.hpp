@@ -119,6 +119,7 @@ void verify_minimap_scope();
 void verify_feature_costs_scope();
 // CaretMotionTests.cpp（ADR 0192・#1933・キャレットの動きの純関数と設定）
 void verify_caret_motion_scope();
+void verify_indent_guides_scope();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
 void verify_language_server_candidates_scope();

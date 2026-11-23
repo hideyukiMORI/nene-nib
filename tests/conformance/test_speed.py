@@ -240,7 +240,7 @@ class KeySegmentTests(unittest.TestCase):
     def test_the_single_benches_have_a_breakdown_and_describe_prints_it(self):
         self.assertEqual(("key-to-frame-single", speed.LONG_LINE_BENCH, speed.CPP_BENCH,
                           speed.PREVIEW_BENCH, speed.GIANT_SINGLE_BENCH, speed.LSP_SINGLE_BENCH,
-                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH),
+                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH, speed.INDENT_GUIDES_BENCH),
                          speed.SINGLE_BENCHES)
         self.assertTrue(set(speed.SINGLE_BENCHES) <= set(speed.BREAKDOWN_BENCHES))
         written = record({})
@@ -815,7 +815,8 @@ class GiantLineTests(unittest.TestCase):
                          speed.GIANT_BENCHES)
         self.assertEqual((*speed.GIANT_BENCHES, *speed.SPLIT_BENCHES, speed.PREVIEW_BENCH, speed.CPP_BENCH,
                           *speed.LARGE_FILE_BENCHES, *speed.LSP_BENCHES,
-                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH, speed.MINIMAP_BURST_BENCH),
+                          speed.MATCHPAREN_BENCH, speed.MINIMAP_BENCH, speed.MINIMAP_BURST_BENCH,
+                          speed.INDENT_GUIDES_BENCH),
                          speed.OPTIONAL_BENCHES)
         self.assertFalse(set(speed.OPTIONAL_BENCHES) & set(speed.BENCHES))
         self.assertIn(speed.GIANT_OPEN_BENCH, speed.BREAKDOWN_BENCHES)
@@ -844,6 +845,31 @@ class GiantLineTests(unittest.TestCase):
         self.assertEqual(speed.MINIMAP_BENCH, seen["name"])
         self.assertIn("features=minimap\n", written)
         self.assertTrue(seen["environment"]["LOCALAPPDATA"].endswith(speed.MINIMAP_PROFILE))
+
+    def test_the_indent_guides_bench_is_optional_and_writes_its_own_profile(self):
+        """#1975 / ADR 0193 decision 6: recorded only, over the C++ document with the guides on."""
+        self.assertEqual("indentguides-single-key", speed.INDENT_GUIDES_BENCH)
+        self.assertIn(speed.INDENT_GUIDES_BENCH, speed.OPTIONAL_BENCHES)
+        self.assertNotIn(speed.INDENT_GUIDES_BENCH, speed.BENCHES)
+        self.assertNotIn(speed.INDENT_GUIDES_PROFILE, (speed.LSP_PROFILE, speed.MINIMAP_PROFILE))
+        seen = {}
+
+        def trial(executable, environment, folder, document, name):
+            seen.update(environment=environment, document=document, name=name)
+            return {name: 1.0}, {}
+
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(speed, "OUTPUT", Path(folder)), \
+                mock.patch.object(speed, "bench_long_line", trial), \
+                mock.patch.dict(os.environ, {"LOCALAPPDATA": str(Path(folder) / "own")}):
+            values, _ = speed.bench_indent_guides(Path("NeNeNib.exe"), {}, Path(folder),
+                                                  Path("single-cpp-1000.cpp"))
+            written = (Path(folder) / speed.INDENT_GUIDES_PROFILE / "NeNeNib" /
+                       "settings.v6").read_text(encoding="utf-8")
+        self.assertEqual({speed.INDENT_GUIDES_BENCH: 1.0}, values)
+        self.assertEqual(speed.INDENT_GUIDES_BENCH, seen["name"])
+        self.assertIn("features=indentguides\n", written)
+        self.assertTrue(seen["environment"]["LOCALAPPDATA"].endswith(speed.INDENT_GUIDES_PROFILE))
 
     def test_the_minimap_burst_is_optional_and_uses_the_minimap_profile(self):
         """#1017 / ADR 0171 decision 6: 200 keystrokes over the C++ document with the minimap on."""
@@ -1484,7 +1510,7 @@ class LanguageServerBenchTests(unittest.TestCase):
             self.assertTrue(text.startswith("version=6\ncolorscheme=system\n"))
             self.assertIn("\nlsp=on\n", text)
             self.assertTrue(text.endswith(
-                'scrolloff=0\nexplorer_width=\nautoindent=off\nfinder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
+                'scrolloff=0\nexplorer_width=\nautoindent=off\nfinder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\nindent_guide_style=rainbow\nindent_guide_colors=4\nindent_guide_active=on\nindent_guide_width=4\nlsp.cpp.command="C:\\b\\nib_fake_language_server.exe" --silent\n'))
             with self.assertRaises(AssertionError):
                 speed.write_settings(environment, {"nosuch": "x"})
             with mock.patch.dict(speed.os.environ, {"LOCALAPPDATA": str(work / "profile")}), \

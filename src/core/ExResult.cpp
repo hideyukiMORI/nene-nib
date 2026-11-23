@@ -4,6 +4,7 @@
 #include "PaneSizing.hpp"
 
 #include "ExDocumentName.hpp"
+#include "ExFeatureOptions.hpp"
 #include "Minimap.hpp"
 
 #include "AppIdentity.hpp"
@@ -24,7 +25,11 @@
 #include "ExTabRequest.hpp"
 #include "ExTabVerb.hpp"
 #include "ExWindowName.hpp"
+#include "FeatureCosts.hpp"
+#include "FeatureStorage.hpp"
 #include "FinderPreview.hpp"
+#include "IndentGuide.hpp"
+#include "IndentGuideStyle.hpp"
 #include "InputText.hpp"
 #include "LanguageTable.hpp"
 #include "Utf8.hpp"
@@ -48,6 +53,14 @@ namespace nenenib::core
 {
 namespace
 {
+using detail::indent_guide_active_option_name;
+using detail::indent_guide_colors_option_name;
+using detail::indent_guide_option;
+using detail::indent_guide_style_option_name;
+using detail::indent_guide_width_option_name;
+using detail::listed_feature_option;
+using detail::switch_message;
+using detail::switch_request;
 [[nodiscard]] std::string_view trimmed(std::string_view text)
 {
     const auto first = text.find_first_not_of(' ');
@@ -609,33 +622,6 @@ display_language_option(std::string_view option)
 constexpr std::array<std::string_view, 2> ignorecase_names{"ignorecase", "ic"};
 constexpr std::array<std::string_view, 2> smartcase_names{"smartcase", "scs"};
 
-[[nodiscard]] DisplayText switch_message(std::string_view name, bool on)
-{
-    return DisplayText::parse(std::string(name) + (on ? "=on" : "=off")).value();
-}
-
-// 名前 `name`・`no<name>`・`<name>?` のどれかなら、その真偽か問い（値が無い）。
-[[nodiscard]] std::optional<std::optional<bool>>
-switch_request(std::string_view option, std::span<const std::string_view> names)
-{
-    for (const std::string_view name : names)
-    {
-        if (option == name)
-        {
-            return std::optional<bool>{true};
-        }
-        if (option.starts_with("no") && option.substr(2) == name)
-        {
-            return std::optional<bool>{false};
-        }
-        if (option.ends_with('?') && option.substr(0, option.size() - 1) == name)
-        {
-            return std::optional<bool>{std::nullopt};
-        }
-    }
-    return std::nullopt;
-}
-
 // `set ic` `set noic` `set ic?` と `scs` の同じ 3 つ（長い名前も・#1041）。保存する設定に載せ、
 // 文言は `set wrap` と同じ `ignorecase=on` の形。問いは今の値を文言にするだけで settings は空。
 [[nodiscard]] std::optional<ExResult> case_option(std::string_view option,
@@ -802,29 +788,6 @@ scrolloff_option(std::string_view option, const EditorSettings &settings)
     return std::nullopt;
 }
 
-// ミニマップ（ADR 0171 の決定 1）。`set minimap` `set nominimap` `set minimap?`。設定 v4 の
-// features の名前を足す・外すだけで、文言は `minimap=on` の形（Vim
-// に無い名前なので短い名前は無い）。
-constexpr std::array<std::string_view, 1> minimap_names{minimap_feature};
-
-[[nodiscard]] std::optional<ExResult> minimap_option(std::string_view option,
-                                                     const EditorSettings &settings)
-{
-    const auto request = switch_request(option, minimap_names);
-    if (!request.has_value())
-    {
-        return std::nullopt;
-    }
-    if (!request.value().has_value())
-    {
-        return ExResult{std::nullopt, std::nullopt, std::nullopt,
-                        switch_message(minimap_feature, minimap_shown(settings))};
-    }
-    const bool wanted = request.value().value();
-    return ExResult{minimap_set(settings, wanted), std::nullopt, std::nullopt,
-                    switch_message(minimap_feature, wanted)};
-}
-
 // キャレットの動き（ADR 0192 の決定 1・#1933）。`set caretmotion` `set nocaretmotion`
 // `set caretmotion?` と、時間の `set caretmotiontime=N` `set caretmotiontime?` `set
 // caretmotiontime` （数の option の名前だけは問い・scrolloff と同じ）。Vim
@@ -894,10 +857,15 @@ view_option(std::string_view option, const EditorSettings &settings)
     {
         return std::expected<ExResult, ExEvaluationFailure>{std::move(relative).value()};
     }
-    auto minimap = minimap_option(option, settings);
-    if (minimap.has_value())
+    auto listed = listed_feature_option(option, settings);
+    if (listed.has_value())
     {
-        return std::expected<ExResult, ExEvaluationFailure>{std::move(minimap).value()};
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(listed).value()};
+    }
+    auto guides = indent_guide_option(option, settings);
+    if (guides.has_value())
+    {
+        return std::move(guides).value();
     }
     auto indent = autoindent_option(option, settings);
     if (indent.has_value())
@@ -961,7 +929,7 @@ using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader
 // hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
 // wrapscan も Vim の状態（#1561）。magic と expandtab は Nib の振る舞いが固定（照合器は magic・
 // ADR 0015 の決定 9〜11 の noexpandtab）なので、変えられない行（#1561）。
-constexpr std::array<SwitchOption, 15> switch_options{{
+constexpr std::array<SwitchOption, 17> switch_options{{
     {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.wrapping == LineWrapping::wrap; }, true},
     {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -978,6 +946,12 @@ constexpr std::array<SwitchOption, 15> switch_options{{
      { return settings.caret_motion; }, true},
     {minimap_feature, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return minimap_shown(settings); }, true},
+    {feature_cost(EditorFeature::indent_guides).name, "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return feature_enabled(settings, EditorFeature::indent_guides); }, true},
+    {indent_guide_active_option_name, "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.indent_guide_active; }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.explorer; }, true},
     {"lsp", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -1058,11 +1032,15 @@ using NumberOption = std::tuple<std::string_view, std::string_view, NumberReader
 
 // `:set` の数の option（#1561）。scrolloff は設定の正本、shiftwidth と tabstop は Nib の固定の値
 // （ADR 0015 の決定 9〜11・ADR 0045）。`=` `:` `+=` `-=` `^=` `&` `<` と問いはこの表から引く。
-constexpr std::array<NumberOption, 3> number_options{{
+constexpr std::array<NumberOption, 5> number_options{{
     {"scrolloff", "so", [](const EditorSettings &settings) noexcept { return settings.scrolloff; },
      true},
     {"shiftwidth", "sw", [](const EditorSettings &) noexcept { return vim_shift_width; }, false},
     {"tabstop", "ts", [](const EditorSettings &) noexcept { return vim_tab_stop; }, false},
+    {indent_guide_colors_option_name, "", [](const EditorSettings &settings) noexcept
+     { return std::size_t{settings.indent_guide_colors}; }, true},
+    {indent_guide_width_option_name, "", [](const EditorSettings &settings) noexcept
+     { return std::size_t{settings.indent_guide_width}; }, true},
 }};
 
 // 表の数の option の行。表に無ければ空。
@@ -1071,7 +1049,7 @@ constexpr std::array<NumberOption, 3> number_options{{
     for (const auto &option : number_options)
     {
         const auto &[long_name, short_name, reader, settable] = option;
-        if (name == long_name || name == short_name)
+        if (name == long_name || (!short_name.empty() && name == short_name))
         {
             return option;
         }
@@ -1098,6 +1076,24 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
         return name.substr(2);
     }
     return name;
+}
+
+// 名前の表から選ぶ文字列の option（`finderpreview` `indentguidestyle`）の既定値の書き方。どちらでも
+// なければ値なし。
+[[nodiscard]] std::optional<std::string> chosen_default_text(std::string_view name,
+                                                             const EditorSettings &defaults)
+{
+    if (name == finder_preview_option_name)
+    {
+        return std::string(finder_preview_option_name) + "=" +
+               std::string(finder_preview_name(defaults.finder_preview));
+    }
+    if (name == indent_guide_style_option_name)
+    {
+        return std::string(indent_guide_style_option_name) + "=" +
+               std::string(indent_guide_style_name(defaults.indent_guide_style));
+    }
+    return std::nullopt;
 }
 
 // `{name}&`（`&vim` `&vi`）を既定値の書き方へ（#1525）。既定値は保存する設定の正本
@@ -1142,10 +1138,9 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     {
         return "language=" + std::string(display_language_choice_name(defaults.ui_language));
     }
-    if (name == finder_preview_option_name)
+    if (const auto chosen = chosen_default_text(name, defaults))
     {
-        return std::string(finder_preview_option_name) + "=" +
-               std::string(finder_preview_name(defaults.finder_preview));
+        return chosen;
     }
     if (name == "guifont")
     {
@@ -2557,7 +2552,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 62> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 66> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2602,9 +2597,13 @@ constexpr std::array<std::string_view, 62> fixed_candidates{"colorscheme",
                                                             "set caretmotion",
                                                             "set nocaretmotion",
                                                             "set caretmotiontime=",
+                                                            "set indentguidestyle=rainbow",
+                                                            "set indentguidestyle=plain",
+                                                            "set indentguidecolors=",
+                                                            "set indentguideactive",
+                                                            "set noindentguideactive",
+                                                            "set indentguidewidth=",
                                                             "set scrolloff=",
-                                                            "set minimap",
-                                                            "set nominimap",
                                                             "set language=ja",
                                                             "set language=en",
                                                             "set language=zh-hans",
@@ -2733,6 +2732,28 @@ void append_language_candidates(std::vector<std::string> &candidates, std::strin
     }
 }
 
+// `features=` の名前で持つ機能の `set <名前>` `set no<名前>`（表 feature_costs の listed
+// の行から作る・ ADR 0193 の決定 3・名前の別表を書かない）。
+void append_listed_feature_candidates(std::vector<std::string> &candidates,
+                                      std::optional<std::string_view> prefix)
+{
+    const auto append = [&candidates, prefix](std::string command)
+    {
+        if (prefix_matches(prefix, command))
+        {
+            candidates.push_back(std::move(command));
+        }
+    };
+    for (const FeatureCost &row : feature_costs)
+    {
+        if (row.storage == FeatureStorage::listed)
+        {
+            append("set " + std::string(row.name));
+            append("set no" + std::string(row.name));
+        }
+    }
+}
+
 [[nodiscard]] std::vector<std::string> matching_candidates(const ThemeCatalog &themes,
                                                            std::optional<std::string_view> prefix)
 {
@@ -2745,6 +2766,7 @@ void append_language_candidates(std::vector<std::string> &candidates, std::strin
             candidates.emplace_back(name);
         }
     }
+    append_listed_feature_candidates(candidates, prefix);
     for (const ExPaletteName &name : palette_names)
     {
         if (prefix_matches(prefix, name.name))

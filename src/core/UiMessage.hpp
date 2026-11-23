@@ -423,10 +423,25 @@ enum class UiMessage : std::uint16_t
     notice_references_not_supported,
     // 参照の答えを上限で切った知らせ（#1954 のレビュー L2・{0} は出した件数・{1} は答えの件数）。
     notice_references_first_of,
+    // インデントガイド（ADR 0193 の決定 4・#1975）の設定の画面の行と値の語。
+    settings_indent_guides_name,
+    settings_indent_guides_description,
+    settings_indent_guide_style_name,
+    settings_indent_guide_style_description,
+    settings_indent_guide_style_rainbow,
+    settings_indent_guide_style_plain,
+    settings_indent_guide_colors_name,
+    settings_indent_guide_colors_description,
+    settings_indent_guide_active_name,
+    settings_indent_guide_active_description,
+    settings_indent_guide_active_on,
+    settings_indent_guide_active_off,
+    settings_indent_guide_width_name,
+    settings_indent_guide_width_description,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_references_first_of) + 1U;
+    std::to_underlying(UiMessage::settings_indent_guide_width_description) + 1U;
 } // namespace nenenib::core

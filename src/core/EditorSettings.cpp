@@ -17,7 +17,11 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.relativenumber == right.relativenumber && left.scrolloff == right.scrolloff &&
            left.explorer_width == right.explorer_width && left.autoindent == right.autoindent &&
            left.finder_preview == right.finder_preview && left.caret_motion == right.caret_motion &&
-           left.caret_motion_time == right.caret_motion_time;
+           left.caret_motion_time == right.caret_motion_time &&
+           left.indent_guide_style == right.indent_guide_style &&
+           left.indent_guide_colors == right.indent_guide_colors &&
+           left.indent_guide_active == right.indent_guide_active &&
+           left.indent_guide_width == right.indent_guide_width;
 }
 
 VimPatternCase search_case(const EditorSettings &settings) noexcept

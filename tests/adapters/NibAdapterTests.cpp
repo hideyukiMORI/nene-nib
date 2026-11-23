@@ -753,8 +753,11 @@ void verify_settings_versions()
                                "root=\nfeatures=\nignorecase=off\nsmartcase=off\n"
                                "relativenumber=off\nscrolloff=0\nexplorer_width=\n"
                                "autoindent=off\nfinder_preview=auto\ncaret_motion=off\n"
-                               "caret_motion_time=120\n"),
-           "the v6 writer emits the v5 keys and the caret motion keys after finder_preview");
+                               "caret_motion_time=120\nindent_guide_style=rainbow\n"
+                               "indent_guide_colors=4\nindent_guide_active=on\n"
+                               "indent_guide_width=4\n"),
+           "the v6 writer emits the v5 keys and the caret motion and indent guide keys after "
+           "finder_preview");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
@@ -770,7 +773,7 @@ void verify_settings_versions()
           "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
           "explorer_width=\n", "explorer_width=300\n", "autoindent=off\n", "autoindent=on\n",
           "finder_preview=auto\n", "finder_preview=right\n", "caret_motion=off\n",
-          "caret_motion_time=120\n"})
+          "caret_motion_time=120\n", "indent_guide_style=rainbow\n", "indent_guide_width=4\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -804,7 +807,8 @@ std::string released_as_v5()
     bytes.replace(0, std::string_view{"version=4"}.size(), "version=6");
     const std::string_view width = "explorer_width=320\n";
     bytes.insert(bytes.find(width) + width.size(),
-                 "autoindent=off\nfinder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n");
+                 "autoindent=off\nfinder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n" +
+                     std::string(nenenib::tests::adapters::indent_guide_defaults));
     return bytes;
 }
 
@@ -920,6 +924,8 @@ void verify_settings_maps()
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
                            "scrolloff=0\nexplorer_width=\nautoindent=off\n"
                            "finder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n"
+                           "indent_guide_style=rainbow\nindent_guide_colors=4\n"
+                           "indent_guide_active=on\nindent_guide_width=4\n"
                            "mapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
