@@ -58,7 +58,8 @@ All 125 themes are included in the published v1.0.0.
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
 [`docs/adr/`](docs/adr/README.md). Everything below is in the published v1.0.0 unless it says
-*new in 1.1.0* (in version 1.1.0 and not in 1.0.0) or *in review* (an open pull request, not on main). The current
+*new in 1.1.0* (in version 1.1.0 and not in 1.0.0), *new after 1.1.0* (on main, in neither published
+version yet) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -162,12 +163,16 @@ records in `docs/quality/`.
   from the keyboard (Shift+F10 and the menu key open the text menu). Done; reordering by drag is planned.
   Split panes (decision D64, [ADR 0148](docs/adr/0148-split-keeps-the-active-pane-path-and-parks-the-other.md)):
   Ctrl+\ splits side by side and Ctrl+Shift+\ one above the other, F6 moves to the other pane and Ctrl+Shift+F4
-  closes it; Vim uses `Ctrl-w {s v w W p h j k l c q o}` and `:only`. Two equal panes at most; the border cannot
-  be dragged and the layout is not restored on the next start.
+  closes it; Vim uses `Ctrl-w {s v w W p h j k l c q o}` and `:only`. Two panes at most; the layout is not
+  restored on the next start. *New after 1.1.0*: dragging the border resizes the panes (double-click makes them
+  equal again and Esc cancels a drag), as do Vim `Ctrl-w > < + - = _ |`, `:resize` and `:vertical resize` and
+  the F1 operations Enlarge Pane, Shrink Pane and Equalize Panes (no key); the sizes last until the window
+  closes.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, bookmarks, recently closed files and
   files in the current folder, fuzzy-matched by name and then by folder. A leading mark narrows the list:
   `#` tabs, `*` bookmarks, `@` history, `/` the current folder, `:` the settings commands (see below),
-  `?` the operation list and (*new in 1.1.0*) `!` project-wide search (FR-026, below). Closed files are kept in a history of up to 100 files; a file that no longer exists
+  `?` the operation list and (*new in 1.1.0*) `!` project-wide search (FR-026, below), and (*new after 1.1.0*)
+  `^` language-server diagnostics and `&` references (FR-021, below). Closed files are kept in a history of up to 100 files; a file that no longer exists
   is reported in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
   inside the bytes of another. Files in the current folder arrive in the background. Open tabs, bookmarks and
@@ -232,6 +237,10 @@ records in `docs/quality/`.
   window that is not maximized resizes from all edges and corners, including the top-right corner and a 4 DIP
   strip along the top of × □ ＿, while a maximized window and edges touching the monitor's edge leave those
   pixels to the buttons, so a pointer thrown into the screen corner still hits ×. Done.
+  *New after 1.1.0*: `:set caretmotion` (off by default, also in the settings drawer) lets the caret trail
+  behind as it moves, with a soft edge; `:set caretmotiontime=` sets the time (120 ms by default, 40–300). It
+  does not move while Windows animation effects are off or the IME is composing (decision D108,
+  [ADR 0192](docs/adr/0192-caret-motion-trails-behind-the-caret.md)).
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
   IME off, INSERT turns it back on. The Ctrl+P palette and the Vim `:` and search lines take a composition: they
   open with the IME off and leave it to the user (D32, D57). The explorer filter also takes Japanese input. Done.
@@ -303,6 +312,19 @@ records in `docs/quality/`.
   executable is missing or not written as an absolute path, or a `.cmd` / `.bat` (write `node.exe` and the script
   instead), is reported in one line and not started. In `settings.v6`, a `lsp.<name>.command` line for a language
   this version does not know is kept when the settings are written back.
+  *New after 1.1.0* (also tried with rust-analyzer, gopls and pyright): each language
+  keeps its own server, and switching tabs does not stop it; the project root is found by looking up from the
+  document's folder for the server's marker files (such as `.git` or `Cargo.toml`), never above `:set root=`
+  when the document is under it. `]d` `[d` and F8 / Shift+F8 jump between diagnostics, `gl` or the F1 operation
+  "Show diagnostic" shows the whole message, and `^` in Ctrl+P lists the diagnostics of the open tabs. `grr`,
+  Shift+F12 or the F1 operation "List references" asks for the references of the name at the caret and lists up
+  to 1,000 of them under `&` in Ctrl+P ([ADR 0191](docs/adr/0191-language-server-references-symbols-signature-help-and-formatting.md)).
+  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). The settings
+  drawer's language-server section lists the servers found on the PC and writes the command line when one is
+  chosen. `:LspLog` or the F1 operation "Open Language Server Log" opens the servers' error output and messages
+  in an untitled tab, and the status bar shows a server's progress next to the diagnostics count. The editor
+  now tells servers that it takes diagnostics and save notices, which typescript-language-server needs before it
+  sends diagnostics.
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
