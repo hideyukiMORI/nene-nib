@@ -242,7 +242,7 @@ def forget_session(environment: dict) -> bool:
 
 
 # settings.v6 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3 と 2026-11-16 の追補・#1041・
-# #1380・#1668・ADR 0192 の決定 1）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は
+# #1380・#1668・ADR 0192 の決定 1・ADR 0193 の決定 4）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は
 # v6 → v5 → v4 の順に読むので、道具も v6 を書く（古い版を書くと、同じ profile に残った新しい版に負けて黙って
 # 効かない・#1780）。
 SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
@@ -252,7 +252,10 @@ SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
                         ("ignorecase", "off"), ("smartcase", "off"), ("relativenumber", "off"),
                         ("scrolloff", "0"), ("explorer_width", ""), ("autoindent", "off"),
                         ("finder_preview", "auto"), ("caret_motion", "off"),
-                        ("caret_motion_time", "120"), ("caret_sparks", "off"))
+                        ("caret_motion_time", "120"), ("caret_sparks", "off"),
+                        ("indent_guide_style", "rainbow"),
+                        ("indent_guide_colors", "4"), ("indent_guide_active", "on"),
+                        ("indent_guide_width", "4"))
 
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path

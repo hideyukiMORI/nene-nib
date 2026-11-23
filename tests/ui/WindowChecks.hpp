@@ -44,6 +44,7 @@ void verify_diagnostic_waves();
 void verify_matchparen_outline();
 // CaretMotionPaintTests.cpp（ADR 0192・#1933・動いているキャレットの 1 frame）
 void verify_caret_motion_paint();
+void verify_indent_guide_paint();
 // CaretMotionPaintTests.cpp（ADR 0192・#1956・キャレットが見えない frame で止まる・作り直しで番号が
 // 当たらない）
 void verify_caret_motion_follow();

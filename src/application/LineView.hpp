@@ -4,6 +4,7 @@
 #include "ComposedLine.hpp"
 #include "DiagnosticSpan.hpp"
 #include "DisplayLine.hpp"
+#include "IndentGuides.hpp"
 #include "LineNumber.hpp"
 #include "LineWindow.hpp"
 #include "MotionLabel.hpp"
@@ -54,6 +55,9 @@ struct LineView
     // イージーモーションの印（ADR 0163 の決定 6）。桁は colors と同じ本文の桁で、印が出ている間の
     // 見えている行だけ（mark_labels）。renderer は字形の後に accent の地で描く（M4）。
     std::vector<core::MotionLabel> labels{};
+    // インデントガイド（ADR 0193 の決定 1・9）。`features=indentguides` がオフの
+    // frame・巨大な行の窓・ IME の差し込み行・格子では値なし（オフでは作らない・決定 6）。
+    std::optional<IndentGuides> indent_guides{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

@@ -183,7 +183,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 171> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 172> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -355,6 +355,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 171> scopes{{
     {"--lsp-references", verify_lsp_references_scope},
     {"--lsp-symbols", verify_lsp_symbols_scope},
     {"--lsp-signature", verify_lsp_signature_scope},
+    {"--indent-guides", verify_indent_guides_scope},
 }};
 
 // 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。

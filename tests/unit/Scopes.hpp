@@ -121,6 +121,10 @@ void verify_feature_costs_scope();
 void verify_caret_motion_scope();
 // CaretSparkTests.cpp（ADR 0192 の追補・#1979・打ったときの粒・--caret-motion の中で回る）
 void verify_caret_sparks_contracts();
+void verify_indent_guides_scope();
+// IndentGuidePathTests.cpp（ADR 0193・#1975 のレビュー・推し当ての道と窓の上限・--indent-guides
+// の続き）
+void verify_indent_guide_paths();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
 void verify_language_server_candidates_scope();
