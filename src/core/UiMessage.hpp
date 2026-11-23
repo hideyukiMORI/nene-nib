@@ -464,10 +464,18 @@ enum class UiMessage : std::uint16_t
     settings_indent_guide_active_off,
     settings_indent_guide_width_name,
     settings_indent_guide_width_description,
+    // 枠の「広げる / 狭める」の 1 回分と、Vim の回数なしの Ctrl-w がそれに従うかの設定の画面の行
+    // （ADR 0148 の 2026-11-23 の追補・#1972）。single と follows は後ろの行の 2 つの値。
+    settings_pane_resize_step_name,
+    settings_pane_resize_step_description,
+    settings_pane_resize_step_vim_name,
+    settings_pane_resize_step_vim_description,
+    settings_pane_resize_step_vim_single,
+    settings_pane_resize_step_vim_follows,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::settings_indent_guide_width_description) + 1U;
+    std::to_underlying(UiMessage::settings_pane_resize_step_vim_follows) + 1U;
 } // namespace nenenib::core
