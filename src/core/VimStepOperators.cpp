@@ -1,6 +1,7 @@
 #include "VimStepDetail.hpp"
 
 #include "DocumentCaret.hpp"
+#include "IndentGuide.hpp"
 #include "Utf8.hpp"
 #include "VimAction.hpp"
 #include "VimCaret.hpp"
@@ -842,17 +843,11 @@ namespace detail
 
 namespace
 {
-// 行の字下げの桁（Tab と空白の表示の桁・Vim の get_indent）と、字下げのバイト数。
+// 行の字下げの桁（Tab と空白の表示の桁・Vim の get_indent）と、字下げのバイト数。数えは core の
+// indent_cells と indent_bytes の 1 本ずつ（ADR 0193 の決定 7）。
 [[nodiscard]] std::pair<std::size_t, std::size_t> indent_of(std::string_view line) noexcept
 {
-    std::size_t columns = 0;
-    std::size_t bytes = 0;
-    while (bytes < line.size() && (line[bytes] == ' ' || line[bytes] == '\t'))
-    {
-        columns += column_advance(static_cast<char32_t>(line[bytes]), columns);
-        ++bytes;
-    }
-    return {columns, bytes};
+    return {indent_cells(line), indent_bytes(line)};
 }
 } // namespace
 

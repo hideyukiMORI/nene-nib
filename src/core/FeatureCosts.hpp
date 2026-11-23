@@ -53,6 +53,8 @@ inline constexpr std::array<FeatureCost, 12> feature_costs{{
      UiMessage::settings_caret_motion_name, UiMessage::settings_caret_motion_description},
     {EditorFeature::caret_sparks, "caretsparks", false, FeatureStorage::own_key, 0, "", false,
      UiMessage::settings_caret_sparks_name, UiMessage::settings_caret_sparks_description},
+    {EditorFeature::indent_guides, "indentguides", false, FeatureStorage::listed, 0, "", false,
+     UiMessage::settings_indent_guides_name, UiMessage::settings_indent_guides_description},
 }};
 
 // 表の行が宣言の順に並んでいること（行が欠けた・入れ替わった表はここで落ちる）。
@@ -65,7 +67,7 @@ inline constexpr std::array<FeatureCost, 12> feature_costs{{
             return false;
         }
     }
-    return std::to_underlying(EditorFeature::caret_sparks) + 1U == feature_costs.size();
+    return std::to_underlying(EditorFeature::indent_guides) + 1U == feature_costs.size();
 }
 static_assert(feature_costs_in_order(), "feature_costs follows the EditorFeature declaration");
 

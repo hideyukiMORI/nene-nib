@@ -26,6 +26,7 @@
 #include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
 #include "HoverTipLayout.hpp"
+#include "IndentGuidePaintMemo.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
@@ -392,6 +393,14 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_plain_line(const application::EditorFrame &frame, const BodyPane &pane,
                          const core::LayoutRect &area, const application::LineView &line);
+    // 本文の「下の飾り」（ADR 0193 の決定 2）。選択の面の後・本文の字の前に、インデントガイド →
+    // （段 3 の）ペアガイドの順で描く。順を知るのはこの 1 本で、段 2・3 の飾りもここに足す。
+    void draw_decorations_under(const BodyPane &pane, const core::LayoutRect &area,
+                                const application::LineView &line);
+    void draw_indent_guides(const BodyPane &pane, const core::LayoutRect &area,
+                            const application::LineView &line);
+    // frame の初めに飾りの色の材料を覚えから引く（オフなら真偽 1 つ・ADR 0193 の決定 6）。
+    void begin_decorations(const application::EditorFrame &frame);
     void draw_line(const application::EditorFrame &frame, const BodyPane &pane,
                    const application::LineView &line);
     // 本文の面の全部（area は面を除いた client・全面のプレビューか枠と案内・ADR 0155 の改訂 15）。
@@ -666,6 +675,9 @@ class Direct2DRenderer final
     // 打ったときの粒の覚え（ADR 0192 の追補・#1979）。作り直すと空から始まる（番号は窓が
     // allow_caret_sparks で下げさせない）。
     CaretSparksFollower caret_sparks_{};
+    // インデントガイドの色の材料の覚え（ADR 0193 の決定 5・6）。`features=indentguides` が
+    // オフの frame では描かない印だけ。テーマ・単色 / 虹・色の数が変わった frame で作り直す。
+    IndentGuidePaintMemo guide_paint_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     // 格子の 1 升の幅（物理画素）。draw_grid_rows がその frame の書式で測る。

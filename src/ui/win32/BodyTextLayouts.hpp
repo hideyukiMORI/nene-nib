@@ -45,6 +45,10 @@ class BodyTextLayouts final : public application::TextLayoutPort
                                                   float bottom = std::numeric_limits<float>::max());
     void begin_frame();
     void end_frame();
+    // 書式 form の空白の幅（物理画素・ADR 0193 の決定 9）。書式の鍵ごとに 1
+    // 回測った値で、まだ書式を 作っていなければ値なし（get の後に読む）。Tab の止まりはこの幅の 8
+    // 倍。
+    [[nodiscard]] std::optional<float> space_width(core::DisplayForm form) const noexcept;
 
   private:
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;
@@ -58,11 +62,13 @@ class BodyTextLayouts final : public application::TextLayoutPort
     [[nodiscard]] std::wstring grid_family(std::string_view requested) const;
     [[nodiscard]] HRESULT make_grid_format(const application::TextLayoutRequest &request);
     [[nodiscard]] HRESULT finish_format(IDWriteTextFormat *format,
-                                        const application::TextLayoutRequest &request);
+                                        const application::TextLayoutRequest &request,
+                                        core::DisplayForm form);
     [[nodiscard]] IDWriteTextFormat *format_of(const application::TextLayoutRequest &request);
     void attach_fallback(IDWriteTextFormat *format);
     [[nodiscard]] HRESULT set_spacing(IDWriteTextFormat *format,
-                                      const application::TextLayoutRequest &request);
+                                      const application::TextLayoutRequest &request,
+                                      core::DisplayForm form);
     // 格子の画面行の字形を升の左端へ置く。cluster ごとの送りを request.cells の升の幅に合わせる。
     // 主字体に無い文字の連続区間に OS が選ぶ字体を範囲で先に当てる（ADR
     // 0142）。最初の問い合わせの前。
@@ -91,6 +97,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     std::vector<BodyTextLayout> pending_;
     // 書式ごとに 1 回だけ測る 1 升（添字は DisplayForm）。書式が変われば prepare が消す。
     std::array<std::optional<application::TextCell>, 2> cells_{};
+    // 書式ごとに 1 回だけ測る空白の幅（物理画素・添字は DisplayForm）。set_spacing が測って置き、
+    // 書式が変われば prepare が消す（ADR 0193 の決定 9）。
+    std::array<std::optional<float>, 2> spaces_{};
     bool collecting_ = false;
 };
 } // namespace nenenib::ui::win32

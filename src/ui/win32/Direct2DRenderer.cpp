@@ -1416,12 +1416,14 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     {
         return;
     }
-    // 検索の当たり → 選択 → 本文 → 現在の当たりの枠 → キャレットの順（ADR 0037 の決定 5）。
+    // 検索の当たり → 選択 → 下の飾り → 本文 → 置き換え → 診断 → 現在の当たりの枠 → キャレットの順
+    // （ADR 0037 の決定 5・ADR 0193 の決定 2）。
     draw_line_matches(frame, text.Get(), area, line);
     if (line.selection.presence == core::SelectionPresence::present)
     {
         draw_line_selection(frame, text.Get(), area, line);
     }
+    draw_decorations_under(pane, area, line);
     draw_line_text(frame, text.Get(), area, line);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_line_diagnostics(frame, text.Get(), area, line);
@@ -1677,6 +1679,7 @@ void Direct2DRenderer::draw_body_area(const application::EditorFrame &frame,
 {
     const auto body = core::active_pane_layout(panes, frame.active_side);
     begin_caret_motion(frame, body);
+    begin_decorations(frame);
     if (frame.full_preview.has_value())
     {
         draw_other(frame, full_preview_body(area, dpi_, frame.settings.font_size),
