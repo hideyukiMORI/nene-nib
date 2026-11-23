@@ -3,10 +3,30 @@
 #include "UiTexts.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
+#include <utility>
 
 namespace nenenib::core
 {
+namespace
+{
+// 行を案内に出すか（閉じた 3 値・CPP-002）。
+[[nodiscard]] bool hinted(const PaletteMark &mark, bool language_server) noexcept
+{
+    switch (mark.hint)
+    {
+    case PaletteMarkHint::always:
+        return true;
+    case PaletteMarkHint::language_server:
+        return language_server;
+    case PaletteMarkHint::never:
+        return false;
+    }
+    std::unreachable();
+}
+} // namespace
+
 PaletteQuery palette_query_of(std::string_view input) noexcept
 {
     if (input.empty())
@@ -32,10 +52,19 @@ std::string palette_input_for(const PaletteQuery &query)
     return (escape ? " " : "") + std::string(query.query);
 }
 
-DisplayText palette_mark_hint(DisplayLanguage language)
+std::vector<PaletteMark> palette_hinted_marks(bool language_server)
+{
+    std::vector<PaletteMark> marks;
+    std::ranges::copy_if(palette_marks, std::back_inserter(marks),
+                         [language_server](const auto &mark)
+                         { return hinted(mark, language_server); });
+    return marks;
+}
+
+DisplayText palette_mark_hint(DisplayLanguage language, bool language_server)
 {
     std::string hint;
-    for (const PaletteMark &mark : palette_marks)
+    for (const PaletteMark &mark : palette_hinted_marks(language_server))
     {
         if (!hint.empty())
         {
@@ -48,21 +77,21 @@ DisplayText palette_mark_hint(DisplayLanguage language)
     return DisplayText::parse(hint).value();
 }
 
-std::array<std::size_t, palette_marks.size()> palette_mark_hint_starts(DisplayLanguage language)
+std::vector<std::size_t> palette_mark_hint_starts(DisplayLanguage language, bool language_server)
 {
     // palette_mark_hint と同じ並べ方の長さを足していく（組 = 記号 1 バイト ＋ 空白 1 バイト ＋
     // 名前）。
     const auto separator = ui_text(UiMessage::palette_mark_separator, language).size();
-    std::array<std::size_t, palette_marks.size()> starts{};
+    std::vector<std::size_t> starts;
     std::size_t at = 0;
-    for (std::size_t index = 0; index < palette_marks.size(); ++index)
+    for (const PaletteMark &mark : palette_hinted_marks(language_server))
     {
-        if (index > 0)
+        if (!starts.empty())
         {
             at += separator;
         }
-        starts.at(index) = at;
-        at += 2 + ui_text(palette_marks.at(index).name, language).size();
+        starts.push_back(at);
+        at += 2 + ui_text(mark.name, language).size();
     }
     return starts;
 }

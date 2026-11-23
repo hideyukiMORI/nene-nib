@@ -286,7 +286,8 @@ constexpr std::array<VimActionBinding, vim_action_count> action_groups{
      {VimAction::language_hover, VimActionGroup::language},
      {VimAction::prefix_bracket_forward, VimActionGroup::input_wait},
      {VimAction::language_diagnostic, VimActionGroup::language},
-     {VimAction::prefix_g_references, VimActionGroup::input_wait}}};
+     {VimAction::prefix_g_references, VimActionGroup::input_wait},
+     {VimAction::language_symbols, VimActionGroup::language}}};
 
 // オペレータの後ろで範囲になる動作。ここに無い鍵（x i a …）は保留中のオペレータを打ち消す。
 constexpr std::array<VimMotionBinding, 42> motion_bindings{
@@ -336,10 +337,10 @@ constexpr std::array<VimMotionBinding, 42> motion_bindings{
 // g の後ろの鍵 → 動作（ADR 0027 / Issue #222 / ADR 0057 の決定 2 / ADR 0144 の決定 4 /
 // ADR 0147 の決定 1・8 / ADR 0015 の決定 9・10・14 / #1039 の gv gi / ADR 0152 の追補 #1037 /
 // ADR 0028 の追補 #1032 の gI / #1617 の gn gN と表示だけの ga g8 g<C-g> g< gV gs /
-// ADR 0190 の決定 8 の gd / #1939 の gl / ADR 0191 の決定 4 の gr）。
+// ADR 0190 の決定 8 の gd / #1939 の gl / ADR 0191 の決定 4 の gr / 決定 5 の gO）。
 // ここに無い鍵は g を打ち消して失敗する（Vim の nv_g_cmd の clearopbeep と、Nib に無い命令で本文か
 // キャレットを変える鍵・一覧は #1617 の out/1617-fix/g-keys.md）。
-constexpr std::array<VimBinding, 36> g_bindings{
+constexpr std::array<VimBinding, 37> g_bindings{
     {{U'g', VimAction::move_document_first},
      {U'e', VimAction::move_previous_word_end},
      {U'E', VimAction::move_previous_big_word_end},
@@ -375,7 +376,8 @@ constexpr std::array<VimBinding, 36> g_bindings{
      {U'8', VimAction::show_character_bytes},
      {U'd', VimAction::language_definition},
      {U'l', VimAction::language_diagnostic},
-     {U'r', VimAction::prefix_g_references}}};
+     {U'r', VimAction::prefix_g_references},
+     {U'O', VimAction::language_symbols}}};
 
 // 保留を立てる鍵 → オペレータ（ADR 0015 の決定 1・10・11）。同じ行の鍵を保留の後ろで押すと
 // 行単位（dd g~g~ >>）。
@@ -781,6 +783,10 @@ static_assert(
     if (action == VimAction::language_definition)
     {
         return LanguageQueryKind::definition;
+    }
+    if (action == VimAction::language_symbols)
+    {
+        return LanguageQueryKind::symbols;
     }
     return action == VimAction::language_hover ? std::optional{LanguageQueryKind::hover}
                                                : std::nullopt;

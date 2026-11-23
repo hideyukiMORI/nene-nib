@@ -15,6 +15,8 @@ enum class LspRequestKind : std::uint8_t
     hover,
     definition,
     // 参照（#1947・ADR 0191 の決定 1）。
-    references
+    references,
+    // 記号（#1955・ADR 0191 の決定 1・5）。
+    document_symbol
 };
 } // namespace nenenib::application

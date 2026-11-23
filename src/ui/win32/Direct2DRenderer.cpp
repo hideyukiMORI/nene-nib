@@ -2421,6 +2421,11 @@ Direct2DRenderer::empty_palette_text(const application::CommandPaletteView &pale
     {
         return project.value().line.text();
     }
+    // 言語サーバーの出どころの候補が 0 の 1 行（#1958）。文は application が作る。
+    if (palette.empty_line.has_value())
+    {
+        return palette.empty_line.value().text();
+    }
     return core::ui_text(core::UiMessage::palette_no_candidates, language);
 }
 
@@ -2460,8 +2465,10 @@ void Direct2DRenderer::draw_palette_footer(const application::EditorFrame &frame
     const auto position = total == 0 ? 0 : palette.selected + 1;
     const auto split = std::max(area.left, area.right - core::to_pixels(64, dpi_));
     const core::LayoutRect hint_area{area.left, area.top, split, area.bottom};
-    const auto hint = frame.command_message.has_value()
-                          ? frame.command_message.value().text()
+    // 参照の一覧は何を頼んだ答えかを案内の欄に出す（#1958）。知らせがあれば知らせが先。
+    const auto hint = frame.command_message.has_value() ? frame.command_message.value().text()
+                      : palette.subject.has_value()
+                          ? palette.subject.value().text()
                           : core::ui_text(core::UiMessage::palette_footer_hint, frame.language);
     context_->PushAxisAlignedClip(to_rect(hint_area), D2D1_ANTIALIAS_MODE_ALIASED);
     write(hint, mode_format_.Get(), hint_area, frame.palette.muted);
@@ -2490,13 +2497,13 @@ void Direct2DRenderer::draw_palette_hint(const application::EditorFrame &frame,
     {
         return;
     }
-    const auto starts = core::palette_mark_hint_starts(frame.language);
-    if (starts.back() >= text.size())
+    const auto &starts = frame.command_palette.value().hint_starts;
+    if (starts.empty() || starts.back() >= text.size())
     {
         return;
     }
     const float right = metrics.left + metrics.width;
-    std::array<std::int32_t, core::palette_marks.size()> widths{};
+    std::vector<std::int32_t> widths(starts.size(), 0);
     for (std::size_t index = 0; index < starts.size(); ++index)
     {
         float x = 0.0F;

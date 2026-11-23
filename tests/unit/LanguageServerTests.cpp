@@ -985,9 +985,9 @@ void verify_abilities()
     expect(
         contains(
             server.sent().front(),
-            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{}})"),
+            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true}})"),
         "initialize offers didSave, versioned diagnostics, completion without snippets, hover "
-        "text, definition links and references");
+        "text, definition links, references and document symbols");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.completion && abilities.hover && abilities.definition &&
                abilities.trigger_characters == std::vector<std::string>{".", "->"},

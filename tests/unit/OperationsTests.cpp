@@ -158,7 +158,7 @@ constexpr std::array<ChordRow, 67> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 64> shown_rows{{
+constexpr std::array<ShownRow, 65> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -245,6 +245,8 @@ constexpr std::array<ShownRow, 64> shown_rows{{
     {EditorOperation::open_language_server_log, "", "", true, true},
     // 参照の一覧（#1947）。Shift+F12 で両モード。
     {EditorOperation::list_references, "Shift+F12", "Shift+F12", true, true},
+    // 記号の一覧（#1955）。鍵なし。
+    {EditorOperation::list_symbols, "", "", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
@@ -433,7 +435,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 64 && vim.size() == 61,
+    expect(ordinary.size() == 65 && vim.size() == 62,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -511,8 +513,8 @@ void verify_packaged_operation_choices()
         }
         return counted;
     };
-    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{64, 61, 59, 61} &&
-               sizes(Distribution::packaged) == std::vector<std::size_t>{62, 59, 57, 59},
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{65, 62, 60, 62} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{63, 60, 58, 60},
            "the packaged list has two rows fewer than the zip list in every mode");
     const auto packaged = nenenib::core::operation_choices(
         "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},
