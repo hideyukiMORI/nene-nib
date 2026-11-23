@@ -375,8 +375,9 @@ class EditorState final
     // 文書を出しているもう 1 つの枠のキャレットと先頭行に写す（決定 9）。キャレットは
     // offset_after_edit、先頭行は「その行の行頭の offset を offset_after_edit で写し、after で
     // 行番号に戻す」の 1 つの規則。違う文書を出しているとき・1 枠では何も変えない。undo は
-    // inserted と removed を入れ替えた編集を渡す。
-    [[nodiscard]] EditorState with_other_adjusted(const core::Edit &edit,
+    // inserted と removed を入れ替えた編集を渡す。edits は編集の前の本文の上の重ならない編集を
+    // 始まりの順に並べた列で、後ろから写す（整形と矩形の道は編集ごとに直す・#1997 のレビュー R1）。
+    [[nodiscard]] EditorState with_other_adjusted(std::span<const core::Edit> edits,
                                                   const core::TextBuffer &after) const;
     // もう 1 つの枠の先頭行と画面行を置く（ScrollPane）。1 枠では何も変えない。
     [[nodiscard]] EditorState with_other_scrolled(core::LineNumber first_visible,

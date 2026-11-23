@@ -37,6 +37,11 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
    - 限界: 頼み直し（`isRetrigger: true`）に `activeSignatureHelp`（前の答え）を添えない。clangd は使わないので害は無いが、typescript-language-server は添えた値で多重定義の選択を保つので、頼み直すたびに最初の署名へ戻る（#1968 のレビュー c-L4・L-e）。Ctrl+Z などで `(` の前へ戻っても同じ行にいる間は札が残り、次の打鍵か行の移動で消える（c-L5・L-e）。
 7. **d 整形（`textDocument/formatting` と `rangeFormatting`）。** 操作「文書を整形」「選択範囲を整形」（**どちらも鍵なし**・F1 の一覧から。VS Code の Shift+Alt+F は ADR 0078 の「Alt と組んだ鍵は操作にしない」に当たるので入れない・設計席の決め 2026-11-22）。Vim の `gq` は Nib に無いので触らない。答えの `TextEdit[]` は、全部を覆う 1 区間（最小の始まり〜最大の終わり）の新しい本文を手元で組み、`EditorController::replace` を 1 回だけ呼ぶ（1 つの undo の単位・`Edit.restore` は当てる前のキャレット）。頼んだ時の改訂番号から本文が変わっていたら捨てて 1 行の知らせ。`tabSize` と `insertSpaces` は Nib の固定の値（tabstop 8 の `vim_tab_stop`・noexpandtab で `insertSpaces: false`）をそのまま渡す（可変にするのは #1991・設計席の決め 2026-11-23）。保存のときの自動の整形は入れない（設定の鍵が要る・`settings.v6` の時）。
    - 段 d（#1993）の形: 答えは core の `lsp_text_edits`（null は空・range か newText の欠けた項目が 1 つでもあれば答え全体を読めない）で読み、`formatted_span` が各 range を `lsp_range_to_offsets` で写して始まりの順（同じ始まりは届いた順）に並べ、間の本文を挟んで 1 区間に組む（重なる編集・写せない range は読めない答え）。照合は文書（退避番号）と revision だけで、キャレットの移動では捨てない。変わっていれば「整形の答えが届く前に文書が変わったので、当てませんでした」、読めなければ「整形の答えを読めなかったので、当てませんでした」の 1 行。空の列と今と同じ結果は undo の単位を積まない。当てた後のキャレットは、手前で終わる編集の長さの差だけずらし、編集の中にあればその編集の新しい本文の終わりへ置く（同じ位置への挿入はキャレットの後ろ）。選択範囲の整形の範囲は、選択（VISUAL は `vim_visual_range`・矩形は覆う行の全体）で、空ならキャレットの行（VS Code と同じ）。Vim の VISUAL で当てたら NORMAL へ戻す（`gv` の選び直しの範囲は置き直さない・限界）。答えの待ちは決定 1 のとおり 30〜60 秒で捨てる。打鍵の道には何も足さない。
+   - レビュー（#1997）の直し:
+     - マーク（`ma`〜`mz`・`''`・`'.`・ジャンプの列・変更の列）ともう 1 つの枠のキャレットと先頭行は、畳んだ 1 区間でなく、`formatted_span` が並べた編集の列（`FormattedSpan.pieces`）で編集ごとに直す（R1）。渡す口は `replace` の第 4 引数の選択肢 `FormattingPieces`（マークは矩形の道と同じ `marks_block_adjusted`）で、もう 1 つの枠も同じ列で後ろから写す（`with_other_adjusted` は編集の列を受ける。矩形の道は今までどおり畳んだ 1 つの Edit で写し、矩形の中のキャレットは矩形の始まりへ畳む）。undo の単位は 1 つのまま。
+     - newText の改行は、貼り付けと同じく本文の改行の形に揃えてから組む（`clipboard_line_feeds` → `with_document_newlines`・D19 と同じ考え・R2）。
+     - 答えは合図（`WorkCompleted`）の中で当たる。入力行・Ctrl+P の一覧・右クリックのメニュー・IME の変換・補完の一覧・設定の画面が開いている間と、Vim が次の鍵を待っている間（回数・オペレータ・1 鍵の待ち・レジスタの名指し・イージーモーション・INSERT の `Ctrl-o`・`map` の左辺の途中）に届いた答えは当てず、「整形の答えが入力の途中に届いたので、当てませんでした」の 1 行にする（L5）。
+   - 限界: 頼んだ後に VISUAL へ入っていても、当てた後は NORMAL になる（L4）。文書の整形と選択範囲の整形は種類が別なので互いを取り消さず、後から届いた方は「文書が変わった」と知らせる（L1）。サーバーの error の答え（`ContentModified` など）も「読めなかった」と知らせる（L2）。同じ位置の「挿入」と「そこから始まる置き換え」は重なりとして答え全体を拒む（L6・clangd はこの形を返さない）。`'.` は区間の最初の編集の位置に置く。
 8. **文と操作。** 画面の文は `UiMessage` の 3 列（操作の名前と説明は操作の群に表の順・知らせは末尾）、操作は `EditorOperation` の末尾。日本語の文に「面」を使わない。設定の鍵は足さない。
 
 ## 強制
@@ -44,8 +49,8 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
 - a 参照の能力の無い要求を送らない・文脈の照合・一覧の候補と着地・上限: **active**（`nib_tests --lsp-references`）。
 - b 記号の同じ守り（読み・能力・文脈の照合・一覧の候補と着地・`gO`）: **active**（`nib_tests --lsp-symbols`）。
 - c 引数の情報の同じ守り（読み・能力・自動の頼み・札の出る間と消える条件（`)`・Esc・行の移動・INSERT を抜ける・空の答え・タブの切り替え・窓が非アクティブ・Ctrl+P の一覧・右クリックのメニュー・設定・hover の札・照合で捨てた答えは札を残す・ホイールで隠す）・補完の一覧と重ならない置き場・lsp がオフと能力の無い席で打鍵の道（通常モードと Vim の INSERT）が言語サーバーに触れない契約）: **active**（`nib_tests --lsp-signature`）。
-- d 整形の同じ守り（読み・1 区間の組み立てと並べ方・重なりと写せない range の拒否・能力・lsp がオフ・要求の形（固定の `tabSize` `insertSpaces`・選択範囲と空の選択のキャレットの行・VISUAL LINE）・頼んだ後に変わった文書・読めない答え・空の答えと同じ結果は単位を積まない・VISUAL から NORMAL へ）: **active**（`nib_tests --lsp-formatting`）。
-- 整形が 1 つの undo の単位で、`u` で元の本文とキャレットに戻る: **active**（`nib_tests --lsp-formatting` の `verify_undo_property`・固定の種の 24 通りの編集の列で、結果が後ろから 1 つずつ当てた本文と同じで、`u` 1 回で本文とキャレットが戻る。通常モードの Ctrl+Z / Ctrl+Y は `verify_document_formatting`）。
+- d 整形の同じ守り（読み・1 区間の組み立てと並べ方・重なりと写せない range の拒否・能力・lsp がオフ・要求の形（固定の `tabSize` `insertSpaces`・選択範囲と空の選択のキャレットの行・VISUAL LINE）・頼んだ後に変わった文書（打鍵・タブの切り替え）・入力の途中に届いた答え・読めない答え・空の答えと同じ結果は単位を積まない・VISUAL から NORMAL へ・マークともう 1 つの枠を編集ごとに直す・CRLF の文書に LF の newText・`didChange` が 1 回・未保存の印）: **active**（`nib_tests --lsp-formatting`）。
+- 整形が 1 つの undo の単位で、`u` で元の本文とキャレットに戻る: **active**（`nib_tests --lsp-formatting` の `verify_undo_property`・固定の種の 24 通りの編集の列（届く順も固定の種で混ぜる）で、結果が後ろから 1 つずつ当てた本文と同じで、当てた直後のキャレットが参照の写しと同じで、`u` 1 回で本文とキャレットが戻る。代理対・CRLF・文書の端を超える range・改行の無い最後の行は 1 件ずつ。通常モードの Ctrl+Z / Ctrl+Y は `verify_document_formatting`）。
 - 打鍵の道（段 c）のオフの速さ: **planned**（QLT-014・段 c の PR の後に設計席が速さのゲートを回して active にする）。
 
 ## 結果

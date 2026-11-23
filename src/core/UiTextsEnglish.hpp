@@ -510,5 +510,7 @@ inline constexpr UiTextColumn ui_texts_english{{
      "The document changed before the formatting arrived, so it was not applied"},
     {UiMessage::notice_formatting_unreadable,
      "The formatting answer could not be read, so it was not applied"},
+    {UiMessage::notice_formatting_busy,
+     "The formatting arrived in the middle of an input, so it was not applied"},
 }};
 } // namespace nenenib::core

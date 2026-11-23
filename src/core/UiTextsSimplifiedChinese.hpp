@@ -445,5 +445,6 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_range_formatting_not_supported, "此语言服务器不提供选定内容的格式化"},
     {UiMessage::notice_formatting_stale, "格式化结果到达前文档已更改，因此未应用"},
     {UiMessage::notice_formatting_unreadable, "无法读取格式化结果，因此未应用"},
+    {UiMessage::notice_formatting_busy, "格式化结果在输入过程中到达，因此未应用"},
 }};
 } // namespace nenenib::core

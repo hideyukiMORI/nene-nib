@@ -175,7 +175,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
      "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します"},
     {UiMessage::operation_format_document_name, "文書を整形"},
     {UiMessage::operation_format_document_description,
-     "今の文書の全体を言語サーバーに整形してもらいます（1 回の元に戻すで戻ります）"},
+     "今の文書の全体を言語サーバーに整形してもらいます（元に戻す 1 回で戻ります）"},
     {UiMessage::operation_format_selection_name, "選択範囲を整形"},
     {UiMessage::operation_format_selection_description,
      "選択範囲（選択が無ければキャレットの行）を言語サーバーに整形してもらいます"},
@@ -482,5 +482,6 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_formatting_stale,
      "整形の答えが届く前に文書が変わったので、当てませんでした"},
     {UiMessage::notice_formatting_unreadable, "整形の答えを読めなかったので、当てませんでした"},
+    {UiMessage::notice_formatting_busy, "整形の答えが入力の途中に届いたので、当てませんでした"},
 }};
 } // namespace nenenib::core

@@ -1,5 +1,6 @@
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
+#include "FormattingPieces.hpp"
 #include "PaneView.hpp"
 
 #include "CaretMove.hpp"
@@ -41,6 +42,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -235,13 +237,18 @@ constexpr std::size_t single_page_line = 1;
 
 // 編集で行がずれたマーク（ADR 0152 の決定 6）。行をその場で書き換えた置き換え（kept）は Vim が
 // mark_adjust を呼ばないので動かさない（#1360）。矩形は行ごとの置き換えで直す（#1361）。
-[[nodiscard]] core::VimMarks
-edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const core::Edit &edit,
-             const std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> &lines)
+[[nodiscard]] core::VimMarks edited_marks(const core::VimMarks &marks,
+                                          const core::TextBuffer &before, const core::Edit &edit,
+                                          const EditLines &lines)
 {
     if (const auto *const block_lines = std::get_if<std::span<const core::VimBlockEdit>>(&lines))
     {
         return core::marks_block_adjusted(marks, before, *block_lines);
+    }
+    // 整形の編集の列も編集ごとに直す（#1997 のレビュー R1）。
+    if (const auto *const formatted = std::get_if<FormattingPieces>(&lines))
+    {
+        return core::marks_block_adjusted(marks, before, formatted->pieces);
     }
     switch (std::get<core::VimLineMarks>(lines))
     {
@@ -288,9 +295,8 @@ EditorController::vim_end_of_line_kept(const core::OffsetRange &range, std::stri
     return {range, std::string(text)};
 }
 
-void EditorController::replace(
-    const core::OffsetRange &asked, std::string_view typed, core::EditBoundary boundary,
-    std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines)
+void EditorController::replace(const core::OffsetRange &asked, std::string_view typed,
+                               core::EditBoundary boundary, EditLines lines)
 {
     // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
     // 決定 2）。
@@ -338,10 +344,33 @@ void EditorController::replace(
     forget_syntax_before(edit);
     note_minimap_edit(next, edit);
     language_server_edit(edit);
-    adjust_other(edit, next);
+    adjust_other_by(edit, lines, next);
     state_ = state_.with_words_edited(edit).with_edit(std::move(next), core::collapsed_at(caret),
                                                       std::move(history), std::move(document));
     follow_caret();
+}
+
+// もう 1 つの枠を写す（ADR 0148 の決定 9）。整形の道（FormattingPieces）だけは、畳んだ 1 つの Edit
+// でなく編集ごとに写す（区間の中の位置を端へ寄せない・#1997 のレビュー R1）。矩形の道は今までどおり
+// 畳んだ 1 つの Edit で写す（矩形の中のキャレットは矩形の始まりへ畳む）。
+void EditorController::adjust_other_by(const core::Edit &edit, const EditLines &lines,
+                                       const core::TextBuffer &after)
+{
+    const auto *const formatted = std::get_if<FormattingPieces>(&lines);
+    if (formatted == nullptr || !state_.split().other.has_value())
+    {
+        adjust_other(std::span<const core::Edit>{&edit, 1}, after);
+        return;
+    }
+    std::vector<core::Edit> edits;
+    edits.reserve(formatted->pieces.size());
+    for (const core::VimBlockEdit &piece : formatted->pieces)
+    {
+        edits.push_back(core::Edit{piece.range.begin,
+                                   state_.text().text_range(piece.range.begin, piece.range.end),
+                                   piece.utf8, edit.restore});
+    }
+    adjust_other(edits, after);
 }
 
 // 空の単位（ADR 0181 の決定 3）。本文の置き換えの口（LSP・ミニマップ・構文の覚え・マークの行の
@@ -752,7 +781,7 @@ void EditorController::undo_edit()
     const core::Edit undone{at, edit.value().inserted, edit.value().removed, at};
     note_minimap_edit(next, undone);
     language_server_edit(undone);
-    adjust_other(undone, next);
+    adjust_other(std::span<const core::Edit>{&undone, 1}, next);
     undone_marks(undone);
     state_ = state_.with_words_edited(undone).with_edit(
         std::move(next), core::collapsed_at(caret), state_.history().undone(), state_.document());
@@ -781,7 +810,8 @@ void EditorController::redo_edit()
     forget_syntax_before(edit.value());
     note_minimap_edit(next, edit.value());
     language_server_edit(edit.value());
-    adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
+    const core::Edit redone{at, edit.value().removed, edit.value().inserted, at};
+    adjust_other(std::span<const core::Edit>{&redone, 1}, next);
     undone_marks(edit.value());
     state_ = state_.with_words_edited(edit.value())
                  .with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),

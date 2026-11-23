@@ -125,6 +125,8 @@ std::optional<FormattedSpan> formatted_span(const TextBuffer &text,
     const Offset start = placed.front().first.begin;
     Offset cursor = start;
     std::string replaced;
+    std::vector<VimBlockEdit> pieces;
+    pieces.reserve(placed.size());
     for (const auto &[range, index] : placed)
     {
         if (range.begin < cursor)
@@ -133,10 +135,12 @@ std::optional<FormattedSpan> formatted_span(const TextBuffer &text,
         }
         replaced += text.text_range(cursor, range.begin);
         replaced += edits[index].new_text;
+        pieces.push_back(VimBlockEdit{.range = range, .utf8 = edits[index].new_text});
         cursor = range.end;
     }
     return FormattedSpan{.range = OffsetRange{start, cursor},
                          .text = std::move(replaced),
-                         .caret = mapped_caret(placed, edits, caret)};
+                         .caret = mapped_caret(placed, edits, caret),
+                         .pieces = std::move(pieces)};
 }
 } // namespace nenenib::core

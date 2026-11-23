@@ -38,6 +38,7 @@
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
+#include "EditLines.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
@@ -89,6 +90,7 @@
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageDefinition.hpp"
+#include "LanguageFormatting.hpp"
 #include "LanguageQueryKind.hpp"
 #include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
@@ -957,7 +959,9 @@ class EditorController final
     // 2 枠で操作中の枠を閉じる（`:q` 系と `Ctrl-w c`・ADR 0148 の決定 5・ADR 0155 の決定 4）。
     void close_operated_pane();
     // 操作中の枠の編集を、同じ文書を出しているもう 1 つの枠に写す（決定 9）。
-    void adjust_other(const core::Edit &edit, const core::TextBuffer &after);
+    void adjust_other(std::span<const core::Edit> edits, const core::TextBuffer &after);
+    void adjust_other_by(const core::Edit &edit, const EditLines &lines,
+                         const core::TextBuffer &after);
     // 編集の始まりの行が覚えの行より前なら、その文書の構文の覚えを捨てる（ADR 0156 の追補 #827）。
     // 編集の 1 か所（replace・undo・redo）が本文を置く前に呼ぶ。
     void forget_syntax_before(const core::Edit &edit);
@@ -1108,6 +1112,9 @@ class EditorController final
     void settle_formatting_answer();
     [[nodiscard]] core::OffsetRange formatting_range() const;
     void leave_visual_for_formatting();
+    [[nodiscard]] bool formatting_interrupts() const noexcept;
+    [[nodiscard]] std::optional<core::UiMessage>
+    formatting_refusal(const LanguageFormatting &answered) const;
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -1685,8 +1692,7 @@ class EditorController final
     // 行ごとに直し（marks_block_adjusted・#1361）、VimLineMarks::kept（VimReplaceRange が渡す）なら
     // 行をその場で書き換えた置き換えでマークの行を動かさない（#1360）。
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
-                 std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
-                     core::VimLineMarks::shifted);
+                 EditLines lines = core::VimLineMarks::shifted);
     // Vim のモードで eol の旗が立つ文書の置き換えの範囲と本文（ADR 0188 の決定 3 (a)）。空の本文に
     // 本文を足すなら最後の改行も足し、engine を通らない編集が除いた本文を全部消すなら最後の改行も
     // 消す（空で旗が立つ本文にする）。ほかは頼まれたまま。

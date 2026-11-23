@@ -25,7 +25,7 @@ lsp_text_edits(const JsonValue &result);
 // lsp_range_to_offsets で text の上へ写し、始まりの順（同じ始まりは届いた順・LSP の規則）に並べて
 // 間の本文を挟んで組む。写せない range・重なる編集・空の列は値なし。caret は当てる前のキャレットを
 // 写した位置: 手前で終わる編集の長さの差だけずらし、編集の中にあればその編集の新しい本文の終わり
-// へ置く（同じ位置への挿入はキャレットの後ろに入る）。純関数。
+// へ置く（同じ位置への挿入はキャレットの後ろに入る）。pieces は並べた編集の列。純関数。
 [[nodiscard]] std::optional<FormattedSpan> formatted_span(const TextBuffer &text,
                                                           std::span<const LspTextEdit> edits,
                                                           LspPositionEncoding encoding,

@@ -1488,7 +1488,7 @@ EditorState EditorState::with_split_share(core::SplitShare share) const
     return next;
 }
 
-EditorState EditorState::with_other_adjusted(const core::Edit &edit,
+EditorState EditorState::with_other_adjusted(std::span<const core::Edit> edits,
                                              const core::TextBuffer &after) const
 {
     // プレビューは編集でずらさない（錨は次の frame で追従し直す・ADR 0155 の決定 12）。
@@ -1499,7 +1499,14 @@ EditorState EditorState::with_other_adjusted(const core::Edit &edit,
     }
     EditorState next(*this);
     PaneView other = *shown;
-    const core::Offset start = core::offset_after_edit(text_.line_start(other.first_visible), edit);
+    // 後ろの編集から写すと、まだ写していない前の編集の位置は編集の前の本文のまま読める。
+    core::Offset start = text_.line_start(other.first_visible);
+    core::Offset caret = other.caret;
+    for (auto edit = edits.rbegin(); edit != edits.rend(); ++edit)
+    {
+        start = core::offset_after_edit(start, *edit);
+        caret = core::offset_after_edit(caret, *edit);
+    }
     const core::TextPosition top = after.position_of(start);
     // 先頭行の行頭が削除の中に畳まれて別の行の途中へ来たら、画面行も行の先頭へ戻す。
     if (top.column.value != 0)
@@ -1507,7 +1514,7 @@ EditorState EditorState::with_other_adjusted(const core::Edit &edit,
         other.first_row = 0;
     }
     other.first_visible = top.line;
-    other.caret = core::offset_after_edit(other.caret, edit);
+    other.caret = caret;
     next.split_.other = other;
     return next;
 }
