@@ -1,6 +1,7 @@
 // scope `--split-resize` の単体テスト（ADR 0148 の 2026-11-22 の追補・#1941）。境界の比と最小の純関
 // 数（pane_layouts・split_extent・split_share_at・sized_share・split_divider_hit）と、ドラッグの意
 // 図 ResizeSplit・鍵の意図 ResizePane・Vim の `Ctrl-w > < + - = _ |`・Ex の `:resize` の契約。
+#include "CancelSelection.hpp"
 #include "ClosePane.hpp"
 #include "DevicePixels.hpp"
 #include "Editing.hpp"
@@ -17,12 +18,14 @@
 #include "PaneSizing.hpp"
 #include "PaneSplit.hpp"
 #include "PreviewFrame.hpp"
+#include "PreviewPlacement.hpp"
 #include "ResizePane.hpp"
 #include "ResizeSplit.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "SplitExtent.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
@@ -554,6 +557,48 @@ void verify_preview_pane_resize()
                moved.share == controller.pane_split().share,
            "moving the divider beside a preview keeps the preview pane");
 }
+
+// 横のプレビュー → 全面 → 戻ると、比は全面の前のまま（#1973）。本文の 2 枠でも同じ。全面から
+// 出てもう一度側を開き直すと等分から。
+void verify_share_through_full_preview()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold(Bytes{std::string{"# title\n\ntext"}});
+    applied(controller, app::VisibleLines{4});
+    applied(controller, app::OpenDocument{sample_path()});
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::ResizeSplit{SplitShare{1, 4}});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    expect(controller.frame().full_preview.has_value(), "the preview is full");
+    const EditorFrame back = controller.apply_frame(app::CancelSelection{});
+    expect(back.other.has_value() &&
+               std::holds_alternative<app::PreviewFrame>(back.other.value()) &&
+               back.share == SplitShare{1, 4} && controller.pane_split().share == SplitShare{1, 4},
+           "side, full and side again keep the divider where it was");
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
+    expect(controller.pane_split().share == SplitShare{1, 4},
+           "leaving full for side by placement keeps the divider too");
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::off});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
+    expect(controller.pane_split().share == SplitShare{},
+           "closing the preview and opening it again starts even");
+
+    Editing body;
+    auto &split = body.controller();
+    body.files().hold(Bytes{std::string{"# title\n\ntext"}});
+    applied(split, app::VisibleLines{4});
+    applied(split, app::OpenDocument{sample_path()});
+    applied(split, app::SplitPane{SplitLayout::vertical});
+    applied(split, app::ResizeSplit{SplitShare{3, 4}});
+    applied(split, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    const EditorFrame returned = split.apply_frame(app::CancelSelection{});
+    expect(returned.other.has_value() &&
+               std::holds_alternative<app::PaneFrame>(returned.other.value()) &&
+               returned.share == SplitShare{3, 4},
+           "two body panes, full and back keep the divider where it was");
+}
 } // namespace
 
 void verify_split_resize_contracts()
@@ -574,5 +619,6 @@ void verify_split_resize_contracts()
     verify_resize_keys_leave_history();
     verify_other_pane_rows();
     verify_preview_pane_resize();
+    verify_share_through_full_preview();
 }
 } // namespace nenenib::tests

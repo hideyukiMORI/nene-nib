@@ -1592,12 +1592,16 @@ EditorState EditorState::with_full_preview(PreviewView fresh) const
     {
         // 本文の枠のもう 1 つは隠して保つ（改訂 15）。
         next.full_return_ = PreviewPlacement::off;
+        // 側のプレビューが無かったので、全面から側へ出るときは等分から（古い比を持ち越さない）。
+        next.full_return_share_ = core::SplitShare{};
         next.full_preview_ = std::move(fresh);
         return next;
     }
     next.full_return_ = PreviewPlacement::side;
     next.full_return_layout_ = split_.layout;
     next.full_return_side_ = split_.active_side;
+    // 境界の比も覚え、側へ戻るときに置き直す（#1973・ADR 0148 の 2026-11-22 の追補）。
+    next.full_return_share_ = split_.share;
     next.full_preview_ = *side;
     next.split_ = SplitState{};
     return next;
@@ -1630,6 +1634,7 @@ EditorState EditorState::without_full_preview(PreviewPlacement placement) const
     {
         next.split_.layout = full_return_layout_;
         next.split_.active_side = full_return_side_;
+        next.split_.share = full_return_share_;
     }
     next.split_.other = std::move(view);
     return next;
