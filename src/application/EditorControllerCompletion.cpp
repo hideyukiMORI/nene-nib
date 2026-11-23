@@ -1,6 +1,8 @@
 // 補完の面（ADR 0190 の決定 1・2・5・ADR 0169 の決定 3〜5）。開く・絞る・選ぶ・確定・閉じるの群。
 // Vim の INSERT の補完（#1845）は engine が形を持ち、ここは候補の写しを engine に置く所
 // （offer_vim_completion）と、engine の状態を面に写す所（follow_vim_completion）だけを持つ。
+// Vim の INSERT で打鍵が自動に開く面（#1962・ADR 0190 の 2026-11-23 の追補）は engine の外で、
+// 通常モードの自動の面と同じ道で絞り、Ctrl-n / Ctrl-p から engine の補完へ移る。
 // 候補を並べるのと絞るのは core::completion_entries / completion_matches、本文の語は
 // insert_completion_list（席 W の入口）、LSP の要求と答えは段 A の request_completion と
 // language_answers の 1 本ずつで、ここは CompletionSession を動かすだけ。面が開いている間の打鍵は
@@ -40,13 +42,19 @@
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
 #include "OpenCompletion.hpp"
+#include "ScopedValue.hpp"
 #include "ScrollCompletion.hpp"
 #include "StepCompletion.hpp"
 #include "UiMessage.hpp"
 #include "Utf8.hpp"
+#include "VimCharacter.hpp"
 #include "VimCompletionOffer.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimKeySource.hpp"
+#include "VimMode.hpp"
+#include "VimSpecialKey.hpp"
+#include "VimState.hpp"
 #include "VimStep.hpp"
 #include "VimStepSource.hpp"
 
@@ -269,14 +277,21 @@ void EditorController::forget_completion_answer()
     state_ = state_.with_language_answers(std::move(answers));
 }
 
-// 面を開ける状態か。通常モード（Vim の INSERT の道は段 B2）・入力行と面とエクスプローラーの焦点と
-// 全面プレビューの外・変換中でない（ADR 0014）・選択が無い。
-bool EditorController::completion_startable() const
+// 面を開ける状態か。通常モードか、Vim の INSERT で打鍵が自動に開く面（triggered・engine の
+// 補完が閉じている間・#1962。Vim の手で開く面は engine の Ctrl-n の道 offer_vim_completion）。
+// どちらも入力行と面とエクスプローラーの焦点と全面プレビューの外・変換中でない（ADR 0014）・
+// 選択が無い。
+bool EditorController::completion_startable(bool triggered) const
 {
     switch (state_.mode())
     {
     case core::EditMode::vim:
-        return false;
+        if (!triggered || state_.vim().mode != core::VimMode::insert ||
+            state_.vim().insert_completion != nullptr)
+        {
+            return false;
+        }
+        break;
     case core::EditMode::ordinary:
         break;
     }
@@ -292,7 +307,7 @@ bool EditorController::completion_startable() const
 bool EditorController::completion_holds(const CompletionSession &session) const
 {
     const core::Offset caret = state_.selection().caret;
-    if (!completion_startable() ||
+    if (!completion_startable(!session.by_hand) ||
         state_.autosave_ids().at(state_.active_tab()) != session.document ||
         caret < session.origin || caret.value - session.origin.value > typed_limit)
     {
@@ -307,11 +322,23 @@ void EditorController::accept(const OpenCompletion &)
     start_completion(std::nullopt);
 }
 
-// 通常モードで `triggerCharacters` の 1 つを打ち終えたら開く（決定 5）。呼ぶのは言語サーバーが
-// running のときだけ（打鍵の道の分岐はその真偽の後ろ・決定 10）。typed は今打った文字。
+// 打った文字の後の言語サーバーの入口（#1962）。今は補完の自動の面だけで、引数の情報（段 S6c）も
+// ここに足す。
+void EditorController::typed_for_language(std::string_view typed)
+{
+    if (active_language_server().phase == LanguageServerPhase::running)
+    {
+        // 補完と並べて足す所（段 S6c の引数の情報）。open_triggered_completion の中には足さない。
+        open_triggered_completion(typed);
+    }
+}
+
+// `triggerCharacters` の 1 つを打ち終えたら開く（決定 5・Vim の INSERT は #1962 の追補）。呼ぶのは
+// 言語サーバーが running のときだけ（打鍵の道の分岐はその真偽の後ろ・決定 10）。typed は今打った
+// 文字。
 void EditorController::open_triggered_completion(std::string_view typed)
 {
-    if (typed.empty() || !completion_startable())
+    if (typed.empty() || !completion_startable(true))
     {
         return;
     }
@@ -350,7 +377,7 @@ core::Offset EditorController::completion_word_start() const
 // M1）。出す行も待つ答えも無ければ開かず、手で開いたときだけ 1 行知らせる。
 void EditorController::start_completion(std::optional<std::string_view> trigger)
 {
-    if (!completion_startable())
+    if (!completion_startable(trigger.has_value()))
     {
         return;
     }
@@ -372,7 +399,9 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
         session.words_collected = true;
     }
     session.awaiting = request_completion(session.id, trigger);
-    arrange(session, state_.text().text_range(session.origin, caret));
+    std::string typed = state_.text().text_range(session.origin, caret);
+    arrange(session, typed);
+    session.requested = std::move(typed);
     if (alive(session))
     {
         completion_ = std::move(session);
@@ -394,7 +423,9 @@ void EditorController::settle_completion()
         return;
     }
     CompletionSession &session = completion_.value();
-    if (state_.mode() == core::EditMode::vim)
+    // Vim の手で開いた面は engine が持つ。打鍵で自動に開いた面（#1962）は engine の外で、通常
+    // モードと同じに絞り直す。
+    if (state_.mode() == core::EditMode::vim && session.by_hand)
     {
         settle_vim_completion(session);
         return;
@@ -435,11 +466,13 @@ void EditorController::refresh_completion(CompletionSession &session)
     const core::Offset caret = state_.selection().caret;
     session.caret = caret;
     session.revision = state_.history().revision();
-    narrow(session, state_.text().text_range(session.origin, caret));
+    std::string typed = state_.text().text_range(session.origin, caret);
+    narrow(session, typed);
     if (session.incomplete)
     {
         session.awaiting = request_completion(session.id);
         session.incomplete = session.awaiting;
+        session.requested = std::move(typed);
     }
 }
 
@@ -458,8 +491,8 @@ bool EditorController::take_completion_answer(CompletionSession &session)
     {
         return false;
     }
-    // Vim の面（#1845）は engine の列に足す。
-    if (state_.mode() == core::EditMode::vim)
+    // Vim の手で開いた面（#1845）は engine の列に足す。
+    if (state_.mode() == core::EditMode::vim && session.by_hand)
     {
         merge_vim_completion_answer(session, answer.list);
         return true;
@@ -661,6 +694,13 @@ void EditorController::offer_vim_completion(const core::VimKey &key)
     {
         return;
     }
+    // 打鍵で自動に開いた面が出ていれば、その候補から選ぶ（#1962）。答えを待っているだけの自動の
+    // 面は取り消して本文の語の補完を開く（下の道）。
+    if (completion_.has_value() && !completion_.value().by_hand && has_rows(completion_.value()) &&
+        offer_auto_vim_completion())
+    {
+        return;
+    }
     close_completion();
     // 補完の面と hover の札は同時に出さない（ADR 0190 の決定 5・6）。
     drop_hover();
@@ -693,6 +733,12 @@ void EditorController::follow_vim_completion()
     const auto &engine = state_.vim().insert_completion;
     if (engine == nullptr || !completion_.has_value())
     {
+        // 打鍵で自動に開いた面（#1962）は engine の外なので、鍵の後も閉じない（成り立つかは
+        // 出口の settle_completion が決める）。
+        if (engine == nullptr && completion_.has_value() && !completion_.value().by_hand)
+        {
+            return;
+        }
         close_completion();
         return;
     }
@@ -829,6 +875,151 @@ void EditorController::merge_vim_completion_answer(CompletionSession &session,
     follow_vim_completion();
 }
 
+// ------------------------------------------------- Vim の INSERT で打鍵が自動に開く面（#1962）
+
+// 言語サーバーが起きている窓で打った Vim の鍵（ADR 0190 の追補・#1962）。打った鍵の入口
+// （accept(VimKeyPress)）だけが呼ぶので、再生（`.` `@`）・:normal!（press_vim_keys）・IME の
+// 確定（type_as_vim_keys）の鍵はここを通らない。`map` の右辺は鍵の出どころで見分ける
+// （watched_vim_key）。engine の歩は変えない。
+void EditorController::typed_vim_key_with_language(const core::VimKey &key)
+{
+    if (auto_vim_completion_took(key))
+    {
+        return;
+    }
+    {
+        // 言語サーバーが running でなければ見張らない（1 文字ごとに文字列を作らない）。
+        const ScopedValue<bool> watch{typed_watch_, active_language_server().phase ==
+                                                        LanguageServerPhase::running};
+        typed_insert_.reset();
+        static_cast<void>(typed_vim_key(key));
+    }
+    typed_vim_character();
+}
+
+// engine に流す鍵の 1 つ（deliver_vim_key の頭・typed_watch_ の間だけ）。打った文字として
+// 数えるのは、出どころが typed（map の右辺の単位は typed_unit が mapped にする・KeyMapEmit の
+// mapped）で再生の中でなく、流す前の engine が INSERT で 1 鍵の引数（Ctrl-r のレジスタ・
+// Ctrl-v の文字）を待っていない文字の鍵だけ。左辺の待ちの後に一度に流れた鍵
+// （`inoremap jk <Esc>` の `j.`）も、最後に流した `.` を、それを流す前のキャレットで数える。
+void EditorController::watched_vim_key(const core::VimKey &key)
+{
+    typed_insert_.reset();
+    const auto *character = std::get_if<core::VimCharacter>(&key);
+    const core::VimState &vim = state_.vim();
+    if (character == nullptr || unit_source_ != core::VimKeySource::typed ||
+        replay_depth_.has_value() || state_.command_input().has_value() ||
+        state_.mode() != core::EditMode::vim || vim.mode != core::VimMode::insert ||
+        vim.input_wait.has_value())
+    {
+        return;
+    }
+    typed_insert_ = std::pair{*character, state_.selection().caret};
+}
+
+bool EditorController::auto_vim_completion_took(const core::VimKey &key)
+{
+    if (!completion_.has_value() || completion_.value().by_hand)
+    {
+        return false;
+    }
+    const auto *special = std::get_if<core::VimSpecialKey>(&key);
+    if (special == nullptr)
+    {
+        return false;
+    }
+    const core::VimSpecialKey pressed = *special;
+    // 何も選んでいない面の Ctrl-y（確定）と Ctrl-e（取り消し）は、本文を変えずに面を閉じる。答えを
+    // 待っているだけ（面がまだ出ていない）なら Vim のまま。
+    if (pressed == core::VimSpecialKey::control_y || pressed == core::VimSpecialKey::control_e)
+    {
+        if (!has_rows(completion_.value()))
+        {
+            return false;
+        }
+        close_completion();
+        return true;
+    }
+    if (pressed != core::VimSpecialKey::escape && pressed != core::VimSpecialKey::backspace &&
+        pressed != core::VimSpecialKey::control_n && pressed != core::VimSpecialKey::control_p)
+    {
+        close_completion();
+    }
+    return false;
+}
+
+// 鍵の後も INSERT で、最後に流した打った文字が流す前のキャレットの直後にそのまま入ったときだけ
+// （1 文字で抜ける鍵・貼り付け・1 鍵の引数で入った文字は渡さない）。
+void EditorController::typed_vim_character()
+{
+    if (!typed_insert_.has_value())
+    {
+        return;
+    }
+    const auto [character, before] = typed_insert_.value();
+    typed_insert_.reset();
+    if (state_.mode() != core::EditMode::vim || state_.vim().mode != core::VimMode::insert)
+    {
+        return;
+    }
+    std::string typed;
+    core::append_utf8(typed, character.code);
+    const core::Offset caret = state_.selection().caret;
+    if (caret.value != before.value + typed.size() ||
+        state_.text().text_range(before, caret) != typed)
+    {
+        return;
+    }
+    typed_for_language(typed);
+}
+
+// 自動の面の候補を engine の写しにする（ADR 0169 の形へ移る）。写すのは面に出ている LSP の候補
+// （今の接頭辞で絞った列）だけで、要求は出し直さず、待っている要求と届いていた答えは捨てる。以後の
+// 面は engine が持つので手で開いた面として扱う（by_hand を立てる）。engine の語に直すのは手で開いた
+// 面と同じ vim_completion_text の 1 本で、比べる範囲は最後の要求を出したときの接頭辞（requested）。
+bool EditorController::offer_auto_vim_completion()
+{
+    if (!completion_.has_value())
+    {
+        return false;
+    }
+    CompletionSession &session = completion_.value();
+    const auto typed = vim_completion_span(session.origin, session.requested);
+    if (!typed.has_value())
+    {
+        return false;
+    }
+    std::vector<core::CompletionEntry> server;
+    for (const std::size_t position : session.shown)
+    {
+        core::CompletionEntry entry = session.entries.at(position);
+        auto text = vim_completion_text(typed.value(), session.origin, entry);
+        if (text.has_value())
+        {
+            entry.insert = std::move(text).value();
+            entry.range.reset();
+            server.push_back(std::move(entry));
+        }
+    }
+    if (server.empty())
+    {
+        return false;
+    }
+    for (const LanguageServerSlot slot : language_server_slots)
+    {
+        cancel_lsp_requests(slot, LspRequestKind::completion);
+    }
+    forget_completion_answer();
+    session.server = std::move(server);
+    session.by_hand = true;
+    session.awaiting = false;
+    session.incomplete = false;
+    arrange_vim(session);
+    state_ = state_.with_vim(core::vim_completion_offered(
+        state_.vim(), core::VimCompletionOffer{vim_words(session), session.origin}));
+    return true;
+}
+
 std::optional<CompletionView> EditorController::completion_view() const
 {
     if (!completion_.has_value() || !has_rows(completion_.value()))
@@ -838,10 +1029,12 @@ std::optional<CompletionView> EditorController::completion_view() const
     const auto &session = completion_.value();
     const std::size_t count =
         std::min(core::completion_face_rows, session.shown.size() - session.first);
-    // 選んでいる行が無い（Vim の補完が元の接頭辞へ戻った 1 歩・#1845）ときは rows の外の値。
+    // 選んでいる行が無い（Vim の補完が元の接頭辞へ戻った 1 歩・#1845、Vim の INSERT で打鍵が自動に
+    // 開いた面・#1962）ときは rows の外の値。
+    const bool unchosen = state_.mode() == core::EditMode::vim && !session.by_hand;
     CompletionView view{.session = session.id,
                         .rows = {},
-                        .selected = session.selected < session.shown.size()
+                        .selected = !unchosen && session.selected < session.shown.size()
                                         ? session.selected - session.first
                                         : count,
                         .first = session.first,

@@ -117,6 +117,8 @@ void verify_matchparen_scope();
 // MinimapTests.cpp（ADR 0171・ミニマップの段 1）
 void verify_minimap_scope();
 void verify_feature_costs_scope();
+// CaretMotionTests.cpp（ADR 0192・#1933・キャレットの動きの純関数と設定）
+void verify_caret_motion_scope();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
 void verify_language_server_candidates_scope();

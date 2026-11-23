@@ -20,10 +20,33 @@ namespace nenenib::application
 {
 // ---------------------------------------------------------------- 言語サーバーの root（段 S3）
 
-// アクティブな文書の root（ADR 0161 の 2026-11-22 の追補）。(a) 設定の root があり文書がその下に
-// ある → 設定の root。(b) 文書のフォルダから上へ印を探した答えがあればそのフォルダ。(c) 探して
-// 何も無ければ文書のフォルダ。答えをまだ覚えていなければ seeking。パスの無い文書は設定の root
-// （あれば）か untitled。ファイルに触れない（覚えた答えを引くだけ）。
+namespace
+{
+// path の文書の root を探す頼み（文書のフォルダから・#1960）。文書が設定の root の下にあれば設定の
+// root を上限にする（開いたフォルダより上へ出ない）。フォルダの無いパスは値なし。document_root と
+// seek_language_root が同じ頼みを作る 1 本。
+[[nodiscard]] std::optional<LanguageRootRequest>
+language_root_request(const std::optional<core::FilePath> &configured, const core::FilePath &path,
+                      core::Language language)
+{
+    auto folder = core::folder_of(path);
+    if (!folder.has_value())
+    {
+        return std::nullopt;
+    }
+    auto ceiling = configured.has_value() && core::folder_contains(configured.value(), path)
+                       ? configured
+                       : std::nullopt;
+    return LanguageRootRequest{std::move(folder).value(), language, std::move(ceiling)};
+}
+} // namespace
+
+// アクティブな文書の root（ADR 0161 の 2026-11-22 の追補と #1960 の追補）。文書のフォルダから上へ
+// 印を探した答えがあればそのフォルダ（設定の root があり文書がその下にあれば、設定の root より
+// 上へは出ない・直下の文書は探さずに設定の root）。探して何も無ければ、設定の root の下の文書は
+// 設定の root、ほかは文書のフォルダ。
+// 答えをまだ覚えていなければ seeking。パスの無い文書は設定の root（あれば）か untitled。ファイルに
+// 触れない（覚えた答えを引くだけ）。
 std::expected<core::FilePath, LanguageRootGap>
 EditorController::document_root(core::Language language) const
 {
@@ -37,25 +60,27 @@ EditorController::document_root(core::Language language) const
         }
         return std::unexpected(LanguageRootGap::untitled);
     }
-    if (configured.has_value() && core::folder_contains(configured.value(), path.value()))
-    {
-        return configured.value();
-    }
-    auto folder = core::folder_of(path.value());
-    if (!folder.has_value())
+    const auto request = language_root_request(configured, path.value(), language);
+    if (!request.has_value())
     {
         return std::unexpected(LanguageRootGap::untitled);
     }
-    const LanguageRootRequest request{std::move(folder).value(), language};
+    // 文書が設定の root の直下にあれば、印があってもなくても root は設定の root（探さない）。
+    // 直下かは core の same_folder（folder_contains と同じ畳み方・`C:\work\` `C:/work` も直下）。
+    const auto &ceiling = request.value().ceiling;
+    if (ceiling.has_value() && core::same_folder(ceiling.value(), request.value().folder))
+    {
+        return ceiling.value();
+    }
     const auto &roots = language_servers_.roots;
-    const auto known =
-        std::ranges::find_if(roots, [&request](const LanguageRootAnswer &answer)
-                             { return same_language_root_request(answer.request, request); });
+    const auto known = std::ranges::find_if(
+        roots, [&request](const LanguageRootAnswer &answer)
+        { return same_language_root_request(answer.request, request.value()); });
     if (known == roots.end())
     {
         return std::unexpected(LanguageRootGap::seeking);
     }
-    return known->found.value_or(request.folder);
+    return known->found.value_or(ceiling.value_or(request.value().folder));
 }
 
 // held が今の（言語・文書のパス・設定の root・覚えの改訂）と同じ鍵か。
@@ -111,17 +136,19 @@ bool EditorController::has_language_server_command(core::Language language) cons
                                [name](const auto &entry) { return entry.first == name; });
 }
 
-// アクティブな文書の（フォルダ・言語）の印を探す頼みを 1 回だけ出す（答えを待つ間は 2
+// アクティブな文書の（フォルダ・言語・上限）の印を探す頼みを 1 回だけ出す（答えを待つ間は 2
 // 回出さない）。
 void EditorController::seek_language_root(core::Language language)
 {
     const auto &path = state_.document().path;
-    auto folder = path.has_value() ? core::folder_of(path.value()) : std::nullopt;
-    if (!folder.has_value())
+    auto made = path.has_value()
+                    ? language_root_request(state_.settings().root, path.value(), language)
+                    : std::nullopt;
+    if (!made.has_value())
     {
         return;
     }
-    LanguageRootRequest request{std::move(folder).value(), language};
+    LanguageRootRequest request = std::move(made).value();
     auto &seeking = language_servers_.seeking;
     if (std::ranges::any_of(seeking, [&request](const LanguageRootRequest &asked)
                             { return same_language_root_request(asked, request); }))
@@ -132,9 +159,9 @@ void EditorController::seek_language_root(core::Language language)
     ports_.language_roots.find(std::move(request));
 }
 
-// WorkCompleted の道。頼んでいなければ port を呼ばない。答えは（フォルダ・言語）で覚え（上限を
-// 超えたら古い方から捨てる）、起こすかを決め直す。言語サーバーの出来事を集めるより前に呼ぶので、
-// 答えで起きた子の最初の出来事は同じ合図で読む。
+// WorkCompleted の道。頼んでいなければ port を呼ばない。答えは（フォルダ・言語・探す上限）で
+// 覚え（数の上限を超えたら古い方から捨てる）、起こすかを決め直す。言語サーバーの出来事を集める
+// より前に呼ぶので、答えで起きた子の最初の出来事は同じ合図で読む。
 void EditorController::collect_language_roots()
 {
     auto &servers = language_servers_;

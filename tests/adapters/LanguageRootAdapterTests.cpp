@@ -88,20 +88,37 @@ void make_tree()
 void verify_on_disk()
 {
     const std::stop_source running;
-    const auto rust = adapters::language_root_on_disk(path_of("roots\\crate\\src\\deep"),
-                                                      core::Language::rust, running.get_token());
+    const auto rust = adapters::language_root_on_disk(
+        app::LanguageRootRequest{path_of("roots\\crate\\src\\deep"), core::Language::rust,
+                                 std::nullopt},
+        running.get_token());
     expect(rust.has_value() && rust.value().text() == "roots\\crate",
            "a Rust file finds the folder of Cargo.toml (a marker file)");
-    const auto plain = adapters::language_root_on_disk(path_of("roots\\crate\\src"),
-                                                       core::Language::cs, running.get_token());
+    const auto plain = adapters::language_root_on_disk(
+        app::LanguageRootRequest{path_of("roots\\crate\\src"), core::Language::cs, std::nullopt},
+        running.get_token());
     expect(plain.has_value() && plain.value().text() == "roots",
            "a language with only .git finds the folder of .git (a marker folder)");
     std::stop_source stopped;
     stopped.request_stop();
-    expect(!adapters::language_root_on_disk(path_of("roots\\crate\\src"), core::Language::rust,
+    expect(!adapters::language_root_on_disk(app::LanguageRootRequest{path_of("roots\\crate\\src"),
+                                                                     core::Language::rust,
+                                                                     std::nullopt},
                                             stopped.get_token())
                 .has_value(),
            "after the stop request nothing is looked at");
+    const auto capped = adapters::language_root_on_disk(
+        app::LanguageRootRequest{path_of("roots\\crate\\src\\deep"), core::Language::rust,
+                                 path_of("roots\\crate\\src")},
+        running.get_token());
+    expect(!capped.has_value(),
+           "a ceiling below the markers keeps the walk from looking above it (#1960)");
+    const auto inside = adapters::language_root_on_disk(
+        app::LanguageRootRequest{path_of("roots\\crate\\src\\deep"), core::Language::cs,
+                                 path_of("roots")},
+        running.get_token());
+    expect(inside.has_value() && inside.value().text() == "roots",
+           "the ceiling folder's own markers are looked at");
 }
 
 // 今のフォルダ（一時フォルダ）の絶対の経路を UTF-8 で。取れなければ空。
@@ -138,12 +155,15 @@ void verify_long_prefix()
     }
     const std::string base = "\\\\?\\" + here + "\\roots";
     const std::stop_source running;
-    const auto rust = adapters::language_root_on_disk(path_of(base + "\\crate\\src\\deep"),
-                                                      core::Language::rust, running.get_token());
+    const auto rust = adapters::language_root_on_disk(
+        app::LanguageRootRequest{path_of(base + "\\crate\\src\\deep"), core::Language::rust,
+                                 std::nullopt},
+        running.get_token());
     expect(rust.has_value() && rust.value().text() == base + "\\crate",
            "a \\\\?\\ path finds the folder of Cargo.toml");
-    const auto plain = adapters::language_root_on_disk(path_of(base + "\\crate\\src"),
-                                                       core::Language::cs, running.get_token());
+    const auto plain = adapters::language_root_on_disk(
+        app::LanguageRootRequest{path_of(base + "\\crate\\src"), core::Language::cs, std::nullopt},
+        running.get_token());
     expect(plain.has_value() && plain.value().text() == base,
            "a \\\\?\\ path finds the folder of .git");
 }
@@ -154,7 +174,8 @@ void verify_on_worker()
     adapters::Win32LanguageRootAdapter roots(worker);
     std::counting_semaphore<> arrived{0};
     roots.bind([&arrived] { arrived.release(); });
-    roots.find(app::LanguageRootRequest{path_of("roots\\crate\\src"), core::Language::rust});
+    roots.find(
+        app::LanguageRootRequest{path_of("roots\\crate\\src"), core::Language::rust, std::nullopt});
     arrived.acquire();
     const auto answers = roots.collect();
     const auto found = answers.empty() ? std::nullopt : answers.front().found;
@@ -165,13 +186,13 @@ void verify_on_worker()
     std::size_t signals = 0;
     shelf.bind([&signals] { ++signals; });
     shelf.deliver(app::LanguageRootAnswer{
-        app::LanguageRootRequest{path_of("a"), core::Language::go}, std::nullopt});
+        app::LanguageRootRequest{path_of("a"), core::Language::go, std::nullopt}, std::nullopt});
     shelf.deliver(app::LanguageRootAnswer{
-        app::LanguageRootRequest{path_of("b"), core::Language::go}, std::nullopt});
+        app::LanguageRootRequest{path_of("b"), core::Language::go, std::nullopt}, std::nullopt});
     expect(signals == 1 && shelf.take().size() == 2, "the shelf signals once when it fills");
     shelf.close();
     shelf.deliver(app::LanguageRootAnswer{
-        app::LanguageRootRequest{path_of("c"), core::Language::go}, std::nullopt});
+        app::LanguageRootRequest{path_of("c"), core::Language::go, std::nullopt}, std::nullopt});
     expect(signals == 1 && shelf.take().empty(), "a closed shelf keeps nothing");
 }
 } // namespace

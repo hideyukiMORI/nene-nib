@@ -3,6 +3,7 @@
 
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
+#include "CaretGlide.hpp"
 #include "DisplayLanguage.hpp"
 #include "DisplayLanguageChoice.hpp"
 #include "DisplayLanguageNames.hpp"
@@ -68,6 +69,8 @@ constexpr std::array<FinderPreview, 4> finder_preview_order{
         return UiMessage::settings_font_size_name;
     case SettingsValue::finder_preview:
         return UiMessage::settings_finder_preview_name;
+    case SettingsValue::caret_motion_time:
+        return UiMessage::settings_caret_motion_time_name;
     }
     std::unreachable();
 }
@@ -86,6 +89,8 @@ constexpr std::array<FinderPreview, 4> finder_preview_order{
         return UiMessage::settings_font_size_description;
     case SettingsValue::finder_preview:
         return UiMessage::settings_finder_preview_description;
+    case SettingsValue::caret_motion_time:
+        return UiMessage::settings_caret_motion_time_description;
     }
     std::unreachable();
 }
@@ -104,6 +109,8 @@ constexpr std::array<FinderPreview, 4> finder_preview_order{
         return "fontsize";
     case SettingsValue::finder_preview:
         return "finderpreview";
+    case SettingsValue::caret_motion_time:
+        return "caretmotiontime";
     }
     std::unreachable();
 }
@@ -283,6 +290,8 @@ std::string settings_value_text(const EditorSettings &settings, SettingsValue va
         return font_size_text(settings.font_size);
     case SettingsValue::finder_preview:
         return std::string(ui_text(finder_preview_title(settings.finder_preview), language));
+    case SettingsValue::caret_motion_time:
+        return caret_motion_time_text(settings.caret_motion_time);
     }
     std::unreachable();
 }
@@ -308,6 +317,9 @@ EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue val
         return settings;
     case SettingsValue::finder_preview:
         settings.finder_preview = cycled(finder_preview_order, settings.finder_preview, forward);
+        return settings;
+    case SettingsValue::caret_motion_time:
+        settings.caret_motion_time = caret_motion_time_stepped(settings.caret_motion_time, forward);
         return settings;
     }
     std::unreachable();

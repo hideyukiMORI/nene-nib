@@ -18,5 +18,6 @@
 | minimap | オフの A/B（2026-11-11・ADR 0171）は差が計測の分解能の外。オンの費用（`minimap-single-key` `minimap-burst-200`）は基準値が無く、試用の後に採る（ADR 0171 の「強制」） |
 | wrap・guide・autoindent・explorer・easymotion・start_screen | 1 打鍵の増分を測った記録が無い |
 | syntax | 文書ごとの値で設定の面に載せない（決定 4） |
+| caretmotion | オフの道の増分は設定の欄 1 つを読むだけ。動いている間だけ frame を出すので、オンの費用は打鍵の基準に混ぜず別の基準で扱う（ADR 0192 の決定 7・D60 の考え方）。試用の後に採る |
 
 行を足すときは、任意のベンチ（`OPTIONAL_BENCHES`）で測った A/B の記録（日・機械・数字）を品質の記録に残し、その行をここに写して `feature_costs` の同じ行の `single_key_delta_us` と `bench` を埋める。

@@ -72,6 +72,8 @@ constexpr std::string_view off_prefix = "no_";
         return settings.explorer;
     case EditorFeature::lsp:
         return settings.lsp;
+    case EditorFeature::caret_motion:
+        return settings.caret_motion;
     case EditorFeature::matchparen:
     case EditorFeature::easymotion:
     case EditorFeature::minimap:
@@ -101,6 +103,9 @@ void own_key_set(EditorSettings &settings, EditorFeature feature, bool on) noexc
         return;
     case EditorFeature::lsp:
         settings.lsp = on;
+        return;
+    case EditorFeature::caret_motion:
+        settings.caret_motion = on;
         return;
     case EditorFeature::matchparen:
     case EditorFeature::easymotion:

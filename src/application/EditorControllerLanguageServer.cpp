@@ -73,9 +73,16 @@ namespace
 }
 
 // client の `textDocument` の能力（ADR 0190 の決定 3）。補完はスニペットを受けず説明は平文、hover
-// は 平文と markdown、定義は LocationLink を受ける。
+// は 平文と markdown、定義は LocationLink を受ける。診断は `version`
+// だけを読む（`relatedInformation` `tags` `codeDescription`
+// は読まないので名乗らない）。同期は保存の後の `didSave` を送る（#1961・
+// 名乗らないと診断を送らないサーバーがある）。
 [[nodiscard]] core::JsonValue text_document_capabilities()
 {
+    core::JsonObject synchronization;
+    synchronization.emplace_back("didSave", core::JsonValue{true});
+    core::JsonObject diagnostics;
+    diagnostics.emplace_back("versionSupport", core::JsonValue{true});
     core::JsonObject item;
     item.emplace_back("snippetSupport", core::JsonValue{false});
     item.emplace_back("documentationFormat", text_list({"plaintext"}));
@@ -86,6 +93,8 @@ namespace
     core::JsonObject definition;
     definition.emplace_back("linkSupport", core::JsonValue{true});
     core::JsonObject text_document;
+    text_document.emplace_back("synchronization", core::JsonValue{std::move(synchronization)});
+    text_document.emplace_back("publishDiagnostics", core::JsonValue{std::move(diagnostics)});
     text_document.emplace_back("completion", core::JsonValue{std::move(completion)});
     text_document.emplace_back("hover", core::JsonValue{std::move(hover)});
     text_document.emplace_back("definition", core::JsonValue{std::move(definition)});
@@ -420,7 +429,7 @@ std::optional<LanguageServerSlot> EditorController::serving_slot(core::Language 
         const LanguageServerLink &link = links.at(slot_index(slot));
         if (!serving_phase(link.phase) || link.language != std::optional{language} ||
             (root.has_value() &&
-             !(link.root.has_value() && same_language_root(link.root.value(), root.value()))))
+             !(link.root.has_value() && core::same_folder(link.root.value(), root.value()))))
         {
             continue;
         }
