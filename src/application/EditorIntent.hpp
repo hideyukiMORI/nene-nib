@@ -10,6 +10,7 @@
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
+#include "CaretMotionTick.hpp"
 #include "ChangeSetting.hpp"
 #include "ChooseCompletion.hpp"
 #include "ChooseContextMenu.hpp"
@@ -149,5 +150,6 @@ using EditorIntent = std::variant<
     CloseSettings, RevertSettings, StepSettings, ChangeSetting, ChooseSettingsPreset,
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
     RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
-    PreviewScrollSettled, RunDiagnosticCommand, ResizeSplit, ResizePane, OpenLanguageServerLog>;
+    PreviewScrollSettled, RunDiagnosticCommand, ResizeSplit, ResizePane, OpenLanguageServerLog,
+    CaretMotionTick>;
 } // namespace nenenib::application

@@ -982,11 +982,11 @@ class EditorController final
     void consider_language_server(core::Language language);
     void yield_language_server();
     [[nodiscard]] std::optional<ServerLaunch> wanted_language_server(core::Language language);
-    // root（2026-11-22 の追補・段 S3）: document_root はアクティブな文書の root（設定の root →
-    // 印を探した答え → 文書のフォルダ・まだ分からなければ理由）、seek は印を探す頼みを 1 回だけ
-    // 出し、collect は答えを覚えて決め直す（頼んでいなければ port を呼ばない）。held_root は
-    // reconcile が hold_language_root で 1 回決めた値が今も同じ鍵なら読み、違えば document_root
-    // （#1944 のレビュー L1）。
+    // root（2026-11-22 の追補・段 S3・#1960）: document_root はアクティブな文書の root（設定の root
+    // を上限に印を探した答え → 設定の root か文書のフォルダ・まだ分からなければ理由）、seek は印を
+    // 探す頼みを 1 回だけ出し、collect は答えを覚えて決め直す（頼んでいなければ port を呼ばない）。
+    // held_root は reconcile が hold_language_root で 1 回決めた値が今も同じ鍵なら読み、違えば
+    // document_root（#1944 のレビュー L1）。
     [[nodiscard]] std::expected<core::FilePath, LanguageRootGap>
     document_root(core::Language language) const;
     [[nodiscard]] std::expected<core::FilePath, LanguageRootGap>
@@ -1096,7 +1096,6 @@ class EditorController final
     void drop_hover();
     // 引数の情報の札（#1959・EditorControllerSignature.cpp）。
     void settle_typed_signature(std::string_view typed);
-    void settle_typed_vim_signature(const core::VimKey &key, std::size_t before);
     void settle_signature_answer();
     void settle_signature_tip();
     [[nodiscard]] bool signature_allowed() const;
@@ -1245,6 +1244,9 @@ class EditorController final
     // 消すのは入口の settle_tab_tip の 1 か所で、使う人の操作の意図（not_user_operation でない
     // 意図）が来たら写す前に消す。札を出しているタブは shown_tab_tip が frame に写す。
     void accept(const TabTipTick &intent);
+    // キャレットの動きの合図（ADR 0192 の決定 3）。進みを覚えて frame に載せるだけで、状態を
+    // 変えない。
+    void accept(const CaretMotionTick &intent);
     void settle_tab_tip(const EditorIntent &intent);
     void hide_tab_tip();
     [[nodiscard]] std::optional<std::size_t> shown_tab_tip() const;
@@ -1484,12 +1486,18 @@ class EditorController final
     void close_completion_before(const EditorIntent &intent);
     // 出口の 1 か所（apply）。成り立たなくなった面を閉じ、届いた答えを足し、打った分で絞り直す。
     void settle_completion();
-    // 通常モードで `triggerCharacters` の 1 つを打ち終えたら開く。呼ぶのは言語サーバーが running の
-    // ときだけ（accept(InsertText) の 1 か所）。
+    // 使う人が打った文字が本文に入った後の言語サーバーの入口（#1962）。通常モードの InsertText と
+    // Vim の INSERT の 1 文字（typed_vim_character）の両方がここを通る。呼ぶ側は「言語サーバーが
+    // 起きている」の真偽の後ろで呼ぶ（ADR 0190 の決定 10）。typed は今打った文字。
+    void typed_for_language(std::string_view typed);
+    // `triggerCharacters` の 1 つを打ち終えたら開く（通常モードと Vim の INSERT・#1962）。呼ぶのは
+    // 言語サーバーが running のときだけ（typed_for_language の 1 か所）。
     void open_triggered_completion(std::string_view typed);
     // 面を開く 1 か所。trigger が無ければ手で開いた面、あれば自動の面。
     void start_completion(std::optional<std::string_view> trigger);
-    [[nodiscard]] bool completion_startable() const;
+    // 面を開ける状態か。triggered は打鍵で自動に開く面（Vim の INSERT で開けるのはこれだけ・
+    // #1962）。
+    [[nodiscard]] bool completion_startable(bool triggered) const;
     [[nodiscard]] bool completion_holds(const CompletionSession &session) const;
     void refresh_completion(CompletionSession &session);
     [[nodiscard]] bool take_completion_answer(CompletionSession &session);
@@ -1509,6 +1517,20 @@ class EditorController final
     // Vim の INSERT の補完（#1845・ADR 0169 の決定 3）。engine が形を持ち、controller は補完を
     // 始める鍵の直前に候補の写しを置き（offer）、鍵の後に engine の状態を面へ写す（follow）。
     void offer_vim_completion(const core::VimKey &key);
+    // 自動で開いた面が出ている間の Ctrl-n / Ctrl-p で、面の候補を engine の写しにする（#1962）。
+    // 写せる候補が無ければ偽（呼ぶ側は ADR 0169 の本文の語の道へ落ちる）。
+    [[nodiscard]] bool offer_auto_vim_completion();
+    // 言語サーバーが起きている窓で打った Vim の鍵（#1962）。accept(VimKeyPress) が「起きている」の
+    // 真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、鍵を流した後に typed_vim_character。
+    void typed_vim_key_with_language(const core::VimKey &key);
+    // 自動で開いた面が出ている間の Ctrl-y / Ctrl-e は面を閉じるだけで Vim に渡さない（真）。
+    // 文字・Backspace・Ctrl-n / Ctrl-p・Esc 以外の鍵は面を閉じてから Vim に渡す（偽）。
+    [[nodiscard]] bool auto_vim_completion_took(const core::VimKey &key);
+    // deliver_vim_key が engine に流す鍵ごとに typed_insert_ を書き直す（typed_watch_ の間だけ）。
+    void watched_vim_key(const core::VimKey &key);
+    // 打った鍵を流し終えた後、最後に流した鍵が typed_insert_ の 1 文字で、それが流す前のキャレット
+    // の直後にそのまま入ったなら typed_for_language へ渡す。
+    void typed_vim_character();
     void follow_vim_completion();
     void choose_vim_completion(std::optional<std::size_t> row);
     void settle_vim_completion(CompletionSession &session);
@@ -1921,6 +1943,13 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
+    // 言語サーバーが running の窓で打った鍵を流している間だけ立つ（typed_vim_key_with_language が
+    // ScopedValue で置く・#1962）。立っている間だけ deliver_vim_key が watched_vim_key を呼ぶ。
+    bool typed_watch_ = false;
+    // 最後に engine へ流した鍵が打った文字（出どころ typed・map の右辺でも再生でもない）で、
+    // INSERT が 1 鍵の引数を待たずに受けたなら、その文字と流す前のキャレット。ほかの鍵を
+    // 流したら空（watched_vim_key だけが書き、typed_vim_character が読んで消す）。
+    std::optional<std::pair<core::VimCharacter, core::Offset>> typed_insert_;
     // 開いている入力行に打った鍵が 1 つでも届いたか（Vim の some_key_typed）。Ex の行を履歴に
     // 足すのはこれが立っているときだけ（remember(CommandLine)）。note_command_key だけが立て、
     // close_command_input だけが倒す。
@@ -2144,5 +2173,8 @@ class EditorController final
     // この意図が頼むタブの札の待ちのタイマー（EditorDelivery.tab_tip_timer・#1789）。apply の
     // 入口で空に戻し、札の段を変える所（帯の hover・合図・入口の消す 1 か所）だけが置く。
     std::optional<TabTipTimer> tab_tip_timer_;
+    // 最後に届いたキャレットの動きの進み（ADR 0192 の決定 3）。CaretMotionTick だけが置き、
+    // frame が写す。
+    core::CaretMotionClock caret_motion_clock_{};
 };
 } // namespace nenenib::application

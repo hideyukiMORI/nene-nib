@@ -14,7 +14,6 @@
 #include "KeyMapEmit.hpp"
 #include "KeyMapPass.hpp"
 #include "KeyMapPending.hpp"
-#include "LanguageServerPhase.hpp"
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
@@ -581,40 +580,13 @@ void EditorController::accept(const VimKeyPress &intent)
     {
         return;
     }
-    // 照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
-    const bool watching = language_servers_.awake != 0 &&
-                          active_language_server().phase == LanguageServerPhase::running;
-    const std::size_t before = watching ? state_.text().size_bytes() : 0;
+    // 言語サーバーが起きていなければ、足すのは真偽 1 つの読みだけ（ADR 0190 の決定 10・#1962）。
+    if (language_servers_.awake != 0)
+    {
+        typed_vim_key_with_language(intent.key);
+        return;
+    }
     static_cast<void>(typed_vim_key(intent.key));
-    // INSERT で打った `triggerCharacters` の 1 文字で引数の情報を頼む（#1959・ADR 0191 の決定 6）。
-    if (watching)
-    {
-        settle_typed_vim_signature(intent.key, before);
-    }
-}
-
-// 使う人が打った ASCII の 1 文字がそのまま本文に入った（INSERT のまま・本文が 1 バイト増え、
-// キャレットの直前がその文字）ときだけ、引数の情報の打鍵の道へ渡す。`map` の右辺（増え方が違う・
-// 打った鍵と違う文字）と、左辺の途中で待っている鍵（本文が増えない）は頼まない。録画の再生・`.`・
-// `:normal`・貼り付け（Ctrl-R など）・IME の確定（CommitText）はこの入口（accept(VimKeyPress)）を
-// 通らない。
-void EditorController::settle_typed_vim_signature(const core::VimKey &key, std::size_t before)
-{
-    const auto *typed = std::get_if<core::VimCharacter>(&key);
-    constexpr char32_t last_ascii = 0x7F;
-    if (typed == nullptr || typed->code > last_ascii ||
-        state_.vim().mode != core::VimMode::insert || state_.text().size_bytes() != before + 1)
-    {
-        return;
-    }
-    const std::size_t caret = state_.selection().caret.value;
-    const std::string typed_text(1, static_cast<char>(typed->code));
-    if (caret == 0 ||
-        state_.text().text_range(core::Offset{caret - 1}, core::Offset{caret}) != typed_text)
-    {
-        return;
-    }
-    settle_typed_signature(typed_text);
 }
 
 // 打った鍵の入口（ADR 0176 の決定 3・4）。表が空なら分岐 1 つで今までの道。表を引けないとき
@@ -862,6 +834,11 @@ void EditorController::refresh_key_map()
 // 失敗しない。失敗を返すのは engine の鍵（入力行の確定が送る検索の鍵を含む）だけ。
 std::optional<core::VimRepeatFailure> EditorController::deliver_vim_key(const core::VimKey &key)
 {
+    // 言語サーバーが running の窓で打った鍵の間だけ（#1962）。ほかは真偽 1 つの読み。
+    if (typed_watch_)
+    {
+        watched_vim_key(key);
+    }
     if (!state_.command_input().has_value())
     {
         // 再生の中で入力行を取り消した後の鍵も、engine へ流す前に同じ 1

@@ -229,7 +229,9 @@ drawing_failure(std::optional<TextLayoutFailure> failure) noexcept
 // not_user_operation の 1 本を経て歩きを続け、報せを消さない。
 // 言語サーバーの古さの合図（LanguageServerTick）も使う人の操作ではないので歩きを続ける（ADR 0160
 // の決定 6）。Ctrl つきのホイールは帯の上でも字の大きさ（AdjustFontSize）になり、歩きを確定する
-// （ADR 0150 の追補・#1048）。歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
+// （ADR 0150 の追補・#1048）。キャレットの動きの合図（CaretMotionTick・ADR 0192 の決定 3）も
+// 使う人の操作ではないので、is_signal の 1 本を経て歩きを続け、begin_intent でも知らせを消さない。
+// 歩きの間は Ctrl を押しているので、ScrollTabs が歩きの間に来る
 // ことは無い。題名のダブルクリックの PinTab も使う人の操作なので、ここにも begin_intent にも
 // 書かない（ADR 0179 の決定 4-4）。ミニマップの押しとドラッグ（PointMinimap）はホイールの
 // ScrollLines と同じく使う人の操作の側で、ここにも begin_intent にも keeps_wanted_x にも書かない
@@ -1444,6 +1446,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.context_menu = context_menu_view();
     result.completion = completion_view();
     result.settings_panel = settings_view();
+    result.caret_motion = caret_motion_clock_;
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

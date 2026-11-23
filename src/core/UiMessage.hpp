@@ -418,6 +418,11 @@ enum class UiMessage : std::uint16_t
     settings_lsp_more,
     notice_language_server_log_empty,
     status_language_server_starting,
+    // キャレットの動き（ADR 0192・#1933）の設定の画面の行。
+    settings_caret_motion_name,
+    settings_caret_motion_description,
+    settings_caret_motion_time_name,
+    settings_caret_motion_time_description,
     // 参照の一覧の記号と知らせ（#1947・ADR 0191 の決定 2・4）。
     palette_mark_references,
     notice_references_not_found,

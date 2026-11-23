@@ -12,7 +12,6 @@
 #include "Edit.hpp"
 #include "HtmlToMarkdown.hpp"
 #include "Language.hpp"
-#include "LanguageServerPhase.hpp"
 #include "OrdinaryCharacterBoundary.hpp"
 #include "OrdinaryWordBoundary.hpp"
 #include "PasteKind.hpp"
@@ -414,13 +413,10 @@ void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchorin
 void EditorController::accept(const InsertText &intent)
 {
     replace(core::selection_range(state_.selection()), intent.utf8, core::EditBoundary::coalesce);
-    // `triggerCharacters` の照合は「言語サーバーが動いている」の真偽の後ろ（ADR 0190 の決定 10）。
-    if (language_servers_.awake != 0 &&
-        active_language_server().phase == LanguageServerPhase::running)
+    // `triggerCharacters` の照合は「言語サーバーが起きている」の真偽の後ろ（ADR 0190 の決定 10）。
+    if (language_servers_.awake != 0)
     {
-        open_triggered_completion(intent.utf8);
-        // 引数の情報も同じ枝の後ろ（#1959・ADR 0191 の決定 6）。
-        settle_typed_signature(intent.utf8);
+        typed_for_language(intent.utf8);
     }
 }
 

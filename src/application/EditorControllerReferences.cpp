@@ -359,6 +359,7 @@ void EditorController::use_symbols_answer(LanguageSymbols answered, bool listing
 
 // 今は見せられない記号の答え。Ctrl+P の一覧が開いていれば（記号が `%` でない打ち直しの途中）、
 // 照合は通っているので見せずに控える（空の答えは控えない・知らせない）。一覧が閉じていれば捨てる。
+// 控えるだけで見せないので、窓が非アクティブかは見ない（非アクティブでも同じに控える）。
 void EditorController::keep_symbols_answer(LanguageSymbols answered)
 {
     const auto &input = state_.command_input();
@@ -501,7 +502,8 @@ EditorController::held_references_subject(core::PaletteScope scope) const
 }
 
 // 言語サーバーの出どころの候補が 0 のときの 1 行（#1958 の決め 2）。LSP がオフならそれを、参照と
-// 記号は頼み方を（席が能力を持たなければ「答えません」）、診断は「診断はありません」。鍵は操作の表から引く（文に鍵を直書きしない）。
+// 記号は頼み方を（席が能力を持たなければ「答えません」）、診断は「診断はありません」。
+// 鍵は操作の表から引く（文に鍵を直書きしない）。
 std::optional<core::DisplayText>
 EditorController::palette_empty_line(core::PaletteScope scope) const
 {

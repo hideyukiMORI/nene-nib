@@ -67,6 +67,11 @@ struct EditorSettings
     // 探して見る面のプレビュー欄の置き方（ADR 0189 の決定 1・settings.v5 の鍵 `finder_preview`・
     // 既定は automatic）。`:set finderpreview=` と面が開いている間の Ctrl+Shift+P が変える。
     FinderPreview finder_preview = FinderPreview::automatic;
+    // キャレットの動き（尾を引く・ADR 0192・#1933・settings.v6 の鍵 `caret_motion` と
+    // `caret_motion_time`）。既定はオフと 120 ms（施主の決め 2026-11-22）。時間は
+    // caret_motion_time_minimum〜caret_motion_time_maximum（CaretGlide.hpp）。
+    bool caret_motion = false;
+    std::uint16_t caret_motion_time = 120;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

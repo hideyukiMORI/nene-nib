@@ -985,8 +985,9 @@ void verify_abilities()
     expect(
         contains(
             server.sent().front(),
-            R"("textDocument":{"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}}})"),
-        "initialize offers completion without snippets, hover text and definition links");
+            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}}})"),
+        "initialize offers didSave, versioned diagnostics, completion without snippets, hover "
+        "text, definition links, references, document symbols and signature help");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.completion && abilities.hover && abilities.definition &&
                abilities.trigger_characters == std::vector<std::string>{".", "->"},
@@ -1931,12 +1932,14 @@ void verify_did_save()
 }
 
 // 2026-11-20 の追補（#1897）: 診断の URI は定義の着地と同じ規則（パスへ写して same_file）で照合し、
-// ドライブ文字の大小と百分率の符号化の違いで捨てない。
+// ドライブ文字の大小と百分率の符号化の違いで捨てない（小文字のドライブと `%3A` は
+// typescript-language-server の綴り・#1961）。
 void verify_diagnostics_uri_forms()
 {
     for (const std::string_view uri : {std::string_view{"file:///c:/work/main.cpp"},
                                        std::string_view{"file:///C%3A/work/main.cpp"},
-                                       std::string_view{"file:///c%3a/work/%6Dain.cpp"}})
+                                       std::string_view{"file:///c%3a/work/%6Dain.cpp"},
+                                       std::string_view{"file:///c%3A/work/main.cpp"}})
     {
         Editing editing(lsp_settings(true));
         started_with_lines(editing);
