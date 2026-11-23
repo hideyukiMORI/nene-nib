@@ -27,7 +27,7 @@ inline constexpr std::uint16_t reference_single_key_us = 641;
 // 機能の表（ADR 0170 の決定 1・2・2026-11-18 の追補 1・3）。EditorFeature の宣言の順に 1 行ずつ。
 // 測った数字（single_key_delta_us・bench）は docs/quality/feature-costs.md の行を写したもので、
 // 文書の行と表の一致は試験 `--feature-costs` が見る。数字を変えるときは文書と同じ PR で変える。
-inline constexpr std::array<FeatureCost, 12> feature_costs{{
+inline constexpr std::array<FeatureCost, 13> feature_costs{{
     {EditorFeature::wrap, "wrap", true, FeatureStorage::own_key, 0, "", false,
      UiMessage::settings_wrap_name, UiMessage::settings_wrap_description},
     {EditorFeature::guide, "guide", true, FeatureStorage::own_key, 0, "", false,
