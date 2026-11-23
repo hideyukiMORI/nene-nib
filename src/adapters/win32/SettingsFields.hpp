@@ -37,6 +37,8 @@ struct SettingsFields
     // v6 だけの鍵。キャレットの動きのオン・オフと時間（ADR 0192 の決定 1）。
     std::optional<std::string_view> caret_motion;
     std::optional<std::string_view> caret_motion_time;
+    // v6 だけの鍵。打ったときの粒のオン・オフ（ADR 0192 の追補・#1979）。
+    std::optional<std::string_view> caret_sparks;
     // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
     std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
     // Vim の `map.<modes>.<lhs>` の行（鍵の全体と値・ファイルの中の順）と `mapleader`

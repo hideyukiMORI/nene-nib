@@ -290,6 +290,10 @@ records in `docs/quality/`.
   behind as it moves, with a soft edge; `:set caretmotiontime=` sets the time (120 ms by default, 40–300). It
   does not move while Windows animation effects are off or the IME is composing (decision D108,
   [ADR 0192](docs/adr/0192-caret-motion-trails-behind-the-caret.md)).
+  *New after 1.1.0*: `:set caretsparks` (off by default, also in the settings drawer, independent of the
+  motion) scatters a few small sparks from where each character is typed; they fade within about 420 ms and
+  do not appear for pastes, replays, `.`, undo or caret moves, nor while Windows animation effects are off or
+  the IME is composing (#1979).
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
   IME off, INSERT turns it back on. The Ctrl+P palette and the Vim `:` and search lines take a composition: they
   open with the IME off and leave it to the user (D32, D57). The explorer filter also takes Japanese input. Done.
@@ -325,7 +329,7 @@ records in `docs/quality/`.
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document
   ([ADR 0156](docs/adr/0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md)).
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion` and `caret_motion_time`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion`, `caret_motion_time` and `caret_sparks`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
@@ -462,7 +466,7 @@ forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=` / `autoi
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off and `caret_motion_time` starts at 120 ms), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off, `caret_motion_time` starts at 120 ms and `caret_sparks` starts off), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170); in the same way, a change made in 1.1.0 after `settings.v6` exists goes to `settings.v5` and is not seen by later versions, and the other way round (ADR 0192). A broken new file is reported and blocks settings writes until repaired and restarted.
 

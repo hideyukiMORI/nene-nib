@@ -387,5 +387,6 @@ void verify_caret_motion_scope()
     verify_tick_keeps_vim_state();
     verify_tick_keeps_key_map_wait();
     verify_tick_keeps_wanted_column();
+    verify_caret_sparks_contracts();
 }
 } // namespace nenenib::tests

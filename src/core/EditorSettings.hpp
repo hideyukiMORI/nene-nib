@@ -72,6 +72,9 @@ struct EditorSettings
     // caret_motion_time_minimum〜caret_motion_time_maximum（CaretGlide.hpp）。
     bool caret_motion = false;
     std::uint16_t caret_motion_time = 120;
+    // 打ったときの粒（ADR 0192 の追補・#1979・settings.v6 の鍵 `caret_sparks`）。既定はオフ（施主の
+    // 決め 2026-11-23）。キャレットの動き（caret_motion）と独立に入れられる。
+    bool caret_sparks = false;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

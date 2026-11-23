@@ -497,5 +497,8 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_signature_not_found, "No parameter info"},
     {UiMessage::notice_signature_not_supported,
      "This language server does not answer parameter info"},
+    {UiMessage::settings_caret_sparks_name, "Typing Sparks"},
+    {UiMessage::settings_caret_sparks_description,
+     "Scatter a few small sparks from where each character is typed"},
 }};
 } // namespace nenenib::core

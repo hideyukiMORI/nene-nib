@@ -502,10 +502,12 @@ void EditorController::accept(const TabTipTick &intent)
     state_ = state_.with_tab_tip(TabTipPhase::shown);
 }
 
-// キャレットの動きの進みを覚える（ADR 0192 の決定 3）。描き直しは要る（renderer が四隅を進める）。
+// キャレットの動きと打ったときの粒の進みを覚える（ADR 0192 の決定 3・追補・#1979）。描き直しは要る
+// （renderer が四隅を進める）。
 void EditorController::accept(const CaretMotionTick &intent)
 {
     caret_motion_clock_ = intent.progress;
+    caret_sparks_clock_ = intent.sparks;
 }
 
 // 札を消す意図を決める 1 か所（#1789）。使う人の操作（押す・鍵・ホイール・面や入力行を開く…・

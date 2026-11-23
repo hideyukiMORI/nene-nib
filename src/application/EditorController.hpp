@@ -443,6 +443,9 @@ class EditorController final
     // keeps_walk は歩きを続ける意図か。Vim の鍵は歩きを続けない。
     void settle_tab_walk_before(bool keeps_walk);
     void accept(const InsertText &intent);
+    // 本文に文字列を入れる 1 本（打った文字と F5 の日時が共用・言語サーバーの照合もここ）。打ったと
+    // きの粒の通し番号は進めない（進めるのは accept(InsertText) だけ・#1979）。
+    void insert_text(const std::string &utf8);
     void accept(const MoveCaret &intent);
     void accept(const PlaceCaret &intent);
     void accept(const DeleteText &intent);
@@ -1520,8 +1523,9 @@ class EditorController final
     // 自動で開いた面が出ている間の Ctrl-n / Ctrl-p で、面の候補を engine の写しにする（#1962）。
     // 写せる候補が無ければ偽（呼ぶ側は ADR 0169 の本文の語の道へ落ちる）。
     [[nodiscard]] bool offer_auto_vim_completion();
-    // 言語サーバーが起きている窓で打った Vim の鍵（#1962）。accept(VimKeyPress) が「起きている」の
-    // 真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、鍵を流した後に typed_vim_character。
+    // 言語サーバーが起きている窓か打ったときの粒がオンの窓で打った Vim の鍵（#1962・#1979）。
+    // accept(VimKeyPress)が「起きている」と粒の真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、
+    // 鍵を流した後に typed_vim_character。
     void typed_vim_key_with_language(const core::VimKey &key);
     // 自動で開いた面が出ている間の Ctrl-y / Ctrl-e は面を閉じるだけで Vim に渡さない（真）。
     // 文字・Backspace・Ctrl-n / Ctrl-p・Esc 以外の鍵は面を閉じてから Vim に渡す（偽）。
@@ -1529,8 +1533,8 @@ class EditorController final
     // deliver_vim_key が engine に流す鍵ごとに typed_insert_ を書き直す（typed_watch_ の間だけ）。
     void watched_vim_key(const core::VimKey &key);
     // 打った鍵を流し終えた後、最後に流した鍵が typed_insert_ の 1 文字で、それが流す前のキャレット
-    // の直後にそのまま入ったなら typed_for_language へ渡す。
-    void typed_vim_character();
+    // の直後にそのまま入ったなら、粒の通し番号を進め、language なら typed_for_language へ渡す。
+    void typed_vim_character(bool language);
     void follow_vim_completion();
     void choose_vim_completion(std::optional<std::size_t> row);
     void settle_vim_completion(CompletionSession &session);
@@ -1943,8 +1947,9 @@ class EditorController final
     // 再生の外で engine に流す鍵の出どころ（typed か mapped）。typed_unit が表に当たった単位の
     // 間だけ mapped にする。再生の中は replayed が勝つ（measured_vim_step）。
     core::VimKeySource unit_source_ = core::VimKeySource::typed;
-    // 言語サーバーが running の窓で打った鍵を流している間だけ立つ（typed_vim_key_with_language が
-    // ScopedValue で置く・#1962）。立っている間だけ deliver_vim_key が watched_vim_key を呼ぶ。
+    // 言語サーバーが running か打ったときの粒がオンの窓で打った鍵を流している間だけ立つ
+    // （typed_vim_key_with_language が ScopedValue で置く・#1962）。立っている間だけ
+    // deliver_vim_key が watched_vim_key を呼ぶ。
     bool typed_watch_ = false;
     // 最後に engine へ流した鍵が打った文字（出どころ typed・map の右辺でも再生でもない）で、
     // INSERT が 1 鍵の引数を待たずに受けたなら、その文字と流す前のキャレット。ほかの鍵を
@@ -2176,5 +2181,11 @@ class EditorController final
     // 最後に届いたキャレットの動きの進み（ADR 0192 の決定 3）。CaretMotionTick だけが置き、
     // frame が写す。
     core::CaretMotionClock caret_motion_clock_{};
+    // 最後に届いた打ったときの粒の時計（ADR 0192 の追補・#1979）。CaretMotionTick だけが置き、frame
+    // が写す。
+    core::CaretMotionClock caret_sparks_clock_{};
+    // 使う人が打った文字が本文に入った打鍵の通し番号（#1979・設定の caret_sparks がオンの間だけ進
+    // む）。accept(InsertText) と typed_vim_character の 2 か所だけが進め、frame が写す。
+    std::uint32_t typed_serial_ = 0;
 };
 } // namespace nenenib::application
