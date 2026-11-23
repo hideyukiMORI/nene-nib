@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 66> expected_2{
+constexpr std::array<OperationChoiceExpected, 68> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -193,8 +193,14 @@ constexpr std::array<OperationChoiceExpected, 66> expected_2{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::show_signature_help, 65U, "引数の情報を表示", 8U,
       "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します", 40U, "",
-      "", core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 63> expected_3{
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::format_document, 66U, "文書を整形", 5U,
+      "今の文書の全体を言語サーバーに整形してもらいます（1 回の元に戻すで戻ります）", 39U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::format_selection, 67U, "選択範囲を整形", 7U,
+      "選択範囲（選択が無ければキャレットの行）を言語サーバーに整形してもらいます", 37U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 65> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -364,8 +370,14 @@ constexpr std::array<OperationChoiceExpected, 63> expected_3{
       core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::show_signature_help, 65U, "引数の情報を表示", 8U,
       "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します", 40U, "",
-      "", core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 66> expected_4{
+      "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::format_document, 66U, "文書を整形", 5U,
+      "今の文書の全体を言語サーバーに整形してもらいます（1 回の元に戻すで戻ります）", 39U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::format_selection, 67U, "選択範囲を整形", 7U,
+      "選択範囲（選択が無ければキャレットの行）を言語サーバーに整形してもらいます", 37U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 68> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -436,6 +448,12 @@ constexpr std::array<OperationChoiceExpected, 66> expected_4{
      {core::EditorOperation::show_signature_help, 65U, "引数の情報を表示", 8U,
       "キャレットの所の呼び出しの引数を言語サーバーに聞き、キャレットの行の上に出します", 40U, "",
       "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::format_document, 66U, "文書を整形", 5U,
+      "今の文書の全体を言語サーバーに整形してもらいます（1 回の元に戻すで戻ります）", 39U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::format_selection, 67U, "選択範囲を整形", 7U,
+      "選択範囲（選択が無ければキャレットの行）を言語サーバーに整形してもらいます", 37U, "", "",
+      core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::list_operations, 8U, "操作の一覧", 5U, "この一覧を開きます", 9U, "F1",
       "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::next_pane, 18U, "隣の枠へ", 4U, "もう 1 つの枠へ移ります", 13U, "F6",
@@ -619,14 +637,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 2587392U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 2711552U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 2480384U, expected_3,
+     {"", core::EditMode::vim, 256U, 2604544U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 2587392U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 2711552U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,

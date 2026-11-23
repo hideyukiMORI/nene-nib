@@ -161,6 +161,12 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_show_signature_help_name, "显示参数信息"},
     {UiMessage::operation_show_signature_help_description,
      "向语言服务器查询光标处调用的参数，并显示在光标所在行的上方"},
+    {UiMessage::operation_format_document_name, "格式化文档"},
+    {UiMessage::operation_format_document_description,
+     "请语言服务器格式化整个文档（撤消一次即可恢复）"},
+    {UiMessage::operation_format_selection_name, "格式化选定内容"},
+    {UiMessage::operation_format_selection_description,
+     "请语言服务器格式化选定内容（未选择时为光标所在行）"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -435,5 +441,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::palette_references_subject, "{0} 的引用"},
     {UiMessage::notice_signature_not_found, "没有参数信息"},
     {UiMessage::notice_signature_not_supported, "此语言服务器不提供参数信息"},
+    {UiMessage::notice_formatting_not_supported, "此语言服务器不提供格式化"},
+    {UiMessage::notice_range_formatting_not_supported, "此语言服务器不提供选定内容的格式化"},
+    {UiMessage::notice_formatting_stale, "格式化结果到达前文档已更改，因此未应用"},
+    {UiMessage::notice_formatting_unreadable, "无法读取格式化结果，因此未应用"},
 }};
 } // namespace nenenib::core

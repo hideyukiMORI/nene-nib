@@ -520,6 +520,8 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::list_references, &EditorWindow::run_list_references},
         {core::EditorOperation::list_symbols, &EditorWindow::run_list_symbols},
         {core::EditorOperation::show_signature_help, &EditorWindow::run_show_signature_help},
+        {core::EditorOperation::format_document, &EditorWindow::run_format_document},
+        {core::EditorOperation::format_selection, &EditorWindow::run_format_selection},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -859,6 +861,17 @@ void EditorWindow::run_list_symbols()
 void EditorWindow::run_show_signature_help()
 {
     send(application::QueryLanguage{core::LanguageQueryKind::signature_help});
+}
+
+// 文書を整形・選択範囲を整形（#1993・ADR 0191 の決定 7）。
+void EditorWindow::run_format_document()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::format_document});
+}
+
+void EditorWindow::run_format_selection()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::format_selection});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

@@ -15,6 +15,7 @@
 #include "OpenedAs.hpp"
 #include "ProjectHitLanding.hpp"
 #include "QueryLanguage.hpp"
+#include "ServerAbilities.hpp"
 #include "UiMessage.hpp"
 #include "VimLanguageQuery.hpp"
 #include "VimMode.hpp"
@@ -47,32 +48,46 @@ void EditorController::accept(const QueryLanguage &intent)
     state_ = state_.with_command_message(ui_notice(unanswered_notice(intent.kind)));
 }
 
-// 問いを出せなかったときの 1 行（ADR 0191 の決定 2）。能力の無い席は「〜に答えません」。
-core::UiMessage EditorController::unanswered_notice(core::LanguageQueryKind kind) const
+namespace
+{
+// 能力の欄と「〜に答えません」の 1 行の組（ADR 0191 の決定 2）。
+using UnansweredAbility = std::pair<bool ServerAbilities::*, core::UiMessage>;
+
+// 問いの種類 → 分けて知らせる能力（定義へと hover は分けない）。
+[[nodiscard]] std::optional<UnansweredAbility> unanswered_ability(core::LanguageQueryKind kind)
 {
     switch (kind)
     {
     case core::LanguageQueryKind::definition:
     case core::LanguageQueryKind::hover:
-        break;
+        return std::nullopt;
     case core::LanguageQueryKind::references:
-        if (lacks_ability(&ServerAbilities::references))
-        {
-            return core::UiMessage::notice_references_not_supported;
-        }
-        break;
+        return UnansweredAbility{&ServerAbilities::references,
+                                 core::UiMessage::notice_references_not_supported};
     case core::LanguageQueryKind::symbols:
-        if (lacks_ability(&ServerAbilities::document_symbols))
-        {
-            return core::UiMessage::notice_symbols_not_supported;
-        }
-        break;
+        return UnansweredAbility{&ServerAbilities::document_symbols,
+                                 core::UiMessage::notice_symbols_not_supported};
     case core::LanguageQueryKind::signature_help:
-        if (lacks_ability(&ServerAbilities::signature_help))
-        {
-            return core::UiMessage::notice_signature_not_supported;
-        }
-        break;
+        return UnansweredAbility{&ServerAbilities::signature_help,
+                                 core::UiMessage::notice_signature_not_supported};
+    case core::LanguageQueryKind::format_document:
+        return UnansweredAbility{&ServerAbilities::formatting,
+                                 core::UiMessage::notice_formatting_not_supported};
+    case core::LanguageQueryKind::format_selection:
+        return UnansweredAbility{&ServerAbilities::range_formatting,
+                                 core::UiMessage::notice_range_formatting_not_supported};
+    }
+    std::unreachable();
+}
+} // namespace
+
+// 問いを出せなかったときの 1 行（ADR 0191 の決定 2）。能力の無い席は「〜に答えません」。
+core::UiMessage EditorController::unanswered_notice(core::LanguageQueryKind kind) const
+{
+    const auto ability = unanswered_ability(kind);
+    if (ability.has_value() && lacks_ability(ability.value().first))
+    {
+        return ability.value().second;
     }
     return core::UiMessage::notice_language_server_not_running;
 }
@@ -89,6 +104,8 @@ void EditorController::perform(const core::VimLanguageQuery &effect)
     case core::LanguageQueryKind::definition:
     case core::LanguageQueryKind::hover:
     case core::LanguageQueryKind::signature_help:
+    case core::LanguageQueryKind::format_document:
+    case core::LanguageQueryKind::format_selection:
         return;
     case core::LanguageQueryKind::references:
     case core::LanguageQueryKind::symbols:
@@ -116,6 +133,10 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
         return request_document_symbols();
     case core::LanguageQueryKind::signature_help:
         return invoke_signature_help();
+    case core::LanguageQueryKind::format_document:
+        return request_formatting(false);
+    case core::LanguageQueryKind::format_selection:
+        return request_formatting(true);
     }
     std::unreachable();
 }
@@ -190,6 +211,10 @@ void EditorController::settle_language_answers(LspRequestKind kind)
         return;
     case LspRequestKind::signature_help:
         settle_signature_answer();
+        return;
+    case LspRequestKind::formatting:
+    case LspRequestKind::range_formatting:
+        settle_formatting_answer();
         return;
     }
 }

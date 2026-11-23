@@ -419,6 +419,8 @@ class EditorController final
     // 引数の情報（#1959・ADR 0191 の決定 6）。trigger は打った `triggerCharacters` の 1 文字
     // （手で頼んだら値なし）。
     [[nodiscard]] bool request_signature_help(std::optional<std::string> trigger, bool retrigger);
+    // 整形（#1993・ADR 0191 の決定 7）。selection が真なら選択範囲（rangeFormatting）。
+    [[nodiscard]] bool request_formatting(bool selection);
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // Ctrl+P の一覧のために参照と記号の当たりを作った数（#1958 のレビュー R1 の契約が読む）。
@@ -1102,6 +1104,10 @@ class EditorController final
     [[nodiscard]] bool invoke_signature_help();
     [[nodiscard]] std::optional<core::LspSignature> shown_signature(const EditorFrame &frame) const;
     void drop_signature_tip() noexcept;
+    // 整形の答えを当てる（#1993・EditorControllerFormatting.cpp）。
+    void settle_formatting_answer();
+    [[nodiscard]] core::OffsetRange formatting_range() const;
+    void leave_visual_for_formatting();
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。

@@ -161,6 +161,11 @@ enum class UiMessage : std::uint16_t
     // 引数の情報を表示の操作（#1959・ADR 0191 の決定 6）。
     operation_show_signature_help_name,
     operation_show_signature_help_description,
+    // 文書を整形・選択範囲を整形の操作（#1993・ADR 0191 の決定 7）。
+    operation_format_document_name,
+    operation_format_document_description,
+    operation_format_selection_name,
+    operation_format_selection_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -446,10 +451,15 @@ enum class UiMessage : std::uint16_t
     // 引数の情報の知らせ（#1959・ADR 0191 の決定 2・6）。
     notice_signature_not_found,
     notice_signature_not_supported,
+    // 整形の知らせ（#1993・ADR 0191 の決定 2・7）。
+    notice_formatting_not_supported,
+    notice_range_formatting_not_supported,
+    notice_formatting_stale,
+    notice_formatting_unreadable,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_signature_not_supported) + 1U;
+    std::to_underlying(UiMessage::notice_formatting_unreadable) + 1U;
 } // namespace nenenib::core

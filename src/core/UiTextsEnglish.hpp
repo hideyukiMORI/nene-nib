@@ -184,6 +184,12 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_show_signature_help_description,
      "Ask the language server for the parameters of the call at the caret and show them above the "
      "caret line"},
+    {UiMessage::operation_format_document_name, "Format document"},
+    {UiMessage::operation_format_document_description,
+     "Ask the language server to format the whole document (one undo brings it back)"},
+    {UiMessage::operation_format_selection_name, "Format selection"},
+    {UiMessage::operation_format_selection_description,
+     "Ask the language server to format the selection (the caret line when nothing is selected)"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -497,5 +503,12 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_signature_not_found, "No parameter info"},
     {UiMessage::notice_signature_not_supported,
      "This language server does not answer parameter info"},
+    {UiMessage::notice_formatting_not_supported, "This language server does not format"},
+    {UiMessage::notice_range_formatting_not_supported,
+     "This language server does not format a selection"},
+    {UiMessage::notice_formatting_stale,
+     "The document changed before the formatting arrived, so it was not applied"},
+    {UiMessage::notice_formatting_unreadable,
+     "The formatting answer could not be read, so it was not applied"},
 }};
 } // namespace nenenib::core

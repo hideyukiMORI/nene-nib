@@ -2,7 +2,7 @@
 
 - 状態: 提案（実装席 E・2026-11-22・FR-021 の段 L4 / LSP の段 S6。鍵と見せ方は hide の試用の後に受理・D41）
 - 日付: 2026-11-22
-- Issue: #1947（a 参照）・#1955（b 記号）・c〜d は各 PR で起票・親 #1821・前提 ADR 0190（要求の表）/ 0161 の決定 9 の追補（診断の一覧・#1939）/ 0060（Ctrl+P の記号）/ 0078（操作の表・Alt と組んだ鍵は操作にしない）/ 0189（プレビュー欄）
+- Issue: #1947（a 参照）・#1955（b 記号）・#1959（c 引数の情報）・#1993（d 整形）・親 #1821・前提 ADR 0190（要求の表）/ 0161 の決定 9 の追補（診断の一覧・#1939）/ 0060（Ctrl+P の記号）/ 0078（操作の表・Alt と組んだ鍵は操作にしない）/ 0189（プレビュー欄）
 - 規則: FR-021、D60 / D61 / D67 / D82、ARC-001 / ARC-003 / ARC-007 / ARC-010 / ARC-012、CPP-002 / CPP-005 / CPP-012、CNF-016、QLT-014
 
 ## 文脈
@@ -11,8 +11,8 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
 
 ## 決定
 
-1. **要求は ADR 0190 の表に種類を足す。** `LspRequestKind` に `references` `document_symbol` `signature_help` `formatting` `range_formatting` を 1 つずつ足し、`lsp_method_of`・答えの振り分け・古さの捨て方の `switch` を直す（CPP-002）。送る前に未送信の変更を流し、同じ種類の古い要求は `$/cancelRequest` で取り消す（ADR 0190 の決定 1・2 のまま）。答えの待ちの上限も今の tick の古さのまま（種類ごとの上限は入れない・設計席の決め 2026-11-22）: tick は 30 秒ごと（`WindowTimer.hpp` の `language_server_interval_milliseconds`）で古さ 2 回で捨てるので、参照・記号・整形の待ちは 30〜60 秒で捨てる。段 a（#1947）で `references`、段 b（#1955）で `document_symbol` を足した。残りの 3 つは各段の PR で足す。
-2. **能力の無い機能は頼まない。** `initialize` の答えの `referencesProvider` `documentSymbolProvider` `signatureHelpProvider`（と `triggerCharacters`）`documentFormattingProvider` `documentRangeFormattingProvider` を `ServerAbilities` に持つ。言語サーバーは動いているが能力が無いときは「この言語サーバーは〜に答えません」の 1 行、動いていなければ今の「言語サーバーが動いていません」。client の能力は `references`・`documentSymbol`（`hierarchicalDocumentSymbolSupport=true`）・`signatureHelp`（`signatureInformation.documentationFormat=["plaintext"]`・`parameterInformation.labelOffsetSupport=true`）・`formatting`・`rangeFormatting` を申し出る。段 a で `referencesProvider` と client の `references`、段 b で `documentSymbolProvider` と client の `documentSymbol` が入った。残りは各段の PR で足す。
+1. **要求は ADR 0190 の表に種類を足す。** `LspRequestKind` に `references` `document_symbol` `signature_help` `formatting` `range_formatting` を 1 つずつ足し、`lsp_method_of`・答えの振り分け・古さの捨て方の `switch` を直す（CPP-002）。送る前に未送信の変更を流し、同じ種類の古い要求は `$/cancelRequest` で取り消す（ADR 0190 の決定 1・2 のまま）。答えの待ちの上限も今の tick の古さのまま（種類ごとの上限は入れない・設計席の決め 2026-11-22）: tick は 30 秒ごと（`WindowTimer.hpp` の `language_server_interval_milliseconds`）で古さ 2 回で捨てるので、参照・記号・整形の待ちは 30〜60 秒で捨てる。段 a（#1947）で `references`、段 b（#1955）で `document_symbol`、段 c（#1959）で `signature_help`、段 d（#1993）で `formatting` と `range_formatting` を足した。
+2. **能力の無い機能は頼まない。** `initialize` の答えの `referencesProvider` `documentSymbolProvider` `signatureHelpProvider`（と `triggerCharacters`）`documentFormattingProvider` `documentRangeFormattingProvider` を `ServerAbilities` に持つ。言語サーバーは動いているが能力が無いときは「この言語サーバーは〜に答えません」の 1 行、動いていなければ今の「言語サーバーが動いていません」。client の能力は `references`・`documentSymbol`（`hierarchicalDocumentSymbolSupport=true`）・`signatureHelp`（`signatureInformation.documentationFormat=["plaintext"]`・`parameterInformation.labelOffsetSupport=true`）・`formatting`・`rangeFormatting` を申し出る。段 a で `referencesProvider` と client の `references`、段 b で `documentSymbolProvider` と client の `documentSymbol`、段 d（#1993）で `documentFormattingProvider` `documentRangeFormattingProvider` と client の `formatting` `rangeFormatting` が入った。
 3. **答えの読みは core の純関数。** 参照は定義と同じ `lsp_locations`（`Location[]`・null）で、1,000 件で切る。記号は `DocumentSymbol[]`（階層・子を親の名前つきで平らにする）と `SymbolInformation[]`（平ら・`containerName`）の両方を読む。引数の情報は `SignatureHelp` の `activeSignature` の `label` と、`activeParameter`（署名の欄が先・無ければ全体の欄・どちらも無ければ 0。引数の数の外は 0（LSP 3.17 の文）、`null`（3.18 の「今の引数なし」）は強めない）の `label` の範囲（文字列なら、署名の `label` の最初の `(` の後から前の引数の一致の終わりを起点に順に探した位置・`[start, end]` なら UTF-16 の位置・#1968 のレビュー c-R3）。整形は `TextEdit[]`。位置の単位は答えた席の単位（`LspLanding` と同じく答えに添えて写すまで運ぶ）。
 4. **a 参照（`textDocument/references`・#1947）。**
    - 鍵: Vim の NORMAL は **`grr`**（Neovim の既定）。Nib の g の表に `r` は無く（`gr{char}` の仮想置換は未実装）、`gr` は次の 1 鍵を取る接頭辞にし、`r` なら参照の問い、ほかの鍵は表に無い鍵と同じに失敗する。engine の歩は `gd` と同じく表に行が無かったときのまま（fixture は不変）で、頼めたら controller が成功の歩に読み替える（S5 の `]d` `[d` `gl` と同じ・#1946 のレビュー R3）。一覧から選んで跳ぶのは鍵の効果の外（下の着地の 1 本）。限界: Vim の `gr<C-v>x` は `<C-v>` の後の文字を読むが、Nib は `<C-v>` で失敗して `x` が別の命令として走る（仮想置換が無いため）。通常モードは **Shift+F12**（VS Code）。操作「参照の一覧」（両モード）。`includeDeclaration: true`。
@@ -35,7 +35,8 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
    - 限界: 括弧を自動で閉じる `map`（`inoremap ( ()`）では、`(` が右辺から入るので自動では頼まない（操作「引数の情報を表示」で頼める・#1968 のレビュー c-L2）。
    - 限界: 試験の `<C-r>(` は `(` がレジスタの名前にならず本文に何も入らないので、「1 鍵の引数の待ちでない」と「流す前のキャレットの直後にその文字が入った」の見分けの片方だけを縛る（どちらか一方を消しても通る）。trigger 文字（`( ) { } < > ,`）には名前と中身が同じになるレジスタが無く、この形でしか縛れない（#1968 のレビュー L-b）。
    - 限界: 頼み直し（`isRetrigger: true`）に `activeSignatureHelp`（前の答え）を添えない。clangd は使わないので害は無いが、typescript-language-server は添えた値で多重定義の選択を保つので、頼み直すたびに最初の署名へ戻る（#1968 のレビュー c-L4・L-e）。Ctrl+Z などで `(` の前へ戻っても同じ行にいる間は札が残り、次の打鍵か行の移動で消える（c-L5・L-e）。
-7. **d 整形（`textDocument/formatting` と `rangeFormatting`）。** 操作「文書を整形」「選択範囲を整形」（**どちらも鍵なし**・F1 の一覧から。VS Code の Shift+Alt+F は ADR 0078 の「Alt と組んだ鍵は操作にしない」に当たるので入れない・設計席の決め 2026-11-22）。Vim の `gq` は Nib に無いので触らない。答えの `TextEdit[]` は、全部を覆う 1 区間（最小の始まり〜最大の終わり）の新しい本文を手元で組み、`EditorController::replace` を 1 回だけ呼ぶ（1 つの undo の単位・`Edit.restore` は当てる前のキャレット）。頼んだ時の改訂番号から本文が変わっていたら捨てて 1 行の知らせ。`tabSize` と `insertSpaces` は今の文書の設定から。保存のときの自動の整形は入れない（設定の鍵が要る・`settings.v6` の時）。
+7. **d 整形（`textDocument/formatting` と `rangeFormatting`）。** 操作「文書を整形」「選択範囲を整形」（**どちらも鍵なし**・F1 の一覧から。VS Code の Shift+Alt+F は ADR 0078 の「Alt と組んだ鍵は操作にしない」に当たるので入れない・設計席の決め 2026-11-22）。Vim の `gq` は Nib に無いので触らない。答えの `TextEdit[]` は、全部を覆う 1 区間（最小の始まり〜最大の終わり）の新しい本文を手元で組み、`EditorController::replace` を 1 回だけ呼ぶ（1 つの undo の単位・`Edit.restore` は当てる前のキャレット）。頼んだ時の改訂番号から本文が変わっていたら捨てて 1 行の知らせ。`tabSize` と `insertSpaces` は Nib の固定の値（tabstop 8 の `vim_tab_stop`・noexpandtab で `insertSpaces: false`）をそのまま渡す（可変にするのは #1991・設計席の決め 2026-11-23）。保存のときの自動の整形は入れない（設定の鍵が要る・`settings.v6` の時）。
+   - 段 d（#1993）の形: 答えは core の `lsp_text_edits`（null は空・range か newText の欠けた項目が 1 つでもあれば答え全体を読めない）で読み、`formatted_span` が各 range を `lsp_range_to_offsets` で写して始まりの順（同じ始まりは届いた順）に並べ、間の本文を挟んで 1 区間に組む（重なる編集・写せない range は読めない答え）。照合は文書（退避番号）と revision だけで、キャレットの移動では捨てない。変わっていれば「整形の答えが届く前に文書が変わったので、当てませんでした」、読めなければ「整形の答えを読めなかったので、当てませんでした」の 1 行。空の列と今と同じ結果は undo の単位を積まない。当てた後のキャレットは、手前で終わる編集の長さの差だけずらし、編集の中にあればその編集の新しい本文の終わりへ置く（同じ位置への挿入はキャレットの後ろ）。選択範囲の整形の範囲は、選択（VISUAL は `vim_visual_range`・矩形は覆う行の全体）で、空ならキャレットの行（VS Code と同じ）。Vim の VISUAL で当てたら NORMAL へ戻す（`gv` の選び直しの範囲は置き直さない・限界）。答えの待ちは決定 1 のとおり 30〜60 秒で捨てる。打鍵の道には何も足さない。
 8. **文と操作。** 画面の文は `UiMessage` の 3 列（操作の名前と説明は操作の群に表の順・知らせは末尾）、操作は `EditorOperation` の末尾。日本語の文に「面」を使わない。設定の鍵は足さない。
 
 ## 強制
@@ -43,8 +44,8 @@ ADR 0190 で、要求と答えを id で結ぶ表（`send_lsp_request`・`lsp_me
 - a 参照の能力の無い要求を送らない・文脈の照合・一覧の候補と着地・上限: **active**（`nib_tests --lsp-references`）。
 - b 記号の同じ守り（読み・能力・文脈の照合・一覧の候補と着地・`gO`）: **active**（`nib_tests --lsp-symbols`）。
 - c 引数の情報の同じ守り（読み・能力・自動の頼み・札の出る間と消える条件（`)`・Esc・行の移動・INSERT を抜ける・空の答え・タブの切り替え・窓が非アクティブ・Ctrl+P の一覧・右クリックのメニュー・設定・hover の札・照合で捨てた答えは札を残す・ホイールで隠す）・補完の一覧と重ならない置き場・lsp がオフと能力の無い席で打鍵の道（通常モードと Vim の INSERT）が言語サーバーに触れない契約）: **active**（`nib_tests --lsp-signature`）。
-- d 整形の同じ守り: **planned**（段 d の PR で、足した scope を名指しして active に書き換える）。
-- 整形が 1 つの undo の単位で、`u` で元の本文とキャレットに戻る: **planned**（性質の試験・段 d の PR で active にする）。
+- d 整形の同じ守り（読み・1 区間の組み立てと並べ方・重なりと写せない range の拒否・能力・lsp がオフ・要求の形（固定の `tabSize` `insertSpaces`・選択範囲と空の選択のキャレットの行・VISUAL LINE）・頼んだ後に変わった文書・読めない答え・空の答えと同じ結果は単位を積まない・VISUAL から NORMAL へ）: **active**（`nib_tests --lsp-formatting`）。
+- 整形が 1 つの undo の単位で、`u` で元の本文とキャレットに戻る: **active**（`nib_tests --lsp-formatting` の `verify_undo_property`・固定の種の 24 通りの編集の列で、結果が後ろから 1 つずつ当てた本文と同じで、`u` 1 回で本文とキャレットが戻る。通常モードの Ctrl+Z / Ctrl+Y は `verify_document_formatting`）。
 - 打鍵の道（段 c）のオフの速さ: **planned**（QLT-014・段 c の PR の後に設計席が速さのゲートを回して active にする）。
 
 ## 結果
