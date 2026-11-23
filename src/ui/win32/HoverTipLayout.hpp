@@ -2,6 +2,7 @@
 
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
+#include "TabTipMeasure.hpp"
 #include "TabTipPaint.hpp"
 
 #include <cstdint>
@@ -28,6 +29,10 @@ class HoverTipLayout final
     // 収めた layout（作れなければ null）。所有はこの保持で、次の fitted か clear まで有効。
     [[nodiscard]] IDWriteTextLayout *fitted(IDWriteFactory &dwrite, IDWriteTextFormat *format,
                                             std::string_view text, std::int32_t limit);
+    // 最後に収めた layout の太字の範囲を emphasis にする（UTF-16・長さ 0 なら無し・引数の情報の札の
+    // 今の引数・#1959）。前の範囲は戻す。同じ範囲なら何もしない。layout が無いか当てられなければ
+    // false（当てられなければ保持を捨てる）。
+    [[nodiscard]] bool emphasized(DWRITE_TEXT_RANGE emphasis);
     // 最後に収めた layout の札を、キャレットの矩形 caret の上（入らなければ下）に領域 area の中で
     // 置いて描く値（置き場は core::hover_tip_rect・色は palette の panel / panel_border / text）。
     // layout が無ければ値なし。
@@ -35,12 +40,19 @@ class HoverTipLayout final
                                                      const core::LayoutRect &area,
                                                      const core::Palette &palette,
                                                      std::uint32_t dpi) const;
+    // 最後に収めた layout の文の大きさ（置き場を別の純関数で決めるとき・引数の情報の札が
+    // core::signature_tip_rect に渡す・#1968 のレビュー c-M1）。layout が無ければ値なし。
+    [[nodiscard]] std::optional<core::TabTipMeasure> measured(std::uint32_t dpi) const;
+    // 最後に収めた layout の札を矩形 box に描く値（measured が値を返した後だけ呼ぶ）。
+    [[nodiscard]] TabTipPaint painted_in(const core::LayoutRect &box, const core::Palette &palette,
+                                         std::uint32_t dpi) const;
     void clear() noexcept;
 
   private:
     std::string text_;
     std::int32_t limit_ = 0;
     IDWriteTextFormat *format_ = nullptr;
+    DWRITE_TEXT_RANGE emphasis_{0, 0};
     TextLayout layout_;
 };
 } // namespace nenenib::ui::win32

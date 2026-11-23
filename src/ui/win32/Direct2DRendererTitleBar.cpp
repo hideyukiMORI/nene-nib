@@ -6,6 +6,7 @@
 #include "EditorFrame.hpp"
 #include "HoverTip.hpp"
 #include "LayoutRect.hpp"
+#include "LspSignature.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
 #include "RectCovers.hpp"
@@ -16,6 +17,7 @@
 #include "TitleBarLayout.hpp"
 #include "TitleBarTarget.hpp"
 #include "UiTextSizes.hpp"
+#include "Utf16.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -252,6 +254,62 @@ void Direct2DRenderer::draw_hover_tip(const application::EditorFrame &frame,
     {
         hover_tip_box_ = paint.value().box;
         paint_tab_tip(*context_.Get(), brush_.Get(), paint.value());
+    }
+}
+
+namespace
+{
+// 今の引数（label の中のバイトの範囲）→ UTF-16 の範囲（写せなければ長さ 0）。
+[[nodiscard]] DWRITE_TEXT_RANGE signature_emphasis(const core::LspSignature &signature)
+{
+    const std::string_view label{signature.label};
+    const auto begin = core::to_utf16(label.substr(0, signature.active_begin));
+    const auto end = core::to_utf16(label.substr(0, signature.active_end));
+    if (!begin.has_value() || !end.has_value() || end.value().size() <= begin.value().size())
+    {
+        return DWRITE_TEXT_RANGE{0, 0};
+    }
+    return DWRITE_TEXT_RANGE{static_cast<UINT32>(begin.value().size()),
+                             static_cast<UINT32>(end.value().size() - begin.value().size())};
+}
+} // namespace
+
+// 引数の情報の札（#1959・ADR 0191 の決定 6）。hover の札と同じ書式・描く 1 本で、今の引数を
+// 太字にする。置き場はキャレットの行の上（入らなければ下）で、補完の一覧が出ていれば一覧の箱を
+// 避ける（core::signature_tip_rect）。描く順は補完の一覧と hover の札の後（hover の札とは同時に
+// 出ない）。キャレットの矩形が操作中の枠 pane の外（折り返した行の見えていない画面行）なら描かない
+// （#1968 のレビュー L-a）。
+void Direct2DRenderer::draw_signature_tip(const application::EditorFrame &frame,
+                                          const core::LayoutRect &area,
+                                          const core::LayoutRect &pane)
+{
+    const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
+                                 caret_rectangle_.right, caret_rectangle_.bottom};
+    if (!frame.signature.has_value() || !core::caret_rect_in_pane(caret, pane))
+    {
+        return;
+    }
+    const core::LspSignature &signature = frame.signature.value();
+    static_cast<void>(
+        signature_tip_layout_.fitted(*dwrite_.Get(), tab_tip_format_.Get(), signature.label,
+                                     core::hover_tip_text_limit(core::width_of(area), dpi_)));
+    if (!signature_tip_layout_.emphasized(signature_emphasis(signature)))
+    {
+        return;
+    }
+    // 補完の一覧が出ていれば（この frame で先に描いた箱）札はそれを避け、入らなければ出さない
+    // （#1968 のレビュー c-M1）。
+    const std::optional<core::LayoutRect> avoid =
+        completion_layout_.has_value() ? std::optional{completion_layout_.value().first.panel}
+                                       : std::nullopt;
+    const auto measure = signature_tip_layout_.measured(dpi_);
+    const auto box = measure.has_value()
+                         ? core::signature_tip_rect(caret, area, measure.value(), avoid)
+                         : std::nullopt;
+    if (box.has_value())
+    {
+        paint_tab_tip(*context_.Get(), brush_.Get(),
+                      signature_tip_layout_.painted_in(box.value(), frame.palette, dpi_));
     }
 }
 } // namespace nenenib::ui::win32

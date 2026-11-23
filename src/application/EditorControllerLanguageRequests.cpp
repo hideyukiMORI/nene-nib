@@ -12,6 +12,7 @@
 #include "LanguageServerPhase.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServers.hpp"
+#include "LanguageSignature.hpp"
 #include "LanguageSymbols.hpp"
 #include "LspAnswerFailure.hpp"
 #include "LspAnswers.hpp"
@@ -25,6 +26,7 @@
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
+#include "LspSignatureHelp.hpp"
 #include "LspSymbol.hpp"
 #include "LspSymbols.hpp"
 #include "PendingLspContext.hpp"
@@ -179,6 +181,23 @@ references_answer(const PendingLspRequest &request, const core::LspResponse &res
                            .symbols = std::move(list.symbols),
                            .encoding = encoding,
                            .total = list.total};
+}
+// 引数の情報の答え（#1959・ADR 0191 の決定 6）。照合は hover と同じ。誤りの答えと読めない答えは
+// 署名なし（札を消す）。
+[[nodiscard]] std::optional<LanguageSignature> signature_answer(const PendingLspRequest &request,
+                                                                const core::LspResponse &response,
+                                                                const LspRequestContext &current)
+{
+    const auto *context = std::get_if<LspRequestContext>(&request.context);
+    if (context == nullptr || !(*context == current))
+    {
+        return std::nullopt;
+    }
+    const auto read = response.result.has_value()
+                          ? core::lsp_signature_help(response.result.value())
+                          : std::unexpected{core::LspAnswerFailure::invalid_result};
+    return LanguageSignature{.context = *context,
+                             .signature = read.has_value() ? read.value() : std::nullopt};
 }
 } // namespace
 
@@ -381,6 +400,9 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
         break;
     case LspRequestKind::document_symbol:
         answers.symbols = symbols_answer(request, response, current, link_of(slot).encoding);
+        break;
+    case LspRequestKind::signature_help:
+        answers.signature = signature_answer(request, response, current);
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));

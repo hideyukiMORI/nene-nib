@@ -180,6 +180,10 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_list_symbols_description,
      "Ask the language server for the functions, types and other symbols of this document and see "
      "them in the Ctrl+P list"},
+    {UiMessage::operation_show_signature_help_name, "Show parameter info"},
+    {UiMessage::operation_show_signature_help_description,
+     "Ask the language server for the parameters of the call at the caret and show them above the "
+     "caret line"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -490,5 +494,8 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::palette_empty_references, "No references yet. Ask with {0} on a name (Vim: {1})"},
     {UiMessage::palette_empty_symbols, "No symbols yet. Ask with {0} in Vim or \"{2}\" in {1}"},
     {UiMessage::palette_references_subject, "References to {0}"},
+    {UiMessage::notice_signature_not_found, "No parameter info"},
+    {UiMessage::notice_signature_not_supported,
+     "This language server does not answer parameter info"},
 }};
 } // namespace nenenib::core

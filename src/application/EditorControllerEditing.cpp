@@ -464,6 +464,8 @@ void EditorController::accept(const CancelSelection &)
     case core::EditMode::ordinary:
         break;
     }
+    // 通常モードの Esc は引数の情報の札も消す（#1959・ADR 0191 の決定 6）。
+    drop_signature_tip();
     move_caret_to(state_.selection().caret, core::SelectionAnchoring::collapse);
 }
 

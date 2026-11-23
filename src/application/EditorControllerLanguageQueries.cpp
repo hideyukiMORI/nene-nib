@@ -67,6 +67,12 @@ core::UiMessage EditorController::unanswered_notice(core::LanguageQueryKind kind
             return core::UiMessage::notice_symbols_not_supported;
         }
         break;
+    case core::LanguageQueryKind::signature_help:
+        if (lacks_ability(&ServerAbilities::signature_help))
+        {
+            return core::UiMessage::notice_signature_not_supported;
+        }
+        break;
     }
     return core::UiMessage::notice_language_server_not_running;
 }
@@ -82,6 +88,7 @@ void EditorController::perform(const core::VimLanguageQuery &effect)
     {
     case core::LanguageQueryKind::definition:
     case core::LanguageQueryKind::hover:
+    case core::LanguageQueryKind::signature_help:
         return;
     case core::LanguageQueryKind::references:
     case core::LanguageQueryKind::symbols:
@@ -107,6 +114,8 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
     case core::LanguageQueryKind::symbols:
         definition_anchor_ = state_.selection().anchor;
         return request_document_symbols();
+    case core::LanguageQueryKind::signature_help:
+        return invoke_signature_help();
     }
     std::unreachable();
 }
@@ -178,6 +187,9 @@ void EditorController::settle_language_answers(LspRequestKind kind)
         return;
     case LspRequestKind::document_symbol:
         settle_symbols_answer();
+        return;
+    case LspRequestKind::signature_help:
+        settle_signature_answer();
         return;
     }
 }

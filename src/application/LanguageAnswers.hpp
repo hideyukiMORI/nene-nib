@@ -3,6 +3,7 @@
 #include "LanguageCompletion.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageHover.hpp"
+#include "LanguageSignature.hpp"
 #include "LanguageSymbols.hpp"
 
 #include <optional>
@@ -21,5 +22,7 @@ struct LanguageAnswers
     std::optional<LanguageDefinition> references = std::nullopt;
     // 記号の答え（#1955・ADR 0191 の決定 5）。
     std::optional<LanguageSymbols> symbols = std::nullopt;
+    // 引数の情報の答え（#1959・ADR 0191 の決定 6）。札の欄は controller の signature_tip_。
+    std::optional<LanguageSignature> signature = std::nullopt;
 };
 } // namespace nenenib::application
