@@ -3,6 +3,7 @@
 #include "CaretMotion.hpp"
 #include "CaretMove.hpp"
 #include "DocumentCaret.hpp"
+#include "IndentGuide.hpp"
 #include "LineEnding.hpp"
 #include "Selection.hpp"
 #include "Utf8.hpp"
@@ -107,17 +108,6 @@ constexpr std::size_t blank_window_bytes = 64;
         window *= 2;
     }
     return count;
-}
-
-// 空白と Tab の列の桁の数（Vim の get_indent_str・Tab は次の vim_tab_stop の倍数まで）。
-[[nodiscard]] std::size_t blank_width(std::string_view blanks) noexcept
-{
-    std::size_t width = 0;
-    for (const char blank : blanks)
-    {
-        width = blank == '\t' ? width + vim_tab_stop - (width % vim_tab_stop) : width + 1;
-    }
-    return width;
 }
 
 // 字下げを写した行を離れるときに消す範囲と、消した後のカーソル（Vim の stop_insert の did_ai の
@@ -1109,7 +1099,9 @@ std::size_t leading_blank_bytes(const TextBuffer &text, Offset from, Offset limi
 std::string auto_indent_of(const TextBuffer &text, Offset from, Offset limit)
 {
     const std::size_t blanks = leading_blank_bytes(text, from, limit);
-    const std::size_t width = blank_width(text.text_range(from, Offset{from.value + blanks}));
+    // 空白と Tab の列の桁の数（Vim の get_indent_str）は core の indent_cells の 1 本（ADR 0193 の
+    // 決定 7）。
+    const std::size_t width = indent_cells(text.text_range(from, Offset{from.value + blanks}));
     std::string indent(width / vim_tab_stop, '\t');
     indent.append(width % vim_tab_stop, ' ');
     return indent;

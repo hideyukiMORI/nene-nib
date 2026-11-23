@@ -14,6 +14,12 @@ enum class SettingsValue : std::uint8_t
     font_size,
     finder_preview,
     // キャレットの動きの時間（ADR 0192・段の上下・20 ms ずつ）。
-    caret_motion_time
+    caret_motion_time,
+    // インデントガイドの形（ADR 0193 の決定 4）。単色 / 虹と強める段は選択、色の数（3〜6）と段の幅
+    // （2 / 4 / 8）は段の上下。
+    indent_guide_style,
+    indent_guide_colors,
+    indent_guide_active,
+    indent_guide_width
 };
 } // namespace nenenib::core

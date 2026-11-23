@@ -21,7 +21,13 @@ inline constexpr std::string_view released_v5_settings =
     "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\nlsp.later-lang.command=C:\\x\\ls.exe\n"
     "mapleader=<Space>\nmap.i.jj=!<Esc>\n";
 
-// 1.1.0 の見本の値（v6 の鍵は既定のオフと 120 ms）。
+// 今の書く形（v6）が caret_motion_time の後ろに書くインデントガイドの 4 つの既定（ADR 0193 の
+// 決定 4）。v6 の形の見本を組み立てる試験が共用する。
+inline constexpr std::string_view indent_guide_defaults =
+    "indent_guide_style=rainbow\nindent_guide_colors=4\nindent_guide_active=on\n"
+    "indent_guide_width=4\n";
+
+// 1.1.0 の見本の値（v6 の鍵は既定のオフと 120 ms・インデントガイドの既定）。
 [[nodiscard]] bool released_v5_values(const core::EditorSettings &settings);
 // v5 の読み・v6 の形への書き戻し・v6 の 2 つの鍵の往復と拒否。
 void verify_settings_v6_codec(Expect expect);

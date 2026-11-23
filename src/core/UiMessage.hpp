@@ -449,10 +449,25 @@ enum class UiMessage : std::uint16_t
     // 打ったときの粒（ADR 0192 の追補・#1979）の設定の画面の行。
     settings_caret_sparks_name,
     settings_caret_sparks_description,
+    // インデントガイド（ADR 0193 の決定 4・#1975）の設定の画面の行と値の語。
+    settings_indent_guides_name,
+    settings_indent_guides_description,
+    settings_indent_guide_style_name,
+    settings_indent_guide_style_description,
+    settings_indent_guide_style_rainbow,
+    settings_indent_guide_style_plain,
+    settings_indent_guide_colors_name,
+    settings_indent_guide_colors_description,
+    settings_indent_guide_active_name,
+    settings_indent_guide_active_description,
+    settings_indent_guide_active_on,
+    settings_indent_guide_active_off,
+    settings_indent_guide_width_name,
+    settings_indent_guide_width_description,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::settings_caret_sparks_description) + 1U;
+    std::to_underlying(UiMessage::settings_indent_guide_width_description) + 1U;
 } // namespace nenenib::core

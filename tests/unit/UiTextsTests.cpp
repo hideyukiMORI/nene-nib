@@ -84,8 +84,8 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 401,
-           "the table has 401 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+    expect(core::ui_message_count == 415,
+           "the table has 415 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
            "project search mark 1 of #1003, the project search face 8 of #1763, the "
            "easymotion prompt of ADR 0163, the 5 context menu operations 10 of #1051, the finder "
            "preview 4 of #1785, the preview failures 3 more of #1793, the packaged "
@@ -100,7 +100,8 @@ void verify_columns()
            "operation 2 and the mark and notices 4 of #1947, the symbols operation 2 and "
            "the mark and notices 3 of #1955, the symbols cut notice, the 3 empty lines and "
            "the references subject of #1958, the signature operation 2 and notices 2 of "
-           "#1959 and the typing sparks rows 2 of #1979)");
+           "#1959, the typing sparks rows 2 of #1979 and the indent guide rows and values 14 of "
+           "#1975)");
     expect(placed == 49, "49 messages take placeholders (T1a 26, the search progress 3, the "
                          "preview line 1, the definition count 1, the settings summary 4, "
                          "the settings no-match line 1, the link card hints 2 and the language "

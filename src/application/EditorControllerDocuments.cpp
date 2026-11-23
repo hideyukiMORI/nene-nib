@@ -975,7 +975,7 @@ void EditorController::open_read(const core::FilePath &path, OpenedDocument open
         return;
     }
     state_ = state_.with_composition(std::nullopt);
-    Document document{path, opened.encoding, std::size_t{0}};
+    Document document = opened_record(path, opened.encoding, opened.text);
     // プレビューのタブがあれば置き換える（ADR 0179 の決定 3-2）。前の文書は閉じる道で外れるが、
     // 使う人が閉じたのではないので履歴に書かない（決定 5）。
     if (opened_as == OpenedAs::transient && state_.transient().has_value())
@@ -1370,9 +1370,9 @@ TabReach EditorController::loaded_tab(std::size_t position,
         return TabReach::dropped;
     }
     OpenedDocument opened = std::move(document).value();
-    state_ = state_.with_loaded(
-        position, reached_bundle(std::move(opened.text),
-                                 Document{tab.path, opened.encoding, std::size_t{0}}, tab));
+    Document record = opened_record(tab.path, opened.encoding, opened.text);
+    state_ = state_.with_loaded(position,
+                                reached_bundle(std::move(opened.text), std::move(record), tab));
     return TabReach::reached;
 }
 

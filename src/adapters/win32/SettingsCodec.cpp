@@ -5,6 +5,7 @@
 #include "DisplayLanguageNames.hpp"
 #include "ExplorerLayout.hpp"
 #include "FinderPreview.hpp"
+#include "IndentGuide.hpp"
 #include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
 #include "Language.hpp"
@@ -31,7 +32,7 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4・v5・v6 だけの鍵も読むが、旧版にあれば
 // apply_v4_fields・apply_v5_fields・apply_v6_fields が拒否する。
-constexpr std::array<std::string_view, 22> field_names{"version",
+constexpr std::array<std::string_view, 26> field_names{"version",
                                                        "colorscheme",
                                                        "font_family",
                                                        "font_size",
@@ -52,8 +53,12 @@ constexpr std::array<std::string_view, 22> field_names{"version",
                                                        "finder_preview",
                                                        "caret_motion",
                                                        "caret_motion_time",
-                                                       "caret_sparks"};
-constexpr std::array<Field, 22> field_members{&SettingsFields::version,
+                                                       "caret_sparks",
+                                                       "indent_guide_style",
+                                                       "indent_guide_colors",
+                                                       "indent_guide_active",
+                                                       "indent_guide_width"};
+constexpr std::array<Field, 26> field_members{&SettingsFields::version,
                                               &SettingsFields::colorscheme,
                                               &SettingsFields::font_family,
                                               &SettingsFields::font_size,
@@ -74,7 +79,11 @@ constexpr std::array<Field, 22> field_members{&SettingsFields::version,
                                               &SettingsFields::finder_preview,
                                               &SettingsFields::caret_motion,
                                               &SettingsFields::caret_motion_time,
-                                              &SettingsFields::caret_sparks};
+                                              &SettingsFields::caret_sparks,
+                                              &SettingsFields::indent_guide_style,
+                                              &SettingsFields::indent_guide_colors,
+                                              &SettingsFields::indent_guide_active,
+                                              &SettingsFields::indent_guide_width};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -519,10 +528,62 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     return {};
 }
 
-// v6 だけの鍵（ADR 0192 の決定 1）。v5 以前に在れば未知の鍵として拒否し（v5 の読みは 1.1.0 と同じ厳
-// しさ）、無ければ既定（オフ・120 ms）のまま。v6 は後から足した鍵の形（無ければ既定・有れば厳密）で
-// 読む。時間の読みは core の caret_motion_time_of の 1 本。打ったときの粒の caret_sparks（ADR 0192
-// の追補・#1979・既定オフ）も同じ形。
+[[nodiscard]] bool has_v6_fields(const SettingsFields &fields) noexcept
+{
+    return fields.caret_motion.has_value() || fields.caret_motion_time.has_value() ||
+           fields.caret_sparks.has_value() || fields.indent_guide_style.has_value() ||
+           fields.indent_guide_colors.has_value() || fields.indent_guide_active.has_value() ||
+           fields.indent_guide_width.has_value();
+}
+
+// 後から足した値の鍵（無ければ既定のまま・有れば core の読み 1 本で厳密に・ADR 0170 の追補）。
+template <typename Value, typename Reader>
+[[nodiscard]] std::expected<void, Failure>
+later_value_from(const std::optional<std::string_view> &text, Value &value, Reader reader)
+{
+    if (!text.has_value())
+    {
+        return {};
+    }
+    const auto parsed = reader(text.value());
+    if (!parsed.has_value())
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    value = parsed.value();
+    return {};
+}
+
+// インデントガイドの形の v6 の鍵（ADR 0193 の決定 4）。無い鍵は既定（rainbow・4 色・強める・4
+// 桁）。
+[[nodiscard]] std::expected<void, Failure> apply_indent_guide_fields(core::EditorSettings &settings,
+                                                                     const SettingsFields &fields)
+{
+    const auto active = fields.indent_guide_active.has_value()
+                            ? switch_from(fields.indent_guide_active)
+                            : std::expected<bool, Failure>{settings.indent_guide_active};
+    if (!active)
+    {
+        return std::unexpected(active.error());
+    }
+    settings.indent_guide_active = active.value();
+    const auto style = later_value_from(fields.indent_guide_style, settings.indent_guide_style,
+                                        core::indent_guide_style_named);
+    const auto colors = later_value_from(fields.indent_guide_colors, settings.indent_guide_colors,
+                                         core::indent_guide_colors_of);
+    const auto width = later_value_from(fields.indent_guide_width, settings.indent_guide_width,
+                                        core::indent_guide_width_of);
+    if (!style || !colors || !width)
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    return {};
+}
+
+// v6 だけの鍵（ADR 0192 の決定 1・ADR 0193 の決定 4）。v5 以前に在れば未知の鍵として拒否し（v5 の
+// 読みは 1.1.0 と同じ厳しさ）、無ければ既定（オフ・120 ms・インデントガイドの既定）のまま。v6 は
+// 後から足した鍵の形（無ければ既定・有れば厳密）で読む。時間の読みは core の caret_motion_time_of
+// の 1 本。打ったときの粒の caret_sparks（ADR 0192 の追補・#1979・既定オフ）も同じ形。
 [[nodiscard]] std::expected<void, Failure> apply_v6_fields(core::EditorSettings &settings,
                                                            const SettingsFields &fields,
                                                            SettingsVersion version)
@@ -534,8 +595,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     case SettingsVersion::v3:
     case SettingsVersion::v4:
     case SettingsVersion::v5:
-        if (fields.caret_motion.has_value() || fields.caret_motion_time.has_value() ||
-            fields.caret_sparks.has_value())
+        if (has_v6_fields(fields))
         {
             return std::unexpected(Failure::malformed);
         }
@@ -564,7 +624,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
         return std::unexpected(sparks.error());
     }
     settings.caret_sparks = sparks.value();
-    return {};
+    return apply_indent_guide_fields(settings, fields);
 }
 
 // v4・v5・v6 の欄を順に置く（どれかが拒めばそこで止める）。
@@ -742,21 +802,26 @@ std::string encode_settings(const core::EditorSettings &settings)
                                     ? std::to_string(settings.explorer_width.value())
                                     : std::string{};
     // 書くのは v6 だけ（ADR 0192 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
-    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前。
-    return std::format("version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
-                       "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
-                       "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
-                       "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
-                       "caret_motion_time={}\ncaret_sparks={}\n{}{}",
-                       theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
-                       core::display_language_choice_name(settings.ui_language),
-                       switch_text(settings.lsp), switch_text(settings.explorer), root,
-                       features_text(settings.features), switch_text(settings.ignorecase),
-                       switch_text(settings.smartcase), switch_text(settings.relativenumber),
-                       settings.scrolloff, explorer_width, switch_text(settings.autoindent),
-                       core::finder_preview_name(settings.finder_preview),
-                       switch_text(settings.caret_motion), settings.caret_motion_time,
-                       switch_text(settings.caret_sparks), lsp_commands_text(settings.lsp_commands),
-                       maps_text(settings));
+    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前
+    // （粒の `caret_sparks` とインデントガイドの 4 つは `caret_motion_time` の後ろ・ADR 0192 の
+    // 追補・ADR 0193 の決定 4）。
+    return std::format(
+        "version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
+        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
+        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
+        "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
+        "caret_motion_time={}\ncaret_sparks={}\nindent_guide_style={}\nindent_guide_colors={}\n"
+        "indent_guide_active={}\nindent_guide_width={}\n{}{}",
+        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
+        core::display_language_choice_name(settings.ui_language), switch_text(settings.lsp),
+        switch_text(settings.explorer), root, features_text(settings.features),
+        switch_text(settings.ignorecase), switch_text(settings.smartcase),
+        switch_text(settings.relativenumber), settings.scrolloff, explorer_width,
+        switch_text(settings.autoindent), core::finder_preview_name(settings.finder_preview),
+        switch_text(settings.caret_motion), settings.caret_motion_time,
+        switch_text(settings.caret_sparks),
+        core::indent_guide_style_name(settings.indent_guide_style), settings.indent_guide_colors,
+        switch_text(settings.indent_guide_active), settings.indent_guide_width,
+        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32
