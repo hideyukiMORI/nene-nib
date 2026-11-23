@@ -20,10 +20,11 @@ struct SplitState
     core::SplitLayout layout = core::SplitLayout::none;
     core::PaneSide active_side = core::PaneSide::first;
     std::optional<OtherView> other;
-    // 境界の位置（ADR 0148 の 2026-11-22 の追補の決定 1）。置くのは with_split_share だけで、分け
-    // る・閉じるは等分（既定値）に戻る。本文の 2 枠から全面プレビューへ出入りしても比は保つ（隠した
-    // 枠と一緒に split を残す）。横のプレビューから全面へ入る道は split を空にして配置と側だけを
-    // 覚えるので、抜けると等分。layout == none なら読まない。
+    // 境界の位置（ADR 0148 の 2026-11-22 の追補の決定 1）。使う人が比を決めるのは with_split_share
+    // だけで、全面からの戻り（without_full_preview）は入るときに覚えた値を戻すだけ。分ける・閉じる
+    // は等分（既定値）に戻る。本文の 2 枠から全面プレビューへ出入りしても比は保つ（隠した
+    // 枠と一緒に split を残す）。横のプレビューから全面へ入る道は split を空にして配置と側と比を
+    // 覚え、側へ戻るときに置き直す（#1973）。layout == none なら読まない。
     core::SplitShare share{};
 };
 
