@@ -252,7 +252,7 @@ SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
                         ("ignorecase", "off"), ("smartcase", "off"), ("relativenumber", "off"),
                         ("scrolloff", "0"), ("explorer_width", ""), ("autoindent", "off"),
                         ("finder_preview", "auto"), ("caret_motion", "off"),
-                        ("caret_motion_time", "120"))
+                        ("caret_motion_time", "120"), ("caret_sparks", "off"))
 
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path

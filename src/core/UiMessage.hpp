@@ -423,10 +423,13 @@ enum class UiMessage : std::uint16_t
     notice_references_not_supported,
     // 参照の答えを上限で切った知らせ（#1954 のレビュー L2・{0} は出した件数・{1} は答えの件数）。
     notice_references_first_of,
+    // 打ったときの粒（ADR 0192 の追補・#1979）の設定の画面の行。
+    settings_caret_sparks_name,
+    settings_caret_sparks_description,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_references_first_of) + 1U;
+    std::to_underlying(UiMessage::settings_caret_sparks_description) + 1U;
 } // namespace nenenib::core

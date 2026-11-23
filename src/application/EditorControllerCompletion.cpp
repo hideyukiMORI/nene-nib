@@ -877,24 +877,24 @@ void EditorController::merge_vim_completion_answer(CompletionSession &session,
 
 // ------------------------------------------------- Vim の INSERT で打鍵が自動に開く面（#1962）
 
-// 言語サーバーが起きている窓で打った Vim の鍵（ADR 0190 の追補・#1962）。打った鍵の入口
-// （accept(VimKeyPress)）だけが呼ぶので、再生（`.` `@`）・:normal!（press_vim_keys）・IME の
-// 確定（type_as_vim_keys）の鍵はここを通らない。`map` の右辺は鍵の出どころで見分ける
-// （watched_vim_key）。engine の歩は変えない。
+// 言語サーバーが起きている窓か、打ったときの粒（ADR 0192 の追補・#1979）がオンの窓で打った Vim の鍵
+// （ADR 0190 の追補・#1962）。打った鍵の入口（accept(VimKeyPress)）だけが呼ぶので、再生（`.`
+// `@`）・:normal!（press_vim_keys）・IME の確定（type_as_vim_keys）の鍵はここを通らない。`map` の右
+// 辺は鍵の出どころで見分ける（watched_vim_key）。engine の歩は変えない。
 void EditorController::typed_vim_key_with_language(const core::VimKey &key)
 {
     if (auto_vim_completion_took(key))
     {
         return;
     }
+    // 言語サーバーが running でなく粒もオフなら見張らない（1 文字ごとに文字列を作らない）。
+    const bool language = active_language_server().phase == LanguageServerPhase::running;
     {
-        // 言語サーバーが running でなければ見張らない（1 文字ごとに文字列を作らない）。
-        const ScopedValue<bool> watch{typed_watch_, active_language_server().phase ==
-                                                        LanguageServerPhase::running};
+        const ScopedValue<bool> watch{typed_watch_, language || state_.settings().caret_sparks};
         typed_insert_.reset();
         static_cast<void>(typed_vim_key(key));
     }
-    typed_vim_character();
+    typed_vim_character(language);
 }
 
 // engine に流す鍵の 1 つ（deliver_vim_key の頭・typed_watch_ の間だけ）。打った文字として
@@ -948,9 +948,10 @@ bool EditorController::auto_vim_completion_took(const core::VimKey &key)
     return false;
 }
 
-// 鍵の後も INSERT で、最後に流した打った文字が流す前のキャレットの直後にそのまま入ったときだけ
-// （1 文字で抜ける鍵・貼り付け・1 鍵の引数で入った文字は渡さない）。
-void EditorController::typed_vim_character()
+// 鍵の後も INSERT で、最後に流した打った文字が流す前のキャレットの直後にそのまま入ったときだけ（1
+// 文字で抜ける鍵・貼り付け・1 鍵の引数で入った文字は渡さない）。粒がオンなら打鍵の通し番号を進め
+// （#1979）、language（鍵を流す前に言語サーバーが running だった）なら言語サーバーへ渡す。
+void EditorController::typed_vim_character(bool language)
 {
     if (!typed_insert_.has_value())
     {
@@ -970,7 +971,14 @@ void EditorController::typed_vim_character()
     {
         return;
     }
-    typed_for_language(typed);
+    if (state_.settings().caret_sparks)
+    {
+        ++typed_serial_;
+    }
+    if (language)
+    {
+        typed_for_language(typed);
+    }
 }
 
 // 自動の面の候補を engine の写しにする（ADR 0169 の形へ移る）。写すのは面に出ている LSP の候補

@@ -478,5 +478,8 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_references_not_found, "No references found"},
     {UiMessage::notice_references_not_supported, "This language server does not answer references"},
     {UiMessage::notice_references_first_of, "Showing {0} of {1} references"},
+    {UiMessage::settings_caret_sparks_name, "Typing Sparks"},
+    {UiMessage::settings_caret_sparks_description,
+     "Scatter a few small sparks from where each character is typed"},
 }};
 } // namespace nenenib::core

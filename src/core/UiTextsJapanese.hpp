@@ -451,5 +451,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_references_not_found, "参照が見つかりません"},
     {UiMessage::notice_references_not_supported, "この言語サーバーは参照に答えません"},
     {UiMessage::notice_references_first_of, "参照 {1} 件のうち {0} 件を出しています"},
+    {UiMessage::settings_caret_sparks_name, "打ったときの粒"},
+    {UiMessage::settings_caret_sparks_description,
+     "文字を打つと、打った所から小さな粒が散って消える"},
 }};
 } // namespace nenenib::core

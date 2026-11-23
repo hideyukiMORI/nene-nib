@@ -1,6 +1,6 @@
-// キャレットの動きの合図（ADR 0192 の決定 3・6・#1933）。窓は描いた後に renderer が動いているかを
-// 読み、動いている間だけ合図のタイマーを張って経過を CaretMotionTick で送る。四隅は core の純関数が
-// 決め、窓は時計の port で経過を測るだけ（ARC-007）。
+// キャレットの動きと打ったときの粒の合図（ADR 0192 の決定 3・6・追補・#1933・#1979）。窓は描いた後
+// に renderer が動いているかを読み、動いている間だけ合図のタイマーを張って経過を CaretMotionTick で
+// 送る。四隅は core の純関数が決め、窓は時計の port で経過を測るだけ（ARC-007）。
 #include "EditorWindow.hpp"
 
 #include "CaretMotionTick.hpp"
@@ -25,18 +25,27 @@ void EditorWindow::read_animation_setting()
     animation_setting_ = animated != FALSE;
 }
 
+// 動きと打ったときの粒（ADR 0192 の追補・#1979）は 1 つのタイマーを分ける。どちらかが生きている間だ
+// け張り、それぞれの番号が変わったら（またはタイマーを張り直すとき）その経過の起点を測り直す。
 void EditorWindow::follow_caret_motion()
 {
     const auto moving = renderer_->caret_motion_generation();
-    if (!moving.has_value())
+    const auto sparking = renderer_->caret_sparks_generation();
+    if (!moving.has_value() && !sparking.has_value())
     {
         stop_caret_motion();
         return;
     }
-    if (moving.value() != caret_motion_generation_ || !caret_motion_timing_)
+    if (moving.has_value() && (moving.value() != caret_motion_generation_ || !caret_motion_timing_))
     {
         caret_motion_generation_ = moving.value();
         caret_motion_start_ = clock_.milliseconds();
+    }
+    if (sparking.has_value() &&
+        (sparking.value() != caret_sparks_generation_ || !caret_motion_timing_))
+    {
+        caret_sparks_generation_ = sparking.value();
+        caret_sparks_start_ = clock_.milliseconds();
     }
     if (!std::exchange(caret_motion_timing_, true))
     {
@@ -68,13 +77,18 @@ void EditorWindow::send_caret_motion()
         if (renderer_ != nullptr)
         {
             renderer_->settle_caret_motion();
+            renderer_->settle_caret_sparks();
         }
         return;
     }
     const std::uint64_t now = clock_.milliseconds();
-    const std::uint64_t elapsed = now >= caret_motion_start_ ? now - caret_motion_start_ : 0;
-    const auto clamped = static_cast<std::uint32_t>(
-        std::min<std::uint64_t>(elapsed, std::numeric_limits<std::uint32_t>::max()));
-    send(application::CaretMotionTick{{caret_motion_generation_, clamped}});
+    const auto since = [now](std::uint64_t start) noexcept
+    {
+        const std::uint64_t elapsed = now >= start ? now - start : 0;
+        return static_cast<std::uint32_t>(
+            std::min<std::uint64_t>(elapsed, std::numeric_limits<std::uint32_t>::max()));
+    };
+    send(application::CaretMotionTick{{caret_motion_generation_, since(caret_motion_start_)},
+                                      {caret_sparks_generation_, since(caret_sparks_start_)}});
 }
 } // namespace nenenib::ui::win32

@@ -119,6 +119,8 @@ void verify_minimap_scope();
 void verify_feature_costs_scope();
 // CaretMotionTests.cpp（ADR 0192・#1933・キャレットの動きの純関数と設定）
 void verify_caret_motion_scope();
+// CaretSparkTests.cpp（ADR 0192 の追補・#1979・打ったときの粒・--caret-motion の中で回る）
+void verify_caret_sparks_contracts();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
 void verify_language_server_candidates_scope();
