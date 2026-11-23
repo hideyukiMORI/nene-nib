@@ -21,7 +21,7 @@ inline constexpr std::string_view released_v5_settings =
     "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\nlsp.later-lang.command=C:\\x\\ls.exe\n"
     "mapleader=<Space>\nmap.i.jj=!<Esc>\n";
 
-// 今の書く形（v6）が caret_motion_time の後ろに書くインデントガイドの 4 つの既定（ADR 0193 の
+// 今の書く形（v6）が pane_resize_step_vim の後ろに書くインデントガイドの 4 つの既定（ADR 0193 の
 // 決定 4）。v6 の形の見本を組み立てる試験が共用する。
 inline constexpr std::string_view indent_guide_defaults =
     "indent_guide_style=rainbow\nindent_guide_colors=4\nindent_guide_active=on\n"
@@ -31,4 +31,7 @@ inline constexpr std::string_view indent_guide_defaults =
 [[nodiscard]] bool released_v5_values(const core::EditorSettings &settings);
 // v5 の読み・v6 の形への書き戻し・v6 の 2 つの鍵の往復と拒否。
 void verify_settings_v6_codec(Expect expect);
+// v3 の見本に v4・v5・v6 の鍵を 1 つ足すと未知の鍵として拒む（NibAdapterTests.cpp の版の試験から
+// 呼ぶ・CNF-014 の長さの上限のためここに置く）。
+void verify_v3_refuses_later_keys(Expect expect, std::string_view v3_settings);
 } // namespace nenenib::tests::adapters
