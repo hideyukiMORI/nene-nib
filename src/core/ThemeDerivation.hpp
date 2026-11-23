@@ -16,9 +16,6 @@ namespace nenenib::core
 inline constexpr RgbColor mix_black{0x00, 0x00, 0x00};
 inline constexpr RgbColor mix_white{0xFF, 0xFF, 0xFF};
 
-// アクセントの上の文字を黒にする明るさの境目（ADR 0017 の決定 4）。
-inline constexpr int on_accent_threshold = 160;
-
 // sRGB の値のまま整数で補間する（ADR 0017 の決定 4）。ガンマも libm も持ち込まない
 // （core から libm のシンボルを出すと ARC-003 が落ちる・ADR 0008 の決定 5）。
 // 端数は 0 方向に落とす。知覚的に均一ではないことは ADR の「失うもの」に書いてある。
@@ -46,14 +43,95 @@ inline constexpr int on_accent_threshold = 160;
                     static_cast<std::uint8_t>((left.blue + right.blue) / 2)};
 }
 
-// アクセントの明るさ（299R + 587G + 114B）/ 1000 が境目以上なら黒、未満なら白。
+// sRGB の 1 成分 → 線形の値の 100 万倍（WCAG 2.x の相対輝度の式・ADR 0017 の 2026-11-23 の追補）。
+// v = c / 255 が 0.03928 以下なら v / 12.92、上なら ((v + 0.055) / 1.055)^2.4。
+// 表はコンパイル時にだけ作る（consteval）。x^2.4 = x² × (x²)^(1/5) で、5 乗根は Newton 法
+// （1 から上側で単調に収束する）。std::pow を呼ばないので libm のシンボルは出ない（ARC-003）。
+[[nodiscard]] consteval double fifth_root(double value) noexcept
+{
+    double root = 1.0;
+    for (int step = 0; step < 200; ++step)
+    {
+        const double fourth = root * root * root * root;
+        root = (4.0 * root + value / fourth) / 5.0;
+    }
+    return root;
+}
+
+[[nodiscard]] consteval std::uint32_t srgb_linear_millionths_of(int channel) noexcept
+{
+    const double level = static_cast<double>(channel) / 255.0;
+    const double base = (level + 0.055) / 1.055;
+    const double linear = level <= 0.03928 ? level / 12.92 : base * base * fifth_root(base * base);
+    return static_cast<std::uint32_t>(linear * 1'000'000.0 + 0.5);
+}
+
+[[nodiscard]] consteval std::array<std::uint32_t, 256> srgb_linear_millionths_table() noexcept
+{
+    std::array<std::uint32_t, 256> table{};
+    for (std::size_t channel = 0; channel < table.size(); ++channel)
+    {
+        table.at(channel) = srgb_linear_millionths_of(static_cast<int>(channel));
+    }
+    return table;
+}
+
+inline constexpr std::array<std::uint32_t, 256> srgb_linear_millionths =
+    srgb_linear_millionths_table();
+
+// 数点は手で式を計算した値（四捨五入）と照らす。
+static_assert(srgb_linear_millionths.at(0) == 0, "black is 0");
+static_assert(srgb_linear_millionths.at(10) == 3'035, "10 / 255 is on the linear segment");
+static_assert(srgb_linear_millionths.at(11) == 3'347, "11 / 255 is on the power segment");
+static_assert(srgb_linear_millionths.at(128) == 215'861, "128 / 255 is about 0.2158605");
+static_assert(srgb_linear_millionths.at(188) == 502'886, "188 / 255 is about 0.5028865");
+static_assert(srgb_linear_millionths.at(255) == 1'000'000, "white is 1");
+
+// 相対輝度 L の 10^10 倍（重み 2126・7152・722 の和は 10,000・成分は 10^6 倍）。
+[[nodiscard]] constexpr std::uint64_t relative_luminance_scaled(RgbColor color) noexcept
+{
+    return 2'126ULL * srgb_linear_millionths.at(color.red) +
+           7'152ULL * srgb_linear_millionths.at(color.green) +
+           722ULL * srgb_linear_millionths.at(color.blue);
+}
+
+// 黒の比は (L + 0.05) / 0.05、白の比は 1.05 / (L + 0.05)。黒の比が白の比以上なのは
+// (L + 0.05)² ≥ 1.05 × 0.05 = 0.0525 のとき（両辺は正なので割り算を掛け算に移せる）。
+// L を 10^10 倍の整数 S で書くと (S + 5×10^8)² ≥ 5.25×10^18（uint64 に収まる）。
+// 左辺は S について単調なので、満たす最小の S をしきいにする（約 0.17913 × 10^10）。
+inline constexpr std::uint64_t on_accent_black_offset = 500'000'000ULL;
+inline constexpr std::uint64_t on_accent_black_square = 5'250'000'000'000'000'000ULL;
+
+[[nodiscard]] consteval std::uint64_t on_accent_black_threshold_scaled() noexcept
+{
+    std::uint64_t low = 0;
+    // 上端 2×10^9 では (2.5×10^9)² = 6.25×10^18 で、uint64 の 1.8×10^19 に収まる。
+    std::uint64_t high = 2'000'000'000ULL;
+    while (low < high)
+    {
+        const std::uint64_t middle = low + (high - low) / 2;
+        const std::uint64_t shifted = middle + on_accent_black_offset;
+        if (shifted * shifted >= on_accent_black_square)
+        {
+            high = middle;
+        }
+        else
+        {
+            low = middle + 1;
+        }
+    }
+    return low;
+}
+
+inline constexpr std::uint64_t on_accent_black_threshold = on_accent_black_threshold_scaled();
+
+static_assert(on_accent_black_threshold == 1'791'287'848ULL,
+              "sqrt(0.0525) - 0.05 is about 0.1791287847");
+
+// アクセントの上の文字は、黒と白のうち WCAG 2.x のコントラスト比が大きい方（等しければ黒）。
 [[nodiscard]] constexpr RgbColor on_accent_for(RgbColor accent) noexcept
 {
-    const int brightness =
-        (299 * static_cast<int>(accent.red) + 587 * static_cast<int>(accent.green) +
-         114 * static_cast<int>(accent.blue)) /
-        1000;
-    return brightness >= on_accent_threshold ? mix_black : mix_white;
+    return relative_luminance_scaled(accent) >= on_accent_black_threshold ? mix_black : mix_white;
 }
 
 // ADR 0017 の決定 4 の表そのもの。添字は Appearance（light = 0・dark = 1）で、
