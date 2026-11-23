@@ -46,17 +46,39 @@ FontSize default_font_size()
     return FontSize::from_points(FontSize::default_points).value();
 }
 
+namespace
+{
+// 1 段は 0.5 pt（#1927）。0.5 pt を 1 とする整数で数え、端で止める（下限 8・上限 40 はどちらも
+// 格子の上）。格子の外の値（`:set fontsize=13.3`）は、上げると上の格子、下げると下の格子へ着く。
+constexpr std::int64_t half_points_per_point = 2;
+constexpr std::int64_t lowest_half_points =
+    static_cast<std::int64_t>(FontSize::minimum_points) * half_points_per_point;
+constexpr std::int64_t highest_half_points =
+    static_cast<std::int64_t>(FontSize::maximum_points) * half_points_per_point;
+constexpr auto widest_walk = static_cast<std::size_t>(highest_half_points - lowest_half_points);
+
+FontSize half_points_size(std::int64_t half_points)
+{
+    const auto bounded = std::clamp(half_points, lowest_half_points, highest_half_points);
+    return FontSize::from_points(static_cast<float>(bounded) /
+                                 static_cast<float>(half_points_per_point))
+        .value();
+}
+} // namespace
+
 FontSize adjusted_font_size(FontSize current, FontSizeAdjustment adjustment, std::size_t steps)
 {
-    const float amount = static_cast<float>(std::min<std::size_t>(steps, 40));
+    const auto amount = static_cast<std::int64_t>(std::min(steps, widest_walk));
+    const float doubled = current.points() * static_cast<float>(half_points_per_point);
+    // 正の値の切り捨ては床。端数があれば天井は床の 1 つ上。
+    const auto floor = static_cast<std::int64_t>(doubled);
+    const std::int64_t ceiling = static_cast<float>(floor) < doubled ? floor + 1 : floor;
     switch (adjustment)
     {
     case FontSizeAdjustment::increase:
-        return FontSize::from_points(std::min(current.points() + amount, FontSize::maximum_points))
-            .value();
+        return amount == 0 ? current : half_points_size(floor + amount);
     case FontSizeAdjustment::decrease:
-        return FontSize::from_points(std::max(current.points() - amount, FontSize::minimum_points))
-            .value();
+        return amount == 0 ? current : half_points_size(ceiling - amount);
     case FontSizeAdjustment::reset:
         return default_font_size();
     }

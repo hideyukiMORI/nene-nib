@@ -114,6 +114,55 @@ using nenenib::core::width_of;
 namespace core = nenenib::core;
 namespace app = nenenib::application;
 
+// 1 段は 0.5 pt（#1927）。下限から上限まで歩くと全部が 0.5 の倍数で、端で止まり、下りて元へ戻る。
+// 格子の外の値は上げると上の格子、下げると下の格子へ着く。
+bool on_half_grid(float points)
+{
+    const float doubled = points * 2.0F;
+    return static_cast<float>(static_cast<int>(doubled)) == doubled;
+}
+
+void verify_font_size_half_steps()
+{
+    using nenenib::core::adjusted_font_size;
+    using nenenib::core::FontSize;
+    using nenenib::core::FontSizeAdjustment;
+    auto size = FontSize::from_points(FontSize::minimum_points).value();
+    int climbed = 0;
+    bool aligned = true;
+    while (size.points() < FontSize::maximum_points && climbed < 1000)
+    {
+        const auto next = adjusted_font_size(size, FontSizeAdjustment::increase, 1);
+        aligned = aligned && on_half_grid(next.points()) && next.points() - size.points() == 0.5F;
+        size = next;
+        ++climbed;
+    }
+    expect(aligned && climbed == 64, "walking up from 8 to 40 takes 64 half-point steps");
+    expect(adjusted_font_size(size, FontSizeAdjustment::increase, 1).points() == 40.0F,
+           "the top stays at forty points");
+    for (int step = 0; step < climbed; ++step)
+    {
+        size = adjusted_font_size(size, FontSizeAdjustment::decrease, 1);
+        aligned = aligned && on_half_grid(size.points());
+    }
+    expect(aligned && size.points() == FontSize::minimum_points,
+           "walking down returns to eight points on the grid");
+    expect(adjusted_font_size(size, FontSizeAdjustment::decrease, 1).points() == 8.0F,
+           "the bottom stays at eight points");
+    const auto start = nenenib::core::default_font_size();
+    expect(adjusted_font_size(adjusted_font_size(start, FontSizeAdjustment::increase, 3),
+                              FontSizeAdjustment::decrease, 3)
+                   .points() == start.points(),
+           "going up and down by the same steps returns to the same size");
+    const auto off_grid = FontSize::from_points(13.3F).value();
+    expect(adjusted_font_size(off_grid, FontSizeAdjustment::increase, 1).points() == 13.5F &&
+               adjusted_font_size(off_grid, FontSizeAdjustment::decrease, 1).points() == 13.0F,
+           "an off-grid size moves onto the half-point grid");
+    const auto near_top = FontSize::from_points(39.8F).value();
+    expect(adjusted_font_size(near_top, FontSizeAdjustment::increase, 3).points() == 40.0F,
+           "an off-grid size clamps at the top");
+}
+
 void verify_font_sizes()
 {
     using nenenib::core::adjusted_font_size;
@@ -131,10 +180,10 @@ void verify_font_sizes()
     {
         expect(!FontSize::from_points(points).has_value(), "invalid point sizes are rejected");
     }
-    expect(adjusted_font_size(initial, FontSizeAdjustment::increase, 1).points() == 14.5F,
-           "increase means one point");
-    expect(adjusted_font_size(initial, FontSizeAdjustment::decrease, 2).points() == 11.5F,
-           "wheel steps use the same point adjustment");
+    expect(adjusted_font_size(initial, FontSizeAdjustment::increase, 1).points() == 14.0F,
+           "increase means half a point");
+    expect(adjusted_font_size(initial, FontSizeAdjustment::decrease, 2).points() == 12.5F,
+           "wheel steps use the same half-point adjustment");
     expect(adjusted_font_size(initial, FontSizeAdjustment::increase, 0).points() == 13.5F,
            "zero wheel steps do nothing");
     expect(adjusted_font_size(initial, FontSizeAdjustment::increase,
@@ -146,6 +195,7 @@ void verify_font_sizes()
     const auto largest = FontSize::from_points(40.0F).value();
     expect(adjusted_font_size(largest, FontSizeAdjustment::reset, 0).points() == 13.5F,
            "reset is independent of the count");
+    verify_font_size_half_steps();
 }
 
 void verify_settings_loading()
@@ -180,10 +230,10 @@ void verify_settings_adjustment()
     static_cast<void>(controller.apply_frame(SelectAll{}));
     const auto before = controller.frame();
     const auto larger = controller.apply_frame(AdjustFontSize{FontSizeAdjustment::increase, 1});
-    expect(larger.settings.font_size.points() == 14.5F && editor.settings().writes() == 1,
+    expect(larger.settings.font_size.points() == 14.0F && editor.settings().writes() == 1,
            "a changed point size is persisted once");
     const auto &written = editor.settings().written();
-    expect(written.has_value() && written.value().font_size.points() == 14.5F,
+    expect(written.has_value() && written.value().font_size.points() == 14.0F,
            "the persisted size equals the displayed size");
     expect(larger.lines.front().text == "abc" &&
                larger.caret.position.column == before.caret.position.column,
@@ -223,7 +273,7 @@ void verify_settings_failures()
     editor.settings().fail(std::nullopt);
     const auto retried =
         editor.controller().apply_frame(AdjustFontSize{FontSizeAdjustment::decrease, 1});
-    expect(retried.settings.font_size.points() == 12.5F && !retried.settings_failure.has_value(),
+    expect(retried.settings.font_size.points() == 13.0F && !retried.settings_failure.has_value(),
            "a later successful save clears the diagnostic");
 }
 

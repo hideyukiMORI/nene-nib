@@ -80,17 +80,17 @@ def prepare(window) -> None:
 def verify_keys(window, settings: Path, appearance: str, output: Path) -> dict:
     result = {"default": geometry(window, 13.5, appearance, output, "font-default")}
     assert not settings.exists(), "startup must not create settings"
-    for key, points in ((0xBB, 14.5), (0xBD, 13.5), (0x6B, 14.5), (0x6D, 13.5)):
+    for key, points in ((0xBB, 14.0), (0xBD, 13.5), (0x6B, 14.0), (0x6D, 13.5)):
         chord(window, key)
         assert saved_points(settings, points) == points, (key, points)
     wheel(window, 60)
     assert saved_points(settings) == 13.5, "partial wheel must not resize yet"
     wheel(window, 60)
-    assert saved_points(settings, 14.5) == 14.5, "two partial wheel deltas make one step"
-    wheel(window, 120 * 40)
+    assert saved_points(settings, 14.0) == 14.0, "two partial wheel deltas make one step"
+    wheel(window, 120 * 64)
     assert saved_points(settings, 40) == 40
     result["maximum"] = geometry(window, 40, appearance, output, "font-maximum")
-    wheel(window, -120 * 40)
+    wheel(window, -120 * 64)
     assert saved_points(settings, 8) == 8
     result["minimum"] = geometry(window, 8, appearance, output, "font-minimum")
     chord(window, 0x30)
@@ -100,11 +100,11 @@ def verify_keys(window, settings: Path, appearance: str, output: Path) -> dict:
     click(window, *toggle["vim"])
     time.sleep(0.2)
     chord(window, 0x6B)
-    assert saved_points(settings, 14.5) == 14.5, "Vim supports the same font intent"
+    assert saved_points(settings, 14.0) == 14.0, "Vim supports the same font intent"
     chord(window, 0x60)
     assert saved_points(settings, 13.5) == 13.5, "numpad zero resets in Vim"
     click(window, *toggle["ordinary"])
-    wheel(window, 120 * 8)
+    wheel(window, 120 * 16)
     assert saved_points(settings, 21.5) == 21.5
     result["enlarged"] = geometry(window, 21.5, appearance, output, "font-enlarged")
     return result
