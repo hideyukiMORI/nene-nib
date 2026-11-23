@@ -11,15 +11,14 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 
 ## いまの状態（2026-11-23）
 
-- **公開版は 1.0.0**: Microsoft Store と [GitHub の v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0)（pre-release・2026-11-17 20:53 JST）。公開元は main `80fd7a53`（記録 [release-1.0.0-2026-11-14.md](../quality/release-1.0.0-2026-11-14.md)）。
-- **1.1.0 は Store の認定待ち**（2026-11-21 18:30 ごろ申請・Submission 2）。区切りはまとめ枝 46 ＋ 47、公開元は main `4fcf258c`。GitHub の tag `v1.1.0` と Release は認定の後。記録は [release-1.1.0-2026-11-17.md](../quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
+- **公開版は 1.1.0**: Microsoft Store と [GitHub の v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)（2026-11-23 12:43 JST）。区切りはまとめ枝 46 ＋ 47、公開元は main `4fcf258c`。記録は [release-1.1.0-2026-11-17.md](../quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
 - **main は `7f266cfb`**（まとめ枝 48 = PR #1957・49 = PR #1967 が 2026-11-23 に入った）。1.1.0 の後の main にある物: LSP の言語ごとの席（#1909）・root の印（#1940 #1960）・診断の跳びと一覧（#1939）・設定の言語サーバーの節（#1945）・記録と進み具合（#1942）・参照の一覧（#1947）・名乗りの直し（#1961）・Vim の INSERT の自動の補完（#1962）・言語 16 個（#1917）・split の境界線（#1941）・キャレットのアニメーション（#1933・`settings.v6`）。v6 を書く最初の公開版はまだ決めていない。
 - **開いている PR**: #1958（LSP 段 S6 b 記号・受理済み）・#1968（S6 c 引数の情報・レビューの直しの途中）・#593（保留）。S6 d（整形）は未着手。
 - `eng/coverage.py`（#1921）は未着手。hide の気になった所 #1926〜#1929 は次の版。
 
 ## 次の順
 
-1. **1.1.0 の公開**（#1815・#1930）: Store の認定 → GitHub の `v1.1.0`（題に Beta を付けない・pre-release にしない・D101）→ 公開の結果の文書（記録の「GitHub の公開」「公開の結果」・README の Status）。手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
+1. **1.1.0 の告知**（hide の順）: 28 秒の動画を SNS と記事に出す → メモ帳との比較動画と計測記事。比較の数字の正本は `D:/NeNeNib/evidence/notepad-compare-20261123/README.md`。3 本の private working set の追加計測は、機械が静かなときに行う。
 2. **LSP を完成させる**（hide の順 2026-11-22・FR-021・[ADR 0191](../adr/0191-language-server-references-symbols-signature-help-and-formatting.md)）: まとめ枝 50（S6 b #1955・c #1959・d 整形）→ S7（rename と quick fix）→ 同じ命令のサーバーの共有（#1952）。細部は[引き継ぎ 2026-11-23](../handoffs/2026-11-23.md)。
 3. **hide の決め待ちと実機の確かめ**: 自動の補完の一覧の鍵とクリック・キャレットのアニメーションの細部・v6 を書く版・split の 1 回分ほか（[引き継ぎ 2026-11-23](../handoffs/2026-11-23.md)の「決めてほしいこと」）。
 4. **コントラスト**（#1953 ＋ #1929）と設定の画面の残り（#1926〜#1928）。

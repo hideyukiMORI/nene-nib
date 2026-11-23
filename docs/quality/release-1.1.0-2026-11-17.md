@@ -159,7 +159,7 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 �
 
 ## GitHub の公開
 
-`<<tag v1.1.0 → 公開元・題 NeNe Nib 1.1.0（pre-release なし）・URL・添付・再取得の照合（verify-publication.py の result）>>`
+tag `v1.1.0` → 公開元 `4fcf258c065216bd2a6106e90593fdbd70fbcd2a`・題 `NeNe Nib 1.1.0`（draft でも pre-release でもない）・2026-11-23 12:43:28 JST・https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0 ・添付は `NeNeNib-1.1.0-windows-x64.zip`（SHA-256 `eb582d88d9bcb215550c76857ff89b10f5f38fba7523cec73f521768ea660381`）と `SHA256SUMS`。再取得の照合 `verify-publication.py` は `"result": "pass"`（`downloadedBytesMatch` true・`zipContentsMatch` true）。公開は hide の GO の後に統合リナが `publish.ps1` で行った。
 
 ## Microsoft Store の提出
 
@@ -170,10 +170,10 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件（まとめ枝 41 �
 | 手順書（「入れ直すとき」から 6-A〜6-E・7・9） | hide | hide「全部OKだったよ」「このリリースはこれでいいと思う」 | 2026-11-21 16:4x〜18:5x（上の「根拠」の (d)）。6-F の片付けは設計席が 18:5x に済ませた（(d)）。紙（手順 12）は設計席が書いた `D:/NeNeNib/evidence/v1.1.0-release/hide-results-20261121.md` |
 | WACK（手順 8） | hide | `OVERALL_RESULT="PASS"` | 本番の MSIX に掛けた（hide「そのはず」）・2026-11-21 18:01:42・`APP_NAME="HideyukiMori.NeNeNib"`・`APP_VERSION="1.1.0.0"`・`APP_TYPE="Centennial"`・WACK `10.0.26100.7705`・OS `10.0.26300.0`・報告 `D:/NeNeNib/releases/v1.1.0/wack/report.xml`（ID `c463cbf48bac04e89f6c095b38670ca3`） |
 | 更新の申請（Submission 2） | hide | 提出 | 2026-11-21 18:30 ごろ（JST・hide「あってる」）・Partner Center。パッケージは「新しいのを一つ上げると古いのは消えるっぽいよ」（hide・1.0.0.0 のパッケージを外す操作は要らない見込み・更新の入口のボタンの名前は未確認）。申請の後の画面は Certification status（Submission → Pre-processing → Certification → Publishing・認定を通りしだい公開を始める） |
-| 認定・Store で公開 | Microsoft | `<<認定の結果と公開の日時>>` | まだ（2026-11-21 の夜の時点） |
+| 認定・Store で公開 | Microsoft | 認定・公開済み（hide の確認） | Store のページの更新日時 2026-11-22T22:48:26Z（2026-11-23 07:48 JST）。hide の PC の Store 版は `1.1.0.0` で、`NeNeNib.exe` の SHA-256 が ZIP の exe と同じ `661abdb664c618924224702cdfd935c290a6a5bb60e2545ecb63a5a19f0aeafb`（2026-11-23 に統合リナが照合） |
 
 GitHub の tag `v1.1.0` と Release は Store の認定の後に出す（1.0.0 と同じ順・設計席が hide に伝えた）。
 
 ## 公開の結果
 
-`<<公開版・公開元・照合の結果・次>>`
+公開版は 1.1.0（Microsoft Store と GitHub）。公開元は main `4fcf258c`。GitHub の再取得の照合は pass で、Store 版と ZIP の exe は同じ。次の版は `settings.v6` を書く最初の公開版で、区切りは未定。
