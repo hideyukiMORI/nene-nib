@@ -584,6 +584,15 @@ void verify_share_through_full_preview()
     applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
     expect(controller.pane_split().share == SplitShare{},
            "closing the preview and opening it again starts even");
+    // 側で比を動かす → 全面 → off → 全面（側のプレビューの無い全面）→
+    // 側は等分（前の比を持ち越さない）。
+    applied(controller, app::ResizeSplit{SplitShare{1, 4}});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::off});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
+    expect(controller.frame().other.has_value() && controller.pane_split().share == SplitShare{},
+           "full entered without a side preview leaves for side evenly");
 
     Editing body;
     auto &split = body.controller();
