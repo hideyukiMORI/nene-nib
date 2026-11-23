@@ -120,7 +120,7 @@ void verify_v6_keys(Expect expect)
            "a duplicate caret motion or sparks key is refused");
 }
 
-// インデントガイドの v6 の 4 つの鍵（ADR 0193 の決定 4）。並びは caret_motion_time の後ろ。無ければ
+// インデントガイドの v6 の 4 つの鍵（ADR 0193 の決定 4）。並びは caret_sparks の後ろ。無ければ
 // 既定、有れば厳密に読み、往復する。
 void verify_indent_guide_keys(Expect expect)
 {
@@ -133,10 +133,10 @@ void verify_indent_guide_keys(Expect expect)
     const auto read = decode_settings(bytes, SettingsVersion::v6);
     expect(
         read && core::same_settings(read.value(), settings) &&
-            bytes.find("\ncaret_motion_time=120\nindent_guide_style=plain\n"
+            bytes.find("\ncaret_motion_time=120\ncaret_sparks=off\nindent_guide_style=plain\n"
                        "indent_guide_colors=6\nindent_guide_active=off\nindent_guide_width=2\n") !=
                 std::string::npos,
-        "the indent guide keys follow caret_motion_time and round trip through v6");
+        "the indent guide keys follow caret_sparks and round trip through v6");
     std::string bare = released_v5_as_v6();
     for (const auto key :
          {"indent_guide_style", "indent_guide_colors", "indent_guide_active", "indent_guide_width"})
