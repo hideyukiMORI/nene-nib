@@ -1,16 +1,48 @@
 # NeNe Nib
 
-A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
+**A 4.4 MB text editor for Windows 11. Press `Ctrl+Shift+Space` to switch between ordinary editing and Vim.**
+
+<a href="https://apps.microsoft.com/detail/9nclgdtfq529?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get NeNe Nib from the Microsoft Store"></a>
 
 ![NeNe Nib displays its README in Vim NORMAL mode with two document tabs.](docs/images/nib-vim.png)
 
-C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
+## Why Nib
 
-> **Get it:** [NeNe Nib on the Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529), or the ZIP of
-> [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0) on GitHub.
->
-> **Status (2026-11-17):** [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0)
-> (a GitHub pre-release, published 2026-11-17, and the Microsoft Store version) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
+- **Small.** One 4.4 MB executable (4,571,648 bytes in version 1.1.0), with no runtime to install.
+- **Notepad or Vim.** Edit the ordinary way, or switch to a Vim written from scratch and tested against real Vim 9.1.
+- **Made for large files.** Open UTF-8 files up to 1 GiB. They are read in the background.
+- **Good with Japanese.** Japanese IME, Shift_JIS, UTF-8 and UTF-16 files, and a Japanese interface.
+- **Find anything.** `Ctrl+P` lists tabs, bookmarks, recent files and folder files. `Ctrl+Shift+F` searches a project.
+- **Markdown preview.** See tables, alerts, colored code blocks and task lists next to the text.
+- **125 themes.** Syntax colors for 25 languages are included.
+- **Language servers when you want them.** Off by default. Install a server and connect it for diagnostics, completion, hover and go-to-definition.
+- **Private.** Nib collects no personal information and makes no network connections of its own.
+
+## 日本語
+
+NeNe Nib は、Windows 11 用の 4.4 MB のテキストエディタです。メモ帳のように普通に書くことも、`Ctrl+Shift+Space` で Vim の操作に切り替えることもできます。
+日本語入力、Shift_JIS、最大 1 GiB の UTF-8 ファイル、Markdown プレビュー、125 種類のテーマに対応しています。
+[Microsoft Store から入手できます](https://apps.microsoft.com/detail/9nclgdtfq529)。
+
+## Get it
+
+- **[Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)**: version 1.1.0, updated by the Store.
+- **ZIP**: [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0) on GitHub. The 1.1.0 ZIP is not published yet.
+
+Requires Windows 11 x64. Built with C++23, plain Win32, Direct2D and DirectWrite, with no UI library. MIT licensed.
+
+<p>
+  <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
+  <img src="docs/images/nib-light.png" width="49%" alt="NeNe Nib wraps Japanese specification text in ordinary editing mode with its light theme.">
+</p>
+
+Screenshots use the default font and size in a development build of 2026-10-12; [capture details](docs/quality/showcase-2026-10-12.md).
+
+<details>
+<summary>Full status of the published versions</summary>
+
+> **Status (2026-11-23):** Version 1.1.0 is on the Microsoft Store. [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0)
+> (a GitHub pre-release, published 2026-11-17) is the latest ZIP for Windows 11 x64. Version 1.0.0 has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
@@ -33,12 +65,7 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > `:set autoindent`, more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`),
 > preview wheel scrolling by pixels, lighter scrolling of long unwrapped lines, and fixes.
 
-<p>
-  <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
-  <img src="docs/images/nib-light.png" width="49%" alt="NeNe Nib wraps Japanese specification text in ordinary editing mode with its light theme.">
-</p>
-
-Screenshots use the default font and size in a development build of 2026-10-12; [capture details](docs/quality/showcase-2026-10-12.md).
+</details>
 
 ## Find your theme
 
