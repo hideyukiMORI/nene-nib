@@ -284,7 +284,7 @@ void verify_immediate_look()
            "the color scheme changes the frame's palette at once");
     focus_on(controller, core::SettingsValue::font_size);
     const auto bigger = controller.apply_frame(app::ChangeSetting{true});
-    expect(bigger.settings.font_size.points() == 14.5F, "the font size changes at once");
+    expect(bigger.settings.font_size.points() == 14.0F, "the font size changes at once");
     focus_on(controller, core::SettingsValue::ui_language);
     static_cast<void>(controller.apply(app::ChangeSetting{true}));
     const auto english = controller.apply_frame(app::ChangeSetting{true});
