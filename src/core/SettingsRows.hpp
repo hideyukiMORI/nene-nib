@@ -64,7 +64,7 @@ inline constexpr std::array<SettingsRow, 14> settings_rows{{
 // 無い配色（今の値が利用者のテーマならそれ、でなければ kept が利用者のテーマならそれ・無ければ
 // 列に入れない）で、回り込む。今の値を列の 1 要素として扱うので、利用者のテーマから送っても戻れる
 // （kept には面を開いたときの配色を渡す・#1835 のレビュー R5）。表示言語と置き方は宣言の順で回り
-// 込む。字の大きさは 1 pt ずつで端で止まる。字体は段 1 では送らない（そのまま返す）。
+// 込む。字の大きさは 0.5 pt ずつで端で止まる。字体は段 1 では送らない（そのまま返す）。
 [[nodiscard]] EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue value,
                                                     bool forward,
                                                     const std::optional<ThemeChoice> &kept);
