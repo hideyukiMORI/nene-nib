@@ -2,6 +2,8 @@
 
 #include "AutosaveId.hpp"
 #include "EditMode.hpp"
+#include "EditorFrame.hpp"
+#include "GridRowView.hpp"
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
 #include "LanguageAnswers.hpp"
@@ -168,17 +170,19 @@ bool EditorController::invoke_signature_help()
 }
 
 // frame に載せる札（決定 6）。キャレットの行が見えている行に無い（ホイールで送った）間は隠す
-// （消さない・戻れば出る・#1968 のレビュー c-R2'）。札が無ければ欄を 1 つ読むだけ。
-std::optional<core::LspSignature>
-EditorController::shown_signature(const std::vector<LineView> &lines) const
+// （消さない・戻れば出る・#1968 のレビュー c-R2'）。格子の文書では行は空で、見えている行は
+// 格子の画面行の番号で照合する（#1968 のレビュー R-a）。札が無ければ欄を 1 つ読むだけ。
+std::optional<core::LspSignature> EditorController::shown_signature(const EditorFrame &frame) const
 {
     if (!signature_tip_.has_value())
     {
         return std::nullopt;
     }
     const core::LineNumber line = signature_tip_.value().line;
-    const bool visible =
-        std::ranges::any_of(lines, [line](const LineView &view) { return view.number == line; });
+    const bool visible = std::ranges::any_of(frame.lines, [line](const LineView &view)
+                                             { return view.number == line; }) ||
+                         std::ranges::any_of(frame.grid, [line](const GridRowView &row)
+                                             { return row.number == line; });
     return visible ? std::optional{signature_tip_.value().signature} : std::nullopt;
 }
 

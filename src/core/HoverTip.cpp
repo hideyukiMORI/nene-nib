@@ -154,4 +154,9 @@ std::optional<LayoutRect> signature_tip_rect(const LayoutRect &caret, const Layo
     }
     return std::nullopt;
 }
+
+bool caret_rect_in_pane(const LayoutRect &caret, const LayoutRect &pane) noexcept
+{
+    return overlaps(caret, pane);
+}
 } // namespace nenenib::core

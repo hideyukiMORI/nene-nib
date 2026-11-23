@@ -1417,8 +1417,6 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.tab_tip = shown_tab_tip();
     // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
     result.hover = shown_hover();
-    // 引数の情報の札（#1959・ADR 0191 の決定 6）。札が無いときの分岐は shown_signature の入口。
-    result.signature = shown_signature(result.lines);
     // リンクの札（#1869 の段 L2）。見せている結果に同じリンクがある間だけ（shown_link_card
     // の入口）。
     result.link_card = shown_link_card();
@@ -1432,6 +1430,9 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
         result.grid_searched = tally.searched;
         lexed = tally.lexed;
     }
+    // 引数の情報の札（#1959・ADR 0191 の決定 6）。格子の画面行を作った後に照合する（#1968 の
+    // レビュー R-a）。札が無いときの分岐は shown_signature の入口。
+    result.signature = shown_signature(result);
     result.syntax_lexed = lexed;
     // matchparen は操作中の枠の text の表示の行だけ（ADR 0164・格子と問いの間は行が空）。
     mark_bracket(state_, state_.scroll().visible_lines, result.lines);

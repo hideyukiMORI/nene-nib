@@ -277,11 +277,15 @@ namespace
 // 引数の情報の札（#1959・ADR 0191 の決定 6）。hover の札と同じ書式・描く 1 本で、今の引数を
 // 太字にする。置き場はキャレットの行の上（入らなければ下）で、補完の一覧が出ていれば一覧の箱を
 // 避ける（core::signature_tip_rect）。描く順は補完の一覧と hover の札の後（hover の札とは同時に
-// 出ない）。
+// 出ない）。キャレットの矩形が操作中の枠 pane の外（折り返した行の見えていない画面行）なら描かない
+// （#1968 のレビュー L-a）。
 void Direct2DRenderer::draw_signature_tip(const application::EditorFrame &frame,
-                                          const core::LayoutRect &area)
+                                          const core::LayoutRect &area,
+                                          const core::LayoutRect &pane)
 {
-    if (!frame.signature.has_value())
+    const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
+                                 caret_rectangle_.right, caret_rectangle_.bottom};
+    if (!frame.signature.has_value() || !core::caret_rect_in_pane(caret, pane))
     {
         return;
     }
@@ -293,8 +297,6 @@ void Direct2DRenderer::draw_signature_tip(const application::EditorFrame &frame,
     {
         return;
     }
-    const core::LayoutRect caret{caret_rectangle_.left, caret_rectangle_.top,
-                                 caret_rectangle_.right, caret_rectangle_.bottom};
     // 補完の一覧が出ていれば（この frame で先に描いた箱）札はそれを避け、入らなければ出さない
     // （#1968 のレビュー c-M1）。
     const std::optional<core::LayoutRect> avoid =

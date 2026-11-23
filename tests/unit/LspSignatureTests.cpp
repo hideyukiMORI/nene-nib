@@ -3,8 +3,11 @@
 // core の読みと controller の道を替え玉 ScriptedLanguageServer で確かめる。
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
+#include "ClipboardAction.hpp"
+#include "ClipboardOperation.hpp"
 #include "CompletionFace.hpp"
 #include "CompletionFaceRequest.hpp"
+#include "DisplayForm.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -29,6 +32,7 @@
 #include "QueryLanguage.hpp"
 #include "Scopes.hpp"
 #include "ScrollLines.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
@@ -36,6 +40,7 @@
 #include "SwitchTab.hpp"
 #include "TabTipMeasure.hpp"
 #include "TestSupport.hpp"
+#include "TextViewGeometry.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 #include "VimKey.hpp"
@@ -251,6 +256,13 @@ void verify_tip_avoids_completion()
         core::CompletionFaceRequest{low, low.left, cramped, 8, 0, false, 96});
     expect(!core::signature_tip_rect(low, cramped, text, squeezed.panel).has_value(),
            "when the tip fits nowhere beside the list the list wins and no tip is drawn");
+    // #1968 のレビュー L-a:
+    // 折り返した行の見えていない画面行（枠の上・下）のキャレットでは出さない。
+    const core::LayoutRect pane{40, 0, 800, 600};
+    expect(core::caret_rect_in_pane(middle, pane) &&
+               !core::caret_rect_in_pane(core::LayoutRect{100, -18, 102, -2}, pane) &&
+               !core::caret_rect_in_pane(core::LayoutRect{100, 602, 102, 618}, pane),
+           "a caret row outside the pane draws no tip");
 }
 
 // ---------------------------------------------------------------- controller の道
@@ -424,14 +436,20 @@ void verify_tip_lifetime()
         const std::string described = std::string{what} + " closes the tip";
         expect(!editing.controller().frame().signature.has_value(), described.c_str());
     };
-    closes("switching to another tab",
-           [](Editing &editing)
-           {
-               editing.files().hold_at("C:\\work\\other.cpp", Bytes{std::string{"int x;\n"}});
-               applied(editing.controller(),
-                       app::OpenDocument{core::FilePath::parse("C:\\work\\other.cpp").value()});
-               applied(editing.controller(), app::SwitchTab{0});
-           });
+    // タブの切り替え（#1968 のレビュー L-d）: 2 つめのタブを先に開いて main.cpp へ戻り、札を出して
+    // から SwitchTab で替える（開く道で消えた札を後の SwitchTab が縛らないように）。
+    {
+        Editing editing(lsp_settings(true));
+        started(editing, clangd_abilities);
+        editing.files().hold_at("C:\\work\\other.cpp", Bytes{std::string{"int x;\n"}});
+        applied(editing.controller(),
+                app::OpenDocument{core::FilePath::parse("C:\\work\\other.cpp").value()});
+        applied(editing.controller(), app::SwitchTab{0});
+        tip_shown(editing);
+        applied(editing.controller(), app::SwitchTab{1});
+        expect(!editing.controller().frame().signature.has_value(),
+               "switching to another tab closes the tip");
+    }
     closes("the window going inactive", [](Editing &editing)
            { static_cast<void>(editing.controller().apply(app::WindowDeactivated{})); });
     closes("opening the Ctrl+P list", [](Editing &editing)
@@ -482,6 +500,41 @@ void verify_tip_scrolled_away()
     static_cast<void>(editing.controller().apply(app::ScrollLines{2}));
     expect(editing.controller().frame().signature.has_value(),
            "the tip comes back when the caret line is in view again");
+}
+
+// #1968 のレビュー R-a: 格子表示の文書では行が空で画面行が grid に載る。札は格子の画面行の番号で
+// 照合して出す。
+void verify_tip_in_grid()
+{
+    Editing editing(lsp_settings(true));
+    started(editing, clangd_abilities);
+    static_cast<void>(
+        editing.controller().apply(app::VisibleLines{6, core::TextViewGeometry{400, 20, 96}}));
+    applied(editing.controller(), app::SelectDisplay{core::DisplayForm::grid});
+    tip_shown(editing);
+    const auto frame = editing.controller().frame();
+    expect(frame.display == core::DisplayForm::grid && frame.lines.empty() && !frame.grid.empty(),
+           "the document is drawn as a grid");
+    expect(frame.signature.has_value(), "the tip shows on a grid document");
+}
+
+// #1968 のレビュー L-c: 貼り付けた `(` は打った文字ではないので頼まない（通常モードの Ctrl+V・
+// Vim の `"+p`・INSERT の Ctrl-r `+`）。
+void verify_paste_asks_nothing()
+{
+    Editing editing(lsp_settings(true));
+    started(editing, clangd_abilities);
+    editing.clipboard().hold(std::string{"add("});
+    applied(editing.controller(), app::ClipboardAction{app::ClipboardOperation::paste});
+    expect(asked_count(editing) == 0 && !editing.controller().frame().signature.has_value(),
+           "pasting add( with Ctrl+V asks nothing");
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    pressed(editing, "\"+p");
+    expect(asked_count(editing) == 0, "pasting add( with \"+p asks nothing");
+    pressed(editing, "a<C-r>+");
+    expect(asked_count(editing) == 0 &&
+               contains(editing.controller().text().line_text(core::LineNumber{3}), "add(add(add("),
+           "inserting add( with Ctrl-r + in INSERT asks nothing");
 }
 
 // c-R5: 手で頼んだ答えが照合で捨てられたら印を下ろし、後の `(` の空の答えで知らせを出さない。
@@ -545,6 +598,8 @@ void verify_lsp_signature_scope()
     verify_retrigger_close();
     verify_tip_lifetime();
     verify_tip_scrolled_away();
+    verify_tip_in_grid();
+    verify_paste_asks_nothing();
     verify_invoked_mark_dropped();
     verify_vim_typed_entry();
     verify_vim_quiet_when_off();

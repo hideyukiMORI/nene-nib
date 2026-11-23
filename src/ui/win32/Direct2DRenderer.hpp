@@ -267,7 +267,8 @@ class Direct2DRenderer final
     // の中で描く。文が無ければ何もしない。
     void draw_hover_tip(const application::EditorFrame &frame, const core::LayoutRect &area);
     // 引数の情報の札（#1959・ADR 0191 の決定 6）。hover の札と同じ部品で、今の引数を太字にする。
-    void draw_signature_tip(const application::EditorFrame &frame, const core::LayoutRect &area);
+    void draw_signature_tip(const application::EditorFrame &frame, const core::LayoutRect &area,
+                            const core::LayoutRect &pane);
     // リンクの札（施主決定 D106・#1869 の段 L2）。この frame で描いたプレビューのリンクの下（入らな
     // ければ上）に、本文の領域 area の中で描く。札が無ければ配置の覚えを捨てる。
     void draw_link_card(const application::EditorFrame &frame, const core::LayoutRect &area);

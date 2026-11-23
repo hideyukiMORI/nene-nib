@@ -1100,8 +1100,7 @@ class EditorController final
     void settle_signature_tip();
     [[nodiscard]] bool signature_allowed() const;
     [[nodiscard]] bool invoke_signature_help();
-    [[nodiscard]] std::optional<core::LspSignature>
-    shown_signature(const std::vector<LineView> &lines) const;
+    [[nodiscard]] std::optional<core::LspSignature> shown_signature(const EditorFrame &frame) const;
     void drop_signature_tip() noexcept;
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
