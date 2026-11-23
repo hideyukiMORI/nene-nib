@@ -115,6 +115,9 @@ enum class EditorOperation : std::uint8_t
     list_references,
     // 記号の一覧（#1955・ADR 0191 の決定 5）。鍵なし（F1 の一覧から・Vim の NORMAL は
     // `gO`）。答えは Ctrl+P の一覧の記号 `%` で開く。
-    list_symbols
+    list_symbols,
+    // 引数の情報を表示（#1959・ADR 0191 の決定 6）。鍵なし（F1 の一覧から）。挿入中の `(` `,` では
+    // 自動に頼む。
+    show_signature_help
 };
 } // namespace nenenib::core

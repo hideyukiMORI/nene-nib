@@ -161,6 +161,7 @@
 #include "SettingsOpen.hpp"
 #include "SettingsSection.hpp"
 #include "SettingsView.hpp"
+#include "SignatureTip.hpp"
 #include "SplitExtent.hpp"
 #include "SplitState.hpp"
 #include "StartEntry.hpp"
@@ -415,6 +416,9 @@ class EditorController final
     [[nodiscard]] bool request_references();
     // 記号（#1955・ADR 0191 の決定 5）。今の文書の記号の一覧。
     [[nodiscard]] bool request_document_symbols();
+    // 引数の情報（#1959・ADR 0191 の決定 6）。trigger は打った `triggerCharacters` の 1 文字
+    // （手で頼んだら値なし）。
+    [[nodiscard]] bool request_signature_help(std::optional<std::string> trigger, bool retrigger);
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // Ctrl+P の一覧のために参照と記号の当たりを作った数（#1958 のレビュー R1 の契約が読む）。
@@ -1090,6 +1094,14 @@ class EditorController final
     [[nodiscard]] bool query_language(core::LanguageQueryKind kind);
     void settle_hover(const EditorIntent &intent);
     void drop_hover();
+    // 引数の情報の札（#1959・EditorControllerSignature.cpp）。
+    void settle_typed_signature(std::string_view typed);
+    void settle_signature_answer();
+    void settle_signature_tip();
+    [[nodiscard]] bool signature_allowed() const;
+    [[nodiscard]] bool invoke_signature_help();
+    [[nodiscard]] std::optional<core::LspSignature> shown_signature(const EditorFrame &frame) const;
+    void drop_signature_tip() noexcept;
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -2035,6 +2047,9 @@ class EditorController final
     bool references_listed_ = false;
     bool symbols_listed_ = false;
     bool symbols_asked_ = false;
+    // 出ている引数の情報の札と、手で頼んだ答えを待っているか（#1959）。
+    std::optional<SignatureTip> signature_tip_;
+    bool signature_invoked_ = false;
     // 参照と記号の当たりを作った数（試験が読む・#1958 のレビュー R1 の契約）。
     std::size_t listed_hits_made_ = 0;
     // 面の上で押した行の節の経路（決定 4・ADR 0056 の決定 9）。離したときに同じ節かを比べて消す。
