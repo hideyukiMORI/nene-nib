@@ -2,6 +2,7 @@
 
 #include "LayoutRect.hpp"
 #include "Palette.hpp"
+#include "TabTipMeasure.hpp"
 #include "TabTipPaint.hpp"
 
 #include <cstdint>
@@ -39,6 +40,12 @@ class HoverTipLayout final
                                                      const core::LayoutRect &area,
                                                      const core::Palette &palette,
                                                      std::uint32_t dpi) const;
+    // 最後に収めた layout の文の大きさ（置き場を別の純関数で決めるとき・引数の情報の札が
+    // core::signature_tip_rect に渡す・#1968 のレビュー c-M1）。layout が無ければ値なし。
+    [[nodiscard]] std::optional<core::TabTipMeasure> measured(std::uint32_t dpi) const;
+    // 最後に収めた layout の札を矩形 box に描く値（measured が値を返した後だけ呼ぶ）。
+    [[nodiscard]] TabTipPaint painted_in(const core::LayoutRect &box, const core::Palette &palette,
+                                         std::uint32_t dpi) const;
     void clear() noexcept;
 
   private:

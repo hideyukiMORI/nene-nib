@@ -418,7 +418,7 @@ class EditorController final
     [[nodiscard]] bool request_document_symbols();
     // 引数の情報（#1959・ADR 0191 の決定 6）。trigger は打った `triggerCharacters` の 1 文字
     // （手で頼んだら値なし）。
-    [[nodiscard]] bool request_signature_help(std::optional<std::string> trigger);
+    [[nodiscard]] bool request_signature_help(std::optional<std::string> trigger, bool retrigger);
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // Ctrl+P の一覧のために参照と記号の当たりを作った数（#1958 のレビュー R1 の契約が読む）。
@@ -1100,7 +1100,8 @@ class EditorController final
     void settle_signature_tip();
     [[nodiscard]] bool signature_allowed() const;
     [[nodiscard]] bool invoke_signature_help();
-    [[nodiscard]] std::optional<core::LspSignature> shown_signature() const;
+    [[nodiscard]] std::optional<core::LspSignature>
+    shown_signature(const std::vector<LineView> &lines) const;
     void drop_signature_tip() noexcept;
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を

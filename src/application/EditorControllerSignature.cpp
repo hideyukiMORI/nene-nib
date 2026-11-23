@@ -6,7 +6,10 @@
 #include "JsonValue.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageServerDocument.hpp"
+#include "LanguageServerPhase.hpp"
 #include "LanguageSignature.hpp"
+#include "LineNumber.hpp"
+#include "LineView.hpp"
 #include "LspPositionJson.hpp"
 #include "LspRequestKind.hpp"
 #include "ServerAbilities.hpp"
@@ -42,7 +45,8 @@ constexpr std::int64_t character_trigger = 2;
 
 // 打鍵の道（accept(InsertText) と Vim の INSERT の打鍵）。呼ぶのは言語サーバーが running のとき
 // だけで、能力の無い席では欄を 1 つ読んで返る（打鍵の道に費用を足さない・ADR 0190 の決定 10）。
-// `)` は札を消し、trigger なら頼み直す（入れ子の呼び出しの外側の札はその答えが戻す）。
+// `)` は札を消し、trigger か（消す前に札が出ていて）retrigger なら頼み直す（入れ子の呼び出しの
+// 外側の札はその答えが戻す・`)` が retrigger だけのサーバーも同じ・#1968 のレビュー c-R1）。
 void EditorController::settle_typed_signature(std::string_view typed)
 {
     const ServerAbilities &abilities = active_language_server().abilities;
@@ -50,27 +54,29 @@ void EditorController::settle_typed_signature(std::string_view typed)
     {
         return;
     }
+    const bool shown = signature_tip_.has_value();
     if (typed == ")")
     {
         signature_tip_.reset();
     }
-    const bool asked =
-        listed(abilities.signature_triggers, typed) ||
-        (signature_tip_.has_value() && listed(abilities.signature_retriggers, typed));
+    const bool asked = listed(abilities.signature_triggers, typed) ||
+                       (shown && listed(abilities.signature_retriggers, typed));
     if (asked)
     {
-        static_cast<void>(request_signature_help(std::string{typed}));
+        static_cast<void>(request_signature_help(std::string{typed}, shown));
     }
 }
 
-// `SignatureHelpParams`。trigger が無ければ手で頼んだ（Invoked）。札が出ていれば頼み直し。
-bool EditorController::request_signature_help(std::optional<std::string> trigger)
+// `SignatureHelpParams`。trigger が無ければ手で頼んだ（Invoked）。retrigger は札が出ている間の
+// 頼み直し。新しい要求は前の「手で頼んだ」の印を下ろす（捨てられた答えの印を残さない・c-R5）。
+bool EditorController::request_signature_help(std::optional<std::string> trigger, bool retrigger)
 {
     const auto slot = requestable_slot(&ServerAbilities::signature_help);
     if (!slot.has_value())
     {
         return false;
     }
+    signature_invoked_ = false;
     core::JsonObject document;
     document.emplace_back("uri", core::JsonValue{active_document_of(slot.value()).uri});
     core::JsonObject context;
@@ -81,7 +87,7 @@ bool EditorController::request_signature_help(std::optional<std::string> trigger
     {
         context.emplace_back("triggerCharacter", core::JsonValue{std::move(trigger).value()});
     }
-    context.emplace_back("isRetrigger", core::JsonValue{signature_tip_.has_value()});
+    context.emplace_back("isRetrigger", core::JsonValue{retrigger});
     core::JsonObject params;
     params.emplace_back("textDocument", core::JsonValue{std::move(document)});
     params.emplace_back("position", core::lsp_position_json(request_position(slot.value())));
@@ -120,7 +126,7 @@ void EditorController::settle_signature_answer()
         return;
     }
     signature_tip_ = SignatureTip{.document = answered.context.document,
-                                  .line = state_.text().position_of(answered.context.at).line,
+                                  .line = state_.text().line_containing(answered.context.at),
                                   .signature = std::move(answered.signature).value()};
     repaint_ = true;
 }
@@ -145,8 +151,10 @@ void EditorController::settle_signature_tip()
     }
     const SignatureTip &tip = signature_tip_.value();
     const AutosaveId active = state_.autosave_ids().at(state_.active_tab());
+    // 言語サーバーが止まった・`lsp` を切ったときも消す（c-L3）。
     if (tip.document != active || !signature_allowed() ||
-        state_.text().position_of(state_.selection().caret).line != tip.line)
+        active_language_server().phase != LanguageServerPhase::running ||
+        state_.text().line_containing(state_.selection().caret) != tip.line)
     {
         signature_tip_.reset();
     }
@@ -155,18 +163,23 @@ void EditorController::settle_signature_tip()
 // 操作「引数の情報を表示」（鍵なし・F1 の一覧から）。
 bool EditorController::invoke_signature_help()
 {
-    signature_invoked_ = request_signature_help(std::nullopt);
+    signature_invoked_ = request_signature_help(std::nullopt, signature_tip_.has_value());
     return signature_invoked_;
 }
 
-// frame に載せる札（決定 6）。
-std::optional<core::LspSignature> EditorController::shown_signature() const
+// frame に載せる札（決定 6）。キャレットの行が見えている行に無い（ホイールで送った）間は隠す
+// （消さない・戻れば出る・#1968 のレビュー c-R2'）。札が無ければ欄を 1 つ読むだけ。
+std::optional<core::LspSignature>
+EditorController::shown_signature(const std::vector<LineView> &lines) const
 {
     if (!signature_tip_.has_value())
     {
         return std::nullopt;
     }
-    return signature_tip_.value().signature;
+    const core::LineNumber line = signature_tip_.value().line;
+    const bool visible =
+        std::ranges::any_of(lines, [line](const LineView &view) { return view.number == line; });
+    return visible ? std::optional{signature_tip_.value().signature} : std::nullopt;
 }
 
 void EditorController::drop_signature_tip() noexcept

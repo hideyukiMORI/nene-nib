@@ -323,7 +323,8 @@ void EditorController::accept(const OpenCompletion &)
 }
 
 // 打った文字の後の言語サーバーの入口（#1962）。補完の自動の面と、引数の情報（#1959・ADR 0191 の
-// 決定 6）の 2 つ。通常モードの accept(InsertText) と Vim の INSERT の打った文字の両方がここへ来る。
+// 決定 6）の 2 つ。通常モードの accept(InsertText) と Vim の INSERT の打った文字の両方が
+// ここへ来る。
 void EditorController::typed_for_language(std::string_view typed)
 {
     if (active_language_server().phase == LanguageServerPhase::running)

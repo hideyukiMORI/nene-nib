@@ -1418,7 +1418,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     // hover の札（ADR 0190 の決定 6）。答えが無いときの分岐はこの 1 つ（shown_hover の入口）。
     result.hover = shown_hover();
     // 引数の情報の札（#1959・ADR 0191 の決定 6）。札が無いときの分岐は shown_signature の入口。
-    result.signature = shown_signature();
+    result.signature = shown_signature(result.lines);
     // リンクの札（#1869 の段 L2）。見せている結果に同じリンクがある間だけ（shown_link_card
     // の入口）。
     result.link_card = shown_link_card();

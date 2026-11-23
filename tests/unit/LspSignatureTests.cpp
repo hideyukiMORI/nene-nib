@@ -3,27 +3,38 @@
 // core の読みと controller の道を替え玉 ScriptedLanguageServer で確かめる。
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
+#include "CompletionFace.hpp"
+#include "CompletionFaceRequest.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "FilePath.hpp"
+#include "HoverTip.hpp"
 #include "InsertText.hpp"
 #include "JsonParse.hpp"
 #include "LanguageQueryKind.hpp"
+#include "LayoutRect.hpp"
+#include "LineView.hpp"
 #include "LspAnswerFailure.hpp"
 #include "LspSignature.hpp"
 #include "LspSignatureHelp.hpp"
 #include "MoveCaret.hpp"
+#include "OpenCommandPalette.hpp"
+#include "OpenContextMenu.hpp"
 #include "OpenDocument.hpp"
+#include "OpenSettings.hpp"
 #include "OperationBindings.hpp"
 #include "QueryLanguage.hpp"
 #include "Scopes.hpp"
+#include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
+#include "SwitchTab.hpp"
+#include "TabTipMeasure.hpp"
 #include "TestSupport.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
@@ -31,10 +42,13 @@
 #include "VimKeyPress.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WindowDeactivated.hpp"
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -54,7 +68,7 @@ constexpr std::string_view source_text = "int add(int a, int b);\nint main() {\n
 constexpr std::string_view signature_method = "textDocument/signatureHelp";
 // 実物の clangd（D:/NeNeNib/scripts/20261122/lsp-s6 の probe）の能力と答えの形。
 constexpr std::string_view clangd_abilities =
-    R"j({"textDocumentSync":2,"signatureHelpProvider":{"triggerCharacters":["(",")","{","}","<",">",","]}})j";
+    R"j({"textDocumentSync":2,"hoverProvider":true,"signatureHelpProvider":{"triggerCharacters":["(",")","{","}","<",">",","]}})j";
 constexpr std::string_view clangd_answer =
     R"({"activeParameter":1,"activeSignature":0,"signatures":[{"label":"add(int a, int b) -> int","parameters":[{"label":[4,9]},{"label":[11,16]}]}]})";
 
@@ -168,6 +182,75 @@ void verify_reading()
                                            binding.chord.has_value();
                                 }),
            "showing the signature has no key (F1 list)");
+}
+
+// c-R3: 文字列の label は `(` の後から前の引数の終わりを起点に順に探す。activeParameter が引数の
+// 数の外なら 0 番目（LSP 3.17）、null（3.18）なら強めない（署名の欄が全体より先）。
+void verify_reading_parameters()
+{
+    const auto first = read(
+        R"j({"activeParameter":0,"signatures":[{"label":"add(a, b)","parameters":[{"label":"a"},{"label":"b"}]}]})j");
+    expect(first.has_value() && first.value().active_begin == 4 && first.value().active_end == 5,
+           "a string label is looked for after the first ( and not in the function name");
+    const auto second = read(
+        R"j({"activeParameter":1,"signatures":[{"label":"aa(a, a)","parameters":[{"label":"a"},{"label":"a"}]}]})j");
+    expect(second.has_value() && second.value().active_begin == 6 && second.value().active_end == 7,
+           "the next string label is looked for after the end of the one before");
+    const auto outside = read(
+        R"j({"activeParameter":5,"signatures":[{"label":"f(x, y)","parameters":[{"label":[2,3]},{"label":[5,6]}]}]})j");
+    expect(outside.has_value() && outside.value().active_begin == 2 &&
+               outside.value().active_end == 3,
+           "an activeParameter outside the parameters highlights the first one");
+    const auto none = read(
+        R"j({"activeParameter":null,"signatures":[{"label":"f(x, y)","parameters":[{"label":[2,3]},{"label":[5,6]}]}]})j");
+    const auto own_none = read(
+        R"j({"activeParameter":1,"signatures":[{"label":"f(x, y)","activeParameter":null,"parameters":[{"label":[2,3]},{"label":[5,6]}]}]})j");
+    expect(none.has_value() && none.value().active_end == 0 && own_none.has_value() &&
+               own_none.value().active_end == 0,
+           "a null activeParameter highlights nothing and the signature's own null wins");
+}
+
+[[nodiscard]] bool overlapping(const core::LayoutRect &one, const core::LayoutRect &other)
+{
+    return one.left < other.right && other.left < one.right && one.top < other.bottom &&
+           other.top < one.bottom;
+}
+
+// c-M1: 札は補完の一覧の箱を避ける。キャレットが窓の下の端（一覧は上へ回る）と上の端（一覧は下・
+// 札は上に入らない）のどちらでも、両方が出ていて 2 つの矩形とキャレットが交わらない。
+void verify_tip_avoids_completion()
+{
+    const core::LayoutRect area{0, 0, 800, 600};
+    const core::TabTipMeasure text{200, 20, 96};
+    const auto placed = [&](const core::LayoutRect &caret)
+    {
+        const auto face = core::completion_face_layout(
+            core::CompletionFaceRequest{caret, caret.left, area, 8, 0, false, 96});
+        return std::pair{face, core::signature_tip_rect(caret, area, text, face.panel)};
+    };
+    const core::LayoutRect bottom{100, 578, 102, 598};
+    const auto [low_face, low_tip] = placed(bottom);
+    expect(low_face.above && low_tip.has_value() && !overlapping(low_tip.value(), low_face.panel) &&
+               !overlapping(low_tip.value(), bottom) && low_tip.value().bottom <= area.bottom &&
+               low_tip.value().bottom <= low_face.panel.top,
+           "at the bottom edge the tip goes above the completion list and covers no row");
+    const core::LayoutRect top{100, 2, 102, 22};
+    const auto [high_face, high_tip] = placed(top);
+    expect(!high_face.above && high_tip.has_value() &&
+               !overlapping(high_tip.value(), high_face.panel) &&
+               !overlapping(high_tip.value(), top) && high_tip.value().top >= area.top,
+           "at the top edge the tip goes below the completion list and covers no row");
+    const core::LayoutRect middle{100, 300, 102, 320};
+    expect(
+        core::signature_tip_rect(middle, area, text, std::nullopt).value_or(core::LayoutRect{}) ==
+            core::hover_tip_rect(middle, area, text),
+        "without a completion list the tip sits where the hover tip sits");
+    const core::LayoutRect cramped{0, 0, 800, 230};
+    const core::LayoutRect low{100, 208, 102, 228};
+    const auto squeezed = core::completion_face_layout(
+        core::CompletionFaceRequest{low, low.left, cramped, 8, 0, false, 96});
+    expect(!core::signature_tip_rect(low, cramped, text, squeezed.panel).has_value(),
+           "when the tip fits nowhere beside the list the list wins and no tip is drawn");
 }
 
 // ---------------------------------------------------------------- controller の道
@@ -294,14 +377,176 @@ void verify_operation()
                                                 unable.controller().display_language()),
            "a server without signatureHelpProvider says it does not answer");
 }
+// typescript-language-server の形: `)` は retrigger だけ。
+constexpr std::string_view retrigger_abilities =
+    R"j({"textDocumentSync":2,"signatureHelpProvider":{"triggerCharacters":["(",",","<"],"retriggerCharacters":[")"]}})j";
+
+// c-R1: `)` が retrigger だけのサーバーでも、入れ子の呼び出しを閉じた後に外側の札を頼み直す
+// （札を消す前に「出ていたか」を見る）。
+void verify_retrigger_close()
+{
+    Editing editing(lsp_settings(true));
+    started(editing, retrigger_abilities);
+    static_cast<void>(typed(editing, "f"));
+    static_cast<void>(typed(editing, "("));
+    static_cast<void>(answered(editing, clangd_answer));
+    static_cast<void>(typed(editing, "g"));
+    static_cast<void>(typed(editing, "("));
+    static_cast<void>(answered(editing, clangd_answer));
+    static_cast<void>(typed(editing, "1"));
+    const std::size_t before = asked_count(editing);
+    const auto closed = typed(editing, ")");
+    expect(!closed.signature.has_value() && asked_count(editing) == before + 1 &&
+               contains(editing.language_server().sent().back(), R"("isRetrigger":true)"),
+           "closing f(g(1) with a retrigger-only ) asks again as a retrigger");
+    expect(answered(editing, clangd_answer).signature.has_value(),
+           "the answer brings the outer tip back");
+}
+
+// 札を出して返す（`(` と clangd の答え）。
+void tip_shown(Editing &editing)
+{
+    static_cast<void>(typed(editing, "("));
+    static_cast<void>(answered(editing, clangd_answer));
+    expect(editing.controller().frame().signature.has_value(), "the tip is shown first");
+}
+
+// c-R4: 決定 6 の消える条件のうち、タブの切り替え・窓が非アクティブ・入力行・右クリックのメニュー・
+// 設定・hover の札。照合で捨てた古い答えは今の札を残す（新しい札にしない）。
+void verify_tip_lifetime()
+{
+    const auto closes = [](std::string_view what, const std::function<void(Editing &)> &act)
+    {
+        Editing editing(lsp_settings(true));
+        started(editing, clangd_abilities);
+        tip_shown(editing);
+        act(editing);
+        const std::string described = std::string{what} + " closes the tip";
+        expect(!editing.controller().frame().signature.has_value(), described.c_str());
+    };
+    closes("switching to another tab",
+           [](Editing &editing)
+           {
+               editing.files().hold_at("C:\\work\\other.cpp", Bytes{std::string{"int x;\n"}});
+               applied(editing.controller(),
+                       app::OpenDocument{core::FilePath::parse("C:\\work\\other.cpp").value()});
+               applied(editing.controller(), app::SwitchTab{0});
+           });
+    closes("the window going inactive", [](Editing &editing)
+           { static_cast<void>(editing.controller().apply(app::WindowDeactivated{})); });
+    closes("opening the Ctrl+P list", [](Editing &editing)
+           { static_cast<void>(editing.controller().apply(app::OpenCommandPalette{})); });
+    closes("opening the context menu",
+           [](Editing &editing)
+           {
+               static_cast<void>(
+                   editing.controller().apply(app::OpenContextMenu{10, 40, std::nullopt}));
+           });
+    closes("opening the settings", [](Editing &editing)
+           { static_cast<void>(editing.controller().apply(app::OpenSettings{})); });
+    closes("a hover tip",
+           [](Editing &editing)
+           {
+               static_cast<void>(editing.controller().request_hover());
+               const auto ids = editing.language_server().requests("textDocument/hover");
+               editing.language_server().answer(ids.empty() ? -1 : ids.back(),
+                                                R"j({"contents":"int add(int a, int b)"})j");
+               static_cast<void>(editing.controller().apply(app::WorkCompleted{}));
+           });
+
+    Editing editing(lsp_settings(true));
+    started(editing, clangd_abilities);
+    tip_shown(editing);
+    static_cast<void>(typed(editing, ","));
+    static_cast<void>(typed(editing, "2"));
+    const auto kept = answered(
+        editing,
+        R"({"activeParameter":0,"signatures":[{"label":"add(int a, int b) -> int","parameters":[{"label":[4,9]},{"label":[11,16]}]}]})");
+    expect(kept.signature.has_value() && kept.signature.value().active_begin == 11,
+           "an answer dropped by the context check keeps the current tip");
+}
+
+// c-R2': 通常モードでホイールを回してキャレットの行が見えなくなったら札を隠し、戻れば出す。
+void verify_tip_scrolled_away()
+{
+    Editing editing(lsp_settings(true));
+    started(editing, clangd_abilities);
+    tip_shown(editing);
+    static_cast<void>(editing.controller().apply(app::VisibleLines{1}));
+    static_cast<void>(editing.controller().apply(app::ScrollLines{-2}));
+    const auto away = editing.controller().frame();
+    expect(!away.signature.has_value() &&
+               std::ranges::none_of(away.lines, [&](const app::LineView &view)
+                                    { return view.number == away.caret.position.line; }),
+           "the tip hides while the caret line is scrolled out of view");
+    static_cast<void>(editing.controller().apply(app::ScrollLines{2}));
+    expect(editing.controller().frame().signature.has_value(),
+           "the tip comes back when the caret line is in view again");
+}
+
+// c-R5: 手で頼んだ答えが照合で捨てられたら印を下ろし、後の `(` の空の答えで知らせを出さない。
+void verify_invoked_mark_dropped()
+{
+    Editing editing(lsp_settings(true));
+    started(editing, clangd_abilities);
+    static_cast<void>(
+        editing.controller().apply(app::QueryLanguage{core::LanguageQueryKind::signature_help}));
+    static_cast<void>(typed(editing, "1"));
+    static_cast<void>(answered(editing, clangd_answer));
+    static_cast<void>(typed(editing, "("));
+    const auto empty = answered(editing, "null");
+    expect(!empty.signature.has_value() && message_of(empty).empty(),
+           "a typed ( after a dropped invoked answer shows no not-found notice");
+}
+
+// #1965 の入口の見分け（統合の後）: INSERT の 1 鍵の引数（Ctrl-r のレジスタの名前）として打った
+// `(` は頼まない（Nib の INSERT の Ctrl+V は窓の OS の貼り付けで engine に届かない・ADR 0035 の
+// 決定 9）。`inoremap jk <Esc>` の待ちの後にまとめて流れた `j(` の `(` は打った文字として頼む。
+void verify_vim_typed_entry()
+{
+    Editing editing(lsp_settings(true));
+    started(editing, clangd_abilities);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    const std::size_t before = asked_count(editing);
+    pressed(editing, "a<C-r>(");
+    expect(asked_count(editing) == before, "a ( typed as the register name of Ctrl-r asks nothing");
+    pressed(editing, "<Esc>");
+    static_cast<void>(run_ex(editing.controller(), "inoremap jk <Esc>"));
+    const std::size_t waiting = asked_count(editing);
+    pressed(editing, "aj(");
+    expect(asked_count(editing) == waiting + 1 &&
+               editing.controller().vim_state().mode == core::VimMode::insert,
+           "a ( flushed with a waiting j of inoremap jk asks once");
+}
+
+// c-L7: lsp がオフの文書では、Vim の INSERT で `(` を打っても言語サーバーに触れない。
+void verify_vim_quiet_when_off()
+{
+    Editing off(lsp_settings(false));
+    off.files().hold_at(std::string(source_path), Bytes{std::string(source_text)});
+    applied(off.controller(), app::OpenDocument{core::FilePath::parse(source_path).value()});
+    applied(off.controller(), app::SelectEditMode{core::EditMode::vim});
+    const std::size_t touches = off.language_server().touches();
+    pressed(off, "aadd(1, 2)<Esc>");
+    expect(off.language_server().touches() == touches && asked_count(off) == 0,
+           "with lsp off typing ( in Vim INSERT touches no language server");
+}
 } // namespace
 
 void verify_lsp_signature_scope()
 {
     verify_reading();
+    verify_reading_parameters();
+    verify_tip_avoids_completion();
     verify_typing();
     verify_vim_insert();
     verify_quiet_when_off_or_unable();
     verify_operation();
+    verify_retrigger_close();
+    verify_tip_lifetime();
+    verify_tip_scrolled_away();
+    verify_invoked_mark_dropped();
+    verify_vim_typed_entry();
+    verify_vim_quiet_when_off();
 }
 } // namespace nenenib::tests

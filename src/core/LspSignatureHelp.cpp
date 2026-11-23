@@ -51,9 +51,9 @@ offsets_range(std::string_view label, const JsonArray &pair)
     return std::pair{utf16_to_bytes(label, start.value()), utf16_to_bytes(label, end.value())};
 }
 
-// 今の引数の範囲（バイト）。`label` が文字列なら署名の label の中の最初の位置。
+// 1 つの引数の範囲（バイト）。`label` が文字列なら署名の label の from から後で最初の位置。
 [[nodiscard]] std::optional<std::pair<std::size_t, std::size_t>>
-parameter_range(std::string_view label, const JsonValue &parameter)
+parameter_range(std::string_view label, const JsonValue &parameter, std::size_t from)
 {
     const JsonObject *object = json_object_of(parameter);
     const auto member = object != nullptr ? json_member(*object, "label") : std::nullopt;
@@ -64,7 +64,7 @@ parameter_range(std::string_view label, const JsonValue &parameter)
     const JsonValue &value = member.value().get();
     if (const auto *text = std::get_if<std::string>(&value.value); text != nullptr)
     {
-        const auto found = text->empty() ? std::string_view::npos : label.find(*text);
+        const auto found = text->empty() ? std::string_view::npos : label.find(*text, from);
         return found == std::string_view::npos
                    ? std::nullopt
                    : std::optional{std::pair{found, found + text->size()}};
@@ -73,29 +73,64 @@ parameter_range(std::string_view label, const JsonValue &parameter)
     return pair != nullptr ? offsets_range(label, *pair) : std::nullopt;
 }
 
-// 署名の `parameters` の index 番目（無ければ nullptr）。
-[[nodiscard]] const JsonValue *parameter_at(const JsonObject &signature, std::uint64_t index)
+// index 番目の引数の範囲（#1968 のレビュー c-R3）。文字列の label は前から順に探す: 探し始めは
+// 署名の label の最初の `(` の後（無ければ先頭）で、2 つめからは前の引数の一致の終わり
+// （`add(a, b)` の `a` が関数名に当たらない）。
+[[nodiscard]] std::optional<std::pair<std::size_t, std::size_t>>
+active_range(std::string_view label, const JsonArray &parameters, std::size_t index)
 {
-    const auto parameters = json_member(signature, "parameters");
-    const auto *list =
-        parameters.has_value() ? std::get_if<JsonArray>(&parameters.value().get().value) : nullptr;
-    return list != nullptr && index < list->size() ? &list->at(static_cast<std::size_t>(index))
-                                                   : nullptr;
+    const std::size_t open = label.find('(');
+    std::size_t from = open == std::string_view::npos ? 0 : open + 1;
+    for (std::size_t at = 0; at < index; ++at)
+    {
+        const auto passed = parameter_range(label, parameters.at(at), from);
+        if (passed.has_value())
+        {
+            from = std::max(from, passed.value().second);
+        }
+    }
+    return parameter_range(label, parameters.at(index), from);
+}
+
+// 今の引数の番号（c-R3）。署名の `activeParameter` が先で、無ければ全体の欄、どちらも無ければ 0。
+// null（LSP 3.18 の「今の引数なし」）は値なしで強めない。引数の数の外は 0（LSP 3.17 の文）。
+[[nodiscard]] std::optional<std::size_t> active_index(const JsonObject &signature,
+                                                      const JsonObject &help, std::size_t count)
+{
+    auto member = json_member(signature, "activeParameter");
+    if (!member.has_value())
+    {
+        member = json_member(help, "activeParameter");
+    }
+    std::uint64_t index = 0;
+    if (member.has_value())
+    {
+        const JsonValue &value = member.value().get();
+        if (std::holds_alternative<JsonNull>(value.value))
+        {
+            return std::nullopt;
+        }
+        index = json_count_of(value).value_or(0);
+    }
+    return index < count ? static_cast<std::size_t>(index) : 0;
 }
 
 // 1 つの署名を札の値に。label を上限で切り、強める範囲も中へ切る。
 [[nodiscard]] std::optional<LspSignature> signature_of(const JsonObject &signature,
-                                                       std::optional<std::uint64_t> active)
+                                                       const JsonObject &help)
 {
     const std::string *label = json_text_member(signature, "label");
     if (label == nullptr || label->empty())
     {
         return std::nullopt;
     }
-    const auto own = json_count_member(signature, "activeParameter");
-    const std::uint64_t index = own.has_value() ? own.value() : active.value_or(0);
-    const JsonValue *parameter = parameter_at(signature, index);
-    const auto range = parameter != nullptr ? parameter_range(*label, *parameter) : std::nullopt;
+    const auto parameters = json_member(signature, "parameters");
+    const auto *list =
+        parameters.has_value() ? std::get_if<JsonArray>(&parameters.value().get().value) : nullptr;
+    const std::size_t count = list != nullptr ? list->size() : 0;
+    const auto index = active_index(signature, help, count);
+    const auto range =
+        count > 0 && index.has_value() ? active_range(*label, *list, index.value()) : std::nullopt;
     std::string kept =
         label->substr(0, whole_code_points(std::string_view{*label}.substr(
                              0, std::min(label->size(), lsp_signature_label_limit))));
@@ -134,6 +169,6 @@ lsp_signature_help(const JsonValue &result)
     {
         return std::optional<LspSignature>{};
     }
-    return signature_of(*object, json_count_member(*help, "activeParameter"));
+    return signature_of(*object, *help);
 }
 } // namespace nenenib::core

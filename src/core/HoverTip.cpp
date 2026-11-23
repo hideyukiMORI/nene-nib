@@ -6,6 +6,7 @@
 #include "VimCharacterBoundary.hpp"
 
 #include <algorithm>
+#include <array>
 
 namespace nenenib::core
 {
@@ -114,5 +115,43 @@ LayoutRect hover_tip_rect(const LayoutRect &caret, const LayoutRect &area,
         std::max(std::min(caret.bottom + gap, area.bottom - height), area.top);
     const std::int32_t top = above >= area.top ? above : below;
     return LayoutRect{left, top, left + width, top + height};
+}
+
+namespace
+{
+[[nodiscard]] bool overlaps(const LayoutRect &one, const LayoutRect &other) noexcept
+{
+    return one.left < other.right && other.left < one.right && one.top < other.bottom &&
+           other.top < one.bottom;
+}
+} // namespace
+
+std::optional<LayoutRect> signature_tip_rect(const LayoutRect &caret, const LayoutRect &area,
+                                             const TabTipMeasure &text,
+                                             const std::optional<LayoutRect> &avoid) noexcept
+{
+    const LayoutRect placed = hover_tip_rect(caret, area, text);
+    if (!avoid.has_value() || !overlaps(placed, avoid.value()))
+    {
+        return placed;
+    }
+    const LayoutRect &list = avoid.value();
+    const std::int32_t height = height_of(placed);
+    const std::int32_t gap = to_pixels(tab_tip_gap_dips, text.dpi);
+    // 一覧の中心がキャレットの中心より上なら、一覧は上に回っている。
+    const bool list_above = list.top + list.bottom < caret.top + caret.bottom;
+    const std::array<std::int32_t, 2> tops{
+        list_above ? caret.bottom + gap : caret.top - gap - height,
+        list_above ? list.top - gap - height : list.bottom + gap};
+    for (const std::int32_t top : tops)
+    {
+        const LayoutRect box{placed.left, top, placed.right, top + height};
+        if (top >= area.top && box.bottom <= area.bottom && !overlaps(box, list) &&
+            !overlaps(box, caret))
+        {
+            return box;
+        }
+    }
+    return std::nullopt;
 }
 } // namespace nenenib::core
