@@ -1562,6 +1562,50 @@ void verify_theme_contrast()
     }
 }
 
+// #1953: アクセントの上の字は、黒と白のうちコントラスト比が大きい方。比は tests の浮動小数の
+// 式で測り、core の表としきいとは独立に確かめる。手で書いた on_accent を持つのは採用案の
+// 2 テーマだけ（白・ADR 0017 の決定 5）で、ほかは導出の値と一致する。
+bool on_accent_is_the_better(RgbColor accent)
+{
+    const RgbColor chosen = on_accent_for(accent);
+    const RgbColor other = chosen == RgbColor{0x00, 0x00, 0x00} ? RgbColor{0xFF, 0xFF, 0xFF}
+                                                                : RgbColor{0x00, 0x00, 0x00};
+    // 黒と白の比がほぼ等しい色（差 10^-4 未満・core の表の丸めで約 2×10^-5
+    // ずれる）はどちらでもよい。
+    return contrast_ratio(chosen, accent) + 1e-4 >= contrast_ratio(other, accent);
+}
+
+// 全色の格子（各成分 0, 5, 10, …, 255 の 52 段・52³ 点）の index 番目の色。
+RgbColor on_accent_grid_color(std::size_t index)
+{
+    constexpr std::size_t steps = 52;
+    const auto level = [](std::size_t step) { return static_cast<std::uint8_t>(step * 5); };
+    return RgbColor{level(index / (steps * steps)), level(index / steps % steps),
+                    level(index % steps)};
+}
+
+void verify_on_accent_contrast()
+{
+    for (const Theme &theme : builtin_themes)
+    {
+        const std::string name{theme.name};
+        expect(on_accent_is_the_better(theme.ui.accent),
+               (name + ": the accent label takes the better of black and white").c_str());
+        const bool adopted = theme.name == "ubuntu-aubergine" || theme.name == "neutral-light";
+        expect(adopted || theme.ui.on_accent == on_accent_for(theme.ui.accent),
+               (name + ": only the adopted palettes write their own accent label").c_str());
+    }
+    std::size_t worse = 0;
+    for (std::size_t index = 0; index < std::size_t{52 * 52 * 52}; ++index)
+    {
+        worse += on_accent_is_the_better(on_accent_grid_color(index)) ? 0U : 1U;
+    }
+    expect(worse == 0, "every colour on the grid takes the better of black and white");
+    expect(on_accent_for(RgbColor{0xE9, 0x54, 0x20}) == RgbColor{0x00, 0x00, 0x00} &&
+               on_accent_for(RgbColor{0x30, 0x0A, 0x24}) == RgbColor{0xFF, 0xFF, 0xFF},
+           "black sits on the orange and white on the aubergine");
+}
+
 // #713: 明暗の印と本文の地の明るさが食い違わない（相対輝度 0.5 で切る）。取り込みの誤りで
 // light の名前の表が暗い既定値を持った（vscode-high-contrast-light）のを機械で止める。
 void verify_theme_appearance_matches_background()
@@ -1660,7 +1704,9 @@ void verify_theme_derivation()
     static_assert(derived.text == RgbColor{0xEE, 0xEE, 0xEC}, "the text is the foreground");
     static_assert(derived.accent == RgbColor{0xE9, 0x54, 0x20}, "the accent passes through");
     static_assert(derived.tab_active == derived.background, "the active tab carries the ground");
-    static_assert(derived.on_accent == RgbColor{0xFF, 0xFF, 0xFF}, "white sits on the orange");
+    // 橙 #E95420 の上は黒 5.75:1・白 3.65:1 なので黒（#1953）。採用案の 2 テーマは白を手で
+    // 書いた上書きのまま（ADR 0017 の決定 5・値は変えない）。
+    static_assert(derived.on_accent == RgbColor{0x00, 0x00, 0x00}, "black sits on the orange");
     static_assert(derived.gutter_background == derived.background,
                   "unspecified gutter background preserves the old surface");
     const Palette adopted = theme_of(BuiltinTheme::ubuntu_aubergine).ui;
@@ -2731,6 +2777,7 @@ void verify_theme_scope()
     verify_light_palette_tokens();
     verify_tab_hover_tokens();
     verify_theme_contrast();
+    verify_on_accent_contrast();
     verify_theme_appearance_matches_background();
     verify_added_syntax_contrast();
     verify_theme_tokens_filled();
