@@ -451,6 +451,32 @@ enum class UiMessage : std::uint16_t
     // 引数の情報の知らせ（#1959・ADR 0191 の決定 2・6）。
     notice_signature_not_found,
     notice_signature_not_supported,
+    // 打ったときの粒（ADR 0192 の追補・#1979）の設定の画面の行。
+    settings_caret_sparks_name,
+    settings_caret_sparks_description,
+    // インデントガイド（ADR 0193 の決定 4・#1975）の設定の画面の行と値の語。
+    settings_indent_guides_name,
+    settings_indent_guides_description,
+    settings_indent_guide_style_name,
+    settings_indent_guide_style_description,
+    settings_indent_guide_style_rainbow,
+    settings_indent_guide_style_plain,
+    settings_indent_guide_colors_name,
+    settings_indent_guide_colors_description,
+    settings_indent_guide_active_name,
+    settings_indent_guide_active_description,
+    settings_indent_guide_active_on,
+    settings_indent_guide_active_off,
+    settings_indent_guide_width_name,
+    settings_indent_guide_width_description,
+    // 枠の「広げる / 狭める」の 1 回分と、Vim の回数なしの Ctrl-w がそれに従うかの設定の画面の行
+    // （ADR 0148 の 2026-11-23 の追補・#1972）。single と follows は後ろの行の 2 つの値。
+    settings_pane_resize_step_name,
+    settings_pane_resize_step_description,
+    settings_pane_resize_step_vim_name,
+    settings_pane_resize_step_vim_description,
+    settings_pane_resize_step_vim_single,
+    settings_pane_resize_step_vim_follows,
     // 整形の知らせ（#1993・ADR 0191 の決定 2・7）。
     notice_formatting_not_supported,
     notice_range_formatting_not_supported,
@@ -458,10 +484,12 @@ enum class UiMessage : std::uint16_t
     notice_formatting_unreadable,
     // 入力の途中に届いた整形の答え（#1997 のレビュー L5）。
     notice_formatting_busy,
+    // Vim の INSERT で頼んだ整形を頼まずに断る 1 行（#1997 の 2 回目のレビュー F1）。
+    notice_formatting_in_insert,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_formatting_busy) + 1U;
+    std::to_underlying(UiMessage::notice_formatting_in_insert) + 1U;
 } // namespace nenenib::core

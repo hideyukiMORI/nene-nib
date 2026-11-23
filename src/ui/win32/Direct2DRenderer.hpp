@@ -6,6 +6,7 @@
 #include "BodyTextLayouts.hpp"
 #include "BodyTextPainter.hpp"
 #include "CaretMotionFollower.hpp"
+#include "CaretSparksFollower.hpp"
 #include "ClauseEmphasis.hpp"
 #include "ColoredRun.hpp"
 #include "CommandChoice.hpp"
@@ -25,6 +26,7 @@
 #include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
 #include "HoverTipLayout.hpp"
+#include "IndentGuidePaintMemo.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
@@ -177,6 +179,12 @@ class Direct2DRenderer final
     void allow_caret_motion(bool allowed, std::uint32_t floor) noexcept;
     [[nodiscard]] std::optional<std::uint32_t> caret_motion_generation() const noexcept;
     void settle_caret_motion() noexcept;
+    // 打ったときの粒（ADR 0192 の追補・#1979）。動きと同じ形で、allowed と floor は窓が描く前に毎回
+    // 置き、generation は粒が生きていれば粒の時計の番号（窓は描いた後に読み、生きている間だけ合図を
+    // 送る）、settle は生きている粒を捨てる。
+    void allow_caret_sparks(bool allowed, std::uint32_t floor) noexcept;
+    [[nodiscard]] std::optional<std::uint32_t> caret_sparks_generation() const noexcept;
+    void settle_caret_sparks() noexcept;
     // 最後に描いたリンクの札の点の下の部品（札を描いていなければ outside・#1869 の段 L2）。
     [[nodiscard]] LinkCardTarget link_card_target_at(std::int32_t x, std::int32_t y) const;
     // 最後に描いた hover の札が点（クライアントの物理画素）を覆うか（描いていなければ偽・#1884 の
@@ -385,6 +393,14 @@ class Direct2DRenderer final
                             const core::LayoutRect &area, const application::LineView &line);
     void draw_plain_line(const application::EditorFrame &frame, const BodyPane &pane,
                          const core::LayoutRect &area, const application::LineView &line);
+    // 本文の「下の飾り」（ADR 0193 の決定 2）。選択の面の後・本文の字の前に、インデントガイド →
+    // （段 3 の）ペアガイドの順で描く。順を知るのはこの 1 本で、段 2・3 の飾りもここに足す。
+    void draw_decorations_under(const BodyPane &pane, const core::LayoutRect &area,
+                                const application::LineView &line);
+    void draw_indent_guides(const BodyPane &pane, const core::LayoutRect &area,
+                            const application::LineView &line);
+    // frame の初めに飾りの色の材料を覚えから引く（オフなら真偽 1 つ・ADR 0193 の決定 6）。
+    void begin_decorations(const application::EditorFrame &frame);
     void draw_line(const application::EditorFrame &frame, const BodyPane &pane,
                    const application::LineView &line);
     // 本文の面の全部（area は面を除いた client・全面のプレビューか枠と案内・ADR 0155 の改訂 15）。
@@ -400,6 +416,10 @@ class Direct2DRenderer final
     void begin_caret_motion(const application::EditorFrame &frame, const core::BodyLayout &body);
     [[nodiscard]] bool caret_moves(std::optional<D2D1_RECT_F> box);
     void paint_caret_motion(const application::EditorFrame &frame);
+    // 打ったときの粒（#1979）。see はキャレットの行き先の矩形の中心を覚え（値なしは何もしない）、
+    // paint はこの frame の覚えを進めて生きている粒を本文の領域に切って描く（操作中の枠の直後）。
+    void see_caret_sparks(const std::optional<D2D1_RECT_F> &box) noexcept;
+    void paint_caret_sparks(const application::EditorFrame &frame, const core::BodyLayout &body);
     void finish_caret_motion() noexcept;
     [[nodiscard]] bool grid_caret_moves(const GridRowCanvas &canvas,
                                         const application::GridRowView &row, bool active);
@@ -652,6 +672,12 @@ class Direct2DRenderer final
     // キャレットの動きの覚え（ADR 0192 の決定 2・3）。renderer を作り直すと空から始まる（跳ぶ・
     // 番号は窓が allow_caret_motion で下げさせない）。
     CaretMotionFollower caret_motion_{};
+    // 打ったときの粒の覚え（ADR 0192 の追補・#1979）。作り直すと空から始まる（番号は窓が
+    // allow_caret_sparks で下げさせない）。
+    CaretSparksFollower caret_sparks_{};
+    // インデントガイドの色の材料の覚え（ADR 0193 の決定 5・6）。`features=indentguides` が
+    // オフの frame では描かない印だけ。テーマ・単色 / 虹・色の数が変わった frame で作り直す。
+    IndentGuidePaintMemo guide_paint_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     // 格子の 1 升の幅（物理画素）。draw_grid_rows がその frame の書式で測る。

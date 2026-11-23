@@ -17,6 +17,7 @@
 #include "LineNumber.hpp"
 #include "MapTimeout.hpp"
 #include "MapTimer.hpp"
+#include "PaneResizeStep.hpp"
 #include "PaneSizing.hpp"
 #include "QuantityText.hpp"
 #include "ReplayLevel.hpp"
@@ -581,8 +582,9 @@ void EditorController::accept(const VimKeyPress &intent)
     {
         return;
     }
-    // 言語サーバーが起きていなければ、足すのは真偽 1 つの読みだけ（ADR 0190 の決定 10・#1962）。
-    if (language_servers_.awake != 0)
+    // 言語サーバーが起きていなければ、足すのは真偽 1 つの読みだけ（ADR 0190 の決定 10・#1962）。打
+    // ったときの粒（ADR 0192 の追補・#1979）がオフなら、足すのはもう 1 つの真偽の読みだけ。
+    if (language_servers_.awake != 0 || state_.settings().caret_sparks)
     {
         typed_vim_key_with_language(intent.key);
         return;
@@ -2237,6 +2239,8 @@ EditorController::measured_vim_step(const VimStepSource &source)
     view.search_case = core::search_case(state_.settings());
     view.scroll_margin = state_.settings().scrolloff;
     view.autoindent = state_.settings().autoindent;
+    view.uncounted_pane_cells = core::vim_uncounted_pane_cells(
+        state_.settings().pane_resize_step, state_.settings().pane_resize_step_vim);
     view.empty_text = state_.vim_empty_text();
     auto step = engine_step(state_.vim(), view, source);
     // どの要求も同じ 1 歩（鍵か行番号）をもう一度流す。viewport は 1 度渡したら以後も渡したまま。

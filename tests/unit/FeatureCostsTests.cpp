@@ -297,10 +297,10 @@ void verify_values()
            "stepping back from system wraps to the last built-in theme");
     const auto bigger =
         core::settings_value_stepped(defaults, core::SettingsValue::font_size, true, std::nullopt);
-    expect(core::settings_value_text(bigger, core::SettingsValue::font_size, japanese) == "14.5" &&
+    expect(core::settings_value_text(bigger, core::SettingsValue::font_size, japanese) == "14" &&
                core::settings_value_text(defaults, core::SettingsValue::font_size, japanese) ==
                    "13.5",
-           "the font size steps by 1 pt");
+           "the font size steps by 0.5 pt");
     const auto language = core::settings_value_stepped(defaults, core::SettingsValue::ui_language,
                                                        true, std::nullopt);
     expect(defaults.ui_language == core::DisplayLanguageChoice::system &&

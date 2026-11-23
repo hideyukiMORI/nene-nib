@@ -200,7 +200,7 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 ### 設定の正本は `settings.v6`。旧版を読むのは新版が無いときだけ
 
-v6 は v5 の全部の鍵に、`finder_preview` の後ろの `caret_motion` と `caret_motion_time`（ADR 0192 の決定 1・#1933）を足した版。v5 は v4 の全部の鍵（既存 5 鍵に `ui_language` `lsp` `explorer` `root` `features` と後から足した鍵・任意の `lsp.<language>.command` の行・ADR 0170 決定 3・上限 16 KiB）に、`explorer_width` の後ろの `autoindent` と `finder_preview`（ADR 0189 の決定 1・#1785）を足した版（ADR 0170 の 2026-11-16 の追補・#1086）。`settings.v5` は 1.1.0 が読み書きする版、`settings.v4` は 1.0.0 が読み書きする版で、どちらも鍵の集合は凍結した。**v5 と v4 の読みを緩めない・v5 と v4 に鍵を足さない**（1.0.0 と 1.1.0 は知らない鍵が 1 つでもあると既定の見た目で始めて保存を断る・D91）。**v6 を書く最初の公開版はまだ決まっていない**（次の版）。公開までは v6 に鍵を足してよく、v6 を書く版を公開したらそこで閉じる（その後に足すなら `settings.v7`）。版は `SettingsVersion` に 1 値、読む順と lock・bytes の照合の順は `Win32SettingsAdapter` の `reading_order` の 1 か所（v6 → v5 → v4 → v3 → v2 → v1）。v6 不在時だけ v5、順に v4・v3・v2・v1 を厳密に読み、v5 以前は `caret_motion=off`・`caret_motion_time=120`、v4 以前は `autoindent=off`・`finder_preview=auto`、v3 以前は `ui_language=ja`・`lsp=off`・`explorer=off`・wrap は既定オン・v1 の guide は既定表示に補う。設定を変更するときだけ v6 へ書き、旧ファイルを bytes のまま残す。存在する新版が壊れていれば旧版へ戻らず保存を拒否し、移行保存時も読込元まで lock と bytes を照合する（ADR 0114）。1.1.0 の書く v5 の見本は `nib_adapter_tests` の `released_v5_settings`（`tests/adapters/SettingsVersionSixTests.hpp`）、1.0.0 の書く v4 の見本は `released_v4_settings`。案内の文字と鍵は `operation_text` と `shown_chord` が正本で、rendererに文字列の別表を書かない。
+v6 は v5 の全部の鍵に、`finder_preview` の後ろの `caret_motion` と `caret_motion_time`（ADR 0192 の決定 1・#1933）と `caret_sparks`（ADR 0192 の追補・#1979）、その後ろの `pane_resize_step` と `pane_resize_step_vim`（ADR 0148 の 2026-11-23 の追補・#1972）と、その後ろのインデントガイドの `indent_guide_style` `indent_guide_colors` `indent_guide_active` `indent_guide_width`（ADR 0193 の決定 4・#1975）を足した版。v5 は v4 の全部の鍵（既存 5 鍵に `ui_language` `lsp` `explorer` `root` `features` と後から足した鍵・任意の `lsp.<language>.command` の行・ADR 0170 決定 3・上限 16 KiB）に、`explorer_width` の後ろの `autoindent` と `finder_preview`（ADR 0189 の決定 1・#1785）を足した版（ADR 0170 の 2026-11-16 の追補・#1086）。`settings.v5` は 1.1.0 が読み書きする版、`settings.v4` は 1.0.0 が読み書きする版で、どちらも鍵の集合は凍結した。**v5 と v4 の読みを緩めない・v5 と v4 に鍵を足さない**（1.0.0 と 1.1.0 は知らない鍵が 1 つでもあると既定の見た目で始めて保存を断る・D91）。**v6 を書く最初の公開版はまだ決まっていない**（次の版）。公開までは v6 に鍵を足してよく、v6 を書く版を公開したらそこで閉じる（その後に足すなら `settings.v7`）。版は `SettingsVersion` に 1 値、読む順と lock・bytes の照合の順は `Win32SettingsAdapter` の `reading_order` の 1 か所（v6 → v5 → v4 → v3 → v2 → v1）。v6 不在時だけ v5、順に v4・v3・v2・v1 を厳密に読み、v5 以前は `caret_motion=off`・`caret_motion_time=120`・`caret_sparks=off`・`pane_resize_step=5`・`pane_resize_step_vim=off`、v4 以前は `autoindent=off`・`finder_preview=auto`、v3 以前は `ui_language=ja`・`lsp=off`・`explorer=off`・wrap は既定オン・v1 の guide は既定表示に補う。設定を変更するときだけ v6 へ書き、旧ファイルを bytes のまま残す。存在する新版が壊れていれば旧版へ戻らず保存を拒否し、移行保存時も読込元まで lock と bytes を照合する（ADR 0114）。1.1.0 の書く v5 の見本は `nib_adapter_tests` の `released_v5_settings`（`tests/adapters/SettingsVersionSixTests.hpp`）、1.0.0 の書く v4 の見本は `released_v4_settings`。案内の文字と鍵は `operation_text` と `shown_chord` が正本で、rendererに文字列の別表を書かない。
 
 ### 本窓を壊すのは `leave` だけ。描画を失っても「保存しますか」を通す
 
@@ -304,6 +304,16 @@ controller は編集の中身・`edits.front()`・改訂番号から「Vim が�
 各 piece は手前までの `prefix_bytes` と `prefix_newlines` を持ち、位置 → piece は `TextBuffer::piece_at`、行 → piece は `piece_of_newline` の二分探索で引く（ADR 0183・#1474）。0 番目から線形に歩かない。
 累積を埋めるのは `TextBuffer.cpp` の `placed` の 1 か所（構築・collect・挿入はどれもここを通る）。最後に読んだ位置などの覚えは持たない。塊の列（段 2）は段 1 の実測の後。
 
+### 打った文字を言語サーバーへ渡す入口は `typed_for_language` の 1 本
+
+通常モードの `InsertText` も Vim の INSERT の 1 文字も、`EditorController::typed_for_language(打った文字)` を通って自動の補完（`open_triggered_completion`）へ行く（#1962・ADR 0190 の 2026-11-23 の追補）。Vim の側で「使う人が打った鍵か」を決めるのは `deliver_vim_key` の `watched_vim_key`（`typed_watch_` が立つ間だけ）と `typed_vim_character` で、再生・`:normal!`・IME の確定は通らない。engine は言語サーバーを知らないまま。
+引数の情報（段 S6 c）など打鍵で頼む物を足すときは、この入口に並べる。別の入口を作らない。`initialize` で名乗る能力は `text_document_capabilities` の 1 か所で、実装した物だけを名乗る（#1961）。
+
+### 言語サーバーの root の「同じフォルダか・下にあるか」は core の `FileFolder` の 1 本
+
+比べは `core::same_folder` と `core::folder_contains`（ASCII の大小・`\` `/`・末尾の区切りを畳む。畳み方は `folder_spelling` の 1 本）で、上る上限 `lsp_root_folders` も同じ畳み方（#1963 のレビュー M1）。application で文字列を比べ直さない。
+root は印（`lsp_root_markers`）を文書のフォルダから上へ探し、設定の root の下の文書は設定の root より上へ登らない（`LanguageRootRequest.ceiling`・#1960）。
+
 ### まとめ枝に積むとき
 
 道具は `D:/NeNeNib/scripts/20261112/` の `stack.sh`（起点からの差分を `git apply --3way`）・`finish-stack.sh`（生成物と `fixtures.json` の衝突を oracle で作り直す・`join-fixtures.py`）・`union-json-list.py`（折り返す窓の fixture を名前で併合）。
@@ -365,9 +375,9 @@ Waivers: none | WVR-NNNN
 
 **この節には、いまの状態と所在だけを書く。日ごとの経緯・入った PR・数字の積み重ねは書かない**（日報と引き継ぎと `current.md` に任せる。2026-11-15 までこの節に積もった経緯 44 KB は [docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md](docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md) に移した・#1716）。状態が変わったら下の箇条を書き換える（足さない）。
 
-- **版と公開**（2026-11-21）: main の版は 1.1.0（まだ公開していない）。**公開版は v1.0.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0)・pre-release・2026-11-17 20:53 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。1.1.0 の区切りはまとめ枝 46 ＋ 47（施主の決め 2026-11-20 夜・Store に出す区切りは機能の区切り）。1.1.0 の公開元は main `4fcf258c`（まとめ枝 46 ＋ 47 ＋ #1925）。2026-11-21 に本番を梱包し、hide が実機で確かめ、WACK `PASS` の後に Store へ更新を申請した（Submission 2・18:30 ごろ）。**いまは認定待ち**で、GitHub の tag `v1.1.0` と Release は認定の後。記録は [docs/quality/release-1.1.0-2026-11-17.md](docs/quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
-- **main の凍結は解いてある**（hide の決め 2026-11-15 夜）。機能の PR を入れてよい。1.0.0 の物は公開元 `80fd7a53` から作った物で、main の今の機能は入っていない（入るのは 1.1.0）。
-- **1.0.0 の後は `settings.v4` に鍵を足さない**。足すときは版を上げる（D91・§2 の設定の節）。
+- **版と公開**（2026-11-23）: **公開版は v1.1.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)・2026-11-23 12:43 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。前の版 v1.0.0 の公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。1.1.0 の区切りはまとめ枝 46 ＋ 47（施主の決め 2026-11-20 夜・Store に出す区切りは機能の区切り）。1.1.0 の公開元は main `4fcf258c`（まとめ枝 46 ＋ 47 ＋ #1925）。2026-11-21 に本番を梱包し、hide が実機で確かめ、WACK `PASS` の後に Store へ更新を申請した（Submission 2・18:30 ごろ）。認定の後、2026-11-23 に Store で公開され、GitHub の tag `v1.1.0` と Release も出した（再取得の照合 pass）。記録は [docs/quality/release-1.1.0-2026-11-17.md](docs/quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
+- **main の凍結は解いてある**（hide の決め 2026-11-15 夜）。機能の PR を入れてよい。1.1.0 の物は公開元 `4fcf258c` から作った物で、その後に main へ入った機能（LSP の段 S2 から後・split の境界線・キャレットのアニメーションなど）は次の版に入る。
+- **`settings.v4`（1.0.0）と `settings.v5`（1.1.0）に鍵を足さない**。main は `settings.v6` を書き、v6 を書く最初の公開版はまだ決めていない（D91・§2 の設定の節）。
 - **再開するとき**: 最新の[引き継ぎ](docs/handoffs/)の「次回の最初の手順」→ `git fetch` と `gh pr list` で照合 → [日報](docs/reports/)。施主決定は [SPECIFICATION.md](SPECIFICATION.md) の D 番号、できることの一覧は [README.md](README.md)。
 - **数字**（fixture の件数・基準値・ベンチの本数）はここに写さない。fixture は `tests/vim/fixtures.json`、速さは `eng/perf-reference.json` と `eng/measure-speed.py` の `BENCHES`、表の大きさは現物を数える。
 - 実機の目視は Claude デスクトップの別セッション（computer-use）か、hide の了承の後に設計席が回す道具（§2 の「窓を最前面に出す確認」）。

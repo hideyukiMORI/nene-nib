@@ -31,6 +31,35 @@ namespace nenenib::application
 {
 // ------------------------------------- 言語サーバーへの問いと答えの使い方（ADR 0190 の決定 6〜8）
 
+namespace
+{
+// 頼む前に断る問いか。整形（文書・選択範囲）を Vim の INSERT で頼んだときだけ（決定 7 の追補）。
+[[nodiscard]] bool refuses_in_insert(core::LanguageQueryKind kind, core::EditMode mode,
+                                     const core::VimState &vim) noexcept
+{
+    switch (kind)
+    {
+    case core::LanguageQueryKind::definition:
+    case core::LanguageQueryKind::hover:
+    case core::LanguageQueryKind::references:
+    case core::LanguageQueryKind::symbols:
+    case core::LanguageQueryKind::signature_help:
+        return false;
+    case core::LanguageQueryKind::format_document:
+    case core::LanguageQueryKind::format_selection:
+        break;
+    }
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return false;
+    case core::EditMode::vim:
+        break;
+    }
+    return vim.mode == core::VimMode::insert;
+}
+} // namespace
+
 // 操作「定義へ移動」（F12）と「情報を表示」。言語サーバーが動いていない文書（要求を出せない文書）
 // では 1 行知らせる。
 void EditorController::accept(const QueryLanguage &intent)
@@ -38,6 +67,14 @@ void EditorController::accept(const QueryLanguage &intent)
     // 設定の面が開いていた（この意図の入口で閉じた）なら、問いを出さない（面どうしの排他）。
     if (settings_closed_now_)
     {
+        return;
+    }
+    // Vim の INSERT で頼んだ整形は、答えが届いても入力の途中で当たらないので、頼まずに 1 行で断る
+    // （#1997 の 2 回目のレビュー F1・設計席の決め 2026-11-24）。
+    if (refuses_in_insert(intent.kind, state_.mode(), state_.vim()))
+    {
+        state_ = state_.with_command_message(
+            ui_notice(core::UiMessage::notice_formatting_in_insert));
         return;
     }
     if (query_language(intent.kind))

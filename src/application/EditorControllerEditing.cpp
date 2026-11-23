@@ -475,13 +475,31 @@ void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchorin
     follow_caret();
 }
 
+// 打った文字（WM_CHAR・Tab・通常モードの IME の確定）。打ったときの粒（ADR 0192 の追補・#1979）がオ
+// フなら足すのは真偽 1 つの読みだけ。オンなら本文が変わったとき（改訂番号が進んだとき）だけ打鍵の通
+// し番号を進める（空の文字列など本文が変わらなかった打鍵は数えない）。
 void EditorController::accept(const InsertText &intent)
 {
-    replace(core::selection_range(state_.selection()), intent.utf8, core::EditBoundary::coalesce);
+    if (!state_.settings().caret_sparks)
+    {
+        insert_text(intent.utf8);
+        return;
+    }
+    const std::size_t before = state_.history().revision();
+    insert_text(intent.utf8);
+    if (state_.history().revision() != before)
+    {
+        ++typed_serial_;
+    }
+}
+
+void EditorController::insert_text(const std::string &utf8)
+{
+    replace(core::selection_range(state_.selection()), utf8, core::EditBoundary::coalesce);
     // `triggerCharacters` の照合は「言語サーバーが起きている」の真偽の後ろ（ADR 0190 の決定 10）。
     if (language_servers_.awake != 0)
     {
-        typed_for_language(intent.utf8);
+        typed_for_language(utf8);
     }
 }
 
@@ -1071,8 +1089,9 @@ void EditorController::accept(const InsertDateTime &)
     switch (state_.mode())
     {
     case core::EditMode::ordinary:
-        // 選択があれば置き換え、無ければキャレットに入れる。InsertText と同じ Edit 1 回。
-        accept(InsertText{core::date_time_text(ports_.wall_clock.now())});
+        // 選択があれば置き換え、無ければキャレットに入れる。InsertText と同じ Edit 1 回。打った文字
+        // ではないので、打ったときの粒の通し番号は進めない（#1979）。
+        insert_text(core::date_time_text(ports_.wall_clock.now()));
         return;
     case core::EditMode::vim:
         break;

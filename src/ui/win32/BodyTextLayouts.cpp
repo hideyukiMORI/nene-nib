@@ -140,6 +140,7 @@ BodyTextLayouts::prepare(const application::TextLayoutRequest &request)
     previous_.clear();
     pending_.clear();
     cells_ = {};
+    spaces_ = {};
     grid_format_.Reset();
     grid_coverage_.reset();
     style_.reset();
@@ -212,7 +213,7 @@ HRESULT BodyTextLayouts::make_format(const application::TextLayoutRequest &reque
     {
         return made;
     }
-    const auto finished = finish_format(format_.Get(), request);
+    const auto finished = finish_format(format_.Get(), request, core::DisplayForm::text);
     if (FAILED(finished))
     {
         return finished;
@@ -240,7 +241,7 @@ HRESULT BodyTextLayouts::make_grid_format(const application::TextLayoutRequest &
                                              size, L"", &made);
     if (SUCCEEDED(result))
     {
-        result = finish_format(made.Get(), request);
+        result = finish_format(made.Get(), request, core::DisplayForm::grid);
     }
     if (SUCCEEDED(result))
     {
@@ -255,10 +256,11 @@ HRESULT BodyTextLayouts::make_grid_format(const application::TextLayoutRequest &
 }
 
 HRESULT BodyTextLayouts::finish_format(IDWriteTextFormat *format,
-                                       const application::TextLayoutRequest &request)
+                                       const application::TextLayoutRequest &request,
+                                       core::DisplayForm form)
 {
     attach_fallback(format);
-    return set_spacing(format, request);
+    return set_spacing(format, request, form);
 }
 
 IDWriteTextFormat *BodyTextLayouts::format_of(const application::TextLayoutRequest &request)
@@ -292,7 +294,8 @@ void BodyTextLayouts::attach_fallback(IDWriteTextFormat *format)
 }
 
 HRESULT BodyTextLayouts::set_spacing(IDWriteTextFormat *format,
-                                     const application::TextLayoutRequest &request)
+                                     const application::TextLayoutRequest &request,
+                                     core::DisplayForm form)
 {
     TextLayout space;
     const float height = static_cast<float>(std::max(request.geometry.line_height, 1));
@@ -309,8 +312,9 @@ HRESULT BodyTextLayouts::set_spacing(IDWriteTextFormat *format,
     {
         return E_FAIL;
     }
-    const auto tab = format->SetIncrementalTabStop(
-        std::max(text.widthIncludingTrailingWhitespace, 1.0F) * tab_stop_spaces);
+    const float space_advance = std::max(text.widthIncludingTrailingWhitespace, 1.0F);
+    spaces_.at(static_cast<std::size_t>(form)) = space_advance;
+    const auto tab = format->SetIncrementalTabStop(space_advance * tab_stop_spaces);
     if (FAILED(tab))
     {
         return tab;
@@ -640,6 +644,11 @@ const BodyTextLayout *BodyTextLayouts::glyphs_of(IDWriteTextLayout *layout, floa
         found->glyph_bottom = bottom;
     }
     return found;
+}
+
+std::optional<float> BodyTextLayouts::space_width(core::DisplayForm form) const noexcept
+{
+    return spaces_.at(static_cast<std::size_t>(form));
 }
 
 void BodyTextLayouts::begin_frame()

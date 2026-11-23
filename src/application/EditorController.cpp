@@ -19,6 +19,7 @@
 #include "GridLineRows.hpp"
 #include "GridLineSource.hpp"
 #include "ImeStance.hpp"
+#include "IndentGuideLines.hpp"
 #include "InsertCompletion.hpp"
 #include "LastResortPlan.hpp"
 #include "LineSpanEvaluation.hpp"
@@ -1128,6 +1129,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
         row += static_cast<std::int64_t>(count.value());
         lines.push_back(std::move(shown));
     }
+    mark_indent_guides(state, scroll.visible_lines, lines);
     return lines;
 }
 
@@ -1438,6 +1440,7 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     mark_bracket(state_, state_.scroll().visible_lines, result.lines);
     // イージーモーションの印も同じ行に写す（ADR 0163 の決定 6・格子では跳び先が無い）。
     mark_labels(state_, result.lines);
+    mark_active_indent_guide(state_, result.lines);
     add_other_pane(result, source.pattern);
     result.explorer = explorer_view();
     add_minimap(result);
@@ -1448,6 +1451,8 @@ void EditorController::finish_frame(EditorFrame &result, const PaneSource &sourc
     result.completion = completion_view();
     result.settings_panel = settings_view();
     result.caret_motion = caret_motion_clock_;
+    result.caret_sparks = caret_sparks_clock_;
+    result.typed = typed_serial_;
 }
 
 std::optional<SyntaxStateCache> &EditorController::syntax_cache(core::PaneSide side) noexcept

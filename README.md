@@ -1,16 +1,50 @@
 # NeNe Nib
 
-A fast single-executable text editor for Windows 11 that toggles between ordinary editing and Vim editing.
+**A 4.4 MB text editor for Windows 11. Press `Ctrl+Shift+Space` to switch between ordinary editing and Vim.**
+
+<a href="https://apps.microsoft.com/detail/9nclgdtfq529?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get NeNe Nib from the Microsoft Store"></a>
+
+[![Watch the 28-second NeNe Nib video on YouTube.](https://img.youtube.com/vi/xke9Ph3RQ3M/maxresdefault.jpg)](https://youtu.be/xke9Ph3RQ3M)
+
+## Why Nib
+
+- **Small.** One 4.4 MB executable (4,571,648 bytes in version 1.1.0), with no runtime to install.
+- **Notepad or Vim.** Edit the ordinary way, or switch to a Vim written from scratch and tested against real Vim 9.1.
+- **Made for large files.** Open UTF-8 files up to 1 GiB. They are read in the background.
+- **Good with Japanese.** Japanese IME, Shift_JIS, UTF-8 and UTF-16 files, and a Japanese interface.
+- **Find anything.** `Ctrl+P` lists tabs, bookmarks, recent files and folder files. `Ctrl+Shift+F` searches a project.
+- **Markdown preview.** See tables, alerts, colored code blocks and task lists next to the text.
+- **125 themes.** Syntax colors for 25 languages are included.
+- **Language servers when you want them.** Off by default. Install a server and connect it for diagnostics, completion, hover and go-to-definition.
+- **Private.** Nib collects no personal information and makes no network connections of its own.
+
+## 日本語
+
+NeNe Nib は、Windows 11 用の 4.4 MB のテキストエディタです。メモ帳のように普通に書くことも、`Ctrl+Shift+Space` で Vim の操作に切り替えることもできます。
+日本語入力、Shift_JIS、最大 1 GiB の UTF-8 ファイル、Markdown プレビュー、125 種類のテーマに対応しています。
+[Microsoft Store から入手できます](https://apps.microsoft.com/detail/9nclgdtfq529)。[日本語の紹介動画（28 秒）](https://youtu.be/p6SaOZh6L-A)もあります。
+
+## Get it
+
+- **[Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)**: version 1.1.0, updated by the Store.
+- **ZIP**: [v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0) on GitHub.
+
+Requires Windows 11 x64. Built with C++23, plain Win32, Direct2D and DirectWrite, with no UI library. MIT licensed.
 
 ![NeNe Nib displays its README in Vim NORMAL mode with two document tabs.](docs/images/nib-vim.png)
 
-C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependency.
+<p>
+  <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
+  <img src="docs/images/nib-light.png" width="49%" alt="NeNe Nib wraps Japanese specification text in ordinary editing mode with its light theme.">
+</p>
 
-> **Get it:** [NeNe Nib on the Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529), or the ZIP of
-> [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0) on GitHub.
->
-> **Status (2026-11-17):** [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0)
-> (a GitHub pre-release, published 2026-11-17, and the Microsoft Store version) is the published build for Windows 11 x64. It has ordinary editing with Notepad-style find,
+Screenshots use the default font and size in a development build of 2026-10-12; [capture details](docs/quality/showcase-2026-10-12.md).
+
+<details>
+<summary>Full status of the published versions</summary>
+
+> **Status (2026-11-23):** [v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0) (GitHub and the Microsoft Store) is the published build for Windows 11 x64.
+> The previous version, [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0) (a GitHub pre-release, published 2026-11-17), has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
 > clickable task-list checkboxes; a side file explorer; two split panes; opt-in language-server diagnostics; and
@@ -33,12 +67,27 @@ C++23, plain Win32, Direct2D and DirectWrite, no UI library, no runtime dependen
 > `:set autoindent`, more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`),
 > preview wheel scrolling by pixels, lighter scrolling of long unwrapped lines, and fixes.
 
-<p>
-  <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
-  <img src="docs/images/nib-light.png" width="49%" alt="NeNe Nib wraps Japanese specification text in ordinary editing mode with its light theme.">
-</p>
+</details>
 
-Screenshots use the default font and size in a development build of 2026-10-12; [capture details](docs/quality/showcase-2026-10-12.md).
+## Speed and memory
+
+<a href="https://youtube.com/shorts/8rAQmeq9qfU"><img src="docs/images/nib-short-compare.png" width="200" align="right" alt="NeNe Nib and Windows Notepad open the same 16 MiB file side by side. Watch the 10-second video on YouTube."></a>
+
+Three editors, the same files, measured the same way from outside the apps. Medians of 20 runs for time and 10 for memory.
+
+| | NeNe Nib 1.1.0 | Sakura Editor 2.4.3 | Windows Notepad 11.2609 |
+|---|---:|---:|---:|
+| Open a 200-line file, until text appears | **100 ms** | 267 ms | 450 ms |
+| Open a 16 MiB file, until text appears | **117 ms** | 383 ms | 908 ms |
+| RAM after opening 200 lines | 14.1 MiB | **11.6 MiB** | 40.4 MiB |
+| RAM after opening 16 MiB | **30.4 MiB** | 54.2 MiB | 88.7 MiB |
+| Package size | **4.75 MB** | 5.62 MB | 18.55 MB |
+
+One PC (Core i9-10850K, RTX 3090, Windows 11), default settings, the same window size, and files in the OS cache.
+RAM is the private working set and excludes GPU memory. Sakura Editor is 3.61 MB without its help files, and its executable is
+smaller than Nib's. Notepad's size excludes the runtimes it needs. See the [measurement record](docs/quality/editor-comparison-2026-11-23.md).
+
+<br clear="right">
 
 ## Find your theme
 
@@ -58,7 +107,8 @@ All 125 themes are included in the published v1.0.0.
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
 [`docs/adr/`](docs/adr/README.md). Everything below is in the published v1.0.0 unless it says
-*new in 1.1.0* (in version 1.1.0 and not in 1.0.0) or *in review* (an open pull request, not on main). The current
+*new in 1.1.0* (in version 1.1.0 and not in 1.0.0), *new after 1.1.0* (on main, in neither published
+version yet) or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -162,12 +212,18 @@ records in `docs/quality/`.
   from the keyboard (Shift+F10 and the menu key open the text menu). Done; reordering by drag is planned.
   Split panes (decision D64, [ADR 0148](docs/adr/0148-split-keeps-the-active-pane-path-and-parks-the-other.md)):
   Ctrl+\ splits side by side and Ctrl+Shift+\ one above the other, F6 moves to the other pane and Ctrl+Shift+F4
-  closes it; Vim uses `Ctrl-w {s v w W p h j k l c q o}` and `:only`. Two equal panes at most; the border cannot
-  be dragged and the layout is not restored on the next start.
+  closes it; Vim uses `Ctrl-w {s v w W p h j k l c q o}` and `:only`. Two panes at most; the layout is not
+  restored on the next start. *New after 1.1.0*: dragging the border resizes the panes (double-click makes them
+  equal again and Esc cancels a drag), as do Vim `Ctrl-w > < + - = _ |`, `:resize` and `:vertical resize` and
+  the F1 operations Enlarge Pane, Shrink Pane and Equalize Panes (no key); the sizes last until the window
+  closes. Enlarge / Shrink Pane move by `pane_resize_step` (`:set paneresizestep=`, 5 by default, 1–40, also
+  a row in the settings panel). Vim `Ctrl-w > < + -` without a count move one cell like Vim unless
+  `:set paneresizestepvim` makes them follow that step; a count always wins.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, bookmarks, recently closed files and
   files in the current folder, fuzzy-matched by name and then by folder. A leading mark narrows the list:
   `#` tabs, `*` bookmarks, `@` history, `/` the current folder, `:` the settings commands (see below),
-  `?` the operation list and (*new in 1.1.0*) `!` project-wide search (FR-026, below). Closed files are kept in a history of up to 100 files; a file that no longer exists
+  `?` the operation list and (*new in 1.1.0*) `!` project-wide search (FR-026, below), and (*new after 1.1.0*)
+  `^` language-server diagnostics and `&` references (FR-021, below). Closed files are kept in a history of up to 100 files; a file that no longer exists
   is reported in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
   inside the bytes of another. Files in the current folder arrive in the background. Open tabs, bookmarks and
@@ -232,6 +288,14 @@ records in `docs/quality/`.
   window that is not maximized resizes from all edges and corners, including the top-right corner and a 4 DIP
   strip along the top of × □ ＿, while a maximized window and edges touching the monitor's edge leave those
   pixels to the buttons, so a pointer thrown into the screen corner still hits ×. Done.
+  *New after 1.1.0*: `:set caretmotion` (off by default, also in the settings drawer) lets the caret trail
+  behind as it moves, with a soft edge; `:set caretmotiontime=` sets the time (120 ms by default, 40–300). It
+  does not move while Windows animation effects are off or the IME is composing (decision D108,
+  [ADR 0192](docs/adr/0192-caret-motion-trails-behind-the-caret.md)).
+  *New after 1.1.0*: `:set caretsparks` (off by default, also in the settings drawer, independent of the
+  motion) scatters a few small sparks from where each character is typed; they fade within about 420 ms and
+  do not appear for pastes, replays, `.`, undo or caret moves, nor while Windows animation effects are off or
+  the IME is composing (#1979).
 - **FR-012 Japanese IME** — IMM32; the composition is drawn in place and committed as one intent; Vim NORMAL turns the
   IME off, INSERT turns it back on. The Ctrl+P palette and the Vim `:` and search lines take a composition: they
   open with the IME off and leave it to the user (D32, D57). The explorer filter also takes Japanese input. Done.
@@ -267,7 +331,7 @@ records in `docs/quality/`.
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document
   ([ADR 0156](docs/adr/0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md)).
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion` and `caret_motion_time`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion`, `caret_motion_time`, `caret_sparks`, `pane_resize_step`, `pane_resize_step_vim` and the indent guide keys `indent_guide_style`, `indent_guide_colors`, `indent_guide_active` and `indent_guide_width`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
@@ -303,6 +367,19 @@ records in `docs/quality/`.
   executable is missing or not written as an absolute path, or a `.cmd` / `.bat` (write `node.exe` and the script
   instead), is reported in one line and not started. In `settings.v6`, a `lsp.<name>.command` line for a language
   this version does not know is kept when the settings are written back.
+  *New after 1.1.0* (also tried with rust-analyzer, gopls and pyright): each language
+  keeps its own server, and switching tabs does not stop it; the project root is found by looking up from the
+  document's folder for the server's marker files (such as `.git` or `Cargo.toml`), never above `:set root=`
+  when the document is under it. `]d` `[d` and F8 / Shift+F8 jump between diagnostics, `gl` or the F1 operation
+  "Show diagnostic" shows the whole message, and `^` in Ctrl+P lists the diagnostics of the open tabs. `grr`,
+  Shift+F12 or the F1 operation "List references" asks for the references of the name at the caret and lists up
+  to 1,000 of them under `&` in Ctrl+P ([ADR 0191](docs/adr/0191-language-server-references-symbols-signature-help-and-formatting.md)).
+  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). The settings
+  drawer's language-server section lists the servers found on the PC and writes the command line when one is
+  chosen. `:LspLog` or the F1 operation "Open Language Server Log" opens the servers' error output and messages
+  in an untitled tab, and the status bar shows a server's progress next to the diagnostics count. The editor
+  now tells servers that it takes diagnostics and save notices, which typescript-language-server needs before it
+  sends diagnostics.
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
@@ -391,7 +468,7 @@ forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=` / `autoi
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off and `caret_motion_time` starts at 120 ms), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off, `caret_motion_time` starts at 120 ms, `caret_sparks` starts off, `pane_resize_step` starts at 5 and `pane_resize_step_vim` starts off), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170); in the same way, a change made in 1.1.0 after `settings.v6` exists goes to `settings.v5` and is not seen by later versions, and the other way round (ADR 0192). A broken new file is reported and blocks settings writes until repaired and restarted.
 

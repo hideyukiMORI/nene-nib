@@ -1,11 +1,14 @@
 // scope `--split-resize` の単体テスト（ADR 0148 の 2026-11-22 の追補・#1941）。境界の比と最小の純関
 // 数（pane_layouts・split_extent・split_share_at・sized_share・split_divider_hit）と、ドラッグの意
 // 図 ResizeSplit・鍵の意図 ResizePane・Vim の `Ctrl-w > < + - = _ |`・Ex の `:resize` の契約。
+#include "CancelSelection.hpp"
 #include "ClosePane.hpp"
 #include "DevicePixels.hpp"
+#include "DisplayLanguage.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorSettings.hpp"
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
 #include "OpenDocument.hpp"
@@ -13,16 +16,21 @@
 #include "PaneFrame.hpp"
 #include "PaneLayouts.hpp"
 #include "PaneResize.hpp"
+#include "PaneResizeStep.hpp"
 #include "PaneSide.hpp"
 #include "PaneSizing.hpp"
 #include "PaneSplit.hpp"
 #include "PreviewFrame.hpp"
+#include "PreviewPlacement.hpp"
 #include "ResizePane.hpp"
 #include "ResizeSplit.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "SetPreviewPlacement.hpp"
+#include "SettingsRows.hpp"
+#include "SettingsValue.hpp"
 #include "SplitExtent.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
@@ -336,6 +344,129 @@ void verify_vim_resize_keys()
     expect(first_of(controller) == 500, "Ctrl-w = splits evenly again");
 }
 
+// on でも升を読まない `Ctrl-w = | _` は off と同じ（#1972 のレビュー L2）。
+void verify_vim_fixed_resize_keys()
+{
+    const auto widest = [](bool follows)
+    {
+        Editing editing;
+        open_vim_document(editing, "one\ntwo");
+        auto &controller = editing.controller();
+        static_cast<void>(window_keys(controller, "", "v"));
+        applied(controller, view_of(10, 10));
+        static_cast<void>(run_ex(controller, "set paneresizestep=7"));
+        static_cast<void>(
+            run_ex(controller, follows ? "set paneresizestepvim" : "set nopaneresizestepvim"));
+        static_cast<void>(window_keys(controller, "", "_"));
+        const bool unmoved = first_of(controller) == 500;
+        static_cast<void>(window_keys(controller, "", "|"));
+        const std::int32_t most = first_of(controller);
+        static_cast<void>(window_keys(controller, "", "="));
+        return std::pair{unmoved && first_of(controller) == 500, most};
+    };
+    const auto off = widest(false);
+    const auto on = widest(true);
+    expect(off.first && on.first && on.second == off.second && on.second != 500,
+           "on: Ctrl-w _ | = move as they do off");
+}
+
+// `:set` の問い・`&`・`inv` と、F1 の操作が読む 1 回分（#1972 のレビュー L2・R2）。
+void verify_pane_resize_step_ex()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    const auto message = [&controller](std::string_view command)
+    {
+        const EditorFrame frame = run_ex(controller, std::string(command));
+        return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                                 : std::string{};
+    };
+    expect(message("set paneresizestep?") == "paneresizestep=5" &&
+               message("set paneresizestep") == "paneresizestep=5" &&
+               message("set paneresizestepvim?") == "paneresizestepvim=off",
+           ":set paneresizestep? and paneresizestepvim? answer the values");
+    static_cast<void>(run_ex(controller, "set invpaneresizestepvim"));
+    expect(message("set paneresizestepvim?") == "paneresizestepvim=on",
+           ":set invpaneresizestepvim flips the switch");
+    static_cast<void>(run_ex(controller, "set paneresizestepvim&"));
+    expect(message("set paneresizestepvim?") == "paneresizestepvim=off",
+           ":set paneresizestepvim& restores the default");
+    static_cast<void>(run_ex(controller, "set paneresizestep=7"));
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    applied(controller, view_of(10, 10));
+    // ui の EditorWindow::resize_operated_pane と同じ形（升の数は controller の口から読む）。
+    applied(controller, app::ResizePane{PaneSizing{PaneResize::grow, PaneDimension::width,
+                                                   controller.pane_resize_step()}});
+    expect(first_of(controller) == 570, "after :set paneresizestep=7 one Enlarge Pane moves 7");
+}
+
+// 回数なしの `Ctrl-w > < + -` は既定で本物の Vim と同じ 1 升、設定 `paneresizestepvim` が on なら
+// 1 回分の設定の升。回数つきはどちらでも回数どおり（#1972・hide の決め 2026-11-23）。
+void verify_vim_resize_step_setting()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    static_cast<void>(window_keys(controller, "", "v"));
+    applied(controller, view_of(10, 10));
+    static_cast<void>(run_ex(controller, "set paneresizestep=7"));
+    static_cast<void>(window_keys(controller, "", ">"));
+    expect(first_of(controller) == 510, "off: Ctrl-w > moves one cell like Vim");
+    static_cast<void>(run_ex(controller, "set paneresizestepvim"));
+    static_cast<void>(window_keys(controller, "", ">"));
+    expect(first_of(controller) == 580, "on: Ctrl-w > moves the pane resize step");
+    static_cast<void>(window_keys(controller, "", "<"));
+    expect(first_of(controller) == 510, "on: Ctrl-w < moves the pane resize step back");
+    static_cast<void>(window_keys(controller, "2", ">"));
+    expect(first_of(controller) == 530, "on: a count still wins");
+    static_cast<void>(run_ex(controller, "set nopaneresizestepvim"));
+    static_cast<void>(window_keys(controller, "2", ">"));
+    expect(first_of(controller) == 550, "off: a count still wins");
+    static_cast<void>(run_ex(controller, "set paneresizestep=0"));
+    static_cast<void>(run_ex(controller, "set paneresizestep=41"));
+    expect(controller.pane_resize_step() == 7,
+           ":set paneresizestep refuses a value outside 1 to 40");
+}
+
+// 1 回分の読み・送り・設定の画面の行（#1972）。既定は 5 升と off。
+void verify_pane_resize_step_values()
+{
+    expect(core::pane_resize_step_of("1") == std::optional<std::uint8_t>{1} &&
+               core::pane_resize_step_of("40") == std::optional<std::uint8_t>{40} &&
+               !core::pane_resize_step_of("0").has_value() &&
+               !core::pane_resize_step_of("41").has_value() &&
+               !core::pane_resize_step_of("05").has_value() &&
+               !core::pane_resize_step_of("").has_value() &&
+               !core::pane_resize_step_of("5a").has_value() &&
+               !core::pane_resize_step_of("-1").has_value() &&
+               !core::pane_resize_step_of("5.5").has_value(),
+           "the pane resize step reads 1 to 40 without a leading zero");
+    expect(core::pane_resize_step_stepped(5, true) == 6 &&
+               core::pane_resize_step_stepped(5, false) == 4 &&
+               core::pane_resize_step_stepped(40, true) == 40 &&
+               core::pane_resize_step_stepped(1, false) == 1,
+           "the pane resize step moves by one and stops at the ends");
+    expect(core::vim_uncounted_pane_cells(7, false) == 1 &&
+               core::vim_uncounted_pane_cells(7, true) == 7,
+           "uncounted Vim keys move one cell unless they follow the step");
+    const auto defaults = core::default_editor_settings();
+    expect(defaults.pane_resize_step == core::pane_resize_step_default &&
+               !defaults.pane_resize_step_vim,
+           "the defaults are five cells and off");
+    const auto language = core::DisplayLanguage::english;
+    const auto bigger = core::settings_value_stepped(
+        defaults, core::SettingsValue::pane_resize_step, true, std::nullopt);
+    const auto follows = core::settings_value_stepped(
+        defaults, core::SettingsValue::pane_resize_step_vim, true, std::nullopt);
+    expect(core::settings_value_text(bigger, core::SettingsValue::pane_resize_step, language) ==
+                   "6" &&
+               follows.pane_resize_step_vim &&
+               !core::settings_value_stepped(follows, core::SettingsValue::pane_resize_step_vim,
+                                             false, std::nullopt)
+                    .pane_resize_step_vim,
+           "the settings rows step the cells and flip the Vim switch");
+}
+
 void verify_ex_resize()
 {
     Editing editing;
@@ -554,6 +685,57 @@ void verify_preview_pane_resize()
                moved.share == controller.pane_split().share,
            "moving the divider beside a preview keeps the preview pane");
 }
+
+// 横のプレビュー → 全面 → 戻ると、比は全面の前のまま（#1973）。本文の 2 枠でも同じ。全面から
+// 出てもう一度側を開き直すと等分から。
+void verify_share_through_full_preview()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    editing.files().hold(Bytes{std::string{"# title\n\ntext"}});
+    applied(controller, app::VisibleLines{4});
+    applied(controller, app::OpenDocument{sample_path()});
+    applied(controller, app::TogglePreview{});
+    applied(controller, app::ResizeSplit{SplitShare{1, 4}});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    expect(controller.frame().full_preview.has_value(), "the preview is full");
+    const EditorFrame back = controller.apply_frame(app::CancelSelection{});
+    expect(back.other.has_value() &&
+               std::holds_alternative<app::PreviewFrame>(back.other.value()) &&
+               back.share == SplitShare{1, 4} && controller.pane_split().share == SplitShare{1, 4},
+           "side, full and side again keep the divider where it was");
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
+    expect(controller.pane_split().share == SplitShare{1, 4},
+           "leaving full for side by placement keeps the divider too");
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::off});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
+    expect(controller.pane_split().share == SplitShare{},
+           "closing the preview and opening it again starts even");
+    // 側で比を動かす → 全面 → off → 全面（側のプレビューの無い全面）→
+    // 側は等分（前の比を持ち越さない）。
+    applied(controller, app::ResizeSplit{SplitShare{1, 4}});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::off});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    applied(controller, app::SetPreviewPlacement{app::PreviewPlacement::side});
+    expect(controller.frame().other.has_value() && controller.pane_split().share == SplitShare{},
+           "full entered without a side preview leaves for side evenly");
+
+    Editing body;
+    auto &split = body.controller();
+    body.files().hold(Bytes{std::string{"# title\n\ntext"}});
+    applied(split, app::VisibleLines{4});
+    applied(split, app::OpenDocument{sample_path()});
+    applied(split, app::SplitPane{SplitLayout::vertical});
+    applied(split, app::ResizeSplit{SplitShare{3, 4}});
+    applied(split, app::SetPreviewPlacement{app::PreviewPlacement::full});
+    const EditorFrame returned = split.apply_frame(app::CancelSelection{});
+    expect(returned.other.has_value() &&
+               std::holds_alternative<app::PaneFrame>(returned.other.value()) &&
+               returned.share == SplitShare{3, 4},
+           "two body panes, full and back keep the divider where it was");
+}
 } // namespace
 
 void verify_split_resize_contracts()
@@ -566,6 +748,10 @@ void verify_split_resize_contracts()
     verify_resize_split_intent();
     verify_other_pane_size();
     verify_vim_resize_keys();
+    verify_vim_resize_step_setting();
+    verify_vim_fixed_resize_keys();
+    verify_pane_resize_step_ex();
+    verify_pane_resize_step_values();
     verify_ex_resize();
     verify_resize_pane_intent();
     verify_stacked_resize_keys();
@@ -574,5 +760,6 @@ void verify_split_resize_contracts()
     verify_resize_keys_leave_history();
     verify_other_pane_rows();
     verify_preview_pane_resize();
+    verify_share_through_full_preview();
 }
 } // namespace nenenib::tests

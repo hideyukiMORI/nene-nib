@@ -593,8 +593,9 @@ class EditorWindow final
     // Windows の「アニメーション効果」（SPI_GETCLIENTAREAANIMATION）を読む（ADR 0192 の決定
     // 6・起動と WM_SETTINGCHANGE）。読めなければ動かす側（既定のオン）。
     void read_animation_setting();
-    // 描いた後にキャレットの動きを追う（ADR 0192 の決定 3）。動いている間だけ合図のタイマーを張り、
-    // 動きが始まり直したら経過の起点を測り直す。止まったらタイマーを外す。
+    // 描いた後にキャレットの動きと打ったときの粒を追う（ADR 0192 の決定 3・追補・#1979）。どちらか
+    // が生きている間だけ合図のタイマーを張り、番号が変わったら経過の起点を測り直す。両方が止まった
+    // らタイマーを外す。
     void follow_caret_motion();
     // 合図のタイマーを張っていれば外す。
     void stop_caret_motion();
@@ -680,6 +681,10 @@ class EditorWindow final
     std::uint32_t caret_motion_generation_ = 0;
     std::uint64_t caret_motion_start_ = 0;
     bool caret_motion_timing_ = false;
+    // 打ったときの粒の時計の番号と、その時計が始まった時計の値（ADR 0192 の追補・#1979）。合図のタ
+    // イマーは動きと共用（caret_motion_timing_）。番号は描く前に renderer へ下限として渡す。
+    std::uint32_t caret_sparks_generation_ = 0;
+    std::uint64_t caret_sparks_start_ = 0;
     // 帯で押した要素（左ボタンと中ボタンで 1 つずつ）。離した要素と同じときだけ動かし、離したら
     // 消す（ADR 0056 の決定 9）。
     std::optional<core::TitleBarTarget> left_pressed_;

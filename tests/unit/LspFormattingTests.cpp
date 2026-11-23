@@ -943,6 +943,31 @@ void verify_recording_applies()
     expect(body(editing) == source_text, "the formatting is not in the recorded macro");
 }
 
+// Vim の INSERT で頼んだ整形は、サーバーへ頼まずに 1 行で断る（#1997 の 2 回目のレビュー F1）。
+// NORMAL に戻れば頼む。
+void verify_insert_refusal()
+{
+    for (const auto kind :
+         {core::LanguageQueryKind::format_document, core::LanguageQueryKind::format_selection})
+    {
+        Editing editing(lsp_on());
+        started(editing, both_providers);
+        applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+        vim_replay(editing.controller(), "i");
+        const std::size_t before = editing.language_server().sent().size();
+        const auto refused = asked(editing, kind);
+        expect(editing.language_server().sent().size() == before &&
+                   message_of(refused) ==
+                       notice(editing, core::UiMessage::notice_formatting_in_insert) &&
+                   editing.controller().vim_state().mode == core::VimMode::insert,
+               "formatting asked in INSERT is refused before the server is asked");
+        vim_replay(editing.controller(), "<Esc>");
+        static_cast<void>(asked(editing, kind));
+        expect(editing.language_server().sent().size() == before + 1,
+               "formatting asked after Esc goes to the server");
+    }
+}
+
 // 頼んだ後のタブの切り替え（R4）・入力の途中に届いた答え（L5）・didChange と未保存の印（L8）。
 void verify_switch_busy_and_sync()
 {
@@ -1011,5 +1036,6 @@ void verify_lsp_formatting_scope()
     verify_switch_busy_and_sync();
     verify_busy_states();
     verify_recording_applies();
+    verify_insert_refusal();
 }
 } // namespace nenenib::tests

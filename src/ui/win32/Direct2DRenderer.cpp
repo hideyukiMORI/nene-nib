@@ -1094,10 +1094,16 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
                                   const core::LayoutRect &area, const application::LineView &shown)
 {
     // 動いている間は本文の上に多角形を重ねるので、ふつうのキャレットは描かない（ADR 0192 の決定
-    // 4）。
-    if (caret_motion_.on() && caret_moves(caret_box(frame, text, area, shown)))
+    // 4）。打ったときの粒（追補・#1979）は行き先の矩形の中心を覚える。どちらもオフなら真偽の読みだ
+    // け。
+    if (caret_motion_.on() || caret_sparks_.on())
     {
-        return;
+        const auto box = caret_box(frame, text, area, shown);
+        see_caret_sparks(box);
+        if (caret_motion_.on() && caret_moves(box))
+        {
+            return;
+        }
     }
     const auto &line = shown.display;
     LineUtf16Evaluation positions(line.text);
@@ -1410,12 +1416,14 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     {
         return;
     }
-    // 検索の当たり → 選択 → 本文 → 現在の当たりの枠 → キャレットの順（ADR 0037 の決定 5）。
+    // 検索の当たり → 選択 → 下の飾り → 本文 → 置き換え → 診断 → 現在の当たりの枠 → キャレットの順
+    // （ADR 0037 の決定 5・ADR 0193 の決定 2）。
     draw_line_matches(frame, text.Get(), area, line);
     if (line.selection.presence == core::SelectionPresence::present)
     {
         draw_line_selection(frame, text.Get(), area, line);
     }
+    draw_decorations_under(pane, area, line);
     draw_line_text(frame, text.Get(), area, line);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
     draw_line_diagnostics(frame, text.Get(), area, line);
@@ -1576,12 +1584,15 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
 bool Direct2DRenderer::grid_caret_moves(const GridRowCanvas &canvas,
                                         const application::GridRowView &row, bool active)
 {
-    if (!caret_motion_.on() || !active || !canvas.caret_shown || !row.caret.has_value())
+    if ((!caret_motion_.on() && !caret_sparks_.on()) || !active || !canvas.caret_shown ||
+        !row.caret.has_value())
     {
         return false;
     }
-    return caret_moves(
-        GridPainter::caret_box(canvas, row.caret.value(), row.composed_at.has_value()));
+    const auto box = GridPainter::caret_box(canvas, row.caret.value(), row.composed_at.has_value());
+    // 打ったときの粒（#1979）は格子のキャレットの中心も覚える。
+    see_caret_sparks(box);
+    return caret_motion_.on() && caret_moves(box);
 }
 
 void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
@@ -1589,6 +1600,7 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
 {
     draw_pane(frame, BodyPane{body, frame.lines, frame.grid, frame.caret, PaneRole::active});
     paint_caret_motion(frame);
+    paint_caret_sparks(frame, body);
 }
 
 // もう 1 つの枠と境界（ADR 0148 の決定 8・採用案の案 A）。境界は panel_border の 1 本。frame に
@@ -1667,6 +1679,7 @@ void Direct2DRenderer::draw_body_area(const application::EditorFrame &frame,
 {
     const auto body = core::active_pane_layout(panes, frame.active_side);
     begin_caret_motion(frame, body);
+    begin_decorations(frame);
     if (frame.full_preview.has_value())
     {
         draw_other(frame, full_preview_body(area, dpi_, frame.settings.font_size),

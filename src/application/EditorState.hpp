@@ -510,10 +510,12 @@ class EditorState final
     std::optional<PreviewTableGrip> table_grip_;
     std::optional<std::size_t> table_hovered_;
     SplitState split_;
-    // 全面のプレビューと、全面の前の見せ方・側の配置と側（Esc で戻す・ADR 0155 の改訂 15・16）。
+    // 全面のプレビューと、全面の前の見せ方・側の配置と側と境界の比（Esc で戻す・ADR 0155 の改訂
+    // 15・16・比は #1973）。
     std::optional<PreviewView> full_preview_;
     PreviewPlacement full_return_ = PreviewPlacement::off;
     core::SplitLayout full_return_layout_ = core::SplitLayout::vertical;
     core::PaneSide full_return_side_ = core::PaneSide::first;
+    core::SplitShare full_return_share_{};
 };
 } // namespace nenenib::application
