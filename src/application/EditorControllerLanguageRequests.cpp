@@ -12,6 +12,7 @@
 #include "LanguageServerPhase.hpp"
 #include "LanguageServerSlot.hpp"
 #include "LanguageServers.hpp"
+#include "LanguageSymbols.hpp"
 #include "LspAnswerFailure.hpp"
 #include "LspAnswers.hpp"
 #include "LspCompletionContext.hpp"
@@ -24,6 +25,8 @@
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
+#include "LspSymbol.hpp"
+#include "LspSymbols.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
 #include "ServerAbilities.hpp"
@@ -155,6 +158,28 @@ references_answer(const PendingLspRequest &request, const core::LspResponse &res
     }
     return answer;
 }
+
+// 記号の答え（#1955・ADR 0191 の決定 5）。照合は定義と同じ。誤りの答えと読めない答えは空の列。
+[[nodiscard]] std::optional<LanguageSymbols> symbols_answer(const PendingLspRequest &request,
+                                                            const core::LspResponse &response,
+                                                            const LspRequestContext &current,
+                                                            core::LspPositionEncoding encoding)
+{
+    const auto *context = std::get_if<LspRequestContext>(&request.context);
+    if (context == nullptr || !(*context == current))
+    {
+        return std::nullopt;
+    }
+    auto read = response.result.has_value()
+                    ? core::lsp_document_symbols(response.result.value())
+                    : std::unexpected{core::LspAnswerFailure::invalid_result};
+    core::LspSymbolList list =
+        read.has_value() ? std::move(read).value() : core::LspSymbolList{.symbols = {}, .total = 0};
+    return LanguageSymbols{.context = *context,
+                           .symbols = std::move(list.symbols),
+                           .encoding = encoding,
+                           .total = list.total};
+}
 } // namespace
 
 // ---------------------------------------------------------------- 文脈つきの要求（ADR 0190）
@@ -218,6 +243,23 @@ bool EditorController::request_references()
     context.emplace_back("includeDeclaration", core::JsonValue{true});
     params.emplace_back("context", core::JsonValue{std::move(context)});
     send_language_request(slot.value(), LspRequestKind::references,
+                          core::JsonValue{std::move(params)}, request_context());
+    return true;
+}
+
+// 記号（#1955・ADR 0191 の決定 5）。`DocumentSymbolParams` は文書だけ。
+bool EditorController::request_document_symbols()
+{
+    const auto slot = requestable_slot(&ServerAbilities::document_symbols);
+    if (!slot.has_value())
+    {
+        return false;
+    }
+    core::JsonObject document;
+    document.emplace_back("uri", core::JsonValue{active_document_of(slot.value()).uri});
+    core::JsonObject params;
+    params.emplace_back("textDocument", core::JsonValue{std::move(document)});
+    send_language_request(slot.value(), LspRequestKind::document_symbol,
                           core::JsonValue{std::move(params)}, request_context());
     return true;
 }
@@ -336,6 +378,9 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
         break;
     case LspRequestKind::references:
         answers.references = references_answer(request, response, current, link_of(slot).encoding);
+        break;
+    case LspRequestKind::document_symbol:
+        answers.symbols = symbols_answer(request, response, current, link_of(slot).encoding);
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));

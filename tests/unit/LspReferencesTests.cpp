@@ -6,8 +6,10 @@
 #include "CloseTab.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
+#include "CommandEdit.hpp"
 #include "CommandText.hpp"
 #include "DisplayText.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -15,6 +17,7 @@
 #include "EditorSettings.hpp"
 #include "FilePath.hpp"
 #include "FileUri.hpp"
+#include "GiantLine.hpp"
 #include "InsertText.hpp"
 #include "JsonParse.hpp"
 #include "KeyChord.hpp"
@@ -35,6 +38,7 @@
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "Selection.hpp"
+#include "ServerExited.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "SwitchTab.hpp"
@@ -291,8 +295,8 @@ void verify_list_and_landing()
     expect(rows.at(0).label.text() == "main.cpp:1:5" && first.has_value() &&
                first.value().text() == "int main() {}" &&
                rows.at(1).label.text() == "main.cpp:2:9" &&
-               rows.at(2).label.text() == "two.cpp:3:10" && !rows.at(2).detail.has_value(),
-           "open tabs show the line; a file not open shows only file:line:column");
+               rows.at(2).label.text() == "two.cpp:3" && !rows.at(2).detail.has_value(),
+           "open tabs show the line; a file not open shows only file:line");
     const auto landed = editing.controller().apply_frame(app::ActivateCommandChoice{2});
     expect(!landed.command_palette.has_value() && caret_on(landed, 3, 10),
            "choosing a reference in a file not open opens it and lands on the reference");
@@ -386,8 +390,8 @@ void verify_limit_and_foreign()
            "a cut answer says how many places it had");
 }
 
-// 位置の単位は答えた席の単位。開いているタブは本文で行と桁を写し、開いていないファイルは答えの
-// 文字の位置 + 1 の桁（複数バイトの行ではずれる・跳んだ先は本文で写すので正しい）。
+// 位置の単位は答えた席の単位。開いているタブは本文で行と桁を写し、開いていないファイルは桁を
+// 出さない（答えの単位では複数バイトの行でずれる・#1955・跳んだ先は本文で写すので正しい）。
 void verify_encodings_and_wide_lines()
 {
     constexpr std::string_view wide_main = "int main() {}\n/*\xE3\x81\x82\xE3\x81\x84*/ main();\n";
@@ -405,8 +409,8 @@ void verify_encodings_and_wide_lines()
         return;
     }
     const auto &rows = listed.command_palette.value().rows;
-    expect(rows.at(0).label.text() == "main.cpp:2:8" && rows.at(1).label.text() == "two.cpp:3:8",
-           "the open tab counts the column in the text and the file not open uses the answer");
+    expect(rows.at(0).label.text() == "main.cpp:2:8" && rows.at(1).label.text() == "two.cpp:3",
+           "the open tab counts the column in the text and the file not open shows no column");
     expect(caret_on(editing.controller().apply_frame(app::ActivateCommandChoice{1}), 3, 8),
            "the reference in the file not open lands on the name after opening it");
 
@@ -418,6 +422,35 @@ void verify_encodings_and_wide_lines()
     static_cast<void>(answered(bytes, "[" + reference_at("file:///C:/work/main.cpp", 1, 11) + "]"));
     expect(caret_on(bytes.controller().apply_frame(app::ActivateCommandChoice{0}), 2, 8),
            "a server that counts UTF-8 bytes lands on the same name");
+}
+
+// 開いているタブの巨大な行（バイト数が giant_line_threshold を超える）の参照は行だけの当たり。
+// 題名は「相対パス:行」（偽の桁を付けない）・行の文は無い・選ぶと名前に着地する（#1958 の確かめ
+// レビュー M1・R2）。行はコードポイントでは閾値の内側なので、格子表示を聞かずに開く。
+void verify_giant_line_reference()
+{
+    constexpr std::size_t wide_characters = 6000;
+    static_assert(wide_characters * 3 > core::giant_line_threshold);
+    std::string giant = "int main() {}\n";
+    for (std::size_t index = 0; index < wide_characters; ++index)
+    {
+        giant += "\xE3\x81\x82";
+    }
+    giant += " main();\n";
+    Editing editing(lsp_on());
+    started_with(editing, R"({"textDocumentSync":2,"referencesProvider":true})", giant,
+                 second_text);
+    static_cast<void>(asked(editing));
+    const auto listed = answered(
+        editing, "[" + reference_at("file:///C:/work/main.cpp", 1, wide_characters + 1) + "]");
+    const bool shown =
+        listed.command_palette.has_value() && !listed.command_palette.value().rows.empty();
+    expect(shown && listed.command_palette.value().rows.front().label.text() == "main.cpp:2" &&
+               !listed.command_palette.value().rows.front().detail.has_value(),
+           "a reference on a giant line of an open tab shows only file:line");
+    expect(caret_on(editing.controller().apply_frame(app::ActivateCommandChoice{0}), 2,
+                    wide_characters + 2),
+           "choosing it lands on the name");
 }
 
 // `grr` は頼めたら成功の歩に読み替わり、マクロの続きが走る（#1954 のレビュー R4）。
@@ -486,6 +519,92 @@ void verify_forgotten_on_close()
     expect(!after.command_palette.has_value() || after.command_palette.value().total == 0,
            "closing the asking document forgets its references");
 }
+
+// `&` の一覧の候補の数（一覧が開いていなければ値なし）。
+[[nodiscard]] std::optional<std::size_t> listed_references(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto frame = editing.controller().apply_frame(app::CommandText{"&"});
+    applied(editing.controller(), app::CancelCommand{});
+    return frame.command_palette.has_value() ? std::optional{frame.command_palette.value().total}
+                                             : std::nullopt;
+}
+
+// 控えを捨てるほかの 3 つの道（#1958 のレビュー R3・a-L2）: 言語を変えた・名前を付けて保存した・
+// 言語サーバーが落ちた。どれも言語サーバーが文書を閉じる道から捨てる。
+void verify_forgotten_on_other_closes()
+{
+    const auto held = [](Editing &editing)
+    {
+        referencing(editing);
+        static_cast<void>(asked(editing));
+        static_cast<void>(answered(editing, three_references));
+        applied(editing.controller(), app::CancelCommand{});
+        return listed_references(editing) == std::optional<std::size_t>{3};
+    };
+    Editing language(lsp_on());
+    const bool language_held = held(language);
+    static_cast<void>(run_ex(language.controller(), "set ft=python"));
+    expect(language_held && listed_references(language) == std::optional<std::size_t>{0},
+           "changing the language forgets the references");
+
+    Editing renamed(lsp_on());
+    const bool renamed_held = held(renamed);
+    static_cast<void>(run_ex(renamed.controller(), "saveas C:\\work\\renamed.cpp"));
+    expect(renamed_held && listed_references(renamed) == std::optional<std::size_t>{0},
+           "saving under another name forgets the references");
+
+    Editing exited(lsp_on());
+    const bool exited_held = held(exited);
+    static_cast<void>(delivered(exited, app::ServerExited{1}));
+    expect(exited_held && listed_references(exited) == std::optional<std::size_t>{0},
+           "a server that stops forgets the references");
+}
+
+// 一覧の下の案内の欄に何を頼んだ答えかを出し、頼んでいない `&` は頼み方の 1 行（#1958 の決め
+// 2・3）。 当たりを作るのは `&` を見せるときだけ（レビュー R1 の契約）。
+void verify_subject_empty_line_and_lazy_hits()
+{
+    Editing editing(lsp_on());
+    referencing(editing);
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto empty = editing.controller().apply_frame(app::CommandText{"&"});
+    const auto line =
+        empty.command_palette.has_value() ? empty.command_palette.value().empty_line : std::nullopt;
+    expect(line.has_value() && line.value().text() ==
+                                   core::ui_text_filled(core::UiMessage::palette_empty_references,
+                                                        editing.controller().display_language(),
+                                                        {"Shift+F12", "grr"}),
+           "& before asking says how to ask, with the key from the operation table");
+    applied(editing.controller(), app::CancelCommand{});
+    static_cast<void>(asked(editing));
+    const std::size_t before = editing.controller().listed_hits_made();
+    const auto listed = answered(editing, three_references);
+    const auto subject =
+        listed.command_palette.has_value() ? listed.command_palette.value().subject : std::nullopt;
+    expect(subject.has_value() && contains(subject.value().text(), "main.cpp:1"),
+           "the references list says where they were asked");
+    expect(editing.controller().listed_hits_made() == before + 3, "showing & makes each hit once");
+    applied(editing.controller(), app::CancelCommand{});
+    const std::size_t shown = editing.controller().listed_hits_made();
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"#"}));
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    applied(editing.controller(), app::CancelCommand{});
+    expect(editing.controller().listed_hits_made() == shown,
+           "a Ctrl+P list under another mark makes no hit of the held references");
+    // 同じ一覧の中で `&` → `#` → `&` と戻っても作り直さない（#1958 の確かめレビュー L4）。
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"&"}));
+    const std::size_t once = editing.controller().listed_hits_made();
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"#"}));
+    static_cast<void>(editing.controller().apply(app::EditCommand{core::CommandEdit::backspace}));
+    static_cast<void>(editing.controller().apply(app::CommandText{"&"}));
+    applied(editing.controller(), app::CancelCommand{});
+    expect(once == shown + 3 && editing.controller().listed_hits_made() == once,
+           "& then # then & in one list makes the hits once");
+}
 } // namespace
 
 void verify_lsp_references_scope()
@@ -498,9 +617,12 @@ void verify_lsp_references_scope()
     verify_vim_keys();
     verify_limit_and_foreign();
     verify_encodings_and_wide_lines();
+    verify_giant_line_reference();
     verify_grr_keeps_the_macro();
     verify_reopen_after_edit();
     verify_inactive_window();
     verify_forgotten_on_close();
+    verify_forgotten_on_other_closes();
+    verify_subject_empty_line_and_lazy_hits();
 }
 } // namespace nenenib::tests

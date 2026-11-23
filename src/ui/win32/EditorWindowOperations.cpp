@@ -518,6 +518,7 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::open_language_server_log,
          &EditorWindow::run_open_language_server_log},
         {core::EditorOperation::list_references, &EditorWindow::run_list_references},
+        {core::EditorOperation::list_symbols, &EditorWindow::run_list_symbols},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -845,6 +846,12 @@ void EditorWindow::run_open_language_server_log()
 void EditorWindow::run_list_references()
 {
     send(application::QueryLanguage{core::LanguageQueryKind::references});
+}
+
+// 記号の一覧（#1955・ADR 0191 の決定 5）。Vim の `gO` と同じ問い。
+void EditorWindow::run_list_symbols()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::symbols});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

@@ -64,6 +64,7 @@ bool palette_previews(PaletteScope scope) noexcept
     case PaletteScope::project_hits:
     case PaletteScope::diagnostics:
     case PaletteScope::references:
+    case PaletteScope::symbols:
         return true;
     case PaletteScope::commands:
     case PaletteScope::operations:
