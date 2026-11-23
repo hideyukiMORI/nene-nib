@@ -101,3 +101,9 @@ hide の指示（2026-11-22）「ペインの境界線の位置、つまり幅�
 - `"{name}` の後の回数と `Ctrl-w` の後ろの回数が重なる形（`2"a3<C-w>4>`）は、`"` の後の桁に続けて数える（Vim は 6 × 4）。窓の命令の前にレジスタを選ぶ意味が無いので合わせない。
 - `PaneSource` はもう 1 つの枠の寸法を参照の欄で持つ（作る所は `view_geometry_` と `other_geometry()` のメンバーへの参照だけで寿命が足りる）。作る所を増やすときは値で持つ形に変える。
 - 境界のドラッグ中は 1 回の動きで `ResizeSplit` の frame と `follow_split` の `VisibleLines` の frame の 2 回、行を組む（前者は古い寸法）。動きは正しく、1 枠の道には影響しない。試用で重ければ見る。
+
+## 追補（2026-11-23・#1972・hide の決め）広げる / 狭めるの 1 回分を設定で変える
+
+1. **1 回分は設定 `pane_resize_step`（`settings.v6`・既定 5・1〜40・1 升ずつ）。** 決定 4 の通常モードの操作 `widen_pane` `narrow_pane` の「仮置き 5 升」を設定の値にした（既定は今の 5・hide が認めた）。読みは core の `pane_resize_step_of` の 1 本で、設定の読みと `:set paneresizestep=N` が共用する（範囲の外は E474 と同じ失敗・`set paneresizestep` と `?` は問い）。ui は `EditorController::pane_resize_step()` を読んで `PaneSizing` の `cells` に置く。Vim に同じ意味の option は無い（`winwidth` `winheight` は最小の幅で別物）ので、名前は現物の並び（`caret_motion_time` / `caretmotiontime`）に合わせた。設定の画面は「枠」の節の探して見る面のプレビューの後ろに段の上下の行。
+2. **Vim の回数なしの `Ctrl-w > < + -` は既定で本物の Vim と同じ 1 升。設定 `pane_resize_step_vim`（真偽・既定 off・`pane_resize_step` の直後）が on なら 1 回分の設定の升。** 回数つき（`Ctrl-w 3>`・`3<C-w>>`）は on でも off でも回数どおり。`_` `|` `=` は升を読まない（今のまま）。controller が `vim_uncounted_pane_cells(step, on)` を `VimEditorView.uncounted_pane_cells` に置き、engine の `window_resize_of` は回数が無いときだけそれを読む（engine は設定を知らないまま）。`:set paneresizestepvim` / `nopaneresizestepvim` / `?`（真偽の表 `switch_options` にも 1 行）。設定の画面は同じ節に 2 つの値（「1（Vim と同じ）」「上の量に従う」）を巡る行。off が既定なので Vim の fixture の振る舞いは変わらない。
+3. **鍵の読み。** どちらも v6 の後から足した鍵の形（無い v6 は 5 と off を補う・有れば厳密）で、v5 以前に在れば未知の鍵として拒否する（v5 の読みを緩めない・D91）。書く順は `caret_sparks`（`caret_motion_time` の後ろ・ADR 0192 の追補）の後ろ・インデントガイドの 4 つの鍵（ADR 0193 の決定 4）の前。

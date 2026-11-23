@@ -253,6 +253,7 @@ SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
                         ("scrolloff", "0"), ("explorer_width", ""), ("autoindent", "off"),
                         ("finder_preview", "auto"), ("caret_motion", "off"),
                         ("caret_motion_time", "120"), ("caret_sparks", "off"),
+                        ("pane_resize_step", "5"), ("pane_resize_step_vim", "off"),
                         ("indent_guide_style", "rainbow"),
                         ("indent_guide_colors", "4"), ("indent_guide_active", "on"),
                         ("indent_guide_width", "4"))

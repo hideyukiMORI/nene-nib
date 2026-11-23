@@ -490,5 +490,13 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::settings_indent_guide_width_name, "字下げの幅"},
     {UiMessage::settings_indent_guide_width_description,
      "開いた文書から字下げの幅を推し当てられないときの段の幅（2 / 4 / 8）"},
+    {UiMessage::settings_pane_resize_step_name, "枠を広げる・狭める量"},
+    {UiMessage::settings_pane_resize_step_description,
+     "「枠を広げる / 狭める」の 1 回で動かす文字の幅か行の数（1〜40）"},
+    {UiMessage::settings_pane_resize_step_vim_name, "Vim の Ctrl-w の量"},
+    {UiMessage::settings_pane_resize_step_vim_description,
+     "回数なしの Ctrl-w > < + - が動かす量（回数つきは回数どおり）"},
+    {UiMessage::settings_pane_resize_step_vim_single, "1（Vim と同じ）"},
+    {UiMessage::settings_pane_resize_step_vim_follows, "上の量に従う"},
 }};
 } // namespace nenenib::core

@@ -20,6 +20,11 @@ enum class SettingsValue : std::uint8_t
     indent_guide_style,
     indent_guide_colors,
     indent_guide_active,
-    indent_guide_width
+    indent_guide_width,
+    // 枠の「広げる / 狭める」の 1 回分（ADR 0148 の 2026-11-23 の追補・#1972・段の上下・1
+    // 升ずつ）。
+    pane_resize_step,
+    // Vim の回数なしの `Ctrl-w > < + -` が 1 回分に従うか（2 つの選択肢を巡る・#1972）。
+    pane_resize_step_vim
 };
 } // namespace nenenib::core

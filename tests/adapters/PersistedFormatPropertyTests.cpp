@@ -113,7 +113,8 @@ constexpr std::array<std::string_view, 8> settings_samples{{
     "version=6\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n"
     "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\nignorecase=off\nsmartcase=off\n"
     "relativenumber=off\nscrolloff=0\nexplorer_width=\nautoindent=on\nfinder_preview=auto\n"
-    "caret_motion=on\ncaret_motion_time=200\ncaret_sparks=on\n",
+    "caret_motion=on\ncaret_motion_time=200\ncaret_sparks=on\npane_resize_step=12\n"
+    "pane_resize_step_vim=on\n",
     "version=5\ncolorscheme=system\nfont_family=Consolas\nfont_size=13.5\nguide=on\nwrap=on\n"
     "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\nignorecase=off\nsmartcase=off\n"
     "relativenumber=off\nscrolloff=0\nexplorer_width=\nautoindent=on\n",

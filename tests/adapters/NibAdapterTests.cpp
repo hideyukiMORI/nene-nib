@@ -754,10 +754,11 @@ void verify_settings_versions()
                                "relativenumber=off\nscrolloff=0\nexplorer_width=\n"
                                "autoindent=off\nfinder_preview=auto\ncaret_motion=off\n"
                                "caret_motion_time=120\ncaret_sparks=off\n"
+                               "pane_resize_step=5\npane_resize_step_vim=off\n"
                                "indent_guide_style=rainbow\nindent_guide_colors=4\n"
                                "indent_guide_active=on\nindent_guide_width=4\n"),
-           "the v6 writer emits the v5 keys and the caret motion, sparks and indent guide keys "
-           "after finder_preview");
+           "the v6 writer emits the v5 keys and the caret motion, sparks, pane resize and indent "
+           "guide keys after finder_preview");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
     expect(v3 && v3.value().guide == nenenib::core::GuideVisibility::hidden &&
                v3.value().wrapping == nenenib::core::LineWrapping::no_wrap &&
@@ -771,9 +772,9 @@ void verify_settings_versions()
     for (const auto extra :
          {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
           "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
-          "explorer_width=\n", "autoindent=off\n", "autoindent=on\n", "finder_preview=auto\n",
-          "finder_preview=right\n", "caret_motion=off\n", "caret_motion_time=120\n",
-          "caret_sparks=off\n", "indent_guide_style=rainbow\n", "indent_guide_width=4\n"})
+          "explorer_width=\n", "autoindent=off\n", "finder_preview=auto\n", "caret_motion=off\n",
+          "caret_motion_time=120\n", "caret_sparks=off\n", "pane_resize_step=5\n",
+          "pane_resize_step_vim=off\n", "indent_guide_style=rainbow\n", "indent_guide_width=4\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
         expect(!refused && refused.error() == SettingsFailure::malformed,
@@ -800,7 +801,8 @@ constexpr std::string_view released_v4_settings =
 
 // 1.0.0 の v4 の見本を今の書く形（v6）にした bytes（版の行を 6 にし、explorer_width の後ろに v5 の
 // autoindent=off と finder_preview=auto、v6 の caret_motion=off と caret_motion_time=120 と
-// caret_sparks=off を足す）。
+// caret_sparks=off と pane_resize_step=5 と pane_resize_step_vim=off と、インデントガイドの既定
+// を足す）。
 std::string released_as_v5()
 {
     std::string bytes(released_v4_settings);
@@ -808,7 +810,7 @@ std::string released_as_v5()
     const std::string_view width = "explorer_width=320\n";
     bytes.insert(bytes.find(width) + width.size(),
                  "autoindent=off\nfinder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n"
-                 "caret_sparks=off\n" +
+                 "caret_sparks=off\npane_resize_step=5\npane_resize_step_vim=off\n" +
                      std::string(nenenib::tests::adapters::indent_guide_defaults));
     return bytes;
 }
@@ -925,7 +927,7 @@ void verify_settings_maps()
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
                            "scrolloff=0\nexplorer_width=\nautoindent=off\n"
                            "finder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n"
-                           "caret_sparks=off\n"
+                           "caret_sparks=off\npane_resize_step=5\npane_resize_step_vim=off\n"
                            "indent_guide_style=rainbow\nindent_guide_colors=4\n"
                            "indent_guide_active=on\nindent_guide_width=4\n"
                            "mapleader=<Space>\n"

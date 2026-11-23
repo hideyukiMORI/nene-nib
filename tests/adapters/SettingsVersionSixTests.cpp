@@ -25,15 +25,16 @@ using nenenib::adapters::win32::SettingsVersion;
 using nenenib::application::SettingsFailure;
 
 // 1.1.0 の v5 の見本を v6 の形にした bytes（版の行を 6 にし、finder_preview の後ろに
-// caret_motion=off と caret_motion_time=120 と caret_sparks=off と、インデントガイドの
-// 4 つの既定を足す）。
+// caret_motion=off と caret_motion_time=120 と caret_sparks=off と pane_resize_step=5 と
+// pane_resize_step_vim=off と、インデントガイドの 4 つの既定を足す）。
 std::string released_v5_as_v6()
 {
     std::string bytes(released_v5_settings);
     bytes.replace(0, std::string_view{"version=5"}.size(), "version=6");
     const std::string_view preview = "finder_preview=right\n";
     bytes.insert(bytes.find(preview) + preview.size(),
-                 "caret_motion=off\ncaret_motion_time=120\ncaret_sparks=off\n" +
+                 "caret_motion=off\ncaret_motion_time=120\ncaret_sparks=off\n"
+                 "pane_resize_step=5\npane_resize_step_vim=off\n" +
                      std::string(indent_guide_defaults));
     return bytes;
 }
@@ -67,7 +68,8 @@ void verify_released_v5(Expect expect)
            "finder_preview and the unknown language row kept");
     for (const auto extra :
          {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n",
-          "caret_sparks=off\n", "caret_sparks=on\n", "indent_guide_style=rainbow\n",
+          "caret_sparks=off\n", "caret_sparks=on\n", "pane_resize_step=5\n",
+          "pane_resize_step_vim=off\n", "pane_resize_step_vim=on\n", "indent_guide_style=rainbow\n",
           "indent_guide_colors=4\n", "indent_guide_active=on\n", "indent_guide_width=4\n"})
     {
         const auto refused =
@@ -120,8 +122,8 @@ void verify_v6_keys(Expect expect)
            "a duplicate caret motion or sparks key is refused");
 }
 
-// インデントガイドの v6 の 4 つの鍵（ADR 0193 の決定 4）。並びは caret_sparks の後ろ。無ければ
-// 既定、有れば厳密に読み、往復する。
+// インデントガイドの v6 の 4 つの鍵（ADR 0193 の決定 4）。並びは pane_resize_step_vim の後ろ。
+// 無ければ既定、有れば厳密に読み、往復する。
 void verify_indent_guide_keys(Expect expect)
 {
     auto settings = core::default_editor_settings();
@@ -133,10 +135,10 @@ void verify_indent_guide_keys(Expect expect)
     const auto read = decode_settings(bytes, SettingsVersion::v6);
     expect(
         read && core::same_settings(read.value(), settings) &&
-            bytes.find("\ncaret_motion_time=120\ncaret_sparks=off\nindent_guide_style=plain\n"
+            bytes.find("\npane_resize_step_vim=off\nindent_guide_style=plain\n"
                        "indent_guide_colors=6\nindent_guide_active=off\nindent_guide_width=2\n") !=
                 std::string::npos,
-        "the indent guide keys follow caret_sparks and round trip through v6");
+        "the indent guide keys follow the pane resize keys and round trip through v6");
     std::string bare = released_v5_as_v6();
     for (const auto key :
          {"indent_guide_style", "indent_guide_colors", "indent_guide_active", "indent_guide_width"})
@@ -162,6 +164,37 @@ void verify_indent_guide_keys(Expect expect)
     expect(!decode_settings(bytes + "indent_guide_width=4\n", SettingsVersion::v6),
            "a duplicate indent guide key is refused");
 }
+
+// 枠の大きさの 2 つの鍵（#1972）。無ければ既定の 5 升と off、有れば厳密に読み、往復する。
+void verify_pane_resize_keys(Expect expect)
+{
+    auto settings = core::default_editor_settings();
+    settings.pane_resize_step = 12;
+    settings.pane_resize_step_vim = true;
+    const auto bytes = encode_settings(settings);
+    const auto read = decode_settings(bytes, SettingsVersion::v6);
+    expect(read && read.value().pane_resize_step == 12 && read.value().pane_resize_step_vim &&
+               bytes.find("\ncaret_sparks=off\npane_resize_step=12\npane_resize_step_vim=on\n") !=
+                   std::string::npos,
+           "the pane resize step and its Vim switch round trip right after caret_sparks");
+    const auto missing = decode_settings(
+        without_key(without_key(released_v5_as_v6(), "pane_resize_step"), "pane_resize_step_vim"),
+        SettingsVersion::v6);
+    expect(missing && missing.value().pane_resize_step == 5 &&
+               !missing.value().pane_resize_step_vim,
+           "a v6 without the pane resize keys takes five cells and off");
+    for (const auto &[key, value] :
+         {std::pair{"pane_resize_step", "0"}, std::pair{"pane_resize_step", "41"},
+          std::pair{"pane_resize_step", "05"}, std::pair{"pane_resize_step", ""},
+          std::pair{"pane_resize_step_vim", "yes"}, std::pair{"pane_resize_step_vim", ""}})
+    {
+        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
+        expect(!broken && broken.error() == SettingsFailure::malformed,
+               "a malformed pane resize value is refused");
+    }
+    expect(!decode_settings(bytes + "pane_resize_step=3\n", SettingsVersion::v6),
+           "a duplicate pane resize key is refused");
+}
 } // namespace
 
 bool released_v5_values(const core::EditorSettings &settings)
@@ -173,6 +206,7 @@ bool released_v5_values(const core::EditorSettings &settings)
            settings.maps.size() == 1 && settings.autoindent &&
            settings.finder_preview == core::FinderPreview::right && !settings.caret_motion &&
            settings.caret_motion_time == 120 && !settings.caret_sparks &&
+           settings.pane_resize_step == 5 && !settings.pane_resize_step_vim &&
            settings.indent_guide_style == core::IndentGuideStyle::rainbow &&
            settings.indent_guide_colors == 4 && settings.indent_guide_active &&
            settings.indent_guide_width == 4;
@@ -183,5 +217,6 @@ void verify_settings_v6_codec(Expect expect)
     verify_released_v5(expect);
     verify_v6_keys(expect);
     verify_indent_guide_keys(expect);
+    verify_pane_resize_keys(expect);
 }
 } // namespace nenenib::tests::adapters

@@ -15,6 +15,7 @@
 #include "FontSizeAdjustment.hpp"
 #include "IndentGuide.hpp"
 #include "IndentGuideStyle.hpp"
+#include "PaneResizeStep.hpp"
 #include "SettingsRow.hpp"
 #include "SettingsSection.hpp"
 #include "SettingsSubject.hpp"
@@ -97,6 +98,10 @@ constexpr std::array<IndentGuideStyle, 2> indent_guide_style_order{IndentGuideSt
         return UiMessage::settings_indent_guide_active_name;
     case SettingsValue::indent_guide_width:
         return UiMessage::settings_indent_guide_width_name;
+    case SettingsValue::pane_resize_step:
+        return UiMessage::settings_pane_resize_step_name;
+    case SettingsValue::pane_resize_step_vim:
+        return UiMessage::settings_pane_resize_step_vim_name;
     }
     std::unreachable();
 }
@@ -125,6 +130,10 @@ constexpr std::array<IndentGuideStyle, 2> indent_guide_style_order{IndentGuideSt
         return UiMessage::settings_indent_guide_active_description;
     case SettingsValue::indent_guide_width:
         return UiMessage::settings_indent_guide_width_description;
+    case SettingsValue::pane_resize_step:
+        return UiMessage::settings_pane_resize_step_description;
+    case SettingsValue::pane_resize_step_vim:
+        return UiMessage::settings_pane_resize_step_vim_description;
     }
     std::unreachable();
 }
@@ -153,6 +162,10 @@ constexpr std::array<IndentGuideStyle, 2> indent_guide_style_order{IndentGuideSt
         return "indentguideactive";
     case SettingsValue::indent_guide_width:
         return "indentguidewidth";
+    case SettingsValue::pane_resize_step:
+        return "paneresizestep";
+    case SettingsValue::pane_resize_step_vim:
+        return "paneresizestepvim";
     }
     std::unreachable();
 }
@@ -346,6 +359,13 @@ std::string settings_value_text(const EditorSettings &settings, SettingsValue va
                                    language));
     case SettingsValue::indent_guide_width:
         return std::to_string(settings.indent_guide_width);
+    case SettingsValue::pane_resize_step:
+        return pane_resize_step_text(settings.pane_resize_step);
+    case SettingsValue::pane_resize_step_vim:
+        return std::string(ui_text(settings.pane_resize_step_vim
+                                       ? UiMessage::settings_pane_resize_step_vim_follows
+                                       : UiMessage::settings_pane_resize_step_vim_single,
+                                   language));
     }
     std::unreachable();
 }
@@ -389,6 +409,13 @@ EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue val
     case SettingsValue::indent_guide_width:
         settings.indent_guide_width =
             indent_guide_width_stepped(settings.indent_guide_width, forward);
+        return settings;
+    case SettingsValue::pane_resize_step:
+        settings.pane_resize_step = pane_resize_step_stepped(settings.pane_resize_step, forward);
+        return settings;
+    case SettingsValue::pane_resize_step_vim:
+        // 2 つの選択肢なので、どちらの向きに送っても反対へ。
+        settings.pane_resize_step_vim = !settings.pane_resize_step_vim;
         return settings;
     }
     std::unreachable();

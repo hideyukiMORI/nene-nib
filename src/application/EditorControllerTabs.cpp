@@ -374,6 +374,11 @@ core::FontSize EditorController::font_size() const noexcept
     return state_.settings().font_size;
 }
 
+std::int32_t EditorController::pane_resize_step() const noexcept
+{
+    return state_.settings().pane_resize_step;
+}
+
 const core::TextViewGeometry &EditorController::other_geometry() const noexcept
 {
     return other_lines_ > 0 ? other_geometry_ : view_geometry_;

@@ -16,6 +16,7 @@
 #include "VimViewport.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <utility>
 
@@ -53,6 +54,9 @@ struct VimEditorView
     // 改行・`o` `O`・行単位の `c` と、写した字下げを消す鍵（Esc・上下・`Ctrl-o`）と `Ctrl-u` の
     // 止まりで読む。偽なら INSERT の道は今のまま（分岐 1 つ）。
     bool autoindent = false;
+    // 回数なしの `Ctrl-w > < + -` の升の数（設定の `pane_resize_step` と `pane_resize_step_vim`・
+    // #1972）。controller が vim_uncounted_pane_cells で置き、既定は本物の Vim と同じ 1。
+    std::int32_t uncounted_pane_cells = 1;
     // 回数で本文を増やす編集が守る文書の上限（#1341・ADR 0159 の決定 7）。製品は既定の
     // maximum_document_bytes のまま置き換えず、試験だけが小さな値を置いて境を確かめる（1 GiB を
     // 確保せずに CRLF の数え方を見るため）。

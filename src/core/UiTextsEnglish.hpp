@@ -518,5 +518,13 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::settings_indent_guide_width_name, "Indent Width"},
     {UiMessage::settings_indent_guide_width_description,
      "Indent level width when it cannot be guessed from the opened document (2 / 4 / 8)"},
+    {UiMessage::settings_pane_resize_step_name, "Pane Resize Step"},
+    {UiMessage::settings_pane_resize_step_description,
+     "How far Enlarge / Shrink Pane moves the divider, in characters or lines (1-40)"},
+    {UiMessage::settings_pane_resize_step_vim_name, "Vim Pane Resize Step"},
+    {UiMessage::settings_pane_resize_step_vim_description,
+     "How far Ctrl-w > < + - without a count moves the divider (a count always wins)"},
+    {UiMessage::settings_pane_resize_step_vim_single, "1 (same as Vim)"},
+    {UiMessage::settings_pane_resize_step_vim_follows, "Follow Pane Resize Step"},
 }};
 } // namespace nenenib::core

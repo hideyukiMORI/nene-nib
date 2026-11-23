@@ -313,8 +313,8 @@ namespace
     // 名指しで組むので、VimEditorView に欄が足されるとほどく数が合わずにコンパイルが落ちる
     // （足した欄を黙って既定値にしない・#1617 のレビュー L3）。
     const auto &[text, selection, viewport, source, tabs, layout, navigation, row_landing,
-                 view_marks, mark_landing, search_case, scroll_margin, autoindent, document_limit,
-                 capture_limit, empty_text] = view;
+                 view_marks, mark_landing, search_case, scroll_margin, autoindent,
+                 uncounted_pane_cells, document_limit, capture_limit, empty_text] = view;
     static_cast<void>(selection);
     const VimEditorView over{.text = text,
                              .selection = selected,
@@ -329,6 +329,7 @@ namespace
                              .search_case = search_case,
                              .scroll_margin = scroll_margin,
                              .autoindent = autoindent,
+                             .uncounted_pane_cells = uncounted_pane_cells,
                              .document_limit = document_limit,
                              .capture_limit = capture_limit,
                              .empty_text = empty_text};
