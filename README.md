@@ -312,7 +312,7 @@ records in `docs/quality/`.
   executable is missing or not written as an absolute path, or a `.cmd` / `.bat` (write `node.exe` and the script
   instead), is reported in one line and not started. In `settings.v6`, a `lsp.<name>.command` line for a language
   this version does not know is kept when the settings are written back.
-  *New after 1.1.0* (also tried with rust-analyzer, gopls, pyright and typescript-language-server): each language
+  *New after 1.1.0* (also tried with rust-analyzer, gopls and pyright): each language
   keeps its own server, and switching tabs does not stop it; the project root is found by looking up from the
   document's folder for the server's marker files (such as `.git` or `Cargo.toml`), never above `:set root=`
   when the document is under it. `]d` `[d` and F8 / Shift+F8 jump between diagnostics, `gl` or the F1 operation
