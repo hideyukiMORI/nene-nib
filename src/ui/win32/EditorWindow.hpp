@@ -573,6 +573,8 @@ class EditorWindow final
     void run_list_references();
     // 記号の一覧（#1955）。
     void run_list_symbols();
+    // 引数の情報を表示（#1959）。
+    void run_show_signature_help();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

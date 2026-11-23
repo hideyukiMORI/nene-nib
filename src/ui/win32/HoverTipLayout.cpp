@@ -98,21 +98,55 @@ IDWriteTextLayout *HoverTipLayout::fitted(IDWriteFactory &dwrite, IDWriteTextFor
     return layout_.Get();
 }
 
-std::optional<TabTipPaint> HoverTipLayout::painted(const core::LayoutRect &caret,
-                                                   const core::LayoutRect &area,
-                                                   const core::Palette &palette,
-                                                   std::uint32_t dpi) const
+bool HoverTipLayout::emphasized(DWRITE_TEXT_RANGE emphasis)
+{
+    if (!layout_)
+    {
+        return false;
+    }
+    if (emphasis_.startPosition == emphasis.startPosition && emphasis_.length == emphasis.length)
+    {
+        return true;
+    }
+    if ((emphasis_.length > 0 &&
+         FAILED(layout_->SetFontWeight(DWRITE_FONT_WEIGHT_NORMAL, emphasis_))) ||
+        (emphasis.length > 0 && FAILED(layout_->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, emphasis))))
+    {
+        clear();
+        return false;
+    }
+    emphasis_ = emphasis;
+    return true;
+}
+
+std::optional<core::TabTipMeasure> HoverTipLayout::measured(std::uint32_t dpi) const
 {
     DWRITE_TEXT_METRICS metrics{};
     if (!layout_ || FAILED(layout_->GetMetrics(&metrics)))
     {
         return std::nullopt;
     }
-    const auto box = core::hover_tip_rect(
-        caret, area,
-        core::TabTipMeasure{
-            static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace)),
-            static_cast<std::int32_t>(std::ceil(metrics.height)), dpi});
+    return core::TabTipMeasure{
+        static_cast<std::int32_t>(std::ceil(metrics.widthIncludingTrailingWhitespace)),
+        static_cast<std::int32_t>(std::ceil(metrics.height)), dpi};
+}
+
+std::optional<TabTipPaint> HoverTipLayout::painted(const core::LayoutRect &caret,
+                                                   const core::LayoutRect &area,
+                                                   const core::Palette &palette,
+                                                   std::uint32_t dpi) const
+{
+    const auto measure = measured(dpi);
+    if (!measure.has_value())
+    {
+        return std::nullopt;
+    }
+    return painted_in(core::hover_tip_rect(caret, area, measure.value()), palette, dpi);
+}
+
+TabTipPaint HoverTipLayout::painted_in(const core::LayoutRect &box, const core::Palette &palette,
+                                       std::uint32_t dpi) const
+{
     return tip_paint(box, layout_.Get(), palette, dpi);
 }
 
@@ -122,5 +156,6 @@ void HoverTipLayout::clear() noexcept
     text_.clear();
     limit_ = 0;
     format_ = nullptr;
+    emphasis_ = DWRITE_TEXT_RANGE{0, 0};
 }
 } // namespace nenenib::ui::win32

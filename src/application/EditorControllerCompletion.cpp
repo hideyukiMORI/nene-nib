@@ -322,14 +322,16 @@ void EditorController::accept(const OpenCompletion &)
     start_completion(std::nullopt);
 }
 
-// 打った文字の後の言語サーバーの入口（#1962）。今は補完の自動の面だけで、引数の情報（段 S6c）も
-// ここに足す。
+// 打った文字の後の言語サーバーの入口（#1962）。補完の自動の面と、引数の情報（#1959・ADR 0191 の
+// 決定 6）の 2 つ。通常モードの accept(InsertText) と Vim の INSERT の打った文字の両方が
+// ここへ来る。
 void EditorController::typed_for_language(std::string_view typed)
 {
     if (active_language_server().phase == LanguageServerPhase::running)
     {
-        // 補完と並べて足す所（段 S6c の引数の情報）。open_triggered_completion の中には足さない。
         open_triggered_completion(typed);
+        // 引数の情報は補完と並べてこの枝の後ろ（open_triggered_completion の中には足さない）。
+        settle_typed_signature(typed);
     }
 }
 

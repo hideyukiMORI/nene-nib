@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -38,4 +39,17 @@ inline constexpr std::size_t hover_tip_max_lines = 12;
 // 左端より左へは出さない。
 [[nodiscard]] LayoutRect hover_tip_rect(const LayoutRect &caret, const LayoutRect &area,
                                         const TabTipMeasure &text) noexcept;
+
+// 引数の情報の札の矩形（ADR 0191 の決定 6・#1968 のレビュー c-M1）。避ける箱 avoid（補完の一覧）が
+// 無いか重ならなければ hover_tip_rect と同じ。重なるなら、キャレットの一覧と反対の側（一覧が上なら
+// キャレットの下・一覧が下ならキャレットの上）、次に一覧の向こう側（一覧の上・一覧の下）の順に、
+// 領域 area に収まり一覧とキャレットの行に掛からない所へ置く。どこにも入らなければ一覧を優先して
+// 値なし（札を出さない）。左は hover_tip_rect と同じ。
+[[nodiscard]] std::optional<LayoutRect>
+signature_tip_rect(const LayoutRect &caret, const LayoutRect &area, const TabTipMeasure &text,
+                   const std::optional<LayoutRect> &avoid) noexcept;
+
+// キャレットの矩形が操作中の枠の本文 pane に掛かるか（#1968 のレビュー L-a）。折り返した行の一部
+// だけが見えていてキャレットの画面行が枠の外にあるとき、札は関係の無い所へ寄るので出さない。
+[[nodiscard]] bool caret_rect_in_pane(const LayoutRect &caret, const LayoutRect &pane) noexcept;
 } // namespace nenenib::core
