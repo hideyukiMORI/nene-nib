@@ -10,6 +10,7 @@
 #include "RgbColor.hpp"
 #include "SyntaxPalette.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -30,10 +31,12 @@ class TextBuffer;
 [[nodiscard]] std::size_t indent_cells(std::string_view line) noexcept;
 // 行頭の空白と Tab の列のバイト数。
 [[nodiscard]] std::size_t indent_bytes(std::string_view line) noexcept;
-// 空の行か（空・空白と Tab だけ・CRLF の行の終わりの `\r` も空白と同じに読む）。
+// 空の行か（空・空白と Tab だけ・CRLF の行の終わりの `\r` も空白と同じに読む）。行の途中の孤立した
+// `\r` は `^M` と見える字なので空白に数えない。
 [[nodiscard]] bool blank_indent_line(std::string_view line) noexcept;
 // 本文の行 line の字下げの桁。空の行は値なし。行を写さず、行頭の窓だけを読む（巨大な行でも先頭の
-// 字下げの分だけ）。
+// 字下げの分だけ）。窓は indent_guess_bytes までで、そこまで空白と Tab が続く行は上限までの桁を
+// 答える（空の行にしない・ADR 0193 の 2026-11-23 の追補 5）。
 [[nodiscard]] std::optional<std::size_t> line_indent_cells(const TextBuffer &text, LineNumber line);
 
 // 推し当てが見る本文の先頭（決定 7）。行の数と、バイト数（窓の端は whole_code_points で切る）。
@@ -82,6 +85,13 @@ continued_indents(std::span<const std::optional<std::size_t>> cells,
 // の線を、キャレットの行 から上下に段が L 以上の行が続く区間（列の中で打ち切る）で強める。
 [[nodiscard]] std::optional<IndentGuideRun> active_indent_run(std::span<const std::size_t> levels,
                                                               std::size_t caret) noexcept;
+
+// 虹の色の候補の役割の順（決定 5）。rainbow_colors が読むのは foreground とこの 9 つだけ（色の
+// 材料を覚える renderer の 1 か所もこの表で比べる）。
+inline constexpr std::array<RgbColor SyntaxPalette::*, 9> rainbow_roles{
+    &SyntaxPalette::keyword,  &SyntaxPalette::function, &SyntaxPalette::string,
+    &SyntaxPalette::type,     &SyntaxPalette::number,   &SyntaxPalette::operators,
+    &SyntaxPalette::constant, &SyntaxPalette::warning,  &SyntaxPalette::error};
 
 // 虹の色（決定 5）。SyntaxPalette の役割の色を keyword function string type number operators
 // constant warning error の順に見て、取った色と互いに ΔE76 ≥ 20・本文の色（foreground）から ≥ 15 の

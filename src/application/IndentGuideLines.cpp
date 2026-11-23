@@ -84,8 +84,8 @@ void strengthen(std::vector<LineView> &lines, const core::IndentGuideRun &run)
 
 void mark_indent_guides(const EditorState &state, std::size_t screen, std::vector<LineView> &lines)
 {
-    if (lines.empty() ||
-        !core::feature_enabled(state.settings(), core::EditorFeature::indent_guides))
+    if (!core::feature_enabled(state.settings(), core::EditorFeature::indent_guides) ||
+        lines.empty())
     {
         return;
     }
@@ -119,8 +119,9 @@ void mark_indent_guides(const EditorState &state, std::size_t screen, std::vecto
 
 void mark_active_indent_guide(const EditorState &state, std::vector<LineView> &lines)
 {
-    if (lines.empty() || !state.settings().indent_guide_active ||
-        !core::feature_enabled(state.settings(), core::EditorFeature::indent_guides))
+    // 機能の有無を先に読む（オフの道の読みは 1 つ・決定 6）。
+    if (!core::feature_enabled(state.settings(), core::EditorFeature::indent_guides) ||
+        lines.empty() || !state.settings().indent_guide_active)
     {
         return;
     }

@@ -218,7 +218,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/UiLanguageTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/SubstituteConfirmTests.cpp tests/unit/ExLinesTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
     tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
-    tests/unit/FeatureCostsTests.cpp tests/unit/CaretMotionTests.cpp tests/unit/IndentGuideTests.cpp tests/unit/SettingsModalTests.cpp tests/unit/SettingsPanelTests.cpp
+    tests/unit/FeatureCostsTests.cpp tests/unit/CaretMotionTests.cpp tests/unit/IndentGuideTests.cpp tests/unit/IndentGuidePathTests.cpp tests/unit/SettingsModalTests.cpp tests/unit/SettingsPanelTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp

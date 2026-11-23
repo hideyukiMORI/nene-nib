@@ -31,6 +31,7 @@
 #include "PaneFrame.hpp"
 #include "PlaceCaret.hpp"
 #include "RainbowColors.hpp"
+#include "RainbowRoleTable.hpp"
 #include "RgbColor.hpp"
 #include "Scopes.hpp"
 #include "SelectDisplay.hpp"
@@ -192,13 +193,39 @@ constexpr std::array<std::pair<std::string_view, std::size_t>, 8> short_themes{{
     return found == short_themes.end() ? std::nullopt : std::optional{found->second};
 }
 
+// 取った役割の印（rainbow_roles の位置のビット）。取った色は役割の色の写しなので、印が同じなら
+// 色も同じ。
+[[nodiscard]] unsigned picked_roles(const core::Theme &theme, const core::RainbowColors &colors)
+{
+    unsigned mask = 0;
+    std::size_t taken = 0;
+    for (std::size_t role = 0; role < core::rainbow_roles.size(); ++role)
+    {
+        const bool picked = taken < colors.count &&
+                            theme.body.*core::rainbow_roles.at(role) == colors.colors.at(taken);
+        mask |= picked ? 1U << role : 0U;
+        taken += picked ? 1U : 0U;
+    }
+    return mask;
+}
+
+// 表に名指しした印と同じか（表に無いテーマは外れ）。
+[[nodiscard]] bool roles_as_recorded(const core::Theme &theme, const core::RainbowColors &colors)
+{
+    const auto found = std::ranges::find(rainbow_role_table, theme.name,
+                                         &std::pair<std::string_view, unsigned>::first);
+    return found != rainbow_role_table.end() && found->second == picked_roles(theme, colors);
+}
+
 void verify_rainbow_counts()
 {
     std::array<std::size_t, 7> counts{};
     bool short_ones_match = true;
+    bool recorded = core::builtin_themes.size() == rainbow_role_table.size();
     for (const core::Theme &theme : core::builtin_themes)
     {
         const auto colors = core::rainbow_colors(theme.body, theme.ui, 6);
+        recorded = recorded && roles_as_recorded(theme, colors);
         ++counts.at(colors.count);
         const auto named = short_count(theme.name);
         short_ones_match = short_ones_match &&
@@ -206,6 +233,7 @@ void verify_rainbow_counts()
     }
     expect(short_ones_match,
            "only the eight named themes have fewer than four distinguishable colors");
+    expect(recorded, "every theme takes the recorded roles (the colors do not move)");
     expect(counts == std::array<std::size_t, 7>{0, 1, 1, 6, 22, 41, 54},
            "117 themes give four colors, 95 give five and 54 give six");
     const auto &aubergine = core::theme_of(core::BuiltinTheme::ubuntu_aubergine);
@@ -568,5 +596,7 @@ void verify_indent_guides_scope()
     verify_frame_guess_paths();
     verify_frame_split();
     verify_frame_skipped_rows();
+    // 推し当ての道と窓の上限の続き（IndentGuidePathTests.cpp・同じ scope）。
+    verify_indent_guide_paths();
 }
 } // namespace nenenib::tests

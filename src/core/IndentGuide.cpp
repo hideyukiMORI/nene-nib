@@ -33,6 +33,8 @@ namespace
 {
 // 字下げの空白を数える窓の初めの大きさ（行の全体は写さない・長ければ倍に広げる）。
 constexpr std::size_t indent_window_bytes = 64;
+// 窓の上限（空白だけの巨大な行で行の全体を写さない・ADR 0193 の 2026-11-23 の追補 5）。
+constexpr std::size_t indent_window_limit = indent_guess_bytes;
 
 [[nodiscard]] constexpr bool indent_blank(char unit) noexcept
 {
@@ -101,7 +103,9 @@ void vote_pair(IndentVotes &votes, std::pair<std::size_t, char> previous,
 // ---------------------------------------------------------------- 虹の色（決定 5）
 
 // sRGB の 1 成分（0〜1）を線形へ。x^2.4 は x^2 × x^0.4 で、x^0.4 は x^2 の 5 乗根（libm を
-// core の外へ出さない・ARC-003）。根は上から Newton で近づける（凸なので単調に収束する）。
+// core の外へ出さない・ARC-003）。根は上から Newton で近づける（凸なので単調に減って収束する）。
+// 値が減らなくなった所で打ち切る（上限の回数は安全のための値で、ここで使う 0〜1
+// の入力は十数回までで止まる・ #1975 のレビュー R2。結果の色は 125 テーマの表で縛る）。
 [[nodiscard]] constexpr double root_of(double value, int degree) noexcept
 {
     if (value <= 0.0)
@@ -117,8 +121,13 @@ void vote_pair(IndentVotes &votes, std::pair<std::size_t, char> previous,
         {
             power *= guess;
         }
-        guess = ((static_cast<double>(degree - 1) * guess) + (value / power)) /
-                static_cast<double>(degree);
+        const double next = ((static_cast<double>(degree - 1) * guess) + (value / power)) /
+                            static_cast<double>(degree);
+        if (next >= guess)
+        {
+            return guess;
+        }
+        guess = next;
     }
     return guess;
 }
@@ -184,12 +193,6 @@ constexpr double apart_from_each_other = 20.0 * 20.0;
 constexpr double apart_from_text = 15.0 * 15.0;
 constexpr std::size_t rainbow_limit = 6;
 
-// 候補の役割の順（決定 5）。
-constexpr std::array<RgbColor SyntaxPalette::*, 9> rainbow_roles{
-    &SyntaxPalette::keyword,  &SyntaxPalette::function, &SyntaxPalette::string,
-    &SyntaxPalette::type,     &SyntaxPalette::number,   &SyntaxPalette::operators,
-    &SyntaxPalette::constant, &SyntaxPalette::warning,  &SyntaxPalette::error};
-
 // 候補 lab が取った色のどれとも離れているか。
 [[nodiscard]] bool apart_from_picked(const Lab &lab, std::span<const Lab> picked) noexcept
 {
@@ -220,31 +223,30 @@ std::size_t indent_bytes(std::string_view line) noexcept
 
 bool blank_indent_line(std::string_view line) noexcept
 {
-    return std::ranges::all_of(line, [](char unit) { return indent_blank(unit) || unit == '\r'; });
+    const std::string_view body =
+        !line.empty() && line.back() == '\r' ? line.substr(0, line.size() - 1) : line;
+    return std::ranges::all_of(body, indent_blank);
 }
 
 std::optional<std::size_t> line_indent_cells(const TextBuffer &text, LineNumber line)
 {
     const Offset start = text.line_start(line);
-    const Offset end = text.line_end(line);
-    std::size_t window = indent_window_bytes;
-    while (true)
+    const std::size_t length = text.line_end(line).value - start.value;
+    std::string piece;
+    bool whole = false;
+    // 字下げの後ろの字が窓に入るか、行の全体か、上限の窓まで広げる。
+    for (std::size_t window = indent_window_bytes;;
+         window = std::min(window * 2, indent_window_limit))
     {
-        const std::size_t reach = std::min(window, end.value - start.value);
-        const std::string piece = text.text_range(start, Offset{start.value + reach});
-        const std::size_t blanks = indent_bytes(piece);
-        if (blanks < piece.size())
+        const std::size_t reach = std::min(window, length);
+        piece = text.text_range(start, Offset{start.value + reach});
+        whole = reach == length;
+        if (indent_bytes(piece) < piece.size() || whole || window >= indent_window_limit)
         {
-            const bool carriage = piece.at(blanks) == '\r' && blanks + 1 == piece.size() &&
-                                  start.value + reach == end.value;
-            return carriage ? std::nullopt : std::optional{indent_cells(piece)};
+            break;
         }
-        if (start.value + reach == end.value)
-        {
-            return std::nullopt;
-        }
-        window *= 2;
     }
+    return whole && blank_indent_line(piece) ? std::nullopt : std::optional{indent_cells(piece)};
 }
 
 std::optional<IndentUnit> guessed_indent_unit(std::string_view head) noexcept

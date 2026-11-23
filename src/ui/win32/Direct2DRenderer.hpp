@@ -25,7 +25,7 @@
 #include "GuideRequest.hpp"
 #include "GutterTextLayouts.hpp"
 #include "HoverTipLayout.hpp"
-#include "IndentGuidePaint.hpp"
+#include "IndentGuidePaintMemo.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
@@ -389,7 +389,7 @@ class Direct2DRenderer final
                                 const application::LineView &line);
     void draw_indent_guides(const BodyPane &pane, const core::LayoutRect &area,
                             const application::LineView &line);
-    // frame の初めに飾りの色の材料を 1 回だけ作る（オフなら空にするだけ・ADR 0193 の決定 6）。
+    // frame の初めに飾りの色の材料を覚えから引く（オフなら真偽 1 つ・ADR 0193 の決定 6）。
     void begin_decorations(const application::EditorFrame &frame);
     void draw_line(const application::EditorFrame &frame, const BodyPane &pane,
                    const application::LineView &line);
@@ -656,9 +656,9 @@ class Direct2DRenderer final
     // キャレットの動きの覚え（ADR 0192 の決定 2・3）。renderer を作り直すと空から始まる（跳ぶ・
     // 番号は窓が allow_caret_motion で下げさせない）。
     CaretMotionFollower caret_motion_{};
-    // その frame のインデントガイドの色の材料（ADR 0193 の決定 5）。`features=indentguides` が
-    // オフの frame では空。
-    std::optional<core::IndentGuidePaint> guide_paint_{};
+    // インデントガイドの色の材料の覚え（ADR 0193 の決定 5・6）。`features=indentguides` が
+    // オフの frame では描かない印だけ。テーマ・単色 / 虹・色の数が変わった frame で作り直す。
+    IndentGuidePaintMemo guide_paint_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     // 格子の 1 升の幅（物理画素）。draw_grid_rows がその frame の書式で測る。

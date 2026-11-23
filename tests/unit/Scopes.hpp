@@ -120,6 +120,9 @@ void verify_feature_costs_scope();
 // CaretMotionTests.cpp（ADR 0192・#1933・キャレットの動きの純関数と設定）
 void verify_caret_motion_scope();
 void verify_indent_guides_scope();
+// IndentGuidePathTests.cpp（ADR 0193・#1975 のレビュー・推し当ての道と窓の上限・--indent-guides
+// の続き）
+void verify_indent_guide_paths();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
 void verify_language_server_candidates_scope();

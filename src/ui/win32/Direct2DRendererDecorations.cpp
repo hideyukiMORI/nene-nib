@@ -4,34 +4,14 @@
 // 真偽 1 つと、行ごとの欄の有無の読み 1 つだけ。
 #include "Direct2DRenderer.hpp"
 
-#include "DevicePixels.hpp"
-#include "EditorFeature.hpp"
-#include "FeatureCosts.hpp"
-#include "IndentGuide.hpp"
 #include "IndentGuidePainter.hpp"
 #include "IndentGuideRow.hpp"
 
-#include <cstdint>
-#include <optional>
-
 namespace nenenib::ui::win32
 {
-namespace
-{
-// 線の太さ（DIP・見本の 1 DIP と強める段の 2 DIP）。
-constexpr std::int32_t guide_dips = 1;
-constexpr std::int32_t strong_guide_dips = 2;
-} // namespace
-
 void Direct2DRenderer::begin_decorations(const application::EditorFrame &frame)
 {
-    guide_paint_.reset();
-    if (core::feature_enabled(frame.settings, core::EditorFeature::indent_guides))
-    {
-        guide_paint_ =
-            core::indent_guide_paint(frame.settings.indent_guide_style,
-                                     frame.settings.indent_guide_colors, frame.body, frame.palette);
-    }
+    guide_paint_.begin(frame.settings, frame.body, frame.palette);
 }
 
 void Direct2DRenderer::draw_decorations_under(const BodyPane &pane, const core::LayoutRect &area,
@@ -43,7 +23,8 @@ void Direct2DRenderer::draw_decorations_under(const BodyPane &pane, const core::
 void Direct2DRenderer::draw_indent_guides(const BodyPane &pane, const core::LayoutRect &area,
                                           const application::LineView &line)
 {
-    if (!line.indent_guides.has_value() || !guide_paint_.has_value())
+    const core::IndentGuidePaint *paint = guide_paint_.shown();
+    if (!line.indent_guides.has_value() || paint == nullptr)
     {
         return;
     }
@@ -52,13 +33,9 @@ void Direct2DRenderer::draw_indent_guides(const BodyPane &pane, const core::Layo
     {
         return;
     }
-    const IndentGuideRow row{line.indent_guides.value(),
-                             static_cast<float>(area.left),
-                             static_cast<float>(area.top),
-                             static_cast<float>(pane.body.line_height),
-                             space.value(),
-                             static_cast<float>(core::to_pixels(guide_dips, dpi_)),
-                             static_cast<float>(core::to_pixels(strong_guide_dips, dpi_))};
-    IndentGuidePainter::paint(*context_.Get(), brush_.Get(), row, guide_paint_.value());
+    IndentGuidePainter::paint(*context_.Get(), brush_.Get(),
+                              indent_guide_row(pane.body, area, line.indent_guides.value(),
+                                               IndentGuideScale{space.value(), dpi_}),
+                              *paint);
 }
 } // namespace nenenib::ui::win32

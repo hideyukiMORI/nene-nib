@@ -243,9 +243,11 @@ std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRem
         {
             return std::nullopt;
         }
-        return restored_document(std::move(text).value(),
-                                 Document{remnant.path, form.encoding, std::nullopt, form.save},
-                                 remnant.caret, state_.display_language());
+        core::TextBuffer body_text = std::move(text).value();
+        Document document{remnant.path, form.encoding, std::nullopt, form.save};
+        document.indent_unit = guessed_unit_of(remnant.path, body_text);
+        return restored_document(std::move(body_text), std::move(document), remnant.caret,
+                                 state_.display_language());
     }
     auto detected = core::DetectedText::from_bytes(view);
     if (!detected)
@@ -258,8 +260,10 @@ std::optional<DocumentState> EditorController::restored_bundle(const AutosaveRem
     {
         return std::nullopt;
     }
-    return restored_document(std::move(text).value(),
-                             Document{remnant.path, encoding, std::nullopt}, remnant.caret,
+    core::TextBuffer body_text = std::move(text).value();
+    Document document{remnant.path, encoding, std::nullopt};
+    document.indent_unit = guessed_unit_of(remnant.path, body_text);
+    return restored_document(std::move(body_text), std::move(document), remnant.caret,
                              state_.display_language());
 }
 
