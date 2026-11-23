@@ -219,4 +219,35 @@ void verify_settings_v6_codec(Expect expect)
     verify_indent_guide_keys(expect);
     verify_pane_resize_keys(expect);
 }
+
+void verify_v3_refuses_later_keys(Expect expect, std::string_view v3_settings)
+{
+    for (const auto extra : {"ui_language=system\n",
+                             "lsp=off\n",
+                             "explorer=off\n",
+                             "root=\n",
+                             "features=\n",
+                             "ignorecase=off\n",
+                             "smartcase=off\n",
+                             "relativenumber=off\n",
+                             "scrolloff=0\n",
+                             "explorer_width=\n",
+                             "explorer_width=300\n",
+                             "autoindent=off\n",
+                             "autoindent=on\n",
+                             "finder_preview=auto\n",
+                             "finder_preview=right\n",
+                             "caret_motion=off\n",
+                             "caret_motion_time=120\n",
+                             "caret_sparks=off\n",
+                             "pane_resize_step=5\n",
+                             "pane_resize_step_vim=off\n",
+                             "indent_guide_style=rainbow\n",
+                             "indent_guide_width=4\n"})
+    {
+        const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
+        expect(!refused && refused.error() == SettingsFailure::malformed,
+               "an older version rejects every v4 and v5 key as unknown");
+    }
+}
 } // namespace nenenib::tests::adapters

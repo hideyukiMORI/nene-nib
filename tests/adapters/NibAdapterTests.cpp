@@ -769,17 +769,7 @@ void verify_settings_versions()
                !v3.value().explorer_width.has_value() && !v3.value().autoindent &&
                v3.value().finder_preview == nenenib::core::FinderPreview::automatic,
            "v3 keeps its values, stays Japanese and takes the other v4 and v5 defaults");
-    for (const auto extra :
-         {"ui_language=system\n", "lsp=off\n", "explorer=off\n", "root=\n", "features=\n",
-          "ignorecase=off\n", "smartcase=off\n", "relativenumber=off\n", "scrolloff=0\n",
-          "explorer_width=\n", "autoindent=off\n", "finder_preview=auto\n", "caret_motion=off\n",
-          "caret_motion_time=120\n", "caret_sparks=off\n", "pane_resize_step=5\n",
-          "pane_resize_step_vim=off\n", "indent_guide_style=rainbow\n", "indent_guide_width=4\n"})
-    {
-        const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);
-        expect(!refused && refused.error() == SettingsFailure::malformed,
-               "an older version rejects every v4 and v5 key as unknown");
-    }
+    nenenib::tests::adapters::verify_v3_refuses_later_keys(expect, v3_settings);
     expect(!decode_settings(bytes + "wrap=on\n", SettingsVersion::v6), "duplicate wrap refused");
     expect(!decode_settings(bytes + "guide=on\n", SettingsVersion::v6), "duplicate guide refused");
     const auto wrong_new = decode_settings(bytes, SettingsVersion::v1);
