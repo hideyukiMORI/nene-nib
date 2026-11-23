@@ -3,6 +3,7 @@
 #include "LanguageCompletion.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageHover.hpp"
+#include "LanguageSymbols.hpp"
 
 #include <optional>
 
@@ -18,5 +19,7 @@ struct LanguageAnswers
     std::optional<LanguageDefinition> definition = std::nullopt;
     // 参照の答え（#1947・ADR 0191 の決定 4）。形は定義と同じ場所の列。
     std::optional<LanguageDefinition> references = std::nullopt;
+    // 記号の答え（#1955・ADR 0191 の決定 5）。
+    std::optional<LanguageSymbols> symbols = std::nullopt;
 };
 } // namespace nenenib::application

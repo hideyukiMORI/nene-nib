@@ -571,6 +571,8 @@ class EditorWindow final
     void run_open_language_server_log();
     // 参照の一覧（#1947）。
     void run_list_references();
+    // 記号の一覧（#1955）。
+    void run_list_symbols();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

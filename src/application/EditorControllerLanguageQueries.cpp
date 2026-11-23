@@ -43,17 +43,38 @@ void EditorController::accept(const QueryLanguage &intent)
     {
         return;
     }
-    // 参照は、動いている言語サーバーが答えないことを分けて知らせる（ADR 0191 の決定 2）。
-    const bool unsupported = intent.kind == core::LanguageQueryKind::references &&
-                             lacks_ability(&ServerAbilities::references);
-    state_ = state_.with_command_message(
-        ui_notice(unsupported ? core::UiMessage::notice_references_not_supported
-                              : core::UiMessage::notice_language_server_not_running));
+    // 参照と記号は、動いている言語サーバーが答えないことを分けて知らせる（ADR 0191 の決定 2）。
+    state_ = state_.with_command_message(ui_notice(unanswered_notice(intent.kind)));
 }
 
-// `gd` `K` `grr`。出せなければ何もしない（engine の歩は表に行が無かったときと同じ失敗のまま）。
-// `grr` は頼めたら stepped_vim が成功の歩に読み替える（診断の鍵と同じ・ADR 0191 の決定 4・
-// #1939 のレビュー R3 の推奨 3）。`gd` `K` は ADR 0190 の追補 4 のまま失敗の歩。
+// 問いを出せなかったときの 1 行（ADR 0191 の決定 2）。能力の無い席は「〜に答えません」。
+core::UiMessage EditorController::unanswered_notice(core::LanguageQueryKind kind) const
+{
+    switch (kind)
+    {
+    case core::LanguageQueryKind::definition:
+    case core::LanguageQueryKind::hover:
+        break;
+    case core::LanguageQueryKind::references:
+        if (lacks_ability(&ServerAbilities::references))
+        {
+            return core::UiMessage::notice_references_not_supported;
+        }
+        break;
+    case core::LanguageQueryKind::symbols:
+        if (lacks_ability(&ServerAbilities::document_symbols))
+        {
+            return core::UiMessage::notice_symbols_not_supported;
+        }
+        break;
+    }
+    return core::UiMessage::notice_language_server_not_running;
+}
+
+// `gd` `K` `grr` `gO`。出せなければ何もしない（engine
+// の歩は表に行が無かったときと同じ失敗のまま）。 `grr` と `gO` は頼めたら stepped_vim
+// が成功の歩に読み替える（診断の鍵と同じ・ADR 0191 の決定 4・ #1939 のレビュー R3 の推奨 3）。`gd`
+// `K` は ADR 0190 の追補 4 のまま失敗の歩。
 void EditorController::perform(const core::VimLanguageQuery &effect)
 {
     const bool asked = query_language(effect.kind);
@@ -63,6 +84,7 @@ void EditorController::perform(const core::VimLanguageQuery &effect)
     case core::LanguageQueryKind::hover:
         return;
     case core::LanguageQueryKind::references:
+    case core::LanguageQueryKind::symbols:
         vim_effect_landed_ = asked;
         return;
     }
@@ -82,6 +104,9 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
     case core::LanguageQueryKind::references:
         definition_anchor_ = state_.selection().anchor;
         return request_references();
+    case core::LanguageQueryKind::symbols:
+        definition_anchor_ = state_.selection().anchor;
+        return request_document_symbols();
     }
     std::unreachable();
 }
@@ -150,6 +175,9 @@ void EditorController::settle_language_answers(LspRequestKind kind)
         return;
     case LspRequestKind::references:
         settle_references_answer();
+        return;
+    case LspRequestKind::document_symbol:
+        settle_symbols_answer();
         return;
     }
 }

@@ -21,6 +21,8 @@ struct ServerAbilities
     bool definition = false;
     // `referencesProvider`（#1947・ADR 0191 の決定 2）。
     bool references = false;
+    // `documentSymbolProvider`（#1955・ADR 0191 の決定 2）。
+    bool document_symbols = false;
     DocumentSync sync = DocumentSync::none;
     SaveNotice save = SaveNotice::none;
 };

@@ -25,7 +25,9 @@ enum class PaletteOrigin : std::uint8_t
     project_hit,
     diagnostic,
     // 言語サーバーの参照の答え（#1947）。
-    reference
+    reference,
+    // 言語サーバーの記号の答え（#1955）。
+    symbol
 };
 
 // 行の右に添える補足の文言（ADR 0060 の決定 3）。文は表示言語の文の表（#1019）。
