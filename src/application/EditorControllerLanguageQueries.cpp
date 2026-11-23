@@ -242,14 +242,25 @@ bool EditorController::awaits_nothing() const noexcept
     case core::EditMode::vim:
         break;
     }
+    return state_.vim().mode == core::VimMode::normal && !vim_waits_for_key();
+}
+
+bool EditorController::vim_waits_for_key() const noexcept
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return false;
+    case core::EditMode::vim:
+        break;
+    }
     const core::VimState &vim = state_.vim();
     // `map` の左辺の途中で積んだ鍵（engine に届いていない）・イージーモーションの印・INSERT の
     // `Ctrl-o` の後の 1 命令の待ちも「待っている」（#1843 の再確認 P1・L1）。
-    return vim.mode == core::VimMode::normal && !vim.count.has_value() &&
-           !vim.pending.has_value() && !vim.input_wait.has_value() &&
-           !vim.selected_register.has_value() && !vim.register_count.has_value() &&
-           !vim.easy_motion.has_value() && !vim.insert_restart.has_value() &&
-           state_.key_map_pending().empty();
+    return vim.count.has_value() || vim.pending.has_value() || vim.input_wait.has_value() ||
+           vim.selected_register.has_value() || vim.register_count.has_value() ||
+           vim.easy_motion.has_value() || vim.insert_restart.has_value() ||
+           !state_.key_map_pending().empty();
 }
 
 // hover の答え（決定 6）。入力行・面・メニュー・変換が開いている間と、窓が非アクティブの間に

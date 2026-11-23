@@ -3,6 +3,8 @@
 // 1 つの undo の単位・頼んだ後に変わった文書・能力の無いサーバー）を替え玉 ScriptedLanguageServer
 // で確かめる。
 #include "CaretMotion.hpp"
+#include "CommandText.hpp"
+#include "ComposeText.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -24,7 +26,10 @@
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCommandPalette.hpp"
+#include "OpenCompletion.hpp"
+#include "OpenContextMenu.hpp"
 #include "OpenDocument.hpp"
+#include "OpenSettings.hpp"
 #include "OperationBindings.hpp"
 #include "OperationTexts.hpp"
 #include "PaneFrame.hpp"
@@ -39,6 +44,7 @@
 #include "ServerStarted.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
@@ -46,7 +52,10 @@
 #include "TextPosition.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimState.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
@@ -558,16 +567,89 @@ void opened(Editing &editing, const std::string &text)
             R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2,"documentFormattingProvider":true}}})"}));
 }
 
-// 通常モードで line 行目の行頭から整形の答えを当て、Vim の `u` を打つ。
-void check_property_case(std::size_t &state, const std::string &text, std::size_t line)
+// 行頭のバイト位置（1 始まりの行）。
+[[nodiscard]] std::size_t line_start_of(std::string_view text, std::size_t line)
+{
+    std::size_t at = 0;
+    for (std::size_t index = 1; index < line; ++index)
+    {
+        at = text.find('\n', at) + 1;
+    }
+    return at;
+}
+
+// 編集が触れない行（行の始まりから行末の改行まで、どの編集の区間とも重ならない）を 1 つ選ぶ。
+// 無ければ 0。
+[[nodiscard]] std::size_t untouched_line(std::size_t &state, std::string_view text,
+                                         const std::vector<PlannedEdit> &edits)
+{
+    const auto lines = static_cast<std::size_t>(std::ranges::count(text, '\n'));
+    const std::size_t first = 1 + (next_random(state) % lines);
+    for (std::size_t step = 0; step < lines; ++step)
+    {
+        const std::size_t line = 1 + ((first - 1 + step) % lines);
+        const std::size_t start = line_start_of(text, line);
+        const std::size_t end = text.find('\n', start);
+        const bool touched =
+            std::ranges::any_of(edits, [start, end](const PlannedEdit &edit)
+                                { return edit.first.second >= start && edit.first.first <= end; });
+        if (!touched)
+        {
+            return line;
+        }
+    }
+    return 0;
+}
+
+// 参照の実装: 編集が触れない行の整形の後の行（手前の編集の改行の差だけずれる）。
+[[nodiscard]] std::size_t line_after(std::string_view text, std::size_t line,
+                                     const std::vector<PlannedEdit> &edits)
+{
+    const std::size_t start = line_start_of(text, line);
+    std::size_t moved = line;
+    for (const auto &[range, added] : edits)
+    {
+        if (range.second < start)
+        {
+            const std::string_view removed = text.substr(range.first, range.second - range.first);
+            moved = moved + static_cast<std::size_t>(std::ranges::count(added, '\n')) -
+                    static_cast<std::size_t>(std::ranges::count(removed, '\n'));
+        }
+    }
+    return moved;
+}
+
+// `'a` で跳んだ行（マークが消えていれば跳ばずに今の行）。
+[[nodiscard]] std::size_t mark_line(Editing &editing)
+{
+    vim_replay(editing.controller(), "'a");
+    return editing.controller().frame().caret.position.line.value;
+}
+
+// 通常モードで line 行目の行の中の桁から整形の答えを当て、Vim の `u` と `Ctrl-r` を打つ。編集が
+// 触れない行に `ma` を置き、整形・`u`・`Ctrl-r` の後の `'a` の行を参照と比べる（2 回目のレビュー
+// P1・F6）。マークを置けたら marked を 1 増やす。
+void check_property_case(std::size_t &state, const std::string &text, std::size_t line,
+                         std::size_t &marked)
 {
     const std::vector<PlannedEdit> edits = random_edits(state, text);
     const std::string json = shuffled_json(state, text, edits);
     const std::string expected = applied_back_to_front(text, edits);
+    const std::size_t start = line_start_of(text, line);
+    const std::size_t length = text.find('\n', start) - start;
+    const std::size_t column = 1 + (next_random(state) % std::max<std::size_t>(length, 1));
+    const std::size_t mark = untouched_line(state, text, edits);
     Editing editing(lsp_on());
     opened(editing, text);
+    if (mark != 0)
+    {
+        applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+        vim_replay(editing.controller(), std::to_string(mark) + "Gma");
+        applied(editing.controller(), app::SelectEditMode{core::EditMode::ordinary});
+        ++marked;
+    }
     applied(editing.controller(),
-            app::PlaceCaret{core::TextPosition{core::LineNumber{line}, core::Column{1}},
+            app::PlaceCaret{core::TextPosition{core::LineNumber{line}, core::Column{column}},
                             core::SelectionAnchoring::collapse});
     const auto caret = editing.controller().frame().caret.position;
     const std::size_t before = caret_offset(text, editing.controller().frame());
@@ -585,21 +667,32 @@ void check_property_case(std::size_t &state, const std::string &text, std::size_
            "one u brings back the text from before the formatting");
     expect(unchanged || editing.controller().frame().caret.position == caret,
            "one u brings back the caret from before the formatting");
+    if (mark == 0 || unchanged)
+    {
+        return;
+    }
+    expect(mark_line(editing) == mark, "after u a mark on an untouched line is on its line again");
+    vim_replay(editing.controller(), "<C-r>");
+    expect(body(editing) == expected, "Ctrl-r applies the formatting again");
+    expect(mark_line(editing) == line_after(text, mark, edits),
+           "after Ctrl-r a mark on an untouched line is where the formatting moved it");
 }
 
 // 性質（ADR 0191 の強制）: 重ならない編集の列をどの順で届けても、整形の結果は後ろから 1 つずつ
 // 当てた本文と同じで、当てた直後のキャレットは参照の写しと同じで、Vim の `u` 1 回で元の本文と
-// 当てる前のキャレットへ戻る。
+// 当てる前のキャレットへ戻る。編集が触れない行のマークは `u` で元の行へ、`Ctrl-r` で参照の行へ。
 void verify_undo_property()
 {
     std::size_t state = 1993;
+    std::size_t marked = 0;
     for (std::size_t round = 0; round < 24; ++round)
     {
         const std::string text =
             random_text(state, 20 + (next_random(state) % 40), property_letters.size()) + "\n";
         const auto lines = static_cast<std::size_t>(std::ranges::count(text, '\n'));
-        check_property_case(state, text, 1 + (next_random(state) % lines));
+        check_property_case(state, text, 1 + (next_random(state) % lines), marked);
     }
+    expect(marked >= 8, "the property puts a mark on an untouched line in many rounds");
 }
 
 // 整形して保存したバイト列（本文の形と改行をそのまま見る）。
@@ -638,6 +731,91 @@ void verify_edges()
            "an edit on the last line without a newline is applied");
 }
 
+// 離れた 2 つの編集（2 行目と 9 行目）の答え。畳んだ 1 区間は 3〜8 行目を覆う。
+[[nodiscard]] std::string apart_edits()
+{
+    return "[" + edit_json(1, 10, 10, " ") + "," + edit_json(8, 2, 2, " ") + "]";
+}
+
+[[nodiscard]] const app::PaneFrame *other_pane(const app::EditorFrame &frame)
+{
+    return frame.other.has_value() ? std::get_if<app::PaneFrame>(&frame.other.value()) : nullptr;
+}
+
+// もう 1 つの枠のキャレットが line 行目で、先頭行が top か。
+[[nodiscard]] bool other_at(const app::EditorFrame &frame, std::size_t line, std::size_t column,
+                            std::size_t top)
+{
+    const auto *other = other_pane(frame);
+    return other != nullptr && other->caret.position.line.value == line &&
+           other->caret.position.column.value == column && other->first_visible.value == top;
+}
+
+// 5 行目のキャレットと 3〜5 行目の先頭行を持つもう 1 つの枠を作り、操作中の枠は先頭へ戻す。
+// もう 1 つの枠の先頭行を返す（0 なら作れなかった）。
+[[nodiscard]] std::size_t split_on_line_five(Editing &editing)
+{
+    static_cast<void>(editing.controller().apply(app::VisibleLines{3}));
+    applied(editing.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{5}, core::Column{2}},
+                            core::SelectionAnchoring::collapse});
+    static_cast<void>(editing.controller().apply(app::SplitPane{core::SplitLayout::vertical}));
+    applied(editing.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                            core::SelectionAnchoring::collapse});
+    const app::EditorFrame frame = editing.controller().frame();
+    const auto *other = other_pane(frame);
+    return other == nullptr ? 0 : other->first_visible.value;
+}
+
+// 離れた 2 つの編集の間の行のマークともう 1 つの枠（畳んだ 1 区間では消える行・端へ寄る位置）は、
+// 整形・`u`・`Ctrl-r` のどれでも同じ行に残る（#1997 のレビュー R1・2 回目のレビュー P1・F6）。
+void verify_marks_between_edits()
+{
+    Editing apart(lsp_on());
+    started(apart, both_providers);
+    applied(apart.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(apart.controller(), "5Gmc");
+    const std::size_t top = split_on_line_five(apart);
+    expect(top > 2 && top <= 5 && other_at(apart.controller().frame(), 5, 2, top),
+           "the other pane starts inside the lines the two edits span");
+    static_cast<void>(asked(apart, core::LanguageQueryKind::format_document));
+    const auto done = answered(apart, formatting_method, apart_edits());
+    expect(other_at(done, 5, 2, top), "the other pane keeps its caret and top line");
+    vim_replay(apart.controller(), "gg'c");
+    expect(apart.controller().frame().caret.position.line.value == 5,
+           "a mark between two edits stays on its line");
+    vim_replay(apart.controller(), "u");
+    expect(body(apart) == source_text && other_at(apart.controller().frame(), 5, 2, top),
+           "u keeps the caret and top line of the other pane");
+    vim_replay(apart.controller(), "gg'c");
+    expect(apart.controller().frame().caret.position.line.value == 5,
+           "after u the mark between two edits stays on its line");
+    vim_replay(apart.controller(), "<C-r>");
+    expect(other_at(apart.controller().frame(), 5, 2, top),
+           "Ctrl-r keeps the caret and top line of the other pane");
+    vim_replay(apart.controller(), "gg'c");
+    expect(apart.controller().frame().caret.position.line.value == 5,
+           "after Ctrl-r the mark between two edits stays on its line");
+}
+
+// 通常モードの Ctrl+Z / Ctrl+Y も、もう 1 つの枠を編集ごとに直す（2 回目のレビュー P1）。
+void verify_other_pane_on_ctrl_z()
+{
+    Editing plain(lsp_on());
+    started(plain, both_providers);
+    const std::size_t top = split_on_line_five(plain);
+    static_cast<void>(asked(plain, core::LanguageQueryKind::format_document));
+    static_cast<void>(answered(plain, formatting_method, apart_edits()));
+    const auto undone =
+        plain.controller().apply_frame(app::HistoryAction{core::HistoryDirection::undo});
+    expect(body(plain) == source_text && other_at(undone, 5, 2, top),
+           "Ctrl+Z keeps the caret and top line of the other pane");
+    const auto redone =
+        plain.controller().apply_frame(app::HistoryAction{core::HistoryDirection::redo});
+    expect(other_at(redone, 5, 2, top), "Ctrl+Y keeps the caret and top line of the other pane");
+}
+
 // マーク（区間の中と下の行）ともう 1 つの枠のキャレットは、編集ごとに直る（#1997 のレビュー R1）。
 void verify_marks_and_other_pane()
 {
@@ -660,18 +838,109 @@ void verify_marks_and_other_pane()
     expect(editing.controller().frame().caret.position.line.value == 8,
            "a mark below the edits moves up with the joined line");
 
-    // 離れた 2 つの編集の間の行のマーク（畳んだ 1 区間では消える行）。
-    Editing apart(lsp_on());
-    started(apart, both_providers);
-    applied(apart.controller(), app::SelectEditMode{core::EditMode::vim});
-    vim_replay(apart.controller(), "5Gmc");
-    static_cast<void>(asked(apart, core::LanguageQueryKind::format_document));
-    static_cast<void>(
-        answered(apart, formatting_method,
-                 "[" + edit_json(1, 10, 10, " ") + "," + edit_json(8, 2, 2, " ") + "]"));
-    vim_replay(apart.controller(), "gg'c");
-    expect(apart.controller().frame().caret.position.line.value == 5,
-           "a mark between two edits stays on its line");
+    verify_marks_between_edits();
+    verify_other_pane_on_ctrl_z();
+}
+
+// 答えが当たらずに「入力の途中」と知らせ、本文が変わっていないか。
+[[nodiscard]] bool refused_as_busy(Editing &editing, const app::EditorFrame &late)
+{
+    return message_of(late) == notice(editing, core::UiMessage::notice_formatting_busy) &&
+           body(editing) == source_text;
+}
+
+// Vim で頼んだ後に keys を流してから答えが届くと、当てずに「入力の途中」と知らせる。
+void expect_busy_after_keys(std::string_view keys, const char *what)
+{
+    Editing editing(lsp_on());
+    started(editing, both_providers);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(asked(editing, core::LanguageQueryKind::format_document));
+    vim_replay(editing.controller(), keys);
+    const auto late = answered(editing, formatting_method, clangd_edits);
+    expect(refused_as_busy(editing, late), what);
+}
+
+// 通常モードで頼んだ後に intent を送ってから答えが届くと、当てずに「入力の途中」と知らせる。
+void expect_busy_after_intent(const app::EditorIntent &intent, const char *what)
+{
+    Editing editing(lsp_on());
+    started(editing, both_providers);
+    applied(editing.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{9}, core::Column{5}},
+                            core::SelectionAnchoring::collapse});
+    static_cast<void>(asked(editing, core::LanguageQueryKind::format_document));
+    static_cast<void>(editing.controller().apply_frame(intent));
+    const auto late = answered(editing, formatting_method, clangd_edits);
+    expect(refused_as_busy(editing, late), what);
+}
+
+// ADR 0191 の強制の行に書いた「入力の途中」の条件を 1 つずつ（#1997 の 2 回目のレビュー F1〜F3）。
+// Vim が次の鍵を待つ間（回数・レジスタ・1 鍵の待ち・INSERT の `Ctrl-o`・`map` の左辺の途中・
+// イージーモーションの印）・INSERT を組み立てている間（`3i`・矩形の `I`・打つ前の `i`）・IME・
+// 右クリックのメニュー・設定の画面・補完の一覧。
+void verify_busy_states()
+{
+    expect_busy_after_keys("3", "an answer that arrives while a count is typed is not applied");
+    expect_busy_after_keys("\"a", "an answer that arrives after a register name is not applied");
+    expect_busy_after_keys("f",
+                           "an answer that arrives while f waits for a character is not applied");
+    expect_busy_after_keys("i<C-o>", "an answer that arrives after INSERT Ctrl-o is not applied");
+    expect_busy_after_keys("3i", "an answer that arrives in INSERT with a count is not applied");
+    expect_busy_after_keys("<C-v>jI", "an answer that arrives in a block INSERT is not applied");
+    expect_busy_after_keys("i", "an answer that arrives in INSERT before typing is not applied");
+
+    Editing mapped(lsp_on());
+    started(mapped, both_providers);
+    applied(mapped.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(mapped.controller(), ":");
+    static_cast<void>(mapped.controller().apply_frame(app::CommandText{"nnoremap Qx dd"}));
+    static_cast<void>(mapped.controller().apply_frame(app::SubmitCommand{}));
+    static_cast<void>(asked(mapped, core::LanguageQueryKind::format_document));
+    vim_replay(mapped.controller(), "Q");
+    expect(refused_as_busy(mapped, answered(mapped, formatting_method, clangd_edits)),
+           "an answer that arrives in the middle of a map left side is not applied");
+
+    Editing labelled(lsp_on());
+    started(labelled, both_providers);
+    applied(labelled.controller(), app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(asked(labelled, core::LanguageQueryKind::format_document));
+    for (const char32_t code : std::u32string_view{U"\\\\w"})
+    {
+        static_cast<void>(labelled.controller().apply_frame(
+            app::VimKeyPress{core::VimKey{core::VimCharacter{code}}}));
+    }
+    expect(labelled.controller().vim_state().easy_motion.has_value() &&
+               refused_as_busy(labelled, answered(labelled, formatting_method, clangd_edits)),
+           "an answer that arrives while easy motion labels are shown is not applied");
+
+    expect_busy_after_intent(app::ComposeText{composed_of("\xE3\x81\x82", {}, 0)},
+                             "an answer that arrives during an IME composition is not applied");
+    expect_busy_after_intent(
+        app::OpenContextMenu{10, 40, std::nullopt},
+        "an answer that arrives while the context menu is open is not applied");
+    expect_busy_after_intent(
+        app::OpenSettings{},
+        "an answer that arrives while the settings screen is open is not applied");
+    expect_busy_after_intent(
+        app::OpenCompletion{},
+        "an answer that arrives while the completion list is open is not applied");
+}
+
+// 録画中（`qa`）は待ちでないので当たり、整形は録画に入らない（`@a` で整形しない・2 回目のレビュー
+// F3）。
+void verify_recording_applies()
+{
+    Editing editing(lsp_on());
+    started(editing, both_providers);
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(editing.controller(), "qa");
+    static_cast<void>(asked(editing, core::LanguageQueryKind::format_document));
+    const auto done = answered(editing, formatting_method, clangd_edits);
+    expect(body(editing) == formatted_text && message_of(done).empty(),
+           "an answer that arrives while a macro is recorded is applied");
+    vim_replay(editing.controller(), "qu@a");
+    expect(body(editing) == source_text, "the formatting is not in the recorded macro");
 }
 
 // 頼んだ後のタブの切り替え（R4）・入力の途中に届いた答え（L5）・didChange と未保存の印（L8）。
@@ -740,5 +1009,7 @@ void verify_lsp_formatting_scope()
     verify_edges();
     verify_marks_and_other_pane();
     verify_switch_busy_and_sync();
+    verify_busy_states();
+    verify_recording_applies();
 }
 } // namespace nenenib::tests

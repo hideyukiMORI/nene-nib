@@ -560,10 +560,11 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 }
 
 // undo と Ctrl-r の編集でマークを直す（ADR 0152 の決定 6）。最後の変更は編集の行の行頭（Vim の
-// u_undoredo の changed_lines）。edit は今の本文に効く向きの編集。
-void EditorController::undone_marks(const core::Edit &edit)
+// u_undoredo の changed_lines）。edit は今の本文に効く向きの編集。整形の単位は lines に今の本文に
+// 効く向きの編集の列を添える（#1997 の 2 回目のレビュー P1）。
+void EditorController::undone_marks(const core::Edit &edit, const EditLines &lines)
 {
-    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
+    auto marks = detail::edited_marks(state_.vim_marks(), state_.text(), edit, lines);
     marks.last_change = core::VimMarkPosition{state_.text().position_of(edit.at).line, 0};
     // undo と Ctrl-r は新しい単位を始めない（Vim の u_undoredo は b_new_change
     // を立てない・#1037）。

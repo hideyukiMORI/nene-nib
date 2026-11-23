@@ -78,10 +78,13 @@
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "FontSize.hpp"
+#include "FormattedSpan.hpp"
+#include "FormattedUnit.hpp"
 #include "FoundLanguageServer.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
+#include "HistoryDirection.hpp"
 #include "ImageOutcome.hpp"
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
@@ -1115,6 +1118,13 @@ class EditorController final
     [[nodiscard]] bool formatting_interrupts() const noexcept;
     [[nodiscard]] std::optional<core::UiMessage>
     formatting_refusal(const LanguageFormatting &answered) const;
+    // 整形が積んだ単位を脇に残す（#1997 の 2 回目のレビュー P1）。積む前の履歴の位置を渡す。
+    void remember_formatted_unit(std::size_t before, const core::FormattedSpan &formatted);
+    // 履歴の index 番目の単位が整形の単位なら、その単位の編集の列（同じ文書・同じ位置・同じ編集の
+    // ときだけ）。向きは direction（undo は逆向きの列・redo は同じ列）。ふつうの単位は値なし。
+    [[nodiscard]] std::optional<std::vector<core::VimBlockEdit>>
+    formatted_pieces_at(std::size_t index, const core::Edit &edit,
+                        core::HistoryDirection direction);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -1223,6 +1233,10 @@ class EditorController final
     // 選択の起点が問いのときのまま）。
     [[nodiscard]] bool faces_closed() const noexcept;
     [[nodiscard]] bool awaits_nothing() const noexcept;
+    // Vim が次の鍵を待っているか（回数・オペレータ・1 鍵の待ち・レジスタの名指し・イージー
+    // モーション・INSERT の `Ctrl-o`・`map` の左辺の途中）。通常モードは偽。awaits_nothing と整形の
+    // 当てない条件（formatting_interrupts）が読む 1 本（#1997 の 2 回目のレビュー P2）。
+    [[nodiscard]] bool vim_waits_for_key() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -1771,7 +1785,7 @@ class EditorController final
     // incsearch の preview（ADR 0041 の決定 3・5）。
     void update_search_preview();
     void restore_search_origin(const ScrollState &origin);
-    void undone_marks(const core::Edit &edit);
+    void undone_marks(const core::Edit &edit, const EditLines &lines = core::VimLineMarks::shifted);
     void check_vim_marks();
     void adopt_vim_marks(const std::optional<core::VimMarks> &marks);
     void undo_edit();
@@ -2000,6 +2014,10 @@ class EditorController final
     // 保存時点を写す after_units_folded の unsure）。起点を置く所と再生の終わりが倒す。
     bool replay_undone_ = false;
     bool replay_save_unsure_ = false;
+    // 整形が積んだ undo の単位と編集の列（#1997 の 2 回目のレビュー P1）。整形を当てたときだけ
+    // 足し、同じ文書の同じ位置かその後ろの古い物は足すときに外す。照合に外れた物は引いたときに
+    // 外す。
+    std::vector<FormattedUnit> formatted_units_;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
