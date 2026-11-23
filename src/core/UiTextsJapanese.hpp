@@ -451,5 +451,13 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_references_not_found, "参照が見つかりません"},
     {UiMessage::notice_references_not_supported, "この言語サーバーは参照に答えません"},
     {UiMessage::notice_references_first_of, "参照 {1} 件のうち {0} 件を出しています"},
+    {UiMessage::settings_pane_resize_step_name, "枠を広げる・狭める量"},
+    {UiMessage::settings_pane_resize_step_description,
+     "「枠を広げる / 狭める」の 1 回で動かす文字の幅か行の数（1〜40）"},
+    {UiMessage::settings_pane_resize_step_vim_name, "Vim の Ctrl-w の量"},
+    {UiMessage::settings_pane_resize_step_vim_description,
+     "回数なしの Ctrl-w > < + - が動かす量（回数つきは回数どおり）"},
+    {UiMessage::settings_pane_resize_step_vim_single, "1（Vim と同じ）"},
+    {UiMessage::settings_pane_resize_step_vim_follows, "上の量に従う"},
 }};
 } // namespace nenenib::core

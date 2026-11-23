@@ -72,6 +72,12 @@ struct EditorSettings
     // caret_motion_time_minimum〜caret_motion_time_maximum（CaretGlide.hpp）。
     bool caret_motion = false;
     std::uint16_t caret_motion_time = 120;
+    // 枠の「広げる / 狭める」の 1 回分の升の数と、Vim の回数なしの `Ctrl-w > < + -` もそれに従うか
+    // （ADR 0148 の 2026-11-23 の追補・#1972・settings.v6 の鍵 `pane_resize_step` と
+    // `pane_resize_step_vim`）。既定は 5 升と off（off の Vim の鍵は本物の Vim と同じ 1 升）。升の
+    // 数は pane_resize_step_minimum〜pane_resize_step_maximum（PaneResizeStep.hpp）。
+    std::uint8_t pane_resize_step = 5;
+    bool pane_resize_step_vim = false;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

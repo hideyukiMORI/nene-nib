@@ -3,9 +3,11 @@
 // 図 ResizeSplit・鍵の意図 ResizePane・Vim の `Ctrl-w > < + - = _ |`・Ex の `:resize` の契約。
 #include "ClosePane.hpp"
 #include "DevicePixels.hpp"
+#include "DisplayLanguage.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorSettings.hpp"
 #include "FontSize.hpp"
 #include "LayoutRect.hpp"
 #include "OpenDocument.hpp"
@@ -13,6 +15,7 @@
 #include "PaneFrame.hpp"
 #include "PaneLayouts.hpp"
 #include "PaneResize.hpp"
+#include "PaneResizeStep.hpp"
 #include "PaneSide.hpp"
 #include "PaneSizing.hpp"
 #include "PaneSplit.hpp"
@@ -23,6 +26,8 @@
 #include "ScriptedFiles.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "SettingsRows.hpp"
+#include "SettingsValue.hpp"
 #include "SplitExtent.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
@@ -336,6 +341,71 @@ void verify_vim_resize_keys()
     expect(first_of(controller) == 500, "Ctrl-w = splits evenly again");
 }
 
+// 回数なしの `Ctrl-w > < + -` は既定で本物の Vim と同じ 1 升、設定 `paneresizestepvim` が on なら
+// 1 回分の設定の升。回数つきはどちらでも回数どおり（#1972・hide の決め 2026-11-23）。
+void verify_vim_resize_step_setting()
+{
+    Editing editing;
+    open_vim_document(editing, "one\ntwo");
+    auto &controller = editing.controller();
+    static_cast<void>(window_keys(controller, "", "v"));
+    applied(controller, view_of(10, 10));
+    static_cast<void>(run_ex(controller, "set paneresizestep=7"));
+    static_cast<void>(window_keys(controller, "", ">"));
+    expect(first_of(controller) == 510, "off: Ctrl-w > moves one cell like Vim");
+    static_cast<void>(run_ex(controller, "set paneresizestepvim"));
+    static_cast<void>(window_keys(controller, "", ">"));
+    expect(first_of(controller) == 580, "on: Ctrl-w > moves the pane resize step");
+    static_cast<void>(window_keys(controller, "", "<"));
+    expect(first_of(controller) == 510, "on: Ctrl-w < moves the pane resize step back");
+    static_cast<void>(window_keys(controller, "2", ">"));
+    expect(first_of(controller) == 530, "on: a count still wins");
+    static_cast<void>(run_ex(controller, "set nopaneresizestepvim"));
+    static_cast<void>(window_keys(controller, "2", ">"));
+    expect(first_of(controller) == 550, "off: a count still wins");
+    static_cast<void>(run_ex(controller, "set paneresizestep=0"));
+    static_cast<void>(run_ex(controller, "set paneresizestep=41"));
+    expect(controller.pane_resize_step() == 7,
+           ":set paneresizestep refuses a value outside 1 to 40");
+}
+
+// 1 回分の読み・送り・設定の画面の行（#1972）。既定は 5 升と off。
+void verify_pane_resize_step_values()
+{
+    expect(core::pane_resize_step_of("1") == std::optional<std::uint8_t>{1} &&
+               core::pane_resize_step_of("40") == std::optional<std::uint8_t>{40} &&
+               !core::pane_resize_step_of("0").has_value() &&
+               !core::pane_resize_step_of("41").has_value() &&
+               !core::pane_resize_step_of("05").has_value() &&
+               !core::pane_resize_step_of("").has_value() &&
+               !core::pane_resize_step_of("5a").has_value(),
+           "the pane resize step reads 1 to 40 without a leading zero");
+    expect(core::pane_resize_step_stepped(5, true) == 6 &&
+               core::pane_resize_step_stepped(5, false) == 4 &&
+               core::pane_resize_step_stepped(40, true) == 40 &&
+               core::pane_resize_step_stepped(1, false) == 1,
+           "the pane resize step moves by one and stops at the ends");
+    expect(core::vim_uncounted_pane_cells(7, false) == 1 &&
+               core::vim_uncounted_pane_cells(7, true) == 7,
+           "uncounted Vim keys move one cell unless they follow the step");
+    const auto defaults = core::default_editor_settings();
+    expect(defaults.pane_resize_step == core::pane_resize_step_default &&
+               !defaults.pane_resize_step_vim,
+           "the defaults are five cells and off");
+    const auto language = core::DisplayLanguage::english;
+    const auto bigger = core::settings_value_stepped(
+        defaults, core::SettingsValue::pane_resize_step, true, std::nullopt);
+    const auto follows = core::settings_value_stepped(
+        defaults, core::SettingsValue::pane_resize_step_vim, true, std::nullopt);
+    expect(core::settings_value_text(bigger, core::SettingsValue::pane_resize_step, language) ==
+                   "6" &&
+               follows.pane_resize_step_vim &&
+               !core::settings_value_stepped(follows, core::SettingsValue::pane_resize_step_vim,
+                                             false, std::nullopt)
+                    .pane_resize_step_vim,
+           "the settings rows step the cells and flip the Vim switch");
+}
+
 void verify_ex_resize()
 {
     Editing editing;
@@ -566,6 +636,8 @@ void verify_split_resize_contracts()
     verify_resize_split_intent();
     verify_other_pane_size();
     verify_vim_resize_keys();
+    verify_vim_resize_step_setting();
+    verify_pane_resize_step_values();
     verify_ex_resize();
     verify_resize_pane_intent();
     verify_stacked_resize_keys();

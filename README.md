@@ -194,7 +194,9 @@ records in `docs/quality/`.
   restored on the next start. *New after 1.1.0*: dragging the border resizes the panes (double-click makes them
   equal again and Esc cancels a drag), as do Vim `Ctrl-w > < + - = _ |`, `:resize` and `:vertical resize` and
   the F1 operations Enlarge Pane, Shrink Pane and Equalize Panes (no key); the sizes last until the window
-  closes.
+  closes. Enlarge / Shrink Pane move by `pane_resize_step` (`:set paneresizestep=`, 5 by default, 1–40, also
+  a row in the settings panel). Vim `Ctrl-w > < + -` without a count move one cell like Vim unless
+  `:set paneresizestepvim` makes them follow that step; a count always wins.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, bookmarks, recently closed files and
   files in the current folder, fuzzy-matched by name and then by folder. A leading mark narrows the list:
   `#` tabs, `*` bookmarks, `@` history, `/` the current folder, `:` the settings commands (see below),
@@ -303,7 +305,7 @@ records in `docs/quality/`.
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document
   ([ADR 0156](docs/adr/0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md)).
 - **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion` and `caret_motion_time`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion`, `caret_motion_time`, `pane_resize_step` and `pane_resize_step_vim`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
@@ -440,7 +442,7 @@ forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=` / `autoi
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off and `caret_motion_time` starts at 120 ms), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off, `caret_motion_time` starts at 120 ms, `pane_resize_step` starts at 5 and `pane_resize_step_vim` starts off), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170); in the same way, a change made in 1.1.0 after `settings.v6` exists goes to `settings.v5` and is not seen by later versions, and the other way round (ADR 0192). A broken new file is reported and blocks settings writes until repaired and restarted.
 

@@ -9,6 +9,7 @@
 #include "KeyValueFields.hpp"
 #include "Language.hpp"
 #include "LanguageTable.hpp"
+#include "PaneResizeStep.hpp"
 #include "SettingsFields.hpp"
 
 #include <algorithm>
@@ -31,7 +32,7 @@ using Field = std::optional<std::string_view> SettingsFields::*;
 
 // 鍵の名前と DTO の欄の対（同じ位置）。v4・v5・v6 だけの鍵も読むが、旧版にあれば
 // apply_v4_fields・apply_v5_fields・apply_v6_fields が拒否する。
-constexpr std::array<std::string_view, 21> field_names{"version",
+constexpr std::array<std::string_view, 23> field_names{"version",
                                                        "colorscheme",
                                                        "font_family",
                                                        "font_size",
@@ -51,8 +52,10 @@ constexpr std::array<std::string_view, 21> field_names{"version",
                                                        "autoindent",
                                                        "finder_preview",
                                                        "caret_motion",
-                                                       "caret_motion_time"};
-constexpr std::array<Field, 21> field_members{&SettingsFields::version,
+                                                       "caret_motion_time",
+                                                       "pane_resize_step",
+                                                       "pane_resize_step_vim"};
+constexpr std::array<Field, 23> field_members{&SettingsFields::version,
                                               &SettingsFields::colorscheme,
                                               &SettingsFields::font_family,
                                               &SettingsFields::font_size,
@@ -72,7 +75,9 @@ constexpr std::array<Field, 21> field_members{&SettingsFields::version,
                                               &SettingsFields::autoindent,
                                               &SettingsFields::finder_preview,
                                               &SettingsFields::caret_motion,
-                                              &SettingsFields::caret_motion_time};
+                                              &SettingsFields::caret_motion_time,
+                                              &SettingsFields::pane_resize_step,
+                                              &SettingsFields::pane_resize_step_vim};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -517,6 +522,30 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     return {};
 }
 
+// v6 の枠の大きさの 2 つ（ADR 0148 の 2026-11-23
+// の追補・#1972）。後から足した鍵の形（無ければ既定の 5 升と
+// off・有れば厳密）で読む。升の数の読みは core の pane_resize_step_of の 1 本。
+[[nodiscard]] std::expected<void, Failure> apply_pane_resize_fields(core::EditorSettings &settings,
+                                                                    const SettingsFields &fields)
+{
+    if (fields.pane_resize_step.has_value())
+    {
+        const auto step = core::pane_resize_step_of(fields.pane_resize_step.value());
+        if (!step.has_value())
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        settings.pane_resize_step = step.value();
+    }
+    const auto follows = later_switch_from(fields.pane_resize_step_vim);
+    if (!follows)
+    {
+        return std::unexpected(follows.error());
+    }
+    settings.pane_resize_step_vim = follows.value();
+    return {};
+}
+
 // v6 だけの鍵（ADR 0192 の決定 1）。v5 以前に在れば未知の鍵として拒否し（v5 の読みは 1.1.0 と
 // 同じ厳しさ）、無ければ既定（オフ・120 ms）のまま。v6 は後から足した鍵の形（無ければ既定・有れば
 // 厳密）で読む。時間の読みは core の caret_motion_time_of の 1 本。
@@ -531,7 +560,8 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     case SettingsVersion::v3:
     case SettingsVersion::v4:
     case SettingsVersion::v5:
-        if (fields.caret_motion.has_value() || fields.caret_motion_time.has_value())
+        if (fields.caret_motion.has_value() || fields.caret_motion_time.has_value() ||
+            fields.pane_resize_step.has_value() || fields.pane_resize_step_vim.has_value())
         {
             return std::unexpected(Failure::malformed);
         }
@@ -554,7 +584,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
         }
         settings.caret_motion_time = time.value();
     }
-    return {};
+    return apply_pane_resize_fields(settings, fields);
 }
 
 // v4・v5・v6 の欄を順に置く（どれかが拒めばそこで止める）。
@@ -732,12 +762,14 @@ std::string encode_settings(const core::EditorSettings &settings)
                                     ? std::to_string(settings.explorer_width.value())
                                     : std::string{};
     // 書くのは v6 だけ（ADR 0192 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
-    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前。
+    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前
+    // （枠の大きさの 2 つは `caret_motion_time` の後ろ・#1972）。
     return std::format("version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
                        "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
                        "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
                        "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
-                       "caret_motion_time={}\n{}{}",
+                       "caret_motion_time={}\npane_resize_step={}\npane_resize_step_vim={}\n"
+                       "{}{}",
                        theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
                        core::display_language_choice_name(settings.ui_language),
                        switch_text(settings.lsp), switch_text(settings.explorer), root,
@@ -746,6 +778,8 @@ std::string encode_settings(const core::EditorSettings &settings)
                        settings.scrolloff, explorer_width, switch_text(settings.autoindent),
                        core::finder_preview_name(settings.finder_preview),
                        switch_text(settings.caret_motion), settings.caret_motion_time,
+                       static_cast<unsigned>(settings.pane_resize_step),
+                       switch_text(settings.pane_resize_step_vim),
                        lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

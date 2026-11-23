@@ -685,10 +685,10 @@ void EditorWindow::run_even_panes()
 
 void EditorWindow::resize_operated_pane(core::PaneResize resize)
 {
-    constexpr std::int32_t operation_cells = 5;
+    // 1 回分は設定の `pane_resize_step`（既定 5 升・#1972）。
     const auto dimension = core::split_dimension(controller_.split().layout);
-    send(application::ResizePane{
-        core::PaneSizing{resize, dimension.value_or(core::PaneDimension::width), operation_cells}});
+    send(application::ResizePane{core::PaneSizing{
+        resize, dimension.value_or(core::PaneDimension::width), controller_.pane_resize_step()}});
 }
 
 void EditorWindow::run_toggle_preview()

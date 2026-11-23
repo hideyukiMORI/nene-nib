@@ -369,6 +369,9 @@ class EditorController final
     // 保存した字の大きさ（入力行の評価も字の大きさは重ねない・shown_settings と同じ値）。窓がマウス
     // の動くたびに本文の枠の配置を引く口で、delivery も frame も作らない。
     [[nodiscard]] core::FontSize font_size() const noexcept;
+    // 枠の「広げる / 狭める」の 1 回分の升の数（設定の `pane_resize_step`・#1972）。窓が F1 の操作
+    // widen_pane / narrow_pane の PaneSizing を作る口で、状態の 1 欄を読むだけ。
+    [[nodiscard]] std::int32_t pane_resize_step() const noexcept;
     // プレビューの見せ方（ADR 0155 の改訂 15）。窓が tick
     // のタイマー・クリック・ホイールを決める口で、 状態を読むだけ。
     [[nodiscard]] PreviewPlacement preview_placement() const noexcept;

@@ -1,6 +1,7 @@
 #include "ExResult.hpp"
 #include "PaneDimension.hpp"
 #include "PaneResize.hpp"
+#include "PaneResizeStep.hpp"
 #include "PaneSizing.hpp"
 
 #include "ExDocumentName.hpp"
@@ -883,6 +884,76 @@ caret_motion_time_option(std::string_view option, const EditorSettings &settings
                     caret_motion_time_message(parsed.value())};
 }
 
+// 枠の「広げる / 狭める」の 1 回分（ADR 0148 の 2026-11-23 の追補・#1972）。`set paneresizestep=N`
+// `set paneresizestep?` `set paneresizestep`（数の option の名前だけは問い）と、Vim の回数なしの
+// `Ctrl-w > < + -` が従うかの `set paneresizestepvim` `set nopaneresizestepvim`
+// `set paneresizestepvim?`。Vim に無い名前なので短い名前は無い。升の数は core の
+// pane_resize_step_of の 1 本で読み、範囲（1〜40）の外は E474 と同じ失敗。
+constexpr std::array<std::string_view, 1> pane_resize_step_vim_names{"paneresizestepvim"};
+constexpr std::string_view pane_resize_step_name = "paneresizestep";
+
+[[nodiscard]] std::optional<ExResult> pane_resize_step_vim_option(std::string_view option,
+                                                                  const EditorSettings &settings)
+{
+    const auto request = switch_request(option, pane_resize_step_vim_names);
+    if (!request.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::string_view name = pane_resize_step_vim_names.front();
+    if (!request.value().has_value())
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        switch_message(name, settings.pane_resize_step_vim)};
+    }
+    const bool wanted = request.value().value();
+    EditorSettings changed = settings;
+    changed.pane_resize_step_vim = wanted;
+    return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
+}
+
+[[nodiscard]] DisplayText pane_resize_step_message(std::uint8_t value)
+{
+    return DisplayText::parse(std::string(pane_resize_step_name) + "=" + std::to_string(value))
+        .value();
+}
+
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+pane_resize_step_option(std::string_view option, const EditorSettings &settings)
+{
+    if (asks_for(option, pane_resize_step_name))
+    {
+        return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                        pane_resize_step_message(settings.pane_resize_step)};
+    }
+    if (!option.starts_with(pane_resize_step_name) ||
+        !option.substr(pane_resize_step_name.size()).starts_with('='))
+    {
+        return std::nullopt;
+    }
+    const auto parsed = pane_resize_step_of(option.substr(pane_resize_step_name.size() + 1));
+    if (!parsed.has_value())
+    {
+        return std::unexpected(ExFailure::invalid_argument);
+    }
+    EditorSettings changed = settings;
+    changed.pane_resize_step = parsed.value();
+    return ExResult{std::move(changed), std::nullopt, std::nullopt,
+                    pane_resize_step_message(parsed.value())};
+}
+
+// 枠の大きさの 2 つ（#1972）。どれにも当たらなければ無し。
+[[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
+pane_resize_options(std::string_view option, const EditorSettings &settings)
+{
+    auto follows = pane_resize_step_vim_option(option, settings);
+    if (follows.has_value())
+    {
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(follows).value()};
+    }
+    return pane_resize_step_option(option, settings);
+}
+
 // 画面の見え方の option（行番号の相対表示と追従の余白・#1041、ミニマップ・ADR 0171）と、同じ束で
 // 保存する INSERT の字下げの写し（#1086）とキャレットの動き（ADR
 // 0192）。どれにも当たらなければ無し。
@@ -918,6 +989,11 @@ view_option(std::string_view option, const EditorSettings &settings)
     if (timing.has_value())
     {
         return std::move(timing).value();
+    }
+    auto resizing = pane_resize_options(option, settings);
+    if (resizing.has_value())
+    {
+        return std::move(resizing).value();
     }
     return scrolloff_option(option, settings);
 }
@@ -961,7 +1037,7 @@ using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader
 // hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
 // wrapscan も Vim の状態（#1561）。magic と expandtab は Nib の振る舞いが固定（照合器は magic・
 // ADR 0015 の決定 9〜11 の noexpandtab）なので、変えられない行（#1561）。
-constexpr std::array<SwitchOption, 15> switch_options{{
+constexpr std::array<SwitchOption, 16> switch_options{{
     {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.wrapping == LineWrapping::wrap; }, true},
     {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -976,6 +1052,8 @@ constexpr std::array<SwitchOption, 15> switch_options{{
      { return settings.autoindent; }, true},
     {"caretmotion", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.caret_motion; }, true},
+    {"paneresizestepvim", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.pane_resize_step_vim; }, true},
     {minimap_feature, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return minimap_shown(settings); }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -2557,7 +2635,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 62> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 65> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2602,6 +2680,9 @@ constexpr std::array<std::string_view, 62> fixed_candidates{"colorscheme",
                                                             "set caretmotion",
                                                             "set nocaretmotion",
                                                             "set caretmotiontime=",
+                                                            "set paneresizestep=",
+                                                            "set paneresizestepvim",
+                                                            "set nopaneresizestepvim",
                                                             "set scrolloff=",
                                                             "set minimap",
                                                             "set nominimap",

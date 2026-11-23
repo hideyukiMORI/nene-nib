@@ -24,13 +24,16 @@ using nenenib::adapters::win32::SettingsVersion;
 using nenenib::application::SettingsFailure;
 
 // 1.1.0 の v5 の見本を v6 の形にした bytes（版の行を 6 にし、finder_preview の後ろに
-// caret_motion=off と caret_motion_time=120 を足す）。
+// caret_motion=off と caret_motion_time=120 と pane_resize_step=5 と pane_resize_step_vim=off を
+// 足す）。
 std::string released_v5_as_v6()
 {
     std::string bytes(released_v5_settings);
     bytes.replace(0, std::string_view{"version=5"}.size(), "version=6");
     const std::string_view preview = "finder_preview=right\n";
-    bytes.insert(bytes.find(preview) + preview.size(), "caret_motion=off\ncaret_motion_time=120\n");
+    bytes.insert(bytes.find(preview) + preview.size(),
+                 "caret_motion=off\ncaret_motion_time=120\npane_resize_step=5\n"
+                 "pane_resize_step_vim=off\n");
     return bytes;
 }
 
@@ -61,7 +64,9 @@ void verify_released_v5(Expect expect)
     expect(read && encode_settings(read.value()) == released_v5_as_v6(),
            "the 1.1.0 settings are written back in the v6 form with the caret motion keys after "
            "finder_preview and the unknown language row kept");
-    for (const auto extra : {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n"})
+    for (const auto extra :
+         {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n",
+          "pane_resize_step=5\n", "pane_resize_step_vim=off\n", "pane_resize_step_vim=on\n"})
     {
         const auto refused =
             decode_settings(std::string(released_v5_settings) + extra, SettingsVersion::v5);
@@ -103,6 +108,38 @@ void verify_v6_keys(Expect expect)
     expect(!decode_settings(bytes + "caret_motion=on\n", SettingsVersion::v6),
            "a duplicate caret motion key is refused");
 }
+
+// 枠の大きさの 2 つの鍵（#1972）。無ければ既定の 5 升と off、有れば厳密に読み、往復する。
+void verify_pane_resize_keys(Expect expect)
+{
+    auto settings = core::default_editor_settings();
+    settings.pane_resize_step = 12;
+    settings.pane_resize_step_vim = true;
+    const auto bytes = encode_settings(settings);
+    const auto read = decode_settings(bytes, SettingsVersion::v6);
+    expect(
+        read && read.value().pane_resize_step == 12 && read.value().pane_resize_step_vim &&
+            bytes.find("\ncaret_motion_time=120\npane_resize_step=12\npane_resize_step_vim=on\n") !=
+                std::string::npos,
+        "the pane resize step and its Vim switch round trip right after caret_motion_time");
+    const auto missing = decode_settings(
+        without_key(without_key(released_v5_as_v6(), "pane_resize_step"), "pane_resize_step_vim"),
+        SettingsVersion::v6);
+    expect(missing && missing.value().pane_resize_step == 5 &&
+               !missing.value().pane_resize_step_vim,
+           "a v6 without the pane resize keys takes five cells and off");
+    for (const auto &[key, value] :
+         {std::pair{"pane_resize_step", "0"}, std::pair{"pane_resize_step", "41"},
+          std::pair{"pane_resize_step", "05"}, std::pair{"pane_resize_step", ""},
+          std::pair{"pane_resize_step_vim", "yes"}, std::pair{"pane_resize_step_vim", ""}})
+    {
+        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
+        expect(!broken && broken.error() == SettingsFailure::malformed,
+               "a malformed pane resize value is refused");
+    }
+    expect(!decode_settings(bytes + "pane_resize_step=3\n", SettingsVersion::v6),
+           "a duplicate pane resize key is refused");
+}
 } // namespace
 
 bool released_v5_values(const core::EditorSettings &settings)
@@ -113,12 +150,14 @@ bool released_v5_values(const core::EditorSettings &settings)
            settings.lsp_commands.size() == 2 && settings.mapleader == "<Space>" &&
            settings.maps.size() == 1 && settings.autoindent &&
            settings.finder_preview == core::FinderPreview::right && !settings.caret_motion &&
-           settings.caret_motion_time == 120;
+           settings.caret_motion_time == 120 && settings.pane_resize_step == 5 &&
+           !settings.pane_resize_step_vim;
 }
 
 void verify_settings_v6_codec(Expect expect)
 {
     verify_released_v5(expect);
     verify_v6_keys(expect);
+    verify_pane_resize_keys(expect);
 }
 } // namespace nenenib::tests::adapters

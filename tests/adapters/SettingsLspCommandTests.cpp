@@ -70,6 +70,7 @@ void verify_settings_lsp_commands(Expect expect, std::string_view released_v4_se
     expect(bytes.ends_with("features=\nignorecase=off\nsmartcase=off\nrelativenumber=off\n"
                            "scrolloff=0\nexplorer_width=\nautoindent=off\n"
                            "finder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n"
+                           "pane_resize_step=5\npane_resize_step_vim=off\n"
                            "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
                            "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
