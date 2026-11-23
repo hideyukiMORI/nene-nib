@@ -341,6 +341,62 @@ void verify_vim_resize_keys()
     expect(first_of(controller) == 500, "Ctrl-w = splits evenly again");
 }
 
+// on でも升を読まない `Ctrl-w = | _` は off と同じ（#1972 のレビュー L2）。
+void verify_vim_fixed_resize_keys()
+{
+    const auto widest = [](bool follows)
+    {
+        Editing editing;
+        open_vim_document(editing, "one\ntwo");
+        auto &controller = editing.controller();
+        static_cast<void>(window_keys(controller, "", "v"));
+        applied(controller, view_of(10, 10));
+        static_cast<void>(run_ex(controller, "set paneresizestep=7"));
+        static_cast<void>(
+            run_ex(controller, follows ? "set paneresizestepvim" : "set nopaneresizestepvim"));
+        static_cast<void>(window_keys(controller, "", "_"));
+        const bool unmoved = first_of(controller) == 500;
+        static_cast<void>(window_keys(controller, "", "|"));
+        const std::int32_t most = first_of(controller);
+        static_cast<void>(window_keys(controller, "", "="));
+        return std::pair{unmoved && first_of(controller) == 500, most};
+    };
+    const auto off = widest(false);
+    const auto on = widest(true);
+    expect(off.first && on.first && on.second == off.second && on.second != 500,
+           "on: Ctrl-w _ | = move as they do off");
+}
+
+// `:set` の問い・`&`・`inv` と、F1 の操作が読む 1 回分（#1972 のレビュー L2・R2）。
+void verify_pane_resize_step_ex()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    const auto message = [&controller](std::string_view command)
+    {
+        const EditorFrame frame = run_ex(controller, std::string(command));
+        return frame.command_message.has_value() ? std::string(frame.command_message.value().text())
+                                                 : std::string{};
+    };
+    expect(message("set paneresizestep?") == "paneresizestep=5" &&
+               message("set paneresizestep") == "paneresizestep=5" &&
+               message("set paneresizestepvim?") == "paneresizestepvim=off",
+           ":set paneresizestep? and paneresizestepvim? answer the values");
+    static_cast<void>(run_ex(controller, "set invpaneresizestepvim"));
+    expect(message("set paneresizestepvim?") == "paneresizestepvim=on",
+           ":set invpaneresizestepvim flips the switch");
+    static_cast<void>(run_ex(controller, "set paneresizestepvim&"));
+    expect(message("set paneresizestepvim?") == "paneresizestepvim=off",
+           ":set paneresizestepvim& restores the default");
+    static_cast<void>(run_ex(controller, "set paneresizestep=7"));
+    applied(controller, app::SplitPane{SplitLayout::vertical});
+    applied(controller, view_of(10, 10));
+    // ui の EditorWindow::resize_operated_pane と同じ形（升の数は controller の口から読む）。
+    applied(controller, app::ResizePane{PaneSizing{PaneResize::grow, PaneDimension::width,
+                                                   controller.pane_resize_step()}});
+    expect(first_of(controller) == 570, "after :set paneresizestep=7 one Enlarge Pane moves 7");
+}
+
 // 回数なしの `Ctrl-w > < + -` は既定で本物の Vim と同じ 1 升、設定 `paneresizestepvim` が on なら
 // 1 回分の設定の升。回数つきはどちらでも回数どおり（#1972・hide の決め 2026-11-23）。
 void verify_vim_resize_step_setting()
@@ -378,7 +434,9 @@ void verify_pane_resize_step_values()
                !core::pane_resize_step_of("41").has_value() &&
                !core::pane_resize_step_of("05").has_value() &&
                !core::pane_resize_step_of("").has_value() &&
-               !core::pane_resize_step_of("5a").has_value(),
+               !core::pane_resize_step_of("5a").has_value() &&
+               !core::pane_resize_step_of("-1").has_value() &&
+               !core::pane_resize_step_of("5.5").has_value(),
            "the pane resize step reads 1 to 40 without a leading zero");
     expect(core::pane_resize_step_stepped(5, true) == 6 &&
                core::pane_resize_step_stepped(5, false) == 4 &&
@@ -637,6 +695,8 @@ void verify_split_resize_contracts()
     verify_other_pane_size();
     verify_vim_resize_keys();
     verify_vim_resize_step_setting();
+    verify_vim_fixed_resize_keys();
+    verify_pane_resize_step_ex();
     verify_pane_resize_step_values();
     verify_ex_resize();
     verify_resize_pane_intent();

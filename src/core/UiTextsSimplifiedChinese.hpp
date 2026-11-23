@@ -421,7 +421,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_references_first_of, "显示 {1} 个引用中的 {0} 个"},
     {UiMessage::settings_pane_resize_step_name, "窗格调整幅度"},
     {UiMessage::settings_pane_resize_step_description,
-     "“加宽 / 收窄窗格”一次移动的字符宽度或行数（1〜40）"},
+     "“扩大 / 缩小窗格”一次移动的字符宽度或行数（1〜40）"},
     {UiMessage::settings_pane_resize_step_vim_name, "Vim 的 Ctrl-w 幅度"},
     {UiMessage::settings_pane_resize_step_vim_description,
      "不带次数的 Ctrl-w > < + - 移动的幅度（带次数时按次数）"},

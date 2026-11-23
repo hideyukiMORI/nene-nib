@@ -480,7 +480,7 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::notice_references_first_of, "Showing {0} of {1} references"},
     {UiMessage::settings_pane_resize_step_name, "Pane Resize Step"},
     {UiMessage::settings_pane_resize_step_description,
-     "How far Widen / Narrow Pane moves the divider, in characters or lines (1-40)"},
+     "How far Enlarge / Shrink Pane moves the divider, in characters or lines (1-40)"},
     {UiMessage::settings_pane_resize_step_vim_name, "Vim Pane Resize Step"},
     {UiMessage::settings_pane_resize_step_vim_description,
      "How far Ctrl-w > < + - without a count moves the divider (a count always wins)"},
