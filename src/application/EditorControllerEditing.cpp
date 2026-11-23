@@ -412,7 +412,7 @@ void EditorController::move_caret_to(core::Offset caret, core::SelectionAnchorin
 
 // 打った文字（WM_CHAR・Tab・通常モードの IME の確定）。打ったときの粒（ADR 0192 の追補・#1979）がオ
 // フなら足すのは真偽 1 つの読みだけ。オンなら本文が変わったとき（改訂番号が進んだとき）だけ打鍵の通
-// し番号を進める（読むだけの文書などで入らなかった打鍵は数えない）。
+// し番号を進める（空の文字列など本文が変わらなかった打鍵は数えない）。
 void EditorController::accept(const InsertText &intent)
 {
     if (!state_.settings().caret_sparks)

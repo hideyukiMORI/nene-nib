@@ -883,7 +883,9 @@ void EditorController::merge_vim_completion_answer(CompletionSession &session,
 // 辺は鍵の出どころで見分ける（watched_vim_key）。engine の歩は変えない。
 void EditorController::typed_vim_key_with_language(const core::VimKey &key)
 {
-    if (auto_vim_completion_took(key))
+    // 粒だけがオンで言語サーバーが起きていない窓は自動の面の鍵を読まない（粒がオフのときと同じ道・
+    // #1988 のレビュー L2）。
+    if (language_servers_.awake != 0 && auto_vim_completion_took(key))
     {
         return;
     }

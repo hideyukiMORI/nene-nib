@@ -20,6 +20,7 @@
 #include "HistoryDirection.hpp"
 #include "InsertDateTime.hpp"
 #include "InsertText.hpp"
+#include "MapRow.hpp"
 #include "MoveCaret.hpp"
 #include "PasteCommand.hpp"
 #include "Scopes.hpp"
@@ -28,6 +29,7 @@
 #include "SettingsSubject.hpp"
 #include "TestSupport.hpp"
 #include "VimKeyPress.hpp"
+#include "VimModeSet.hpp"
 #include "VimTestSupport.hpp"
 
 #include <algorithm>
@@ -163,6 +165,9 @@ void verify_typed_serial_ordinary()
     applied(controller, application::InsertText{"a"});
     applied(controller, application::InsertText{"b"});
     expect(controller.frame().typed == 2, "each typed character advances the keystroke number");
+    applied(controller, application::InsertText{""});
+    expect(controller.frame().typed == 2,
+           "a keystroke that leaves the text unchanged (no new revision) does not count");
     editing.clipboard().hold(std::string("pasted"));
     applied(controller, application::PasteCommand{});
     applied(controller, application::MoveCaret{core::CaretMotion::previous_character,
@@ -201,6 +206,34 @@ void verify_typed_serial_vim()
     open_vim_document(off, "abc\n");
     press(off.controller(), "ixy");
     expect(off.controller().frame().typed == 0, "with the sparks off Vim typing counts nothing");
+}
+
+// map の右辺・:normal!・Ctrl-r の 1 鍵の引数で入った文字は数えない（#1988 のレビュー R3）。
+void verify_typed_serial_vim_sources()
+{
+    auto settings = sparks_on();
+    settings.maps = {
+        core::MapRow{core::VimModeSet{false, true, false, false, false}, "x", ".", false}};
+    Editing mapped(std::optional<core::EditorSettings>{settings});
+    open_vim_document(mapped, "abc\n");
+    press(mapped.controller(), "ix");
+    expect(mapped.controller().frame().typed == 0 &&
+               whole_vim_body(mapped.controller()) == ".abc\n",
+           "a character put in by the right side of an inoremap does not count");
+    Editing normal(std::optional<core::EditorSettings>{sparks_on()});
+    open_vim_document(normal, "abc\n");
+    static_cast<void>(normal.controller().press_vim_keys(vim_keys_of("ix")));
+    expect(normal.controller().frame().typed == 0 &&
+               whole_vim_body(normal.controller()) == "xabc\n",
+           "keys fed as :normal! do not count");
+    // Ctrl-r のレジスタの名前（`"-` が名前と同じ `-` を持つので、キャレットも 1 字だけ進む）。
+    // INSERT の Ctrl-v は Nib では何もしない鍵（ADR 0035 の決定 9）なので、続けて打った文字はふつう
+    // の打鍵。
+    Editing named(std::optional<core::EditorSettings>{sparks_on()});
+    open_vim_document(named, "-bc\n");
+    press(named.controller(), "xi<C-r>-");
+    expect(named.controller().frame().typed == 0 && whole_vim_body(named.controller()) == "-bc\n",
+           "a character put in by the register named after Ctrl-r does not count");
 }
 
 // `:set` が置いた設定（問い・失敗は値なし）。
@@ -253,6 +286,7 @@ void verify_caret_sparks_contracts()
     verify_spark_track();
     verify_typed_serial_ordinary();
     verify_typed_serial_vim();
+    verify_typed_serial_vim_sources();
     verify_spark_settings();
 }
 } // namespace nenenib::tests
