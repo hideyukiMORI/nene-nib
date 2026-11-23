@@ -1094,10 +1094,16 @@ void Direct2DRenderer::draw_caret(const application::EditorFrame &frame, IDWrite
                                   const core::LayoutRect &area, const application::LineView &shown)
 {
     // 動いている間は本文の上に多角形を重ねるので、ふつうのキャレットは描かない（ADR 0192 の決定
-    // 4）。
-    if (caret_motion_.on() && caret_moves(caret_box(frame, text, area, shown)))
+    // 4）。打ったときの粒（追補・#1979）は行き先の矩形の中心を覚える。どちらもオフなら真偽の読みだ
+    // け。
+    if (caret_motion_.on() || caret_sparks_.on())
     {
-        return;
+        const auto box = caret_box(frame, text, area, shown);
+        see_caret_sparks(box);
+        if (caret_motion_.on() && caret_moves(box))
+        {
+            return;
+        }
     }
     const auto &line = shown.display;
     LineUtf16Evaluation positions(line.text);
@@ -1576,12 +1582,15 @@ void Direct2DRenderer::draw_grid_row(GridPainter &painter, const application::Ed
 bool Direct2DRenderer::grid_caret_moves(const GridRowCanvas &canvas,
                                         const application::GridRowView &row, bool active)
 {
-    if (!caret_motion_.on() || !active || !canvas.caret_shown || !row.caret.has_value())
+    if ((!caret_motion_.on() && !caret_sparks_.on()) || !active || !canvas.caret_shown ||
+        !row.caret.has_value())
     {
         return false;
     }
-    return caret_moves(
-        GridPainter::caret_box(canvas, row.caret.value(), row.composed_at.has_value()));
+    const auto box = GridPainter::caret_box(canvas, row.caret.value(), row.composed_at.has_value());
+    // 打ったときの粒（#1979）は格子のキャレットの中心も覚える。
+    see_caret_sparks(box);
+    return caret_motion_.on() && caret_moves(box);
 }
 
 void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
@@ -1589,6 +1598,7 @@ void Direct2DRenderer::draw_body(const application::EditorFrame &frame,
 {
     draw_pane(frame, BodyPane{body, frame.lines, frame.grid, frame.caret, PaneRole::active});
     paint_caret_motion(frame);
+    paint_caret_sparks(frame, body);
 }
 
 // もう 1 つの枠と境界（ADR 0148 の決定 8・採用案の案 A）。境界は panel_border の 1 本。frame に

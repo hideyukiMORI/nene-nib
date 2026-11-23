@@ -20,6 +20,8 @@ enum class EditorFeature : std::uint8_t
     lsp,
     syntax,
     // キャレットの動き（ADR 0192・#1933・自分の鍵 caret_motion）。
-    caret_motion
+    caret_motion,
+    // 打ったときの粒（ADR 0192 の追補・#1979・自分の鍵 caret_sparks）。
+    caret_sparks
 };
 } // namespace nenenib::core

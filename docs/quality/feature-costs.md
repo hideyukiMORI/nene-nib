@@ -19,5 +19,6 @@
 | wrap・guide・autoindent・explorer・easymotion・start_screen | 1 打鍵の増分を測った記録が無い |
 | syntax | 文書ごとの値で設定の面に載せない（決定 4） |
 | caretmotion | オフの道の増分は設定の欄 1 つを読むだけ。動いている間だけ frame を出すので、オンの費用は打鍵の基準に混ぜず別の基準で扱う（ADR 0192 の決定 7・D60 の考え方）。試用の後に採る |
+| caretsparks | オフの道の増分は打鍵の道の真偽 1 つの読みと、描く側の設定の欄 1 つを読むだけ。粒が生きている間（1 打鍵から 420 ms）だけ frame を出すので、オンの費用は打鍵の基準に混ぜず別の基準で扱う（ADR 0192 の追補・#1979）。試用の後に採る |
 
 行を足すときは、任意のベンチ（`OPTIONAL_BENCHES`）で測った A/B の記録（日・機械・数字）を品質の記録に残し、その行をここに写して `feature_costs` の同じ行の `single_key_delta_us` と `bench` を埋める。

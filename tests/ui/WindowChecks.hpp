@@ -47,6 +47,8 @@ void verify_caret_motion_paint();
 // CaretMotionPaintTests.cpp（ADR 0192・#1956・キャレットが見えない frame で止まる・作り直しで番号が
 // 当たらない）
 void verify_caret_motion_follow();
+// CaretSparksPaintTests.cpp（ADR 0192 の追補・#1979・打ったときの粒の 1 frame と frame ごとの覚え）
+void verify_caret_sparks_paint();
 // イージーモーションの印の地と字（ADR 0163 の決定 6・#1782）。
 void verify_motion_label_paint();
 // タブの札の文の切り方と地・縁・字（#1789）。

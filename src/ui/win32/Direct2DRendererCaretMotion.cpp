@@ -7,6 +7,9 @@
 #include "CaretGlide.hpp"
 #include "CaretMotionPainter.hpp"
 #include "CaretMotionStart.hpp"
+#include "CaretPoint.hpp"
+#include "CaretSparksPaint.hpp"
+#include "CaretSparksPainter.hpp"
 #include "Direct2DRendererDetail.hpp"
 
 #include <cstdint>
@@ -21,6 +24,7 @@ constexpr float caret_glow_dips = 6.0F;
 } // namespace
 
 using detail::to_color;
+using detail::to_rect;
 
 void Direct2DRenderer::allow_caret_motion(bool allowed, std::uint32_t floor) noexcept
 {
@@ -37,6 +41,21 @@ void Direct2DRenderer::settle_caret_motion() noexcept
     caret_motion_.settle();
 }
 
+void Direct2DRenderer::allow_caret_sparks(bool allowed, std::uint32_t floor) noexcept
+{
+    caret_sparks_.allow(allowed, floor);
+}
+
+std::optional<std::uint32_t> Direct2DRenderer::caret_sparks_generation() const noexcept
+{
+    return caret_sparks_.generation();
+}
+
+void Direct2DRenderer::settle_caret_sparks() noexcept
+{
+    caret_sparks_.settle();
+}
+
 // 動かさないとき（決定 6）: 設定がオフ・Windows の「アニメーション効果」がオフ・IME の変換中。
 // 覚えは空にする（次にオンになった最初の frame は跳ぶ）。タブが変わった frame と、操作中の枠の側が
 // 同じまま本文の領域が変わった frame（split の境界線のドラッグなど）は跳ぶ（決定 5）。
@@ -50,6 +69,9 @@ void Direct2DRenderer::begin_caret_motion(const application::EditorFrame &frame,
             static_cast<float>(body.content.left), static_cast<float>(body.content.top),
             static_cast<float>(body.content.right), static_cast<float>(body.content.bottom)),
         frame.active_side});
+    // 打ったときの粒（追補・#1979）は動きと独立。オフは欄 1 つを読むだけで覚えを空にする。
+    caret_sparks_.begin(frame.settings.caret_sparks, frame.composition.has_value(), frame.typed,
+                        frame.caret_sparks);
 }
 
 bool Direct2DRenderer::caret_moves(std::optional<D2D1_RECT_F> box)
@@ -93,5 +115,34 @@ void Direct2DRenderer::paint_caret_motion(const application::EditorFrame &frame)
 void Direct2DRenderer::finish_caret_motion() noexcept
 {
     caret_motion_.end();
+    caret_sparks_.end();
+}
+
+void Direct2DRenderer::see_caret_sparks(const std::optional<D2D1_RECT_F> &box) noexcept
+{
+    if (!caret_sparks_.on() || !box.has_value())
+    {
+        return;
+    }
+    const auto &shown = box.value();
+    caret_sparks_.see(
+        core::CaretPoint{(shown.left + shown.right) / 2.0F, (shown.top + shown.bottom) / 2.0F});
+}
+
+// 粒の 2 つの色は尾を引く動きと同じ accent（頭）と ime（尾の先・見本の紫）。トークンは足さない（追
+// 補・#1979）。本文の領域の外へ散った粒は切る。
+void Direct2DRenderer::paint_caret_sparks(const application::EditorFrame &frame,
+                                          const core::BodyLayout &body)
+{
+    const auto &track = caret_sparks_.advance();
+    if (!caret_sparks_.paints())
+    {
+        return;
+    }
+    context_->PushAxisAlignedClip(to_rect(body.content), D2D1_ANTIALIAS_MODE_ALIASED);
+    CaretSparksPainter::paint(*context_.Get(), *brush_.Get(), track,
+                              CaretSparksPaint{to_color(frame.palette.accent),
+                                               to_color(frame.palette.ime), scaled(1.0F)});
+    context_->PopAxisAlignedClip();
 }
 } // namespace nenenib::ui::win32

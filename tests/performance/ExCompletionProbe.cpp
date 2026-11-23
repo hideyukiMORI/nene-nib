@@ -101,6 +101,8 @@ constexpr auto fixed_candidates = std::to_array<std::string_view>({"colorscheme"
                                                                    "set caretmotion",
                                                                    "set nocaretmotion",
                                                                    "set caretmotiontime=",
+                                                                   "set caretsparks",
+                                                                   "set nocaretsparks",
                                                                    "set scrolloff=",
                                                                    "set minimap",
                                                                    "set nominimap",

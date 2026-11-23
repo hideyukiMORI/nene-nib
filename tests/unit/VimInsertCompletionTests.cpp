@@ -355,6 +355,29 @@ void capable(Editing &editing)
     capable(editing, capable_answer);
 }
 
+// 打ったときの粒（#1979）もオンの言語サーバーつきの設定。
+[[nodiscard]] SettingsReading sparks_lsp_settings()
+{
+    auto settings = core::default_editor_settings();
+    settings.lsp = true;
+    settings.lsp_commands = {{"cpp", std::string{clangd_command}}};
+    settings.caret_sparks = true;
+    return SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}};
+}
+
+// main.cpp を開いて子は起きたが `initialize` に答えていない（awake だが running でない）窓。
+void starting(Editing &editing)
+{
+    editing.files().hold_at(std::string(source_path), Bytes{std::string("int main() {}\n")});
+    applied(editing.controller(), app::OpenDocument{core::FilePath::parse(source_path).value()});
+    editing.language_server().serve(app::ServerStarted{});
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    static_cast<void>(editing.controller().apply(app::VisibleLines{shown_lines}));
+    applied(editing.controller(),
+            app::MoveCaret{core::CaretMotion::document_end, core::SelectionAnchoring::collapse});
+    applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+}
+
 [[nodiscard]] app::EditorFrame answered(Editing &editing, std::string_view result)
 {
     auto &server = editing.language_server();
@@ -688,6 +711,24 @@ void verify_triggered_off()
            "with the language server off a trigger character only inserts itself");
 }
 
+// #1979: 打ったときの粒がオンで見張りが立っても、言語サーバーへ渡すのは鍵を流す前に running だった
+// ときだけで、1 つの trigger に 1 回だけ（#1988 のレビュー R2）。打った文字は粒の番号に数える。
+void verify_triggered_with_sparks()
+{
+    Editing waiting(sparks_lsp_settings());
+    starting(waiting);
+    static_cast<void>(pressed(waiting, "ox."));
+    expect(completion_requests(waiting) == 0 && !waiting.controller().completion_open() &&
+               waiting.controller().frame().typed == 2 && body(waiting) == "int main() {}\nx.\n",
+           "with the sparks on a starting server is asked nothing while the typed keys count");
+    Editing running(sparks_lsp_settings());
+    capable(running);
+    static_cast<void>(pressed(running, "ox."));
+    expect(completion_requests(running) == 1 && running.controller().completion_open() &&
+               running.controller().frame().typed == 2,
+           "with the sparks on a running server is asked once for the trigger");
+}
+
 // 面の配置: 選んでいる行が無い（rows 以上）ときは先頭から出す。
 void verify_layout_without_choice()
 {
@@ -719,6 +760,7 @@ void verify_vim_insert_completion()
     verify_triggered_waiting();
     verify_triggered_replays();
     verify_triggered_off();
+    verify_triggered_with_sparks();
     verify_triggered_not_typed();
     verify_triggered_after_pending();
     verify_triggered_recording();

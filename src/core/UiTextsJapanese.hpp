@@ -470,5 +470,8 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::palette_references_subject, "{0} の参照"},
     {UiMessage::notice_signature_not_found, "引数の情報がありません"},
     {UiMessage::notice_signature_not_supported, "この言語サーバーは引数の情報に答えません"},
+    {UiMessage::settings_caret_sparks_name, "打ったときの粒"},
+    {UiMessage::settings_caret_sparks_description,
+     "文字を打つと、打った所から小さな粒が散って消える"},
 }};
 } // namespace nenenib::core

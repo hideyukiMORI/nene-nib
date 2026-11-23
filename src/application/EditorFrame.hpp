@@ -202,6 +202,12 @@ struct EditorFrame
     // キャレットの動きの進み（ADR 0192 の決定 3）。最後に届いた合図 CaretMotionTick の番号と経過。
     // renderer は設定の caret_motion がオンのときだけ読む（オフの道は欄を読まない）。
     core::CaretMotionClock caret_motion{};
+    // 打ったときの粒（ADR 0192 の追補・#1979）。caret_sparks は最後に届いた合図の粒の時計、typed は
+    // 使う人が打った文字が本文に入った打鍵の通し番号（設定の caret_sparks がオンの間だけ数える・貼
+    // り付け・再生・`.`・undo・移動では増えない）。renderer は設定がオンのときだけ読み、番号が前の
+    // frame と違えばキャレットの所に粒を散らす（向きと速さはこの番号から決まる）。
+    core::CaretMotionClock caret_sparks{};
+    std::uint32_t typed = 0;
 };
 
 // 変換中か（本文と入力行のどちらかに変換がある・ADR 0061 の決定 4）。ui が変換中かを見るのは

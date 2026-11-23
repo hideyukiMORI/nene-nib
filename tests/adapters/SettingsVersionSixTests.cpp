@@ -24,13 +24,14 @@ using nenenib::adapters::win32::SettingsVersion;
 using nenenib::application::SettingsFailure;
 
 // 1.1.0 の v5 の見本を v6 の形にした bytes（版の行を 6 にし、finder_preview の後ろに
-// caret_motion=off と caret_motion_time=120 を足す）。
+// caret_motion=off と caret_motion_time=120 と caret_sparks=off を足す）。
 std::string released_v5_as_v6()
 {
     std::string bytes(released_v5_settings);
     bytes.replace(0, std::string_view{"version=5"}.size(), "version=6");
     const std::string_view preview = "finder_preview=right\n";
-    bytes.insert(bytes.find(preview) + preview.size(), "caret_motion=off\ncaret_motion_time=120\n");
+    bytes.insert(bytes.find(preview) + preview.size(),
+                 "caret_motion=off\ncaret_motion_time=120\ncaret_sparks=off\n");
     return bytes;
 }
 
@@ -61,7 +62,8 @@ void verify_released_v5(Expect expect)
     expect(read && encode_settings(read.value()) == released_v5_as_v6(),
            "the 1.1.0 settings are written back in the v6 form with the caret motion keys after "
            "finder_preview and the unknown language row kept");
-    for (const auto extra : {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n"})
+    for (const auto extra : {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n",
+                             "caret_sparks=off\n", "caret_sparks=on\n"})
     {
         const auto refused =
             decode_settings(std::string(released_v5_settings) + extra, SettingsVersion::v5);
@@ -75,33 +77,42 @@ void verify_released_v5(Expect expect)
            "a v5 is not read as v6 and a v6 is not read as v5");
 }
 
-// v6 の 2 つの鍵。無ければ既定、有れば厳密に読み、往復する。
+// v6 の 3 つの鍵（打ったときの粒の caret_sparks は ADR 0192 の追補・#1979）。無ければ既定、有れば厳
+// 密に読み、往復する。
 void verify_v6_keys(Expect expect)
 {
     auto settings = core::default_editor_settings();
     settings.caret_motion = true;
     settings.caret_motion_time = 200;
+    settings.caret_sparks = true;
     const auto bytes = encode_settings(settings);
     const auto read = decode_settings(bytes, SettingsVersion::v6);
     expect(read && read.value().caret_motion && read.value().caret_motion_time == 200 &&
-               bytes.find("\ncaret_motion=on\ncaret_motion_time=200\n") != std::string::npos,
-           "caret motion and its time round trip through v6");
-    const auto missing = decode_settings(
-        without_key(without_key(released_v5_as_v6(), "caret_motion"), "caret_motion_time"),
-        SettingsVersion::v6);
-    expect(missing && !missing.value().caret_motion && missing.value().caret_motion_time == 120,
+               read.value().caret_sparks &&
+               bytes.find("\ncaret_motion=on\ncaret_motion_time=200\ncaret_sparks=on\n") !=
+                   std::string::npos,
+           "caret motion, its time and the sparks round trip through v6");
+    const auto missing =
+        decode_settings(without_key(without_key(without_key(released_v5_as_v6(), "caret_motion"),
+                                                "caret_motion_time"),
+                                    "caret_sparks"),
+                        SettingsVersion::v6);
+    expect(missing && !missing.value().caret_motion && missing.value().caret_motion_time == 120 &&
+               !missing.value().caret_sparks,
            "a v6 without the caret motion keys takes the defaults");
     for (const auto &[key, value] :
          {std::pair{"caret_motion", "yes"}, std::pair{"caret_motion", ""},
           std::pair{"caret_motion_time", "20"}, std::pair{"caret_motion_time", "301"},
-          std::pair{"caret_motion_time", "0120"}, std::pair{"caret_motion_time", ""}})
+          std::pair{"caret_motion_time", "0120"}, std::pair{"caret_motion_time", ""},
+          std::pair{"caret_sparks", "1"}, std::pair{"caret_sparks", ""}})
     {
         const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
         expect(!broken && broken.error() == SettingsFailure::malformed,
                "a malformed caret motion value is refused");
     }
-    expect(!decode_settings(bytes + "caret_motion=on\n", SettingsVersion::v6),
-           "a duplicate caret motion key is refused");
+    expect(!decode_settings(bytes + "caret_motion=on\n", SettingsVersion::v6) &&
+               !decode_settings(bytes + "caret_sparks=on\n", SettingsVersion::v6),
+           "a duplicate caret motion or sparks key is refused");
 }
 } // namespace
 
@@ -113,7 +124,7 @@ bool released_v5_values(const core::EditorSettings &settings)
            settings.lsp_commands.size() == 2 && settings.mapleader == "<Space>" &&
            settings.maps.size() == 1 && settings.autoindent &&
            settings.finder_preview == core::FinderPreview::right && !settings.caret_motion &&
-           settings.caret_motion_time == 120;
+           settings.caret_motion_time == 120 && !settings.caret_sparks;
 }
 
 void verify_settings_v6_codec(Expect expect)
