@@ -69,6 +69,26 @@ Screenshots use the default font and size in a development build of 2026-10-12; 
 
 </details>
 
+## Speed and memory
+
+<a href="https://youtube.com/shorts/8rAQmeq9qfU"><img src="docs/images/nib-short-compare.png" width="200" align="right" alt="NeNe Nib and Windows Notepad open the same 16 MiB file side by side. Watch the 10-second video on YouTube."></a>
+
+Three editors, the same files, measured the same way from outside the apps. Medians of 20 runs for time and 10 for memory.
+
+| | NeNe Nib 1.1.0 | Sakura Editor 2.4.3 | Windows Notepad 11.2609 |
+|---|---:|---:|---:|
+| Open a 200-line file, until text appears | **100 ms** | 267 ms | 450 ms |
+| Open a 16 MiB file, until text appears | **117 ms** | 383 ms | 908 ms |
+| RAM after opening 200 lines | 14.1 MiB | **11.6 MiB** | 40.4 MiB |
+| RAM after opening 16 MiB | **30.4 MiB** | 54.2 MiB | 88.7 MiB |
+| Package size | **4.75 MB** | 5.62 MB | 18.55 MB |
+
+One PC (Core i9-10850K, RTX 3090, Windows 11), default settings, the same window size, and files in the OS cache.
+RAM is the private working set and excludes GPU memory. Sakura Editor is 3.61 MB without its help files, and its executable is
+smaller than Nib's. Notepad's size excludes the runtimes it needs. See the [measurement record](docs/quality/editor-comparison-2026-11-23.md).
+
+<br clear="right">
+
 ## Find your theme
 
 ![Eight NeNe Nib theme color samples, with four dark palettes above four light palettes.](docs/images/nib-theme-gallery.svg)
