@@ -357,7 +357,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::settings_font_family_description, "本文の字体"},
     {UiMessage::settings_font_size_name, "文字の大きさ"},
     {UiMessage::settings_font_size_description, "本文の字の大きさ（pt）"},
-    {UiMessage::settings_finder_preview_name, "探す一覧のプレビュー"},
+    {UiMessage::settings_finder_preview_name, "Ctrl+P のプレビュー"},
     {UiMessage::settings_finder_preview_description, "Ctrl+P の一覧のプレビュー欄の置き方"},
     {UiMessage::settings_wrap_name, "折り返し"},
     {UiMessage::settings_wrap_description, "長い行を窓の幅で折り返す"},
