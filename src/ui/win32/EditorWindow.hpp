@@ -259,7 +259,10 @@ class EditorWindow final
     [[nodiscard]] bool wheel_settings(std::int32_t delta, LPARAM data);
     // 選ぶ欄の一覧（#1926）。描いた一覧があるか・点の下の選択肢・点が一覧の中か・マウスの動き・一覧の
     // 上のホイール・窓の大きさが変わったときに閉じる。
-    [[nodiscard]] bool settings_choice_shown() const noexcept;
+    [[nodiscard]] std::size_t settings_choice_rows_drawn() const noexcept;
+    void follow_settings_choice_timer(const application::EditorIntent &intent);
+    // Alt+↓ / Alt+↑ を受けた後の SC_KEYMENU を捨てたか（レビュー R3）。
+    [[nodiscard]] bool take_settings_key_menu(WPARAM word, LPARAM data) noexcept;
     [[nodiscard]] std::optional<std::size_t> settings_choice_under(LPARAM data) const;
     [[nodiscard]] bool settings_choice_inside(LPARAM data) const;
     [[nodiscard]] bool point_settings_choice(LPARAM data);
@@ -718,6 +721,8 @@ class EditorWindow final
     // 動きでは送らない・#1926）。
     std::optional<std::size_t> settings_choice_pressed_;
     std::optional<std::size_t> settings_choice_hovered_;
+    // 一覧の Alt+↓ / Alt+↑ を受けてから次の Alt の押しまでか（その間の SC_KEYMENU を捨てる・R3）。
+    bool settings_alt_taken_ = false;
     std::int32_t settings_wheel_remainder_ = 0;
     wchar_t settings_high_surrogate_ = 0;
     // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。

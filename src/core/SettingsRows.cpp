@@ -17,6 +17,8 @@
 #include "IndentGuideStyle.hpp"
 #include "PaneResizeStep.hpp"
 #include "SettingsChoices.hpp"
+#include "SettingsControl.hpp"
+#include "SettingsPanel.hpp"
 #include "SettingsRow.hpp"
 #include "SettingsSection.hpp"
 #include "SettingsSubject.hpp"
@@ -523,6 +525,12 @@ EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue val
 std::size_t settings_choice_count(const EditorSettings &settings, SettingsValue value,
                                   const std::optional<ThemeChoice> &kept) noexcept
 {
+    // 「一覧を持つか」は面の部品の決め（settings_control_of の choice）の 1 本を読む（レビュー
+    // M1）。choice の値の列が 2 未満なら試験 verify_choice_rows_have_lists が落ちる。
+    if (settings_control_of(SettingsSubject{value}, false) != SettingsControl::choice)
+    {
+        return 0;
+    }
     switch (value)
     {
     case SettingsValue::theme:
@@ -553,6 +561,10 @@ std::optional<std::size_t> settings_choice_position(const EditorSettings &settin
                                                     SettingsValue value,
                                                     const std::optional<ThemeChoice> &kept) noexcept
 {
+    if (settings_choice_count(settings, value, kept) == 0)
+    {
+        return std::nullopt;
+    }
     switch (value)
     {
     case SettingsValue::theme:
@@ -624,6 +636,10 @@ std::vector<std::string> settings_choice_texts(const EditorSettings &settings, S
                                                const std::optional<ThemeChoice> &kept,
                                                DisplayLanguage language)
 {
+    if (settings_choice_count(settings, value, kept) == 0)
+    {
+        return {};
+    }
     const auto said = [language](UiMessage message) { return ui_text(message, language); };
     switch (value)
     {

@@ -10,6 +10,7 @@
 #include "CloseSettings.hpp"
 #include "CloseSettingsChoice.hpp"
 #include "DisplayLanguage.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFeature.hpp"
@@ -18,6 +19,7 @@
 #include "FocusSettingsRow.hpp"
 #include "InsertText.hpp"
 #include "LayoutRect.hpp"
+#include "NewTab.hpp"
 #include "OpenSettings.hpp"
 #include "OpenSettingsChoice.hpp"
 #include "PointSettingsChoice.hpp"
@@ -25,27 +27,35 @@
 #include "Scopes.hpp"
 #include "ScrollSettings.hpp"
 #include "ScrollSettingsChoice.hpp"
+#include "SelectEditMode.hpp"
 #include "SettingsChoiceLayout.hpp"
 #include "SettingsChoiceRequest.hpp"
 #include "SettingsChoiceTimeout.hpp"
 #include "SettingsChoiceView.hpp"
 #include "SettingsChoices.hpp"
+#include "SettingsControl.hpp"
 #include "SettingsPanel.hpp"
 #include "SettingsRows.hpp"
 #include "SettingsValue.hpp"
 #include "SettingsView.hpp"
+#include "SettleRecentTab.hpp"
 #include "StepSettings.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "ThemeChoice.hpp"
 #include "ThemeDocument.hpp"
 #include "ThemeName.hpp"
 #include "TypeSettingsChoice.hpp"
+#include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <variant>
 #include <vector>
 
 namespace nenenib::tests
@@ -56,13 +66,45 @@ namespace app = nenenib::application;
 namespace core = nenenib::core;
 
 constexpr std::uint32_t dpi = 96;
-constexpr std::array<core::SettingsValue, 6> choice_values{
-    core::SettingsValue::theme,
-    core::SettingsValue::ui_language,
-    core::SettingsValue::finder_preview,
-    core::SettingsValue::indent_guide_style,
-    core::SettingsValue::indent_guide_active,
-    core::SettingsValue::pane_resize_step_vim};
+
+// 面の表の値の行のうち、部品が選ぶ欄（choice）の値の列（手で並べない・レビュー M1）。
+[[nodiscard]] std::vector<core::SettingsValue> choice_values()
+{
+    std::vector<core::SettingsValue> values;
+    for (const auto &row : core::settings_rows)
+    {
+        if (std::holds_alternative<core::SettingsValue>(row.subject) &&
+            core::settings_control_of(row.subject, false) == core::SettingsControl::choice)
+        {
+            values.push_back(std::get<core::SettingsValue>(row.subject));
+        }
+    }
+    return values;
+}
+
+// 表の値の行の全部で「部品が選ぶ欄」と「一覧が 2 つ以上の選択肢を持つ」が一致する（レビュー M1）。
+// 値を choice にして一覧の case を足し忘れる（数 0）と、Enter と値の箱のクリックが何もしなくなる。
+void verify_choice_rows_have_lists()
+{
+    const auto settings = core::default_editor_settings();
+    bool matched = true;
+    std::size_t choices = 0;
+    for (const auto &row : core::settings_rows)
+    {
+        if (!std::holds_alternative<core::SettingsValue>(row.subject))
+        {
+            continue;
+        }
+        const auto value = std::get<core::SettingsValue>(row.subject);
+        const bool choice =
+            core::settings_control_of(row.subject, false) == core::SettingsControl::choice;
+        const auto count = core::settings_choice_count(settings, value, std::nullopt);
+        matched = matched && choice == (count >= 2) && (choice || count == 0);
+        choices += choice ? 1U : 0U;
+    }
+    expect(matched && choices > 0,
+           "every choice value row has a list of two or more and no other value row has one");
+}
 
 [[nodiscard]] bool same_value(const core::EditorSettings &left, const core::EditorSettings &right,
                               core::SettingsValue value)
@@ -78,7 +120,7 @@ void verify_lists_follow_the_steps()
     const auto settings = core::default_editor_settings();
     bool ordered = true;
     bool named = true;
-    for (const auto value : choice_values)
+    for (const auto value : choice_values())
     {
         const auto count = core::settings_choice_count(settings, value, std::nullopt);
         const auto texts = core::settings_choice_texts(settings, value, std::nullopt,
@@ -192,11 +234,24 @@ void verify_layout()
                core::settings_choice_centred(126, 125) == 116 &&
                core::settings_choice_centred(4, 3) == 0,
            "opening scrolls the current choice to the middle of the shown rows");
-    expect(core::settings_choice_paged(126, 0, true) == 9 &&
-               core::settings_choice_paged(126, 120, true) == 125 &&
-               core::settings_choice_paged(126, 5, false) == 0 &&
-               core::settings_choice_paged(2, 0, true) == 1,
-           "a page moves by the shown rows less one and stops at the ends");
+    expect(core::settings_choice_paged(126, 0, true, 0) == 9 &&
+               core::settings_choice_paged(126, 120, true, 10) == 125 &&
+               core::settings_choice_paged(126, 5, false, 10) == 0 &&
+               core::settings_choice_paged(2, 0, true, 0) == 1 &&
+               core::settings_choice_paged(126, 0, true, 3) == 2,
+           "a page moves by the shown rows less one (fewer in a low window) and stops at the ends");
+    const auto bar = core::settings_choice_thumb(below);
+    const auto wide_row = core::settings_choice_row(wide, 0);
+    expect(!core::settings_choice_hit(below, bar.left, bar.top + 1).has_value() &&
+               core::settings_choice_hit(wide, wide.panel.right - 2, wide_row.top + 2) ==
+                   std::optional<std::size_t>{0},
+           "the scroll bar column picks no choice and a list without a bar picks to its edge");
+    expect(core::settings_choice_scrolled(below, 0, 3) == std::optional<std::size_t>{3} &&
+               core::settings_choice_scrolled(below, 114, 5) == std::optional<std::size_t>{116} &&
+               !core::settings_choice_scrolled(below, 116, 2).has_value() &&
+               !core::settings_choice_scrolled(below, 0, -1).has_value() &&
+               !core::settings_choice_scrolled(wide, 0, 3).has_value(),
+           "the wheel scrolls the list from the state's scroll and stops at the ends");
 }
 
 [[nodiscard]] const app::SettingsView &panel_of(const app::EditorFrame &frame)
@@ -328,10 +383,37 @@ void verify_typing_and_signals()
     expect(!controller.frame().settings_panel.has_value() && editing.settings().writes() == 0,
            "typing in the text closes the panel and the list without a choice to save");
 }
+
+// 頭文字の 1 秒の合図は合図（is_signal）の側で、Ctrl+Tab の歩きも 1
+// 意図の知らせも動かさない（レビュー R4 a・`map` の待ちは KeyMapTests の
+// verify_flush_before_intents）。
+void verify_timeout_is_a_signal()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::VisibleLines{10}));
+    static_cast<void>(controller.apply(app::InsertText{"a"}));
+    for (const std::string_view body : {"b", "c", "d"})
+    {
+        static_cast<void>(controller.apply(app::NewTab{}));
+        static_cast<void>(controller.apply(app::InsertText{std::string(body)}));
+    }
+    static_cast<void>(controller.apply(app::WalkRecentTab{core::TabStep::next}));
+    static_cast<void>(controller.apply(app::SettingsChoiceTimeout{}));
+    expect(controller.tab_walking(), "the typing signal does not settle the Ctrl+Tab walk");
+    static_cast<void>(controller.apply(app::SettleRecentTab{}));
+    static_cast<void>(controller.apply(app::SelectEditMode{core::EditMode::vim}));
+    const auto rejected = run_ex(controller, "tabnext 9");
+    const auto after = controller.apply_frame(app::SettingsChoiceTimeout{});
+    expect(rejected.command_message.has_value() && after.command_message.has_value(),
+           "the typing signal keeps the one-intent notice");
+}
 } // namespace
 
 void verify_settings_choice_scope()
 {
+    verify_choice_rows_have_lists();
+    verify_timeout_is_a_signal();
     verify_lists_follow_the_steps();
     verify_outside_scheme();
     verify_typed_jump();

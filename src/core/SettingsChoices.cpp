@@ -160,11 +160,27 @@ std::optional<std::size_t> settings_choice_hit(const SettingsChoiceLayout &layou
 {
     const auto top = layout.panel.top + inner_gap(layout.dpi);
     const auto bottom = top + (row_height(layout.dpi) * static_cast<std::int32_t>(layout.rows));
-    if (!contains(layout.panel, x, y) || y < top || y >= bottom)
+    // 送りの棒の欄（送れるときの右端の内側）はどの行にも当たらない（棒の上の押しで決めない）。
+    const auto bar = settings_choice_thumb(layout);
+    const bool on_bar = width_of(bar) > 0 && x >= bar.left;
+    if (!contains(layout.panel, x, y) || y < top || y >= bottom || on_bar)
     {
         return std::nullopt;
     }
     return layout.first + static_cast<std::size_t>((y - top) / row_height(layout.dpi));
+}
+
+std::optional<std::size_t> settings_choice_scrolled(const SettingsChoiceLayout &layout,
+                                                    std::size_t from, std::int32_t lines) noexcept
+{
+    const auto last = static_cast<std::int64_t>(layout.count - std::min(layout.rows, layout.count));
+    const auto origin = std::min(static_cast<std::int64_t>(from), last);
+    const auto moved = std::clamp(origin + lines, std::int64_t{0}, last);
+    if (lines == 0 || moved == static_cast<std::int64_t>(from))
+    {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(moved);
 }
 
 std::size_t settings_choice_revealing(const SettingsChoiceLayout &layout, std::size_t at) noexcept
@@ -188,13 +204,16 @@ std::size_t settings_choice_centred(std::size_t count, std::size_t at) noexcept
     return std::min(top, count - rows);
 }
 
-std::size_t settings_choice_paged(std::size_t count, std::size_t at, bool down) noexcept
+std::size_t settings_choice_paged(std::size_t count, std::size_t at, bool down,
+                                  std::size_t rows) noexcept
 {
     if (count == 0)
     {
         return 0;
     }
-    const std::size_t step = std::max<std::size_t>(shown_rows(count) - 1, 1);
+    // 見えている行の数（描く前・0 なら最大の行の数）。窓が低くて行が少ないときもその数で歩く。
+    const std::size_t shown = rows == 0 ? shown_rows(count) : std::min(rows, count);
+    const std::size_t step = std::max<std::size_t>(shown - 1, 1);
     return down ? std::min(at + step, count - 1) : (at >= step ? at - step : 0);
 }
 } // namespace nenenib::core

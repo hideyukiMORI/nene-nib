@@ -59,6 +59,8 @@ class SettingsPanelPainter final
                const core::Palette &palette, core::RgbColor heavy);
     // 選ぶ欄の一覧の配置（一覧が開いていなければ値なし・#1926）。錨は焦点の行の値の箱、出してよい所は
     // 面の行の領域の幅で面の上下いっぱい、幅は選択肢の名前を測って渡す。
+    // 最後の paint が描いた一覧の配置（描いていなければ値なし・窓の当たりがこれを引く）。
+    [[nodiscard]] const std::optional<core::SettingsChoiceLayout> &painted_choice() const noexcept;
     [[nodiscard]] std::optional<core::SettingsChoiceLayout>
     arranged_choice(const application::SettingsView &view,
                     const core::SettingsLayout &layout) const;
@@ -142,5 +144,6 @@ class SettingsPanelPainter final
     PaletteRowLayouts &layouts_;
     core::Palette palette_{};
     core::RgbColor heavy_{};
+    std::optional<core::SettingsChoiceLayout> painted_choice_;
 };
 } // namespace nenenib::ui::win32

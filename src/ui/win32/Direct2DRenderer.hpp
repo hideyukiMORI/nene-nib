@@ -160,14 +160,12 @@ class Direct2DRenderer final
     // - settings_choice_layout: 最後に描いた一覧の配置（一覧を描いていなければ値なし・当たり）。
     // - settings_choice_revealed: view の選ぼうとしている行が見える一覧の送り（今のままでよければ
     //   値なし）。配置は最後に描いた帯で view から作り直す。
-    // - settings_choice_scrolled: 一覧をホイールで lines 行送った送り（変わらなければ値なし）。
+
     [[nodiscard]] const std::optional<core::SettingsChoiceLayout> &
     settings_choice_layout() const noexcept;
     [[nodiscard]] std::optional<std::size_t>
     settings_choice_revealed(const application::SettingsView &view, core::DisplayLanguage language);
-    [[nodiscard]] std::optional<std::size_t>
-    settings_choice_scrolled(const application::SettingsView &view, core::DisplayLanguage language,
-                             std::int32_t lines);
+
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,

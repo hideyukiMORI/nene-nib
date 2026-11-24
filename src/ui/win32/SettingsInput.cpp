@@ -12,6 +12,7 @@
 #include "OpenSettingsChoice.hpp"
 #include "PointSettingsChoice.hpp"
 #include "RevertSettings.hpp"
+#include "ScrollSettingsChoice.hpp"
 #include "SettingsChoiceKeyAction.hpp"
 #include "SettingsChoiceView.hpp"
 #include "SettingsChoices.hpp"
@@ -158,7 +159,8 @@ constexpr unsigned char continuation_mark = 0x80;
 // 一覧が開いている間の鍵（#1926）。
 [[nodiscard]] SettingsIntents choice_acted(SettingsChoiceKeyAction action,
                                            const SettingsKeyPress &press,
-                                           const application::SettingsChoiceView &choice)
+                                           const application::SettingsChoiceView &choice,
+                                           std::size_t rows)
 {
     const std::size_t count = choice.choices.size();
     switch (action)
@@ -174,9 +176,9 @@ constexpr unsigned char continuation_mark = 0x80;
     case SettingsChoiceKeyAction::last:
         return pointed(choice, std::max<std::size_t>(count, 1) - 1);
     case SettingsChoiceKeyAction::page_up:
-        return pointed(choice, core::settings_choice_paged(count, choice.candidate, false));
+        return pointed(choice, core::settings_choice_paged(count, choice.candidate, false, rows));
     case SettingsChoiceKeyAction::page_down:
-        return pointed(choice, core::settings_choice_paged(count, choice.candidate, true));
+        return pointed(choice, core::settings_choice_paged(count, choice.candidate, true, rows));
     case SettingsChoiceKeyAction::choose:
         return {application::ChooseSettingsChoice{}};
     case SettingsChoiceKeyAction::cancel:
@@ -260,7 +262,8 @@ constexpr unsigned char continuation_mark = 0x80;
 }
 
 // 行のクリックは焦点を置き、スイッチの行と畳みの行はどこを押しても切り替える。選ぶ欄は欄を押すと
-// 次の値、段の上下は − と ＋、言語サーバーの行の「使う」「外す」はボタンを押したときだけ。
+// 一覧を開き（#1926）、段の上下は − と
+// ＋、言語サーバーの行の「使う」「外す」はボタンを押したときだけ。
 [[nodiscard]] SettingsIntents row_clicked(core::SettingsTarget target,
                                           const application::SettingsView &view)
 {
@@ -369,13 +372,14 @@ constexpr unsigned char continuation_mark = 0x80;
 
 SettingsIntents settings_key_intents(const SettingsKeyPress &press,
                                      const application::SettingsView &view,
-                                     const std::optional<core::SettingsLayout> &layout)
+                                     const std::optional<core::SettingsLayout> &layout,
+                                     std::size_t choice_rows)
 {
     // 一覧が開いている間の鍵は一覧へ（面の鍵・節の鍵へ通さない・#1926）。
     if (view.choice.has_value())
     {
         return choice_acted(settings_choice_key_action(press.key, press.control), press,
-                            view.choice.value());
+                            view.choice.value(), choice_rows);
     }
     const auto section = settings_section_key(press.key, press.control);
     if (section.has_value())
@@ -455,6 +459,50 @@ SettingsIntents settings_choice_release_intents(std::optional<std::size_t> press
         return {};
     }
     return {application::PointSettingsChoice{pressed.value()}, application::ChooseSettingsChoice{}};
+}
+
+std::pair<std::optional<std::size_t>, SettingsIntents>
+settings_choice_hover_step(std::optional<std::size_t> hovered, std::optional<std::size_t> under)
+{
+    if (!under.has_value() || under == hovered)
+    {
+        return {hovered, SettingsIntents{}};
+    }
+    return {under, SettingsIntents{application::PointSettingsChoice{under.value()}}};
+}
+
+std::optional<SettingsIntents> settings_choice_right_press_intents(bool open)
+{
+    if (!open)
+    {
+        return std::nullopt;
+    }
+    return SettingsIntents{application::CloseSettingsChoice{}};
+}
+
+std::optional<SettingsIntents> settings_choice_wheel_intents(bool inside, bool over_panel,
+                                                             std::optional<std::size_t> scrolled)
+{
+    if (inside)
+    {
+        return scrolled.has_value()
+                   ? SettingsIntents{application::ScrollSettingsChoice{scrolled.value()}}
+                   : SettingsIntents{};
+    }
+    if (over_panel)
+    {
+        return SettingsIntents{};
+    }
+    return std::nullopt;
+}
+
+SettingsIntents settings_choice_resize_intents(bool open)
+{
+    if (!open)
+    {
+        return {};
+    }
+    return {application::CloseSettingsChoice{}};
 }
 
 std::pair<std::optional<SettingsPress>, SettingsIntents>

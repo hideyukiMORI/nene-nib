@@ -70,7 +70,8 @@ settings_choice_layout(const SettingsChoiceRequest &request) noexcept;
 // 送りの棒のつまみ（選択肢が全部見えていれば幅 0）。
 [[nodiscard]] LayoutRect settings_choice_thumb(const SettingsChoiceLayout &layout) noexcept;
 // 点（クライアント座標の物理画素）の下の選択肢の位置（layout.first + 行）。一覧の外と上下の内側の
-// 空きは値なし（一覧の中かは contains(layout.panel, …) で引く）。描画と窓の当たりが同じ配置を読む。
+// 空きと送りの棒の欄は値なし（一覧の中かは contains(layout.panel, …)
+// で引く）。描画と窓の当たりが同じ配置を読む。
 [[nodiscard]] std::optional<std::size_t>
 settings_choice_hit(const SettingsChoiceLayout &layout, std::int32_t x, std::int32_t y) noexcept;
 // 位置 at が見える送り（見えていれば layout.first のまま）。
@@ -78,7 +79,13 @@ settings_choice_hit(const SettingsChoiceLayout &layout, std::int32_t x, std::int
                                                     std::size_t at) noexcept;
 // 開いた直後の送り: 位置 at が見える範囲（最大 settings_choice_rows 行）の中ほどに来る送り。
 [[nodiscard]] std::size_t settings_choice_centred(std::size_t count, std::size_t at) noexcept;
-// PgUp / PgDn の 1 歩の行き先（見える行の数 - 1 ずつ・端で止まる）。
-[[nodiscard]] std::size_t settings_choice_paged(std::size_t count, std::size_t at,
-                                                bool down) noexcept;
+// PgUp / PgDn の 1 歩の行き先（見えている行の数 rows - 1 ずつ・端で止まる）。rows が 0（まだ
+// 描いていない）なら最大の行の数で数える。
+[[nodiscard]] std::size_t settings_choice_paged(std::size_t count, std::size_t at, bool down,
+                                                std::size_t rows) noexcept;
+// 一覧を送り from からホイールで lines 行送った送り（最後の rows 行が見える所で止まる・変わら
+// なければ値なし）。from は application の状態の送り（描く前に 2 通来ても 1 通目が消えない）。
+[[nodiscard]] std::optional<std::size_t>
+settings_choice_scrolled(const SettingsChoiceLayout &layout, std::size_t from,
+                         std::int32_t lines) noexcept;
 } // namespace nenenib::core

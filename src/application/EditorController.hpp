@@ -276,6 +276,10 @@ class EditorController final
     // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
     // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
     [[nodiscard]] bool settings_open() const noexcept;
+    // 設定の面の選ぶ欄の一覧が開いているか（#1926・レビュー
+    // R1）。右クリック・ホイール・窓の大きさ・
+    // マウスの動きの行き先を、最後に描いた配置ではなく状態から決めるための安い読み。
+    [[nodiscard]] bool settings_choice_open() const noexcept;
     // 設定の面の表示値（開いていなければ値なし）。frame に載る値と同じで、窓が鍵とマウスの後に
     // 焦点の行と送りを読む口（本文の frame を作らない・#1836）。
     [[nodiscard]] std::optional<SettingsView> settings_view() const;

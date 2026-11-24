@@ -22,9 +22,11 @@
 #include "PointSettingsChoice.hpp"
 #include "RevertSettings.hpp"
 #include "ScrollSettings.hpp"
+#include "ScrollSettingsChoice.hpp"
 #include "SettingsChoiceView.hpp"
 #include "SettingsInput.hpp"
 #include "SettingsKeyPress.hpp"
+#include "SettingsKeys.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsPart.hpp"
 #include "SettingsPreset.hpp"
@@ -453,6 +455,47 @@ void verify_choice_keys()
     expect(panel_only, "every key and character of the open list maps to panel intents only");
 }
 
+// #1926（レビューの観点 7・R1・R3）:
+// 一覧の上のマウスの動き・右の押し・ホイール・窓の大きさの変化と、 Alt+↓ を受けた後の
+// SC_KEYMENU。開いているかは controller の状態（open）を渡す。
+void verify_choice_pointer()
+{
+    using nenenib::ui::win32::settings_choice_hover_step;
+    using nenenib::ui::win32::settings_choice_resize_intents;
+    using nenenib::ui::win32::settings_choice_right_press_intents;
+    using nenenib::ui::win32::settings_choice_wheel_intents;
+    using nenenib::ui::win32::settings_swallows_key_menu;
+    const auto [moved, pointing] = settings_choice_hover_step(std::nullopt, 4);
+    const auto [stayed, quiet] = settings_choice_hover_step(4, 4);
+    const auto [gap, nothing] = settings_choice_hover_step(4, std::nullopt);
+    expect(moved == std::optional<std::size_t>{4} && points_at(pointing, 4) &&
+               stayed == std::optional<std::size_t>{4} && quiet.empty() &&
+               gap == std::optional<std::size_t>{4} && nothing.empty(),
+           "moving onto another row points at it; the same row and the gaps send nothing");
+    const auto right = settings_choice_right_press_intents(true);
+    expect(right.has_value() && only<app::CloseSettingsChoice>(right.value()) &&
+               !settings_choice_right_press_intents(false).has_value(),
+           "a right press closes an open list and is left to the panel when no list is open");
+    const auto scrolled = settings_choice_wheel_intents(true, true, 7);
+    const auto still = settings_choice_wheel_intents(true, true, std::nullopt);
+    const auto panel = settings_choice_wheel_intents(false, true, std::nullopt);
+    expect(scrolled.has_value() && scrolled.value().size() == 1 &&
+               std::holds_alternative<app::ScrollSettingsChoice>(scrolled.value().front()) &&
+               std::get<app::ScrollSettingsChoice>(scrolled.value().front()).top == 7 &&
+               still.has_value() && still.value().empty() && panel.has_value() &&
+               panel.value().empty() &&
+               !settings_choice_wheel_intents(false, false, std::nullopt).has_value(),
+           "the wheel scrolls the list, is taken over the panel and left to the text outside");
+    expect(only<app::CloseSettingsChoice>(settings_choice_resize_intents(true)) &&
+               settings_choice_resize_intents(false).empty(),
+           "a window size change closes an open list without choosing");
+    expect(settings_swallows_key_menu(SC_KEYMENU, 0, true) &&
+               !settings_swallows_key_menu(SC_KEYMENU, 0, false) &&
+               !settings_swallows_key_menu(SC_KEYMENU, 'f', true) &&
+               !settings_swallows_key_menu(SC_CLOSE, 0, true),
+           "only the bare SC_KEYMENU after an Alt key the list took is swallowed");
+}
+
 // #1926: 一覧の上のマウス。外の押しは閉じるだけ・行の押しはその行を選ぼうとしている行にする・同じ行
 // で離すと決める・ほかの行や外で離すと何もしない・上下の空きは何もしない。
 void verify_choice_mouse()
@@ -473,6 +516,7 @@ void verify_choice_mouse()
                settings_choice_release_intents(held, std::nullopt).empty() &&
                settings_choice_release_intents(std::nullopt, 3).empty(),
            "releasing on the pressed row chooses it and anywhere else does nothing");
+    verify_choice_pointer();
 }
 } // namespace
 

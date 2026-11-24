@@ -18,6 +18,7 @@
 #include "SettingsChoices.hpp"
 #include "SettingsInput.hpp"
 #include "SettingsKeyPress.hpp"
+#include "SettingsKeys.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsPart.hpp"
 #include "SettingsTarget.hpp"
@@ -70,11 +71,7 @@ void EditorWindow::send_settings(const application::EditorIntent &intent)
 {
     settings_choice_hovered_ = std::nullopt;
     send(intent);
-    if (std::holds_alternative<application::TypeSettingsChoice>(intent) && window_ != nullptr)
-    {
-        static_cast<void>(SetTimer(window_, std::to_underlying(WindowTimer::settings_choice),
-                                   settings_choice_typing_milliseconds, nullptr));
-    }
+    follow_settings_choice_timer(intent);
     if (renderer_ == nullptr)
     {
         return;
@@ -121,7 +118,7 @@ bool EditorWindow::take_settings_key(UINT message, WPARAM word, LPARAM data)
     case WM_KEYDOWN:
         send_settings_all(settings_key_intents(
             SettingsKeyPress{word, control, held(VK_SHIFT), (data & repeated_key_bit) != 0},
-            view.value(), settings_layout_drawn()));
+            view.value(), settings_layout_drawn(), settings_choice_rows_drawn()));
         return true;
     case WM_CHAR:
         send_settings_all(settings_character_intents(static_cast<wchar_t>(word), control,
@@ -136,15 +133,64 @@ bool EditorWindow::take_settings_key(UINT message, WPARAM word, LPARAM data)
 
 // Alt+↓ / Alt+↑ は選ぶ欄の一覧を開く・閉じる（Windows のコンボボックスの標準・#1926）。ほかの Alt
 // の 鍵（Alt+F4 など）は受けず、OS の既定処理へ渡す。
+// 受けた後の Alt の離しで来る SC_KEYMENU は take_settings_key_menu が捨てる（レビュー R3）。次の
+// Alt の 押しで覚えを下ろす。
 bool EditorWindow::take_settings_system_key(WPARAM word, const application::SettingsView &view)
 {
+    if (word == VK_MENU)
+    {
+        settings_alt_taken_ = false;
+    }
     const auto intents = settings_system_key_intents(word, view);
     if (!intents.has_value())
     {
         return false;
     }
+    settings_alt_taken_ = true;
     send_settings_all(intents.value());
     return true;
+}
+
+// Alt+↓ / Alt+↑ を受けた後の SC_KEYMENU を捨てたか（SettingsKeys.hpp・捨てたら覚えを下ろす）。
+bool EditorWindow::take_settings_key_menu(WPARAM word, LPARAM data) noexcept
+{
+    if (!settings_swallows_key_menu(word, data, settings_alt_taken_))
+    {
+        return false;
+    }
+    settings_alt_taken_ = false;
+    return true;
+}
+
+// 一覧へ字を送ったら、打った字を忘れる 1 秒のタイマーを張り直す。一覧が閉じたら止める（閉じた後に
+// 合図が空振りで 1 回届かない・レビューの軽い 3）。
+void EditorWindow::follow_settings_choice_timer(const application::EditorIntent &intent)
+{
+    if (window_ == nullptr)
+    {
+        return;
+    }
+    const auto timer = std::to_underlying(WindowTimer::settings_choice);
+    if (!controller_.settings_choice_open())
+    {
+        static_cast<void>(KillTimer(window_, timer));
+        return;
+    }
+    if (std::holds_alternative<application::TypeSettingsChoice>(intent))
+    {
+        static_cast<void>(SetTimer(window_, timer, settings_choice_typing_milliseconds, nullptr));
+    }
+}
+
+// 最後に描いた一覧の見えている行の数（描いていなければ 0）。
+std::size_t EditorWindow::settings_choice_rows_drawn() const noexcept
+{
+    if (renderer_ == nullptr)
+    {
+        return 0;
+    }
+    const auto &layout = renderer_->settings_choice_layout();
+    return layout.has_value() ? layout.value().rows : 0;
 }
 
 void EditorWindow::send_settings_all(const std::vector<application::EditorIntent> &intents)
@@ -170,7 +216,12 @@ void EditorWindow::follow_settings_closing()
     settings_pressed_ = std::nullopt;
     settings_choice_pressed_ = std::nullopt;
     settings_choice_hovered_ = std::nullopt;
+    settings_alt_taken_ = false;
     settings_high_surrogate_ = 0;
+    if (window_ != nullptr)
+    {
+        static_cast<void>(KillTimer(window_, std::to_underlying(WindowTimer::settings_choice)));
+    }
     cancel_ime_composition();
 }
 
@@ -231,21 +282,17 @@ bool EditorWindow::press_settings_right(LPARAM data)
     {
         return false;
     }
-    // 一覧が開いていれば、どこの右クリックも一覧を決めずに閉じるだけ（#1926）。
-    if (settings_choice_shown())
+    // 一覧が開いていれば、どこの右クリックも一覧を決めずに閉じるだけ（#1926・開いているかは状態
+    // から・レビュー R1）。
+    const auto closing = settings_choice_right_press_intents(controller_.settings_choice_open());
+    if (closing.has_value())
     {
-        send_settings(application::CloseSettingsChoice{});
+        send_settings_all(closing.value());
         return true;
     }
     send_settings_all(
         settings_right_press_intents(settings_target_under(low_word_of(data), high_word_of(data))));
     return true;
-}
-
-// 選ぶ欄の一覧を描いているか（描いた配置があるか）。
-bool EditorWindow::settings_choice_shown() const noexcept
-{
-    return renderer_ != nullptr && renderer_->settings_choice_layout().has_value();
 }
 
 // 点の下の一覧の選択肢（一覧の外と上下の空きは値なし）。
@@ -278,25 +325,23 @@ bool EditorWindow::settings_choice_inside(LPARAM data) const
 // なら真（下の面・本文へ渡さない）。
 bool EditorWindow::point_settings_choice(LPARAM data)
 {
-    if (!settings_choice_inside(data))
+    if (!controller_.settings_choice_open() || !settings_choice_inside(data))
     {
         return false;
     }
-    const auto under = settings_choice_under(data);
-    if (under.has_value() && under != settings_choice_hovered_)
-    {
-        send_settings(application::PointSettingsChoice{under.value()});
-        settings_choice_hovered_ = under;
-    }
+    const auto [hovered, intents] =
+        settings_choice_hover_step(settings_choice_hovered_, settings_choice_under(data));
+    send_settings_all(intents);
+    settings_choice_hovered_ = hovered;
     return true;
 }
 
-// 窓の大きさが変わったら一覧を決めずに閉じる（#1926・設計席の決め）。
+// 窓の大きさが変わったら一覧を決めずに閉じる（#1926・設計席の決め・開いているかは状態から）。
 void EditorWindow::close_settings_choice_on_resize()
 {
-    if (settings_choice_shown())
+    for (const auto &intent : settings_choice_resize_intents(controller_.settings_choice_open()))
     {
-        send(application::CloseSettingsChoice{});
+        send(intent);
     }
 }
 
@@ -329,7 +374,7 @@ bool EditorWindow::wheel_settings(std::int32_t delta, LPARAM data)
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
-    if (settings_choice_shown())
+    if (controller_.settings_choice_open())
     {
         return wheel_settings_choice(delta, point);
     }
@@ -357,22 +402,32 @@ bool EditorWindow::wheel_settings(std::int32_t delta, LPARAM data)
 bool EditorWindow::wheel_settings_choice(std::int32_t delta, POINT point)
 {
     const auto &layout = renderer_->settings_choice_layout();
-    if (!layout.has_value() || !core::contains(layout.value().panel, point.x, point.y))
-    {
-        return settings_takes_wheel(renderer_->settings_target_at(point.x, point.y));
-    }
+    const bool inside =
+        layout.has_value() && core::contains(layout.value().panel, point.x, point.y);
     const auto turn =
         wheel_turned(settings_wheel_remainder_, delta,
                      wheel_lines_per_notch(wheel_setting_, core::settings_choice_rows));
     settings_wheel_remainder_ = turn.remainder;
+    // 起点は application の状態の送り（描く前に 2 通来ても 1 通目が消えない）。
     const auto view = controller_.settings_view();
-    const auto top = turn.lines == 0 || !view.has_value()
-                         ? std::nullopt
-                         : renderer_->settings_choice_scrolled(
-                               view.value(), controller_.display_language(), turn.lines);
-    if (top.has_value())
+    const auto from = view.has_value() && view.value().choice.has_value()
+                          ? view.value().choice.value().top
+                          : std::size_t{0};
+    std::optional<std::size_t> scrolled;
+    if (inside && layout.has_value())
     {
-        send(application::ScrollSettingsChoice{top.value()});
+        scrolled = core::settings_choice_scrolled(layout.value(), from, turn.lines);
+    }
+    const auto intents = settings_choice_wheel_intents(
+        inside, settings_takes_wheel(renderer_->settings_target_at(point.x, point.y)), scrolled);
+    if (!intents.has_value())
+    {
+        return false;
+    }
+    // 送りは選ぼうとしている行へ寄せ直さない（send_settings を通さない）。
+    for (const auto &intent : intents.value())
+    {
+        send(intent);
     }
     return true;
 }

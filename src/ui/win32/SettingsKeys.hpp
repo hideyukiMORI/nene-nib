@@ -116,4 +116,17 @@ namespace nenenib::ui::win32
     }
     return static_cast<std::size_t>(key - '1');
 }
+
+// WM_SYSCOMMAND を既定の処理へ渡さずに捨てるか（#1926・レビュー R3）。設定の一覧の Alt+↓ / Alt+↑ を
+// 面が受けた（WM_SYSKEYDOWN を既定の処理へ渡さなかった）後に Alt を離すと、既定の処理が「Alt だけ
+// 押した」と数えて SC_KEYMENU（lParam が 0・窓のメニューのモード）を送ることがある。そうなると次の
+// ↓ が窓のメニューを開き、Esc がそのモードに食べられる（Shift+F10 の swallows_key_menu と同じ事故・
+// #1051）。捨てるのは alt_taken（受けた後で、次の Alt の押しの前）の間の lParam 0 の SC_KEYMENU
+// だけ。Alt+文字（lParam が文字）・F10・受けていない Alt は今のまま既定の処理へ渡す。
+[[nodiscard]] constexpr bool settings_swallows_key_menu(WPARAM word, LPARAM data,
+                                                        bool alt_taken) noexcept
+{
+    constexpr WPARAM command_mask = 0xFFF0;
+    return alt_taken && (word & command_mask) == SC_KEYMENU && data == 0;
+}
 } // namespace nenenib::ui::win32

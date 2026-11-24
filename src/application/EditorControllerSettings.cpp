@@ -182,6 +182,11 @@ bool EditorController::settings_open() const noexcept
     return settings_.has_value();
 }
 
+bool EditorController::settings_choice_open() const noexcept
+{
+    return settings_.has_value() && settings_.value().choice.has_value();
+}
+
 // 開く前に、Ctrl+P の面・`:` の入力行（配色の仮当てごと）・変換・右クリックのメニューを閉じる
 // （#1835 のレビュー R2・面と入力行を重ねない）。IME は閉じない: 面が開いている間は探す欄で
 // 使え（ime_stance_in_settings）、面が閉じた所で窓が変換を取り消す（#1836 のレビュー M1）。

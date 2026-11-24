@@ -102,8 +102,9 @@ void Direct2DRenderer::draw_settings(const application::EditorFrame &frame,
                                  settings_layouts_);
     settings_area_ = area;
     settings_layout_ = painter.arranged(view, area);
-    settings_choice_layout_ = painter.arranged_choice(view, settings_layout_.value());
     painter.paint(view, settings_layout_.value(), frame.palette, frame.body.error);
+    // 一覧の配置は描いたときの 1 回を当たりにも使う（1 frame に 2 回作らない・レビューの軽い 2）。
+    settings_choice_layout_ = painter.painted_choice();
 }
 
 const std::optional<core::SettingsChoiceLayout> &
@@ -139,20 +140,5 @@ Direct2DRenderer::settings_choice_revealed(const application::SettingsView &view
     const auto &choice = view.choice.value();
     const auto top = core::settings_choice_revealing(layout.value(), choice.candidate);
     return top == choice.top ? std::nullopt : std::optional{top};
-}
-
-std::optional<std::size_t>
-Direct2DRenderer::settings_choice_scrolled(const application::SettingsView &view,
-                                           core::DisplayLanguage language, std::int32_t lines)
-{
-    const auto layout = settings_choice_arranged(view, language);
-    if (!layout.has_value() || lines == 0)
-    {
-        return std::nullopt;
-    }
-    const auto first = static_cast<std::int64_t>(layout.value().first);
-    const auto last = static_cast<std::int64_t>(layout.value().count - layout.value().rows);
-    const auto moved = std::clamp(first + lines, std::int64_t{0}, last);
-    return moved == first ? std::nullopt : std::optional{static_cast<std::size_t>(moved)};
 }
 } // namespace nenenib::ui::win32

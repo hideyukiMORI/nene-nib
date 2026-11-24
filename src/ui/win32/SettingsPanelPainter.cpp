@@ -189,11 +189,17 @@ void SettingsPanelPainter::paint(const application::SettingsView &view,
     target_.PopAxisAlignedClip();
     paint_footer(view, layout);
     // 選ぶ欄の一覧は面のほかの全部の上に描く（行の領域の切り抜きの外・#1926）。
-    const auto choice = arranged_choice(view, layout);
-    if (choice.has_value() && view.choice.has_value())
+    painted_choice_ = arranged_choice(view, layout);
+    if (painted_choice_.has_value() && view.choice.has_value())
     {
-        paint_choice(view.choice.value(), choice.value());
+        paint_choice(view.choice.value(), painted_choice_.value());
     }
+}
+
+const std::optional<core::SettingsChoiceLayout> &
+SettingsPanelPainter::painted_choice() const noexcept
+{
+    return painted_choice_;
 }
 
 std::optional<core::SettingsChoiceLayout>
