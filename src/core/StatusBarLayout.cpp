@@ -214,6 +214,12 @@ StatusBarLayout status_bar_fitted(const StatusBarLayout &layout, std::uint32_t d
     return fitted;
 }
 
+LayoutRect status_after_mode(const StatusBarLayout &fitted, std::int32_t left, bool marked) noexcept
+{
+    const auto right = marked ? fitted.display.left : fitted.items.at(0).left;
+    return LayoutRect{left, fitted.band.top, std::max(left, right), fitted.band.bottom};
+}
+
 StatusBarHit status_bar_hit(const StatusBarLayout &layout, std::int32_t x, std::int32_t y) noexcept
 {
     if (contains(layout.toggle_ordinary, x, y))

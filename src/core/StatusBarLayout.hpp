@@ -70,6 +70,14 @@ inline constexpr std::int32_t status_text_gap_dips = 6;
                                                 std::int32_t mode_width,
                                                 std::int32_t position_width) noexcept;
 
+// モードの文の後ろの欄（録画の `recording @a`・ADR 0046 の決定 8 と、キャレットの上の診断の文・
+// ADR 0161 の 2026-11-24 の追補）。left はモードの文の右端から間を空けた位置（物理画素）、fitted は
+// status_bar_fitted の配置、marked は表示形式の印を書く frame か。右端は印を書くなら印の手前、
+// 書かないなら行と桁の手前。間が無い（細い窓でトグルとモードで左側が埋まる）なら幅 0 の欄で、
+// 呼ぶ側は何も書かない。
+[[nodiscard]] LayoutRect status_after_mode(const StatusBarLayout &fitted, std::int32_t left,
+                                           bool marked) noexcept;
+
 [[nodiscard]] StatusBarHit status_bar_hit(const StatusBarLayout &layout, std::int32_t x,
                                           std::int32_t y) noexcept;
 } // namespace nenenib::core

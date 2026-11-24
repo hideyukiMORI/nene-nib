@@ -349,9 +349,6 @@ class EditorController final
     // 1 本で、frame の diagnostic_counts と窓のステータスバーの hit test（status_bar_layout）が
     // 同じ値を引く。frame を作らない。
     [[nodiscard]] core::DiagnosticCounts diagnostic_counts() const;
-    // 知らせの欄にキャレットの上の診断の文が出ているか（frame の diagnostic_message の有無と同じ
-    // 値・ADR 0161 の決定 4 の追補）。窓がステータスバーのクリックを決める口で、frame を作らない。
-    [[nodiscard]] bool diagnostic_message_shown() const;
     // アクティブな文書を受ける言語サーバーの席の 1 行（ADR 0160 の 2026-11-22 の追補・LSP 段 S8）。
     // `initialize` の答えを待つ間は「<言語>: 起動中」、running で `$/progress` の動いている
     // token があれば最後に動いたものの「<言語>: <題> <文> <百分率>%」、ほかは値なし。frame の
@@ -1969,8 +1966,7 @@ class EditorController final
     // 診断の件数とキャレットの上の診断の文を frame に載せる（ADR 0161 の決定 4）。文はほかの
     // 知らせ（command_message）が無いときだけで、文を出す frame は案内を消す（知らせと同じ）。
     void add_diagnostics(EditorFrame &result) const;
-    // 知らせの欄に出す診断の文（優先の式の 1 か所）。add_diagnostics と diagnostic_message_shown が
-    // 読む。
+    // ステータスバーに出す診断の文（優先の式の 1 か所）。add_diagnostics が読む。
     [[nodiscard]] std::optional<core::DisplayText> shown_diagnostic_message() const;
     // 枠の側の構文の覚え（ADR 0156 の決定 9）。操作中の枠ともう 1 つの枠は別の覚えを持つ。
     [[nodiscard]] std::optional<SyntaxStateCache> &syntax_cache(core::PaneSide side) noexcept;

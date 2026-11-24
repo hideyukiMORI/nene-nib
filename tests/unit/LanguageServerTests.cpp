@@ -841,23 +841,25 @@ void verify_diagnostic_frame()
            "the window's count reads the same value as the frame");
 }
 
-// 決定 4 の追補（R3-3）: マクロの録画中は診断の文を出さず `recording @a` を隠さない。窓の口
-// diagnostic_message_shown は frame の文の有無と同じ値。
+// 決定 4 の追補（R3-3）: マクロの録画中は診断の文を出さず `recording @a` を隠さない。
+// 2026-11-24 の追補（#2025）: 文が出たままモードを切り替えると、frame
+// のモードとモードの文が変わり、 文も残る（窓はモードの文の後ろに文を書くので、切り替えが見える）。
 void verify_recording_hides_message()
 {
     Editing editing(lsp_settings(true));
     diagnosed(editing);
+    const auto ordinary = editing.controller().apply_frame(app::WorkCompleted{});
     applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
     const auto shown = editing.controller().apply_frame(app::WorkCompleted{});
-    expect(diagnostic_message(shown) == "w" && editing.controller().diagnostic_message_shown(),
-           "the message shows in Vim mode and the window's reading agrees");
+    expect(diagnostic_message(shown) == "w" && shown.mode == core::EditMode::vim &&
+               shown.mode_label != ordinary.mode_label,
+           "switching to Vim on a diagnostic changes the mode and its label and keeps the message");
     for (const auto &key : vim_keys_of("qa"))
     {
         applied(editing.controller(), app::VimKeyPress{key});
     }
     const auto recording = editing.controller().frame();
-    expect(recording.recording.has_value() && diagnostic_message(recording) == "<none>" &&
-               !editing.controller().diagnostic_message_shown(),
+    expect(recording.recording.has_value() && diagnostic_message(recording) == "<none>",
            "recording a macro hides the diagnostic message so `recording @a` stays visible");
     for (const auto &key : vim_keys_of("q"))
     {
