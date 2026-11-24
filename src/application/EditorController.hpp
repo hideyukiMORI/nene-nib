@@ -11,6 +11,7 @@
 #include "CommandChoice.hpp"
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
+#include "CompletionCommitKey.hpp"
 #include "CompletionDirection.hpp"
 #include "CompletionEntry.hpp"
 #include "CompletionList.hpp"
@@ -291,9 +292,10 @@ class EditorController final
     // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
     [[nodiscard]] bool completion_active() const noexcept;
     [[nodiscard]] bool completion_open() const noexcept;
-    // 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。窓が Enter と
-    // Tab を 面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
-    [[nodiscard]] bool completion_commits() const;
+    // key で確定する候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。
+    // 窓が Enter と Tab を面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
+    // 打鍵で自動に開いて使う人がまだ選んでいない面の Enter は偽（#1971）。
+    [[nodiscard]] bool completion_commits(CompletionCommitKey key) const;
     // 帯のタブの退避番号の並び（帯の順）とアクティブなタブの位置（ADR 0078 の追補 #1790）。窓が
     // 「ほかのタブを閉じる」「右のタブを閉じる」で次に閉じるタブを引き直す安い読みで、frame を
     // 作らない。
@@ -1563,6 +1565,28 @@ class EditorController final
     // 自動で開いた面が出ている間の Ctrl-n / Ctrl-p で、面の候補を engine の写しにする（#1962）。
     // 写せる候補が無ければ偽（呼ぶ側は ADR 0169 の本文の語の道へ落ちる）。
     [[nodiscard]] bool offer_auto_vim_completion();
+    // 自動で開いた面に出ている行ごとの、engine の語に直した候補（直せない行は空・#1962）。
+    [[nodiscard]] std::vector<std::optional<core::CompletionEntry>> auto_vim_rows() const;
+    // 打鍵で自動に開いた面が出ている間の engine へ流す鍵（step_vim から・#1971）。engine の補完へ
+    // 移った面は、補完の鍵でない鍵の前に確定してマクロに語を積み、Ctrl-y は確定して閉じる。補完の
+    // 鍵はマクロに積まない。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> triggered_step_vim(const core::VimKey &key);
+    // 打鍵で自動に開いた面が Ctrl-n から engine の補完へ移って開いているか（#1971）。
+    [[nodiscard]] bool triggered_in_engine() const noexcept;
+    // 打鍵で自動に開いた面の補完の鍵（Ctrl-n Ctrl-p Ctrl-e）か。マクロの録画に積まず、確定した
+    // 語を打った本文として積む（#1971・D109）。
+    [[nodiscard]] bool triggered_completion_key(const core::VimKey &key) const noexcept;
+    // 自動で開いた面の Enter と Tab（#1971）。確定したら真（鍵は Vim に渡さない）。
+    [[nodiscard]] bool triggered_confirm_took(const core::VimKey &key);
+    [[nodiscard]] bool engine_confirm_took(bool tab);
+    [[nodiscard]] bool auto_tab_took();
+    // 自動で開いた面（engine の外）の index 番目の候補を、Ctrl-n で engine へ移してから確定する。
+    // index は自動の面の行の位置で、engine の語に直せない候補なら面を閉じるだけ。
+    void choose_auto_vim_row(std::size_t index);
+    // engine の補完の index 番目の候補で確定する（面の行のクリックと同じ 1 歩）。
+    void chosen_vim_row(std::size_t index);
+    // 打鍵で自動に開いた面の確定で入った語を、打った本文としてマクロの録画に積む（#1971）。
+    void record_triggered_typed(std::optional<std::size_t> index);
     // 言語サーバーが起きている窓か打ったときの粒がオンの窓で打った Vim の鍵（#1962・#1979）。
     // accept(VimKeyPress)が「起きている」と粒の真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、
     // 鍵を流した後に typed_vim_character。

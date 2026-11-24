@@ -208,6 +208,17 @@ vim_completion_reoffered(const VimState &state,
 // 写しも消す。開いていなければ何も変えない。
 [[nodiscard]] VimState vim_completion_settled(const VimState &state);
 
+// 開いている補完を key の前に確定する鍵か（補完の鍵 Ctrl-n Ctrl-p Ctrl-e Ctrl-y でない鍵・
+// vim_step が鍵の前に確定するのと同じ判定・#1971）。補完が開いていなければ偽。
+[[nodiscard]] bool vim_completion_ends(const VimState &state, const VimKey &key) noexcept;
+
+// 開いている補完の index 番目の候補（index が無ければ選んでいる候補）で確定したときに、`.` の記録
+// と同じく打った本文として足す鍵の列（元の接頭辞と違う分の Backspace と語の残り・#1971）。
+// controller が打鍵で自動に開いた面の確定をマクロの録画に打った本文として積むときに読む。補完が
+// 開いていない・index が列の外・元の接頭辞を選んでいるなら空。
+[[nodiscard]] std::vector<VimKey> vim_completion_typed(const VimState &state,
+                                                       std::optional<std::size_t> index);
+
 // 検索の入力行が開いているあいだの回数（`2/be` の 2・`d2/` なら積）。確定の鍵が engine の中で
 // 使う回数と同じ値で、incsearch の preview と Ctrl-G / Ctrl-T が同じ回数で探すために読む
 // （ADR 0043 の決定 1・2）。
