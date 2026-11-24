@@ -473,10 +473,11 @@ class Direct2DRenderer final
                                                const core::StatusBarLayout &layout);
     void draw_toggle(const application::EditorFrame &frame, const core::StatusBarLayout &layout);
     void draw_status_message(const application::EditorFrame &frame, const core::LayoutRect &area);
-    void draw_recording(const application::EditorFrame &frame, const core::StatusBarLayout &layout,
-                        const StatusTextLayout &mode);
-    // 左側を描き、モードを描いたときはその文の幅（物理画素）を、そうでなければ 0 を返す。録画の欄は
-    // position（行と桁の文字組み）と並べて測った配置（status_bar_fitted・#1658）の中に書く。
+    void draw_after_mode(const application::EditorFrame &frame, const core::StatusBarLayout &layout,
+                         const StatusTextLayout &mode);
+    // 左側を描き、モードを描いたときはその文の幅（物理画素）を、そうでなければ 0 を返す。
+    // 録画と診断の文の欄は position（行と桁の文字組み）と並べて測った配置
+    // （status_bar_fitted・#1658）の中に書く。
     [[nodiscard]] std::int32_t draw_status_left(const application::EditorFrame &frame,
                                                 const core::StatusBarLayout &layout,
                                                 const StatusTextLayout &position);

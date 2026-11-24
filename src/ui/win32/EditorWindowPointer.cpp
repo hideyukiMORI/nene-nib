@@ -67,15 +67,6 @@ constexpr std::int32_t resize_border_dips = 8;
     }
     return monitor.rcMonitor;
 }
-
-// 診断の文がトグルの位置を覆っている間（covered）はトグルを押さない（command_message のときと
-// 同じ・ADR 0161 の決定 4 の追補）。
-[[nodiscard]] core::StatusBarHit uncovered_hit(core::StatusBarHit hit, bool covered) noexcept
-{
-    const bool toggle =
-        hit == core::StatusBarHit::toggle_ordinary || hit == core::StatusBarHit::toggle_vim;
-    return covered && toggle ? core::StatusBarHit::none : hit;
-}
 } // namespace
 
 LRESULT EditorWindow::pointer_message(UINT message, WPARAM word, LPARAM data)
@@ -659,8 +650,9 @@ void EditorWindow::click_client(LPARAM data, application::PointerClicks clicks)
     {
         return;
     }
-    switch (uncovered_hit(core::status_bar_hit(layout, low_word_of(data), high_word_of(data)),
-                          controller_.diagnostic_message_shown()))
+    // キャレットの上の診断の文はモードの後ろに出てトグルを覆わないので、文の間もトグルを押せる
+    // （ADR 0161 の 2026-11-24 の追補・#2025）。
+    switch (core::status_bar_hit(layout, low_word_of(data), high_word_of(data)))
     {
     // 意図は「どちらを選んだか」。同じ側を押しても controller が同じ表示値を返すだけ（ARC-011）。
     case core::StatusBarHit::toggle_ordinary:
