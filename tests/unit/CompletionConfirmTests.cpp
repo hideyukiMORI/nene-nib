@@ -1,11 +1,11 @@
 // 契約 --completion-face の自動で開いた面の確定（Issue #1971・ADR 0190 の 2026-11-24 の追補・施主の
 // 決め 2026-11-23）。triggerCharacters で開いた面で、行のクリックはその候補・Tab は選んでいればその
 // 候補で選んでいなければいちばん上の候補・Enter は使う人が選んだときだけ確定する（選んでいなければ
-// 改行を通して閉じる）ことを、通常モードと Vim の INSERT の両方で固定する。Vim の側は確定が INSERT
-// の undo の 1 単位の中の 1 編集で、`.`
-// の記録とマクロの録画に打った本文として残り、再生で面を開かずに 同じ本文になること・手で開いた面の
-// Enter と Tab が変わらないこと・`map` より確定が先なことも縛る。 替え玉 ScriptedLanguageServer
-// だけを使い、本物のサーバーも窓も使わない。
+// 改行を通して閉じる）ことを、通常モードと Vim の INSERT の両方で固定する。
+// Vim の側は、確定が INSERT の undo の 1 単位の中にあること、ドットの記録とマクロの録画に打った本文
+// として残り、再生で面を開かずに同じ本文になること、手で開いた面の Enter と Tab が変わらないこと、
+// map より確定が先なことも縛る。替え玉 ScriptedLanguageServer だけを使い、本物のサーバーも窓も
+// 使わない。
 #include "CaretMotion.hpp"
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
@@ -295,8 +295,8 @@ void verify_vim_click()
            "a click after Ctrl-n puts the clicked candidate in");
 }
 
-// 録画: 確定した語は打った本文として積み、Ctrl-n・Ctrl-p・Ctrl-e・Ctrl-y・確定の Tab と Enter
-// は積ま ない。再生は面を開かず要求も出さずに、打ったときと同じ本文を入れる。
+// 録画: 確定した語は打った本文として積み、補完の鍵（Ctrl-n・Ctrl-p・Ctrl-e・Ctrl-y）と確定の
+// Tab と Enter は積まない。再生は面を開かず要求も出さずに、打ったときと同じ本文を入れる。
 void verify_vim_recording()
 {
     Editing editing(lsp_settings());
@@ -353,6 +353,125 @@ void verify_vim_unchanged_and_map()
     static_cast<void>(pressed(mapped, "<Tab>"));
     expect(body(mapped) == "int main() {}\nx.emptyQ\n", "with no face the map of Tab still works");
 }
+
+// 12 件の候補（wa〜wl・届いた順）。
+[[nodiscard]] std::string twelve_items()
+{
+    std::string items = "[";
+    for (char letter = 'a'; letter <= 'l'; ++letter)
+    {
+        items += std::string(letter == 'a' ? "" : ",") + R"({"label":"w)" + std::string(1, letter) +
+                 R"("})";
+    }
+    return items + "]";
+}
+
+// 通常モードの選んでいない面の PageDown は面の行数ぶん、PageUp は先頭を選ぶ。先頭の候補が打った語と
+// 同じ綴りなら、Tab は確定せず（窓が Tab の文字を通す・#1844 の L1）。
+void verify_ordinary_pages()
+{
+    Editing editing(lsp_settings());
+    capable(editing, false);
+    typed(editing, "x.");
+    static_cast<void>(answered(editing, twelve_items()));
+    const auto paged =
+        editing.controller().apply_frame(app::StepCompletion{app::CompletionStep::page_next});
+    expect(chosen(paged) == "wh", "PageDown from no choice chooses the row a face height down");
+    static_cast<void>(editing.controller().apply_frame(app::CloseCompletion{}));
+    typed(editing, " y.");
+    static_cast<void>(answered(editing, twelve_items()));
+    const auto top =
+        editing.controller().apply_frame(app::StepCompletion{app::CompletionStep::page_previous});
+    expect(chosen(top) == "wa", "PageUp from no choice chooses the top row");
+    static_cast<void>(editing.controller().apply_frame(app::CloseCompletion{}));
+    typed(editing, " z.");
+    static_cast<void>(answered(editing, three_items));
+    typed(editing, "size");
+    expect(!commits(editing, app::CompletionCommitKey::tab),
+           "Tab does not commit a top candidate spelled as the typed word");
+}
+
+// engine の語に直せない候補（textEdit
+// の範囲が語の頭より前から始まり、本文と合わない）の行のクリックは 面を閉じるだけで、Tab
+// は直せる候補のいちばん上で確定する。
+void verify_vim_unconvertible()
+{
+    constexpr std::string_view items =
+        R"([{"label":"bad","textEdit":{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":2}},"newText":"zz"}},{"label":"good"}])";
+    Editing editing(lsp_settings());
+    capable(editing, true);
+    static_cast<void>(pressed(editing, "ox."));
+    static_cast<void>(answered(editing, items));
+    static_cast<void>(editing.controller().apply_frame(app::ChooseCompletion{std::size_t{0}}));
+    expect(
+        !editing.controller().completion_open() && inserting(editing) &&
+            body(editing) == "int main() {}\nx.\n",
+        "a click on a candidate that cannot be written from the word start only closes the face");
+    static_cast<void>(pressed(editing, "<BS>."));
+    static_cast<void>(answered(editing, items));
+    static_cast<void>(pressed(editing, "<Tab>"));
+    expect(body(editing) == "int main() {}\nx.good\n",
+           "Tab commits the top candidate that can be written");
+}
+
+// 左辺の待ちが積まれている間の Tab は確定せず表を引く。`inoremap <CR>` は、選んでいない面では map
+// の まま、選んだ面では確定が先。
+void verify_vim_pending_and_enter_map()
+{
+    Editing editing(lsp_settings({core::MapRow{insert_modes, "jk", "<Esc>", false},
+                                  core::MapRow{insert_modes, "<CR>", "Q", false}}));
+    capable(editing, true);
+    static_cast<void>(pressed(editing, "ox."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(pressed(editing, "j<Tab>"));
+    expect(body(editing) == "int main() {}\nx.j\t\n" && !editing.controller().completion_open(),
+           "Tab after a waiting key of a map does not commit and goes through the map table");
+    static_cast<void>(pressed(editing, "<Esc>oy."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(pressed(editing, "<CR>"));
+    expect(body(editing) == "int main() {}\nx.j\t\ny.Q\n",
+           "Enter on a face with no chosen row keeps an insert map of Enter");
+    static_cast<void>(pressed(editing, "<Esc>oz."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(pressed(editing, "<C-n><CR>"));
+    expect(body(editing) == "int main() {}\nx.j\t\ny.Q\nz.empty\n",
+           "Enter after Ctrl-n commits before an insert map of Enter");
+}
+
+// engine の外からの閉じ（窓の非アクティブなど）と、Ctrl-n の後の Esc の録画も、確定した語を打った
+// 本文として持つ。選んだ候補が元の接頭辞と同じ綴りなら、Enter は確定せずに改行を入れる。
+// Shift+Tab は窓が先に面を閉じるので、Tab の文字を入れる。
+void verify_vim_outside_close_and_same_word()
+{
+    Editing editing(lsp_settings());
+    capable(editing, true);
+    static_cast<void>(pressed(editing, "qaox."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(pressed(editing, "<C-n>"));
+    static_cast<void>(editing.controller().apply_frame(app::CloseCompletion{}));
+    static_cast<void>(pressed(editing, " y."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(pressed(editing, "<C-n><C-n><Esc>q"));
+    expect(macro_of(editing, U'a') == "ox.empty y.size\x1b",
+           "an outside close and Esc after Ctrl-n record the words as typed text");
+    static_cast<void>(pressed(editing, "@a"));
+    expect(body(editing) == "int main() {}\nx.empty y.size\nx.empty y.size\n",
+           "the replay puts the same text in");
+
+    Editing same(lsp_settings());
+    capable(same, true);
+    static_cast<void>(pressed(same, "ox."));
+    static_cast<void>(answered(same, three_items));
+    static_cast<void>(pressed(same, "size<C-n><CR>"));
+    expect(body(same) == "int main() {}\nx.size\n\n",
+           "Enter on a chosen candidate spelled as the prefix breaks the line");
+    static_cast<void>(pressed(same, "y."));
+    static_cast<void>(answered(same, three_items));
+    static_cast<void>(same.controller().apply_frame(app::CloseCompletion{}));
+    static_cast<void>(pressed(same, "<Tab>"));
+    expect(body(same) == "int main() {}\nx.size\ny.\t\n",
+           "Shift+Tab (the window closes the face first) puts a tab character in");
+}
 } // namespace
 
 void verify_completion_confirm()
@@ -363,5 +482,9 @@ void verify_completion_confirm()
     verify_vim_click();
     verify_vim_recording();
     verify_vim_unchanged_and_map();
+    verify_ordinary_pages();
+    verify_vim_unconvertible();
+    verify_vim_pending_and_enter_map();
+    verify_vim_outside_close_and_same_word();
 }
 } // namespace nenenib::tests

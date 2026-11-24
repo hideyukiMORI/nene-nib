@@ -919,12 +919,17 @@ bool EditorController::triggered_confirm_took(const core::VimKey &key)
 }
 
 // engine の補完へ移った面の Enter と Tab。選んでいる候補があればそれで確定し、元の接頭辞を選んで
-// いれば Tab だけが先頭の候補で確定する。
+// いれば Tab だけが先頭の候補で確定する。選んでいる候補が元の接頭辞と同じ綴りなら確定は本文を変え
+// ないので、鍵を Vim に渡す（改行・Tab が空振りしない・通常モードの #1844 の L1 と同じ考え）。
 bool EditorController::engine_confirm_took(bool tab)
 {
     const auto &engine = *state_.vim().insert_completion;
     if (engine.selected < engine.words->size())
     {
+        if (engine.words->at(engine.selected) == engine.original)
+        {
+            return false;
+        }
         close_completion();
         return true;
     }

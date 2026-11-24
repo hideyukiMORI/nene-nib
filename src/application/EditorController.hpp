@@ -287,10 +287,9 @@ class EditorController final
     // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
     [[nodiscard]] bool completion_active() const noexcept;
     [[nodiscard]] bool completion_open() const noexcept;
-    // key で確定する候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。窓が Enter
-    // と Tab を
-    // 面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。打鍵で自動に開いて
-    // 使う人がまだ選んでいない面の Enter は偽（#1971）。
+    // key で確定する候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。
+    // 窓が Enter と Tab を面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
+    // 打鍵で自動に開いて使う人がまだ選んでいない面の Enter は偽（#1971）。
     [[nodiscard]] bool completion_commits(CompletionCommitKey key) const;
     // 帯のタブの退避番号の並び（帯の順）とアクティブなタブの位置（ADR 0078 の追補 #1790）。窓が
     // 「ほかのタブを閉じる」「右のタブを閉じる」で次に閉じるタブを引き直す安い読みで、frame を
