@@ -12,6 +12,8 @@
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorIntent.hpp"
+#include "HoverExplorer.hpp"
 #include "ImeStance.hpp"
 #include "InputLinePrompt.hpp"
 #include "InputLineView.hpp"
@@ -19,6 +21,8 @@
 #include "MotionLabel.hpp"
 #include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
+#include "PointTitleBar.hpp"
+#include "RefreshAppearance.hpp"
 #include "Scopes.hpp"
 #include "ScrollLines.hpp"
 #include "SelectEditMode.hpp"
@@ -219,6 +223,28 @@ void verify_discarded_labels()
            "scrolling drops the labels");
 }
 
+// 帯とエクスプローラーの hover と外観の写しは、本文も画面も動かさないので印を保つ（keeps_labels）。
+// 押していない帯の hover（target なし）とエクスプローラーの行から外れた hover で確かめる。
+void verify_hover_keeps_labels()
+{
+    const app::EditorIntent keeping[] = {
+        app::PointTitleBar{std::nullopt, false},
+        app::HoverExplorer{std::nullopt},
+        app::RefreshAppearance{},
+    };
+    for (const auto &intent : keeping)
+    {
+        Editing editing;
+        open_vim_document(editing, "ab cd ef");
+        static_cast<void>(leader_typed(editing.controller(), U"w"));
+        const auto kept = editing.controller().apply_frame(intent);
+        expect(!no_labels(kept) && editing.controller().vim_state().easy_motion.has_value(),
+               "hovering the band or the explorer and refreshing the look keep the labels");
+        expect(caret_at(typed(editing.controller(), U"a"), 1, 4),
+               "the label key after the hover still jumps");
+    }
+}
+
 // 改行で終わる本文は最後の空の行に跳び先を作らない（ADR 0188）。
 // 窓が非アクティブになった知らせは、印・保留のオペレータ・回数・レジスタの指定・Ctrl+Tab の歩きを
 // 動かさない（#1843 のレビュー M1）。窓を離れて戻った後の印の鍵は跳ぶ。
@@ -399,6 +425,7 @@ void verify_vim_easymotion_input_contracts()
     verify_visual_and_repeat();
     verify_wide_cells();
     verify_discarded_labels();
+    verify_hover_keeps_labels();
     verify_deactivated_window_keeps_waits();
     verify_final_line_break();
     verify_paused_insert();

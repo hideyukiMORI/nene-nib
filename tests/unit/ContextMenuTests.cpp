@@ -8,6 +8,7 @@
 #include "CommandChoice.hpp"
 #include "CommandPaletteView.hpp"
 #include "CommandText.hpp"
+#include "ComposeText.hpp"
 #include "ContextMenu.hpp"
 #include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
@@ -31,6 +32,7 @@
 #include "OpenContextMenu.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
+#include "OpenTabMenu.hpp"
 #include "OperationTexts.hpp"
 #include "PaletteMode.hpp"
 #include "PlaceCaret.hpp"
@@ -47,6 +49,7 @@
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "ToggleExplorer.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
@@ -356,6 +359,35 @@ void verify_close()
     expect(!controller.context_menu_active(), "the menu does not open over the input line");
 }
 
+// 変換の間とエクスプローラーに焦点がある間は開かない（ui もこの間は送らない）。開いたメニューで、
+// 選んでいない Enter・行の外のクリック・行の外を指すことは何もしない。
+void verify_menu_refusals()
+{
+    Editing composing;
+    prepare_line(composing.controller());
+    static_cast<void>(composing.controller().apply(app::ComposeText{composed_of("に", {}, 0)}));
+    static_cast<void>(composing.controller().apply(right_click(5.0F)));
+    expect(!composing.controller().context_menu_active(),
+           "the menu does not open over the IME composition");
+    Editing focused;
+    prepare_line(focused.controller());
+    static_cast<void>(focused.controller().apply(app::ToggleExplorer{}));
+    static_cast<void>(focused.controller().apply(right_click(5.0F)));
+    expect(!focused.controller().context_menu_active(),
+           "the menu does not open while the explorer has the focus");
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto unchosen = controller.apply_frame(app::ChooseContextMenu{std::nullopt});
+    const auto outside = controller.apply_frame(app::ChooseContextMenu{99});
+    static_cast<void>(controller.apply(app::PointContextMenu{99}));
+    expect(controller.context_menu_active() && !unchosen.operation_request.has_value() &&
+               !outside.operation_request.has_value() &&
+               !controller.context_menu_highlighted().has_value(),
+           "Enter with no row chosen, a row past the end and pointing past the end do nothing");
+}
+
 [[nodiscard]] Editing &vim_line(Editing &editing)
 {
     prepare_line(editing.controller());
@@ -419,6 +451,36 @@ void verify_vim_visual()
     static_cast<void>(controller.apply(right_click(5.0F)));
     const auto all = controller.apply_frame(app::ChooseContextMenu{select_all_row});
     expect(all.vim_mode == core::VimMode::visual_line, "select all from normal is visual line");
+    // 矩形の VISUAL も同じ VISUAL の鍵の列（vim_visual）。
+    static_cast<void>(
+        controller.apply(app::VimKeyPress{core::VimKey{core::VimSpecialKey::escape}}));
+    static_cast<void>(
+        controller.apply(app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_v}}));
+    press_keys(controller, U"l");
+    const auto block = controller.apply_frame(right_click(5.0F));
+    const auto &rows = block.context_menu.value_or(app::ContextMenuView{}).rows;
+    expect(block.vim_mode == core::VimMode::visual_block && rows.at(copy_row).key == "\"+y" &&
+               rows.at(cut_row).key == "\"+d",
+           "vim block visual shows the visual keys too");
+}
+
+// 開いている間の右クリックは、メニューを新しい点で開き直す（本文の上でもタブの上でも・メニューの
+// 意図は開いたまま受ける側）。
+void verify_reopen_while_open()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto again = controller.apply_frame(app::OpenContextMenu{200, 60, std::nullopt});
+    const auto body = again.context_menu.value_or(app::ContextMenuView{});
+    expect(controller.context_menu_active() && body.x == 200 && body.y == 60,
+           "a second right click in the body opens the menu again at the new point");
+    const auto tab = controller.apply_frame(app::OpenTabMenu{30, 4, 0});
+    const auto band = tab.context_menu.value_or(app::ContextMenuView{});
+    expect(controller.context_menu_active() && band.x == 30 && band.y == 4 &&
+               band.rows.size() == core::tab_menu_size,
+           "a right click on a tab with the body menu open opens the tab menu there");
 }
 
 void verify_vim_insert()
@@ -594,8 +656,10 @@ void verify_context_menu_scope()
     verify_keep_selection();
     verify_choose_and_step();
     verify_close();
+    verify_menu_refusals();
     verify_vim_normal();
     verify_vim_visual();
+    verify_reopen_while_open();
     verify_vim_insert();
     verify_vim_columns_parse();
     verify_vim_waiting_discarded();

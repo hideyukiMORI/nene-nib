@@ -341,6 +341,20 @@ void verify_macro_replays_ex_line()
                                                           VimRegisterKind::characters}});
     vim_replay(controller, "@c");
     expect(controller.frame().settings.scrolloff == 4, "<Up> in a replayed : line recalls history");
+    {
+        // `<Down>` は 1 つ新しい方へ戻る（Vim の c_<Down>・so=4 so=1 so=2 の後の
+        // `:<Up><Up><Up><Down>` は so=1。何もしなければ so=4、行が走らなければ so=2 のまま）。
+        Editing recalled;
+        open_vim_document(recalled, "abc\ndef");
+        EditorController &back = recalled.controller();
+        vim_replay(back, ":set so=4<CR>:set so=1<CR>:set so=2<CR>");
+        applied(back,
+                StoreVimRegister{'d', VimRegister{":\xC2\x80ku\xC2\x80ku\xC2\x80ku\xC2\x80kd\r",
+                                                  VimRegisterKind::characters}});
+        vim_replay(back, "@d");
+        expect(back.frame().settings.scrolloff == 1,
+               "<Down> in a replayed : line recalls the newer history entry");
+    }
 
     applied(controller, stored_text('a', ":set so=2<CR>j"));
     vim_replay(controller, "qb@aq");

@@ -268,6 +268,27 @@ void verify_keys()
            "Enter on a folder opens it like l");
 }
 
+// 何も選んでいない Enter と l、ファイルの行の l は何もしない（l は閉じたフォルダだけを開く・決定
+// 5。 ファイルを開くのは Enter とダブルクリック・#1388）。
+void verify_keys_that_do_nothing()
+{
+    Editing editing(shown_at(project));
+    const auto loaded = loaded_project(editing);
+    const auto listed = editing.folders().entry_requests();
+    const auto unselected = key(editing, ExplorerKeyKind::enter);
+    const auto opened_nothing = key(editing, ExplorerKeyKind::l);
+    expect(printed(unselected) == printed(loaded) && printed(opened_nothing) == printed(loaded) &&
+               editing.reads().requests().empty() && editing.folders().entry_requests() == listed,
+           "Enter and l without a selection do nothing");
+    static_cast<void>(key(editing, ExplorerKeyKind::j));
+    static_cast<void>(key(editing, ExplorerKeyKind::j));
+    const auto on_file = key(editing, ExplorerKeyKind::j);
+    const auto pressed = key(editing, ExplorerKeyKind::l);
+    expect(printed(pressed) == printed(on_file) && editing.reads().requests().empty() &&
+               editing.folders().entry_requests() == listed,
+           "l on a file row neither opens the file nor lists anything");
+}
+
 void verify_enter_opens_file()
 {
     Editing editing(shown_at(project));
@@ -301,6 +322,34 @@ void verify_enter_opens_file()
     expect(message_of(notice) == "開けませんでした: README.md" && missing.history().reads() == 0 &&
                missing.history().writes() == 0,
            "a file that cannot be opened leaves one notice line and the history alone");
+}
+
+// 知らせの 1 行は 256 バイトまで（DisplayText）。長い名前は code point の境目で切って「…」を付け、
+// 文の頭は残す。
+void verify_long_name_notice_clipped()
+{
+    std::string name;
+    for (std::size_t index = 0; index < 100; ++index)
+    {
+        name += "\xE3\x81\x82";
+    }
+    name += ".txt";
+    Editing editing(shown_at(project));
+    applied(editing.controller(), app::VisibleLines{10});
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\" + name, false)}, FolderProgress::complete));
+    const auto notice =
+        editing.controller().apply_frame(PointExplorer{0, ExplorerPointing::double_click});
+    const std::string shown = message_of(notice);
+    constexpr std::string_view prefix = "開けませんでした: ";
+    constexpr std::string_view mark = "\xE2\x80\xA6";
+    const std::string kept =
+        shown.size() > prefix.size() + mark.size()
+            ? shown.substr(prefix.size(), shown.size() - prefix.size() - mark.size())
+            : std::string{};
+    expect(shown.size() <= 256 && shown.starts_with(prefix) && shown.ends_with(mark) &&
+               !kept.empty() && kept.size() % 3 == 0 && name.starts_with(kept),
+           "a long name is clipped at a code point with an ellipsis within one notice line");
 }
 
 void verify_pointing()
@@ -808,6 +857,15 @@ void verify_truncated()
     expect(view_of(bottom).first_visible == core::ExplorerTree::entry_limit + 1 - 9 &&
                rows.size() == 9 && rows.back().more && rows.front().name == "f1992",
            "more entries than the limit end with the … row");
+    // 「…」の行はクリックしても Enter でも選ぶだけで、何も開かない（決定 4 の改め #1388）。
+    const std::size_t more = view_of(bottom).total - 1;
+    applied(editing.controller(), PointExplorer{more, ExplorerPointing::pressed});
+    applied(editing.controller(), PointExplorer{more, ExplorerPointing::released});
+    applied(editing.controller(), PointExplorer{more, ExplorerPointing::double_click});
+    const auto entered = key(editing, ExplorerKeyKind::enter);
+    expect(editing.reads().requests().empty() && entered.tabs.size() == 1 &&
+               view_of(entered).rows.back().more,
+           "the … row opens nothing by a click, a double click or Enter");
 }
 
 void verify_root_requests()
@@ -839,6 +897,11 @@ void verify_root_requests()
            "set noexplorer hides the panel");
     static_cast<void>(run_ex(controller, "set explorer"));
     expect(!view_of(controller.frame()).focused, "hiding the panel from Ex gave the focus back");
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto refused = controller.apply_frame(app::ExplorerRootChosen{path_of("E:\\other")});
+    expect(message_of(refused) == "Settings could not be saved" &&
+               view_of(refused).root == std::optional{path_of("D:\\picked")},
+           "a root that cannot be saved is refused and the panel keeps its root");
 }
 
 // Ctrl+Shift+R（#1495）の後に controller へ届くのは ExplorerRootChosen だけ（窓が表で拾い、Vim の
@@ -1269,7 +1332,9 @@ void verify_explorer_contracts()
     verify_toggle_focus();
     verify_entries_round_trip();
     verify_keys();
+    verify_keys_that_do_nothing();
     verify_enter_opens_file();
+    verify_long_name_notice_clipped();
     verify_pointing();
     verify_pointing_across_arrival();
     verify_click_opens_file();
