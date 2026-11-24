@@ -25,32 +25,33 @@ namespace nenenib::core::detail
 {
 namespace
 {
-// インデントガイドの形（ADR 0193 の決定 4・#1975）。`set indentguideactive` `noindentguideactive`
-// `indentguideactive?`、`set indentguidestyle=rainbow|plain` `indentguidestyle?` `indentguidestyle`
-// （文字列の option の名前だけは問い）、`set indentguidecolors=N`（3〜6）と `indentguidewidth=N`
-// （2 / 4 / 8・数の問いと `+=` などは数の表 number_options が引く）。値の読みは core の
-// IndentGuide.hpp の 1 本ずつで、範囲の外・表に無い値は E474 と同じ失敗。`indentguidewidth?` は設定
+// インデントガイドの形（ADR 0193 の決定 4・#1975）。`set indentguidehighlightcurrent`
+// `noindentguidehighlightcurrent` `indentguidehighlightcurrent?`、`set
+// indentguidestyle=rainbow|plain` `indentguidestyle?` `indentguidestyle` （文字列の option
+// の名前だけは問い）、`set indentguidecolorcount=N`（3〜6）と `indentguidewidth=N` （2 / 4 /
+// 8・数の問いと `+=` などは数の表 number_options が引く）。値の読みは core の IndentGuide.hpp の 1
+// 本ずつで、範囲の外・表に無い値は E474 と同じ失敗。`indentguidewidth?` は設定
 // の値を答える（推し当てた値を見せる口は作らない・依頼書の決め）。
-constexpr std::array<std::string_view, 1> indent_guide_active_names{
-    indent_guide_active_option_name};
+constexpr std::array<std::string_view, 1> indent_guide_highlight_current_names{
+    indent_guide_highlight_current_option_name};
 
-[[nodiscard]] std::optional<ExResult> indent_guide_active_option(std::string_view option,
-                                                                 const EditorSettings &settings)
+[[nodiscard]] std::optional<ExResult>
+indent_guide_highlight_current_option(std::string_view option, const EditorSettings &settings)
 {
-    const auto request = switch_request(option, indent_guide_active_names);
+    const auto request = switch_request(option, indent_guide_highlight_current_names);
     if (!request.has_value())
     {
         return std::nullopt;
     }
-    const std::string_view name = indent_guide_active_names.front();
+    const std::string_view name = indent_guide_highlight_current_names.front();
     if (!request.value().has_value())
     {
         return ExResult{std::nullopt, std::nullopt, std::nullopt,
-                        switch_message(name, settings.indent_guide_active)};
+                        switch_message(name, settings.indent_guide_highlight_current)};
     }
     EditorSettings changed = settings;
-    changed.indent_guide_active = request.value().value();
-    const bool wanted = changed.indent_guide_active;
+    changed.indent_guide_highlight_current = request.value().value();
+    const bool wanted = changed.indent_guide_highlight_current;
     return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
 }
 
@@ -95,17 +96,17 @@ indent_guide_style_option(std::string_view option, const EditorSettings &setting
     return option.starts_with(name) && option.substr(name.size()).starts_with('=');
 }
 
-// `indentguidecolors=N` と `indentguidewidth=N` の値を置く（問いは数の表が答える）。
+// `indentguidecolorcount=N` と `indentguidewidth=N` の値を置く（問いは数の表が答える）。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_number_option(std::string_view option, const EditorSettings &settings)
 {
-    const bool colors = assigns(option, indent_guide_colors_option_name);
+    const bool colors = assigns(option, indent_guide_color_count_option_name);
     if (!colors && !assigns(option, indent_guide_width_option_name))
     {
         return std::nullopt;
     }
     const std::string_view value = option.substr(option.find('=') + 1);
-    const auto parsed = colors ? indent_guide_colors_of(value) : indent_guide_width_of(value);
+    const auto parsed = colors ? indent_guide_color_count_of(value) : indent_guide_width_of(value);
     if (!parsed.has_value())
     {
         return std::unexpected(ExFailure::invalid_argument);
@@ -113,7 +114,7 @@ indent_guide_number_option(std::string_view option, const EditorSettings &settin
     EditorSettings changed = settings;
     if (colors)
     {
-        changed.indent_guide_colors = parsed.value();
+        changed.indent_guide_color_count = parsed.value();
     }
     else
     {
@@ -184,7 +185,7 @@ switch_request(std::string_view option, std::span<const std::string_view> names)
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_option(std::string_view option, const EditorSettings &settings)
 {
-    auto active = indent_guide_active_option(option, settings);
+    auto active = indent_guide_highlight_current_option(option, settings);
     if (active.has_value())
     {
         return std::expected<ExResult, ExEvaluationFailure>{std::move(active).value()};

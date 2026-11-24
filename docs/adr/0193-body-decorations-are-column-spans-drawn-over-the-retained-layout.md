@@ -27,22 +27,22 @@ hide は 2026-11-23 の朝に 3 つの飾りを頼み（#1975 インデントガ
    - 不可視文字: `std::vector<InvisibleSpan{ Column begin; Column end; InvisibleKind kind }>`（`kind` は閉じた enum: `space` `trailing_space` `tab` `ideographic_space`）と `std::optional<LineBreakMark>`（`lf` `crlf`）。
 2. **描く順は 1 か所。** `draw_plain_line` の中の 2 本の関数（下調べの案の `draw_decorations_under` と `draw_decorations_over`）だけが順を知る: 現在行の面（今のまま `draw_line`）→ 検索の面 → 選択 → **下の飾り（インデントガイド → ペアガイド）** → 本文の字（括弧の色を含む・置き換えの字は括弧より上）→ 置き換え → **上の飾り（不可視文字の印）** → 診断の波線 → 当たりと matchparen の枠 → キャレット → キャレットの動きの層（ADR 0192・`draw_body_area` の後のまま）。ガイドは選択と検索の面の上に見え、キャレットと枠はガイドと印より上。格子の行（後の段・決定 15）は `GridRowPainter` に同じ順を写す。
 3. **オン・オフは `features=` の名前の列（設定の版を上げない）。** ADR 0170 の 2026-11-18 の追補 1 の形で、`feature_costs` に 4 行を足す（どれも `FeatureStorage::listed`・既定オフ・測るまで費用 0 と段の印なし・追補 3）。名前は `indentguides` `bracketpairs` `bracketcolors` `list`。`:set <名前>` `no<名前>` `<名前>?` と Ctrl+P の `:` の候補は表から作る（ADR 0170 の決定 4。表から作る工程がまだなら、その段の PR が表の行から作る形で足し、名前の別表を書かない）。1.1.0 の codec は知らない名前を往復で残すので、1.1.0 で開いても消えない。`list` は Vim の `:set list` / `nolist` と同じ綴りで、Vim のモードでも通常モードでも同じ値（窓全体の設定・文書の値ではない）。`:set listchars=…` は受けない（Nib の知らない option と同じ失敗）。
-4. **形の値は `settings.v6` の鍵。** v6 は未公開なので鍵を足してよい（ADR 0192 の決定 1。v6 を書く最初の公開版で鍵の集合を閉じる）。並びは `pane_resize_step_vim`（`caret_motion_time` → `caret_sparks` → `pane_resize_step` の後ろ・ADR 0192 の追補・ADR 0148 の 2026-11-23 の追補）の後ろ・`lsp.<language>.command` の前で、下の表の順。後から足す鍵の形（ADR 0170 の追補）に従い、無い v6 は既定を補って読み、有れば厳密に読み（範囲の外・形の違いは拒否）、書くときは必ず書く。v5 以前に在れば未知の鍵として拒否する。値の読みは core の 1 本ずつ（`*_of`）で Ex と共用する。設定の画面は「表示」の節（`SettingsSection::display`）に、スイッチ（`EditorFeature` の 4 行）と、それぞれの下に形の行（`SettingsValue` に値を足す・段の上下か選択）を置く。画面の文は `ui_text` の表（CNF-016）。
+4. **形の値は `settings.v6` の鍵。** v6 は未公開なので鍵を足してよい（ADR 0192 の決定 1。v6 を書く最初の公開版で鍵の集合を閉じる。その版は 1.2.0・鍵の名前と不可視文字の鍵の置き場は 2026-11-24 の追補）。並びは `pane_resize_step_vim`（`caret_motion_time` → `caret_sparks` → `pane_resize_step` の後ろ・ADR 0192 の追補・ADR 0148 の 2026-11-23 の追補）の後ろ・`lsp.<language>.command` の前で、下の表の順。後から足す鍵の形（ADR 0170 の追補）に従い、無い v6 は既定を補って読み、有れば厳密に読み（範囲の外・形の違いは拒否）、書くときは必ず書く。v5 以前に在れば未知の鍵として拒否する。値の読みは core の 1 本ずつ（`*_of`）で Ex と共用する。設定の画面は「表示」の節（`SettingsSection::display`）に、スイッチ（`EditorFeature` の 4 行）と、それぞれの下に形の行（`SettingsValue` に値を足す・段の上下か選択）を置く。画面の文は `ui_text` の表（CNF-016）。
 
 | 何を | 置き場 | `:set` | 値と既定 |
 | --- | --- | --- | --- |
 | インデントガイドの表示 | `features=indentguides` | `indentguides` `noindentguides` `indentguides?` | 既定オフ |
 | 単色 / 虹 | v6 `indent_guide_style` | `indentguidestyle=rainbow\|plain` | `rainbow` |
-| 虹の色の数 | v6 `indent_guide_colors` | `indentguidecolors=N` | 3〜6・既定 4 |
-| キャレットのいる段を強める | v6 `indent_guide_active` | `indentguideactive` `noindentguideactive` | `on` |
+| 虹の色の数 | v6 `indent_guide_color_count` | `indentguidecolorcount=N` | 3〜6・既定 4 |
+| キャレットのいる段を強める | v6 `indent_guide_highlight_current` | `indentguidehighlightcurrent` `noindentguidehighlightcurrent` | `on` |
 | 段の幅（推し当てが外れたとき） | v6 `indent_guide_width` | `indentguidewidth=2\|4\|8` | 4 |
 | ペアガイドの表示 | `features=bracketpairs` | `bracketpairs` `nobracketpairs` | 既定オフ |
 | 括弧の色分け | `features=bracketcolors` | `bracketcolors` `nobracketcolors` | 既定オフ |
 | 不可視文字の全体 | `features=list` | `list` `nolist` `list?` | 既定オフ |
-| 改行の印 | v6 `list_eol` | `listeol` `nolisteol` | `on` |
-| Tab の印 | v6 `list_tab` | `listtab` `nolisttab` | `on` |
-| 全角空白の印 | v6 `list_wide_space` | `listwidespace` `nolistwidespace` | `on` |
-| 空白の印 | v6 `list_space` | `listspace=none\|trail\|all` | `trail` |
+| 改行の印 | v7 `list_eol` | `listeol` `nolisteol` | `on` |
+| Tab の印 | v7 `list_tab` | `listtab` `nolisttab` | `on` |
+| 全角空白の印 | v7 `list_wide_space` | `listwidespace` `nolistwidespace` | `on` |
+| 空白の印 | v7 `list_space` | `listspace=none\|trail\|all` | `trail` |
 
    種類のスイッチは全体（`list`）がオンのときだけ効く。全体がオフのとき種類の値は読むだけで描かない（種類を全部オフにして全体をオンにした状態は「何も出ない」で、拒否しない）。
 
@@ -53,7 +53,7 @@ hide は 2026-11-23 の朝に 3 つの飾りを頼み（#1975 インデントガ
 
 7. **字下げの数えと段の幅。** 行の字下げは core の 1 本 `indent_cells(std::string_view line)`（空白は 1 桁・Tab は `vim_tab_stop` の止まりまで・全角空白 U+3000 は字下げに入れない・`VimStepInsert.cpp` の `get_indent_str` と同じ規則をここへ寄せる）。段の数は `indent_cells / 段の幅`。**段の幅は文書の値**で、開いたときに core の純関数 `guessed_indent_unit(std::string_view head) -> std::optional<IndentUnit>`（`IndentUnit` は閉じた enum: `two` `four` `eight` `tab`）が本文の先頭の最大 1,000 行・64 KiB（窓の端は `whole_code_points`）から推し当てる: 空白で始まる空でない隣り合う行の字下げの差が 2 / 4 / 8 のどれかなら 1 票、Tab で始まる行は `tab` に 1 票。`tab` の票が空白の票より多ければ `tab`（段の幅は `vim_tab_stop`）、そうでなければ最も票の多い差（同数は小さい方）、票が 3 未満なら値なし。値なしのとき・無題の文書は設定の `indent_guide_width` を使う。置き場は `Document` の値（`DisplayForm` と同じく文書ごと・設定にも一覧 `session.v2` にも入れない）。推し当てるのは開く道の 1 か所（`open_document` と、`reach_tab` がまだ読んでいない文書を読むとき。同じ読みの道を通る。自動退避から名前のあるファイルを戻すときも同じ入口の関数を呼ぶ・名前の無い退避は無題の文書と同じく設定の値・2026-11-23 の追補）で、機能のオン・オフに依らず毎回行う（64 KiB の 1 回の歩きで、後からオンにしても開いている文書に値がある）。編集・保存では推し当て直さない。票の数え方の細部（差 6 の扱い・同数の順）は段 1 の試験の表で決め、この決定の形（開くとき 1 回・先頭だけ・当たらなければ設定）は変えない。
 8. **`vim_shift_width = 8` とは別の値にする。** ガイドの段の幅は表示だけの値で、`>>` `<<`・autoindent・Vim の oracle が使う `vim_shift_width`（8 固定）は変えない。shiftwidth を可変にする（`:set sw=` と推し当てを `>>` にも効かせる）のは engine と oracle の fixture に響く別の仕事で、別 Issue の候補にする。
-9. **空の行・強める段・折り返し。** 空の行（空白だけの行も）は、上の空でない行と下の空でない行の字下げの大きい方で続ける（見本の形）。見えている範囲の端の空の行は、範囲の外の空でない行を前後 1 画面まで探し、届かなければ届いた側の値で続ける。キャレットのいる段を強める（`indent_guide_active=on`）のは、キャレットの行の字下げの段の 1 つ外側の段の線で、キャレットの行から上下にその段より深い行が続く区間（見えている行の中で打ち切る）だけ。強めるのは操作中の枠だけ。線は 1 DIP、強める段は 2 DIP（見本）。線は行ごとの矩形にする（同じ段の続きを 1 本にまとめない・2026-11-23 の追補 1）。**折り返した行では最初の画面行の高さにだけ引く**（施主の決め。2 行目以降は字が x=0 から並ぶので線を引かない）。x は `area.left + line.left + 仮想桁 × 空白の幅`。行頭の空白と Tab だけなら x は仮想桁と空白の幅で決まる（Tab の止まりが空白の幅の倍数・`SetIncrementalTabStop`）ので hit test を回さない。空白の幅は `BodyTextLayouts` が書式の鍵ごとに 1 回測って持つ口を足して読む（今は `set_spacing` の中だけ）。比例の字体でも合うことを段 1 の窓の試験で確かめる。
+9. **空の行・強める段・折り返し。** 空の行（空白だけの行も）は、上の空でない行と下の空でない行の字下げの大きい方で続ける（見本の形）。見えている範囲の端の空の行は、範囲の外の空でない行を前後 1 画面まで探し、届かなければ届いた側の値で続ける。キャレットのいる段を強める（`indent_guide_highlight_current=on`）のは、キャレットの行の字下げの段の 1 つ外側の段の線で、キャレットの行から上下にその段より深い行が続く区間（見えている行の中で打ち切る）だけ。強めるのは操作中の枠だけ。線は 1 DIP、強める段は 2 DIP（見本）。線は行ごとの矩形にする（同じ段の続きを 1 本にまとめない・2026-11-23 の追補 1）。**折り返した行では最初の画面行の高さにだけ引く**（施主の決め。2 行目以降は字が x=0 から並ぶので線を引かない）。x は `area.left + line.left + 仮想桁 × 空白の幅`。行頭の空白と Tab だけなら x は仮想桁と空白の幅で決まる（Tab の止まりが空白の幅の倍数・`SetIncrementalTabStop`）ので hit test を回さない。空白の幅は `BodyTextLayouts` が書式の鍵ごとに 1 回測って持つ口を足して読む（今は `set_spacing` の中だけ）。比例の字体でも合うことを段 1 の窓の試験で確かめる。
 
 ### 不可視文字（段 2・#1977・#1011 の行末の空白）
 
@@ -109,7 +109,7 @@ hide は 2026-11-23 の朝に 3 つの飾りを頼み（#1975 インデントガ
 
 ## 結果
 
-- `feature_costs` の行が 4 つ、`settings.v6` の鍵が 8 つ増える（どちらも段ごと）。v6 の鍵の集合は v6 を書く最初の公開版で閉じる。
+- `feature_costs` の行が 4 つ増える（段ごと）。設定の鍵は段 1 のインデントガイドの 4 つが `settings.v6` に、段 2 の不可視文字の 4 つが `settings.v7` に増える（2026-11-24 の追補）。v6 の鍵の集合は v6 を書く最初の公開版 1.2.0 の公開で閉じる（まだ公開していない）。
 - 仕様（SPECIFICATION.md）の D 番号と FR への記入は設計席が文書の PR で行う。
 
 ## 追補（2026-11-23・段 1 の PR #1992 のレビュー）
@@ -120,3 +120,11 @@ hide は 2026-11-23 の朝に 3 つの飾りを頼み（#1975 インデントガ
 4. **線の色の材料は renderer の覚え 1 つ。** 単色 / 虹・色の数・`rainbow_colors` が読む本文の色（`foreground` と 9 つの役割）・線の 3 色（`panel_border` `muted` `background`）が前の frame と同じなら前の `IndentGuidePaint` を使い、どれかが変われば core の `indent_guide_paint` で作り直す。オフの frame は真偽 1 つで描かない印だけを立てる（決定 6）。根の Newton は値が減らなくなった所で打ち切る（結果の色は 125 テーマで変わらないことを試験の表で縛る）。
 5. **行頭の字下げの窓に上限（`indent_guess_bytes`・64 KiB）。** 空白だけの巨大な行で行の全体を写さない。上限まで空白と Tab が続く行は、上限までの桁を字下げとして答える（空の行として扱わない）。
 6. **決定 2 の順の強制を狭める。** 描く順（選択・検索・現在行の面の上にガイド・字とキャレットの下）は `draw_plain_line` の 1 か所のコードが持ち、窓の試験は renderer の全体を通して面とガイドの重なりを画素で見ない（窓の試験には frame から renderer を通して描く道具が無い）。窓の試験が縛るのは、行の位置の組み立て（`indent_guide_row`: 横の送りを含む x の原点・最初の画面行の上端と高さ・欄の端・太さ）・描く段の区間・線の画素・色の材料の覚え（オフで描かない）まで。
+
+## 追補（2026-11-24・`settings.v6` を 1.2.0 で閉じる前に・#2023）
+
+施主の決め（2026-11-24）: 次の版 1.2.0 は `settings.v6` を書く最初の公開版で、公開した所で v6 の鍵の集合が閉じる。閉じた後は鍵の名前を変えられないので、閉じる前に決定 4 の鍵を 2 つ改める。
+
+1. **鍵の名前を 2 つ変える。** `indent_guide_active` → `indent_guide_highlight_current`（キャレットのいる段を強く描く。表示のオン・オフの `features=indentguides` と読み違えない名前）、`indent_guide_colors` → `indent_guide_color_count`（値は色ではなく色の数 3〜6）。`:set` は鍵から下線を落とした形の決まりのまま `indentguidehighlightcurrent` `noindentguidehighlightcurrent` `indentguidehighlightcurrent?` と `indentguidecolorcount=N` `indentguidecolorcount?`。既定値・範囲・鍵の順は変えない。v6 は未公開なので古い名前の読みの互換は持たず、古い名前は未知の鍵として拒む（古い名前を持つ v6 は壊れた新版として読めず、v5 へ戻らず、既定の見た目で始めて保存を断る・ADR 0114）。古い 2 つの `:set` の名前も残さない。設定の画面の名前と説明は意味が合っているので変えない。
+2. **不可視文字の 4 つの鍵は `settings.v7` で足す。** 段 2（#1977）は 1.2.0 に間に合わないので、`list_eol` `list_tab` `list_wide_space` `list_space` は v6 に足さず、段 2 の PR が `settings.v7` を作って足す（`SettingsVersion` に 1 値・`reading_order` の先頭に v7・道具 `eng/window_driver.py` の `SETTINGS_FILE` も同じ PR で上げる）。名前・値・既定は決定 4 の表のまま。`features=list` は開いた族なので版を上げずに足せる。
+3. **1.2.0 が書く v6 の見本。** `nib_adapter_tests` の `released_v6_settings`（`tests/adapters/SettingsReleasedSixTests.hpp`）が、v6 で足した 9 つの鍵が全部既定でない値の見本を縛る（読む・バイト列のまま書き戻す・未知の鍵と古い 2 つの名前を拒む・v5 と取り違えない・欠けた鍵に既定を補う）。公開元の SHA は公開の記録に書く。
