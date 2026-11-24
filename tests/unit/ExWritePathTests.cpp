@@ -243,7 +243,11 @@ void verify_failures()
     for (const bool named : {false, true})
     {
         for (const auto failure :
-             {FileFailure::access_denied, FileFailure::unwritable, FileFailure::already_exists})
+             {FileFailure::access_denied, FileFailure::unwritable, FileFailure::already_exists,
+              // 書き込みの port がほかの失敗を返しても、E13 と符号化できない文字のほかは同じ 1 行。
+              FileFailure::not_found, FileFailure::unreadable, FileFailure::too_large,
+              FileFailure::too_large_to_decode, FileFailure::undecodable,
+              FileFailure::unsupported_utf32, FileFailure::insufficient_memory})
         {
             verify_failed_save(named, failure);
         }

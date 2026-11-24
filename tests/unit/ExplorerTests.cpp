@@ -268,6 +268,27 @@ void verify_keys()
            "Enter on a folder opens it like l");
 }
 
+// 何も選んでいない Enter と l、ファイルの行の l は何もしない（l は閉じたフォルダだけを開く・決定
+// 5。 ファイルを開くのは Enter とダブルクリック・#1388）。
+void verify_keys_that_do_nothing()
+{
+    Editing editing(shown_at(project));
+    const auto loaded = loaded_project(editing);
+    const auto listed = editing.folders().entry_requests();
+    const auto unselected = key(editing, ExplorerKeyKind::enter);
+    const auto opened_nothing = key(editing, ExplorerKeyKind::l);
+    expect(printed(unselected) == printed(loaded) && printed(opened_nothing) == printed(loaded) &&
+               editing.reads().requests().empty() && editing.folders().entry_requests() == listed,
+           "Enter and l without a selection do nothing");
+    static_cast<void>(key(editing, ExplorerKeyKind::j));
+    static_cast<void>(key(editing, ExplorerKeyKind::j));
+    const auto on_file = key(editing, ExplorerKeyKind::j);
+    const auto pressed = key(editing, ExplorerKeyKind::l);
+    expect(printed(pressed) == printed(on_file) && editing.reads().requests().empty() &&
+               editing.folders().entry_requests() == listed,
+           "l on a file row neither opens the file nor lists anything");
+}
+
 void verify_enter_opens_file()
 {
     Editing editing(shown_at(project));
@@ -1269,6 +1290,7 @@ void verify_explorer_contracts()
     verify_toggle_focus();
     verify_entries_round_trip();
     verify_keys();
+    verify_keys_that_do_nothing();
     verify_enter_opens_file();
     verify_pointing();
     verify_pointing_across_arrival();

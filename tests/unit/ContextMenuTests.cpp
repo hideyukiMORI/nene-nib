@@ -31,6 +31,7 @@
 #include "OpenContextMenu.hpp"
 #include "OpenDocumentFormatList.hpp"
 #include "OpenOperationList.hpp"
+#include "OpenTabMenu.hpp"
 #include "OperationTexts.hpp"
 #include "PaletteMode.hpp"
 #include "PlaceCaret.hpp"
@@ -419,6 +420,36 @@ void verify_vim_visual()
     static_cast<void>(controller.apply(right_click(5.0F)));
     const auto all = controller.apply_frame(app::ChooseContextMenu{select_all_row});
     expect(all.vim_mode == core::VimMode::visual_line, "select all from normal is visual line");
+    // 矩形の VISUAL も同じ VISUAL の鍵の列（vim_visual）。
+    static_cast<void>(
+        controller.apply(app::VimKeyPress{core::VimKey{core::VimSpecialKey::escape}}));
+    static_cast<void>(
+        controller.apply(app::VimKeyPress{core::VimKey{core::VimSpecialKey::control_v}}));
+    press_keys(controller, U"l");
+    const auto block = controller.apply_frame(right_click(5.0F));
+    const auto &rows = block.context_menu.value_or(app::ContextMenuView{}).rows;
+    expect(block.vim_mode == core::VimMode::visual_block && rows.at(copy_row).key == "\"+y" &&
+               rows.at(cut_row).key == "\"+d",
+           "vim block visual shows the visual keys too");
+}
+
+// 開いている間の右クリックは、メニューを新しい点で開き直す（本文の上でもタブの上でも・メニューの
+// 意図は開いたまま受ける側）。
+void verify_reopen_while_open()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto again = controller.apply_frame(app::OpenContextMenu{200, 60, std::nullopt});
+    const auto body = again.context_menu.value_or(app::ContextMenuView{});
+    expect(controller.context_menu_active() && body.x == 200 && body.y == 60,
+           "a second right click in the body opens the menu again at the new point");
+    const auto tab = controller.apply_frame(app::OpenTabMenu{30, 4, 0});
+    const auto band = tab.context_menu.value_or(app::ContextMenuView{});
+    expect(controller.context_menu_active() && band.x == 30 && band.y == 4 &&
+               band.rows.size() == core::tab_menu_size,
+           "a right click on a tab with the body menu open opens the tab menu there");
 }
 
 void verify_vim_insert()
@@ -596,6 +627,7 @@ void verify_context_menu_scope()
     verify_close();
     verify_vim_normal();
     verify_vim_visual();
+    verify_reopen_while_open();
     verify_vim_insert();
     verify_vim_columns_parse();
     verify_vim_waiting_discarded();

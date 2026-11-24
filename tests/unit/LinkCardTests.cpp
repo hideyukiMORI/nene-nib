@@ -173,6 +173,16 @@ void verify_mismatched_click_does_nothing()
     expect(!controller.apply_frame(app::ClickPreviewLink{first, core::PreviewPoint{first.block, 0}})
                 .link_card.has_value(),
            "releasing outside the link opens nothing");
+    expect(!controller
+                .apply_frame(
+                    app::ClickPreviewLink{first, core::PreviewPoint{first.block + 1, first.offset}})
+                .link_card.has_value(),
+           "releasing on another element opens nothing");
+    expect(!controller
+                .apply_frame(
+                    app::ClickPreviewLink{core::PreviewPoint{999, 0}, core::PreviewPoint{999, 0}})
+                .link_card.has_value(),
+           "a click on an element the shown result does not have opens nothing");
     static_cast<void>(clicked(editing, 0));
     expect(!controller
                 .apply_frame(app::ClickPreviewLink{core::PreviewPoint{first.block, 0},

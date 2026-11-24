@@ -2638,6 +2638,19 @@ void verify_composition_vim_normal()
     const auto committed = controller.apply_frame(CommitText{"日本"});
     expect(committed.lines.at(0).text == "abc", "NORMAL drops the committed text too");
     expect(controller.vim_state().mode == VimMode::normal, "and stays in NORMAL");
+    // VISUAL の 3 つも NORMAL と同じく IME を切る側（決定 4・5）。来た変換と確定は捨て、選択の
+    // モードのまま。
+    for (const std::string_view keys : {"v", "V", "<C-v>"})
+    {
+        vim_replay(controller, keys);
+        const VimMode mode = controller.vim_state().mode;
+        const auto shown = controller.apply_frame(ComposeText{composed_of("に", {}, 0)});
+        const auto dropped = controller.apply_frame(CommitText{"日本"});
+        expect(mode != VimMode::normal && !shown.composition.has_value() &&
+                   dropped.lines.at(0).text == "abc" && controller.vim_state().mode == mode,
+               "VISUAL drops the composition and the committed text and stays in VISUAL");
+        vim_replay(controller, "<Esc>");
+    }
 }
 
 // Vim の INSERT では確定した文字列が code point ごとの打鍵として engine を通る（決定 4）。

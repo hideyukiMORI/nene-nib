@@ -1,27 +1,49 @@
 // 全面の Markdown プレビューの application の契約（ADR 0155 の改訂 15〜17・20・#1052 の N5a）。
 // 3 つの見せ方の遷移・Esc の戻り先・編集の拒否と知らせ・通る鍵・錨の往復・静かな道。
+#include "ActOnLinkCard.hpp"
+#include "ActivateCommandChoice.hpp"
+#include "AdjustFontSize.hpp"
 #include "AutosaveTick.hpp"
+#include "CancelCommand.hpp"
+#include "CancelComposition.hpp"
 #include "CancelSelection.hpp"
 #include "CaretMotion.hpp"
+#include "ChooseContextMenu.hpp"
 #include "ClipboardAction.hpp"
 #include "ClipboardOperation.hpp"
+#include "CloseContextMenu.hpp"
 #include "ClosePane.hpp"
+#include "CloseTab.hpp"
 #include "Column.hpp"
+#include "CommandEdit.hpp"
+#include "CommandText.hpp"
+#include "CopyTabName.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
+#include "DiscardAutosave.hpp"
+#include "DisplayForm.hpp"
+#include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
+#include "EndSession.hpp"
+#include "ExplorerKey.hpp"
+#include "ExplorerKeyKind.hpp"
+#include "ExplorerPointing.hpp"
 #include "ExplorerResizing.hpp"
+#include "ExplorerRootChosen.hpp"
 #include "ExplorerView.hpp"
 #include "FilePath.hpp"
+#include "FontSizeAdjustment.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertDateTime.hpp"
 #include "InsertText.hpp"
+#include "Language.hpp"
 #include "LineNumber.hpp"
+#include "LinkCardAction.hpp"
 #include "MarkdownDocument.hpp"
 #include "MarkdownOutcome.hpp"
 #include "MarkdownParse.hpp"
@@ -30,10 +52,20 @@
 #include "NewLine.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
+#include "OpenCommandPalette.hpp"
+#include "OpenContextMenu.hpp"
 #include "OpenDocument.hpp"
+#include "OpenOperationList.hpp"
+#include "OpenProjectSearch.hpp"
+#include "OpenTabList.hpp"
+#include "OpenTabMenu.hpp"
 #include "PaneFrame.hpp"
 #include "PaneSide.hpp"
+#include "PasteCommand.hpp"
+#include "PinTab.hpp"
 #include "PlaceCaret.hpp"
+#include "PointContextMenu.hpp"
+#include "PointExplorer.hpp"
 #include "PointPreview.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewPlacement.hpp"
@@ -43,29 +75,50 @@
 #include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
 #include "ResizeExplorer.hpp"
+#include "RestoreAutosave.hpp"
+#include "RevealTab.hpp"
+#include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedMarkdown.hpp"
+#include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
+#include "ScrollPaletteList.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollTabs.hpp"
+#include "SearchHop.hpp"
 #include "SelectAll.hpp"
+#include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
+#include "SelectLanguage.hpp"
+#include "SelectSyntax.hpp"
 #include "SelectionAnchoring.hpp"
+#include "SessionEnd.hpp"
 #include "SetPreviewPlacement.hpp"
+#include "SettleRecentTab.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
+#include "StepContextMenu.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchPane.hpp"
 #include "SwitchTab.hpp"
+#include "TabNamePart.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
+#include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "ToggleBookmark.hpp"
+#include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
 #include "TogglePreviewTask.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimSearchDirection.hpp"
 #include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <array>
@@ -73,6 +126,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -937,6 +991,91 @@ void verify_full_preview_resize()
                 std::optional<std::int32_t>{300},
         "releasing during the full preview writes the width and stays in full");
 }
+
+// 全面の間も今までどおり写す意図（ADR 0155 の改訂 17・passes_full_preview の表）。拒否される意図は
+// 「プレビュー中は編集できません」の 1 行を出す（4.）ので、表の意図はどれもその 1 行を出さない。
+// 意図ごとに新しい窓で全面を開いて 1 つだけ送る（前の意図の効果を次へ持ち越さない）。
+[[nodiscard]] bool refused_in_full(const app::EditorIntent &intent)
+{
+    Editing editing;
+    open_text(editing, "# title\n\ntext");
+    applied(editing.controller(), app::NewTab{});
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    return message_of(editing.controller().apply_frame(intent)) == refused;
+}
+
+void expect_all_pass(std::span<const app::EditorIntent> intents)
+{
+    for (const auto &intent : intents)
+    {
+        expect(!refused_in_full(intent),
+               "an intent the full preview passes on is not refused (revision 17)");
+    }
+}
+
+// タブ・窓・枠・面の側（passes_full_preview_window）。
+void verify_full_preview_passes_window()
+{
+    const app::EditorIntent passing[] = {
+        app::PinTab{0},
+        app::WalkRecentTab{core::TabStep::next},
+        app::SettleRecentTab{},
+        app::CloseTab{1},
+        app::ScrollTabs{1},
+        app::OpenTabList{},
+        app::EndSession{app::SessionEnd::window_closed},
+        app::RestoreAutosave{},
+        app::DiscardAutosave{},
+        app::ToggleBookmark{},
+        app::OpenOperationList{},
+        app::SelectDisplay{core::DisplayForm::text},
+        app::SelectLanguage{core::Language::plain},
+        app::SelectSyntax{true},
+        app::ScrollPaletteList{1},
+        app::SplitPane{core::SplitLayout::vertical},
+        app::SwitchPane{},
+        app::ToggleExplorer{},
+        app::ExplorerKey{app::ExplorerKeyKind::j},
+        app::PointExplorer{0, app::ExplorerPointing::pressed},
+        app::ScrollExplorer{1},
+        app::ExplorerRootChosen{sample_path()},
+    };
+    expect_all_pass(passing);
+    // 対照: 表に無い編集の意図は同じ窓の作りで拒否される（判定が常に「通す」になっていない）。
+    expect(refused_in_full(app::InsertText{"x"}), "an edit outside the table is refused");
+}
+
+// 開く・保存・入力行・Ctrl+P・右クリックの面・リンクの札（passes_full_preview）。
+void verify_full_preview_passes_input()
+{
+    const app::EditorIntent passing[] = {
+        app::OpenDocument{sample_path()},
+        app::SaveDocument{sample_path(), core::TextEncoding::utf8},
+        app::CancelComposition{},
+        app::AdjustFontSize{core::FontSizeAdjustment::increase, 1},
+        app::CommandText{"x"},
+        app::EditCommand{core::CommandEdit::left},
+        app::SubmitCommand{},
+        app::CancelCommand{},
+        app::PasteCommand{},
+        app::OpenCommandPalette{},
+        app::OpenProjectSearch{},
+        app::ActivateCommandChoice{0},
+        app::SearchHop{core::VimSearchDirection::forward},
+        app::OpenContextMenu{10, 10, std::nullopt},
+        app::OpenTabMenu{10, 10, 0},
+        app::CopyTabName{app::TabNamePart::file_name},
+        app::RevealTab{},
+        app::PointContextMenu{std::nullopt},
+        app::StepContextMenu{true},
+        app::ChooseContextMenu{std::nullopt},
+        app::CloseContextMenu{},
+        app::ActOnLinkCard{app::LinkCardAction::close},
+    };
+    expect_all_pass(passing);
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -963,5 +1102,7 @@ void verify_preview_full_scope()
     verify_toggle_with_split();
     verify_toggle_across_tabs();
     verify_full_preview_resize();
+    verify_full_preview_passes_window();
+    verify_full_preview_passes_input();
 }
 } // namespace nenenib::tests

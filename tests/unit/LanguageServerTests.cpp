@@ -171,6 +171,28 @@ void started(Editing &editing)
             R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
 }
 
+// 読めない本文（JSON でない・JSON-RPC の形でない）は捨てる（receive_server
+// の決まり）。何も送り返さず、 待っている `initialize` の答えはその後に届いても読む。
+void verify_unreadable_messages_dropped()
+{
+    Editing editing(lsp_settings(true));
+    hold_documents(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    auto &server = editing.language_server();
+    const std::size_t sent = server.sent().size();
+    static_cast<void>(delivered(editing, app::ServerMessage{"not json"}));
+    static_cast<void>(delivered(editing, app::ServerMessage{R"({"jsonrpc":"2.0"})"}));
+    expect(server.sent().size() == sent, "an unreadable message is dropped without an answer");
+    static_cast<void>(delivered(
+        editing,
+        app::ServerMessage{
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
+    expect(server.sent().size() == sent + 2 &&
+               contains(server.sent().at(sent), R"("method":"initialized")"),
+           "the answer to initialize after the dropped messages still starts the server");
+}
+
 // 設定の 1 行を起こす要求にする（決定 7）。
 void verify_server_command()
 {
@@ -1950,6 +1972,28 @@ void verify_diagnostics_uri_forms()
     }
 }
 
+// uri の無い publishDiagnostics と、診断の列が読めない publishDiagnostics は捨てる（送った覚えの
+// ない文書の診断は捨てる・決定 2）。前に置いた診断は残す。
+void verify_unplaceable_diagnostics_dropped()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    editing.language_server().publish(source_uri, 0, main_error);
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    const std::string without_uri =
+        R"({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":)" +
+        std::string(int_warning) + "}}";
+    const std::string unreadable =
+        R"({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":")" +
+        std::string(source_uri) + R"(","diagnostics":5}})";
+    for (const std::string &body : {without_uri, unreadable})
+    {
+        const auto frame = delivered(editing, app::ServerMessage{body});
+        expect(underlined(frame.lines.at(0), 5, 9, core::DiagnosticSeverity::error),
+               "a publish without a URI or with unreadable diagnostics is dropped");
+    }
+}
+
 // 2026-11-20 の追補（#1897）: 起こせない理由を分けて 1 行で知らせる。
 void verify_start_failure_notices()
 {
@@ -1969,6 +2013,15 @@ void verify_start_failure_notices()
                 "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: cpp" &&
             told(app::ServerFailure::pipe_failed) == "言語サーバーを起こせませんでした: cpp",
         "missing, relative, script and other start failures are told apart");
+    // 「ほか」は全部同じ「起こせませんでした」（ADR 0160 の 2026-11-20 の追補）。
+    for (const auto failure :
+         {app::ServerFailure::cannot_start, app::ServerFailure::write_failed,
+          app::ServerFailure::read_failed, app::ServerFailure::message_too_long,
+          app::ServerFailure::header_too_long})
+    {
+        expect(told(failure) == "言語サーバーを起こせませんでした: cpp",
+               "every other start failure says the server could not be started");
+    }
 }
 
 // 2026-11-20 の追補（#1897）: 表に無い名前の命令の行（後の版が足す言語）は使わない。
@@ -1991,6 +2044,7 @@ void verify_language_server_contracts()
     verify_server_command();
     verify_ex_lsp_option();
     verify_lifecycle();
+    verify_unreadable_messages_dropped();
     verify_switch();
     verify_language_server_slots();
     verify_restart_limit();
@@ -2028,6 +2082,7 @@ void verify_language_server_contracts()
     verify_unsynced_diagnostics();
     verify_did_save();
     verify_diagnostics_uri_forms();
+    verify_unplaceable_diagnostics_dropped();
     verify_start_failure_notices();
     verify_unknown_command_rows_unused();
     verify_language_server_log();

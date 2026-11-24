@@ -19,8 +19,10 @@ namespace
 // してここへも 1 行足す。fixture の再生は verify_vim_fixtures が全件行うので、ここには載せない。
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
+// --minimap-property は Debug で 1 回約 28 秒と重いので載せない（#2013 の実測）。
+// nib_unit_scopes（--every-scope）だけが回す。
 // 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 147> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 148> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -168,6 +170,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 147> contracts{{
     {"--lsp-signature", verify_lsp_signature_scope},
     {"--indent-guides", verify_indent_guides_scope},
     {"--lsp-formatting", verify_lsp_formatting_scope},
+    {"--input-line-property", verify_input_line_property_scope},
 }};
 
 void verify_vim_scope_contracts()

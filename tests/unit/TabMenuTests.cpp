@@ -341,6 +341,13 @@ void verify_tab_reveal()
     applied(controller, app::WorkCompleted{});
     expect(editing.reveal().collects() == 1,
            "the port is not collected again once every request has come back");
+    applied(controller, app::OpenTabMenu{50, 40, 1});
+    applied(controller, app::ChooseContextMenu{reveal_row});
+    editing.reveal().serve(std::unexpected(app::RevealFailure::failed));
+    applied(controller, app::WorkCompleted{});
+    expect(notice_of(controller) == core::ui_text(core::UiMessage::notice_reveal_failed,
+                                                  core::DisplayLanguage::japanese),
+           "a reveal the shell could not show says it failed, apart from a missing file");
 }
 
 // 前回のタブを戻した起動（a と c はまだ読んでいない・b がアクティブ）。
