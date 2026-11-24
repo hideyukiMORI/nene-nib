@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CompletionStep.hpp"
 #include "KeyVimSpecial.hpp"
 #include "VimSpecialKey.hpp"
 
@@ -89,5 +90,31 @@ vim_completion_key(WPARAM key, bool control, bool inserting, bool face_shown) no
 [[nodiscard]] constexpr bool tab_closes_completion(bool shifted, bool face_open) noexcept
 {
     return shifted && face_open;
+}
+
+// Vim の INSERT で補完の面が見えている間に、面の行を選ぶ鍵（#2024・本物の Vim の popupmenu-keys の
+// `<Down>` `<Up>` `<PageDown>` `<PageUp>`）。Shift つきとほかの鍵は空（今までどおり Vim の鍵）。
+// 面が見えているかは呼ぶ側が controller に問う（completion_takes_arrows）。
+[[nodiscard]] constexpr std::optional<application::CompletionStep>
+vim_completion_step_for(WPARAM key, bool shifted) noexcept
+{
+    if (shifted)
+    {
+        return std::nullopt;
+    }
+    // OS の仮想キーは開いた集合（CPP-017）。
+    switch (key)
+    {
+    case VK_DOWN:
+        return application::CompletionStep::next;
+    case VK_UP:
+        return application::CompletionStep::previous;
+    case VK_NEXT:
+        return application::CompletionStep::page_next;
+    case VK_PRIOR:
+        return application::CompletionStep::page_previous;
+    default:
+        return std::nullopt;
+    }
 }
 } // namespace nenenib::ui::win32
