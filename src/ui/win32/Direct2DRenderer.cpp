@@ -1971,42 +1971,44 @@ std::int32_t Direct2DRenderer::draw_status_left(const application::EditorFrame &
         return 0;
     case StatusLeftState::mode:
     case StatusLeftState::recording:
+    case StatusLeftState::diagnostic:
         break;
     }
     draw_toggle(frame, layout);
     const auto &mode = status_text_layout(frame.mode_label, mode_format_.Get(), layout.mode);
     draw_status_text(mode, layout.mode, frame.palette.text);
     const auto mode_width = text_extent(mode.layout.Get());
-    draw_recording(
+    draw_after_mode(
         frame,
         core::status_bar_fitted(layout, dpi_, mode_width, text_extent(position.layout.Get())),
         mode);
     return mode_width;
 }
 
-// 知らせの 1 行。command_message か、キャレットの上の診断の文（ADR 0161 の決定 4）の値のある方を
-// 同じ描き方で書く。両方が値を持つことは無い（application の add_diagnostics が決める）。
+// 知らせの 1 行（command_message）。キャレットの上の診断の文はモードの後ろ（draw_after_mode）。
 void Direct2DRenderer::draw_status_message(const application::EditorFrame &frame,
                                            const core::LayoutRect &area)
 {
-    const auto &message =
-        frame.diagnostic_message.has_value() ? frame.diagnostic_message : frame.command_message;
-    if (!message.has_value())
+    if (!frame.command_message.has_value())
     {
         return;
     }
     context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
-    write_status(message.value().text(), command_format_.Get(), area, frame.palette.text);
+    write_status(frame.command_message.value().text(), command_format_.Get(), area,
+                 frame.palette.text);
     context_->PopAxisAlignedClip();
 }
 
-// 録画中のマクロ（ADR 0046 の決定 8）。モード表示の文字の直後から右の項目の手前までに、
-// Vim のコマンド行と同じ `recording @a` を muted で書く。色はトークンだけ（ADR 0008 決定 8）。
-void Direct2DRenderer::draw_recording(const application::EditorFrame &frame,
-                                      const core::StatusBarLayout &layout,
-                                      const StatusTextLayout &mode)
+// モード表示の文字の直後から右の項目の手前までの欄（core::status_after_mode）に、録画中のマクロ
+// （ADR 0046 の決定 8・Vim のコマンド行と同じ `recording @a` を muted）か、キャレットの上の診断の文
+// （ADR 0161 の 2026-11-24 の追補・text）を書く。2 つは排他（録画中は文が無い）。
+// 長い文は欄で切る。色はトークンだけ（ADR 0008 決定 8）。
+void Direct2DRenderer::draw_after_mode(const application::EditorFrame &frame,
+                                       const core::StatusBarLayout &layout,
+                                       const StatusTextLayout &mode)
 {
-    if (!frame.recording.has_value())
+    const bool recording = frame.recording.has_value();
+    if (!recording && !frame.diagnostic_message.has_value())
     {
         return;
     }
@@ -2021,16 +2023,16 @@ void Direct2DRenderer::draw_recording(const application::EditorFrame &frame,
     // 表示形式の印を書く frame は印の手前まで（印は layout の欄に書く・#1658）。
     const bool marked =
         !core::display_form_label(frame.display).empty() && core::width_of(layout.display) > 0;
-    const core::LayoutRect area{left, layout.band.top,
-                                marked ? layout.display.left : layout.items.at(0).left,
-                                layout.band.bottom};
+    const auto area = core::status_after_mode(layout, left, marked);
     if (core::width_of(area) <= 0)
     {
         return;
     }
-    const std::string shown = std::string("recording @") + frame.recording.value();
+    const std::string shown = recording ? std::string("recording @") + frame.recording.value()
+                                        : std::string(frame.diagnostic_message.value().text());
     context_->PushAxisAlignedClip(to_rect(area), D2D1_ANTIALIAS_MODE_ALIASED);
-    write_status(shown, command_format_.Get(), area, frame.palette.muted);
+    write_status(shown, command_format_.Get(), area,
+                 recording ? frame.palette.muted : frame.palette.text);
     context_->PopAxisAlignedClip();
 }
 

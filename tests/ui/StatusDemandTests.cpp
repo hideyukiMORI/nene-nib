@@ -1,8 +1,8 @@
 // ステータスの文字組みの保持の枠（ADR 0079 の決定 11 と追補・ADR 0154 の決定 6・#776）。
 // renderer が 1 frame で使う枠の数を status_layout_demand で数え、保持の配列の長さ
 // status_layout_capacity と照らす。案内が出る frame で 11（診断の件数があれば 12・ADR 0161 の
-// 決定 4）・録画中 8（件数があれば 9）・言語を畳んだ狭い窓で案内が出るとしたら 10（最小の 360 DIP
-// では案内は消えるので 6）。
+// 決定 4）・録画中とキャレットの上の診断の文 8（件数があれば 9）・言語を畳んだ狭い窓で案内が
+// 出るとしたら 10（最小の 360 DIP では案内は消えるので 6）。
 #include "WindowChecks.hpp"
 
 #include "BodyLayout.hpp"
@@ -16,6 +16,7 @@
 #include "StatusBarLayout.hpp"
 #include "StatusGuideLayout.hpp"
 #include "StatusLayoutDemand.hpp"
+#include "StatusLeftInputs.hpp"
 #include "StatusLeftState.hpp"
 #include "StatusServerItem.hpp"
 
@@ -62,6 +63,27 @@ constexpr core::DiagnosticCounts counted{2, 1, core::DiagnosticsCount::truncated
 {
     return demand_in(status_at(width_dips, dpi, counted), dpi, left, context);
 }
+
+// 左側の分かれ目（#2025）: 診断の文はトグルとモードを残す状態で、知らせと入力行は今までどおり
+// 左側を全部使い、Ctrl+P の一覧が開いていればトグルの側へ落ちる。
+void verify_status_left_order()
+{
+    using win32::StatusLeftInputs;
+    expect(win32::status_left_of(StatusLeftInputs{.diagnostic = true}) ==
+               StatusLeftState::diagnostic,
+           "a diagnostic message keeps the toggle and the mode (ADR 0161 2026-11-24)");
+    expect(win32::status_left_of(StatusLeftInputs{.message = true, .diagnostic = true}) ==
+                   StatusLeftState::message &&
+               win32::status_left_of(StatusLeftInputs{.command_line = true, .diagnostic = true}) ==
+                   StatusLeftState::command_input,
+           "a notice and the input line still take the whole left side over the diagnostic");
+    expect(win32::status_left_of(StatusLeftInputs{.palette = true, .diagnostic = true}) ==
+                   StatusLeftState::mode &&
+               win32::status_left_of(StatusLeftInputs{.recording = true}) ==
+                   StatusLeftState::recording &&
+               win32::status_left_of(StatusLeftInputs{}) == StatusLeftState::mode,
+           "the open list falls back to the toggle and recording keeps its own state");
+}
 } // namespace
 
 void verify_status_demand()
@@ -86,6 +108,12 @@ void verify_status_demand()
                    counted_demand_at(900, dpi, StatusLeftState::recording,
                                      core::GuideContext::hidden) == 9,
                "recording hides the guide and uses 8, or 9 with the count");
+        // キャレットの上の診断の文はトグルとモードの後ろに 1 枠（ADR 0161 の 2026-11-24 の追補・
+        // #2025）。文を出す frame は案内を消し、録画とは排他なので最大は録画と同じ 9。
+        expect(demand_at(900, dpi, StatusLeftState::diagnostic, core::GuideContext::hidden) == 8 &&
+                   counted_demand_at(900, dpi, StatusLeftState::diagnostic,
+                                     core::GuideContext::hidden) == 9,
+               "the diagnostic message after the mode uses 8, or 9 with the count");
         expect(demand_at(900, dpi, StatusLeftState::message, core::GuideContext::hidden) == 5 &&
                    demand_at(900, dpi, StatusLeftState::command_input,
                              core::GuideContext::hidden) == 4,
@@ -99,5 +127,6 @@ void verify_status_demand()
                    10,
                "a folded status bar with the guide would use 10");
     }
+    verify_status_left_order();
 }
 } // namespace nenenib::tests::ui
