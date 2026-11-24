@@ -512,26 +512,22 @@ void SettingsPanelPainter::paint_stepper(std::string_view value, const core::Set
 }
 
 // 行の領域の 1 行（見えている行の通しの位置: 設定の行 → 言語サーバーの行 → 畳みの 1 行）。焦点の
-// 行は current_line の面。言語サーバーの節の焦点はさらに text の 1 DIP の枠で囲む（#1929 の
-// 「焦点の色がほとんど変わらない」をこの節では繰り返さない・#1945。accent は背景に近いテーマが
-// あるので枠に使わない・レビュー M1）。
+// 行はどの行も current_line の面 ＋ text の 1 DIP の枠（#1929: current_line と panel の差は色では
+// 見分けられない・text と panel の比は全テーマで 3:1 以上を契約が縛る・#1945 の形を全部の行へ。
+// accent は背景に近いテーマがあるので枠に使わない・レビュー M1）。
 void SettingsPanelPainter::paint_any_row(const application::SettingsView &view,
                                          const core::SettingsLayout &layout,
                                          const core::SettingsLayoutItem &item)
 {
-    const bool focused = view.focused == std::optional{item.index};
-    if (focused)
+    if (view.focused == std::optional{item.index})
     {
         fill_rounded(item.box, row_radius_dips, palette_.current_line);
+        outline(item.box, row_radius_dips, palette_.text);
     }
     if (item.index < view.rows.size())
     {
         paint_row(view.rows.at(item.index), layout, item);
         return;
-    }
-    if (focused)
-    {
-        outline(item.box, row_radius_dips, palette_.text);
     }
     const std::size_t server = item.index - view.rows.size();
     if (server < view.servers.size())

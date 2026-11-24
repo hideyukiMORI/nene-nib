@@ -1559,6 +1559,12 @@ void verify_theme_contrast()
                (name + ": the gutter has its own background").c_str());
         expect(!(theme.ui.on_accent == theme.ui.accent),
                (name + ": text on an accent differs from that accent").c_str());
+        // #1929: 焦点の行（設定の行・補完の選んだ行）は current_line の面に text の 1 DIP の枠。
+        // 枠は panel と current_line の境に乗るので、両方に非テキストの UI の目安 3:1（WCAG
+        // 1.4.11）を縛る（current_line と panel の差は色では見分けられないので枠で伝える）。
+        expect(contrast_ratio(theme.ui.text, theme.ui.panel) >= 3.0 &&
+                   contrast_ratio(theme.ui.text, theme.ui.current_line) >= 3.0,
+               (name + ": the focus frame clears 3:1 over the panel and the current line").c_str());
     }
 }
 
