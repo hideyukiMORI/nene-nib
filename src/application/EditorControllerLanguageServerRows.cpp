@@ -213,14 +213,15 @@ void erase_row_commands(Commands &commands, std::size_t index, std::string_view 
                   });
 }
 
-// before と after で命令の行が違う名前（消えた・変わった・足した）。
+// before と after で命令の行が違う名前（消えた・変わった・足した）。「違う」は席の鍵と同じ
+// server_command_key の比べ（前後の空白だけの違いは変わっていない・#2007 のレビュー R3）。
 [[nodiscard]] std::vector<std::string> changed_names(const Commands &before, const Commands &after)
 {
     std::vector<std::string> names;
     for (const auto &[name, command] : before)
     {
         const auto *now = command_named(after, name);
-        if (now == nullptr || *now != command)
+        if (now == nullptr || server_command_key(*now) != server_command_key(command))
         {
             names.push_back(name);
         }
@@ -235,7 +236,7 @@ void erase_row_commands(Commands &commands, std::size_t index, std::string_view 
     return names;
 }
 
-// 命令の行 command の失敗の控えを消す（無ければ何もしない）。
+// 命令の行 command の全部の root の失敗の控えを消す（無ければ何もしない）。
 void forget_trouble(std::vector<LanguageServerTrouble> &troubles, std::string_view command)
 {
     std::erase_if(troubles, [command](const LanguageServerTrouble &trouble)
@@ -517,11 +518,11 @@ void EditorController::unfold_language_server_rows(const std::vector<LanguageSer
     settings_.value().focus = core::settings_rows.size() + first;
 }
 
-// 命令の行が変わった言語（「使う」「外す」「元に戻す」・#1945）。その言語の前の命令の行の席を止め、
-// 前と後の命令の行の失敗の控えを消し（諦めた命令の行に足した言語も、もう一度試す）、起こすかを決め
-// 直す（行があれば今の規則どおり `lsp=on`
-// でその言語の文書があれば起きる）。席の鍵は命令の行なので、前の命令の行を共有していたほかの言語の
-// 文書も閉じ、アクティブになったときに今の命令の行の席で開き直す（2026-11-24 の追補・#1952）。
+// 命令の行が変わった言語（「使う」「外す」「元に戻す」・#1945）。その言語の前の命令の行の席を
+// 全部の root で止め、前と後の命令の行の全部の root の失敗の控えを消し（諦めた命令の行に足した
+// 言語も、もう一度試す）、起こすかを決め直す（行があれば今の規則どおり `lsp=on` でその言語の
+// 文書があれば起きる）。席の鍵は命令の行を含むので、前の命令の行を共有していたほかの言語の文書も
+// 閉じ、アクティブになったときに今の命令の行の席で開き直す（2026-11-24 の追補・#1952）。
 void EditorController::follow_language_server_commands(const Commands &before,
                                                        const Commands &after)
 {
@@ -544,8 +545,8 @@ void EditorController::follow_language_server_commands(const Commands &before,
     language_servers_.considered.reset();
 }
 
-// 命令の行 command の失敗の控えを消し、その命令の行で起きた席を止める（行が残っていれば今の規則で
-// 起こし直す）。
+// 命令の行 command の全部の root の失敗の控えを消し、その命令の行で起きた席を root を問わず止める
+// （行が残っていれば今の規則で起こし直す）。
 void EditorController::restart_language_servers_of(std::string_view command)
 {
     forget_trouble(language_servers_.troubles, command);

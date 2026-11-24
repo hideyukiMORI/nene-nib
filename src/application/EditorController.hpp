@@ -975,15 +975,17 @@ class EditorController final
     // 席（2026-11-20 の追補・段 S2）: serving はその言語の文書を受ける席、active_language_server
     // はアクティブな文書を受ける席のつながり（無ければ空）、holding はアクティブな文書を開いた席。
     // 席の鍵は（命令の行・root）で、同じ命令の行の言語は 1 席を共有する（2026-11-24 の追補・
-    // #1952）。失敗の数と given_up は命令の行ごと（trouble_of）。席が満ちたら yield
-    // が最も前に使った席を譲らせる。
+    // #1952）。失敗の数と given_up は席の鍵（命令の行・root）ごと（trouble_of）。席が満ちたら
+    // yield が最も前に使った席を譲らせる。
     void reconcile_language_server();
     [[nodiscard]] std::optional<LanguageServerSlot> serving_slot(core::Language language) const;
     [[nodiscard]] const LanguageServerLink &active_language_server() const;
     [[nodiscard]] std::optional<LanguageServerSlot> holding_slot() const;
     [[nodiscard]] std::optional<LanguageServerSlot> free_slot() const;
     [[nodiscard]] LanguageServerLink &link_of(LanguageServerSlot slot);
-    [[nodiscard]] LanguageServerTrouble &trouble_of(std::string_view command);
+    [[nodiscard]] LanguageServerTrouble &trouble_of(std::string_view command,
+                                                    const std::optional<core::FilePath> &root);
+    [[nodiscard]] bool seat_given_up(std::string_view command, const core::FilePath &root) const;
     [[nodiscard]] bool language_server_given_up(core::Language language) const;
     // 設定の language の命令の行を席の鍵の形（server_command_key）で（行が無ければ値なし）。
     [[nodiscard]] std::optional<std::string_view>

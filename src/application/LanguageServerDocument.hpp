@@ -23,6 +23,8 @@ struct LanguageServerDocument
     std::string uri;
     std::vector<SentRevision> sent;
     core::JsonArray changes = {};
-    core::Language language = core::Language::plain;
+    // 既定値を持たない（作る所が書き忘れると -Wmissing-field-initializers で落ちる・#2007 の
+    // レビュー L1）。
+    core::Language language;
 };
 } // namespace nenenib::application

@@ -319,7 +319,9 @@ std::optional<LanguageServerSlot> EditorController::requestable_slot(bool Server
     }
     const auto uri = language_server_uri(slot.value());
     LanguageServerDocument &document = active_document_of(slot.value());
-    if (!uri.has_value() || document.uri != uri.value())
+    // 開いた言語も照合する（`:set ft=` の後・同期の前に、共有の席で別の languageId の文書として
+    // 出さない・#2007 のレビュー L2）。
+    if (!uri.has_value() || document.uri != uri.value() || document.language != state_.language())
     {
         return std::nullopt;
     }

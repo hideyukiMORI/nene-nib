@@ -120,5 +120,5 @@ clangd の索引中や jedi の起動の数秒は、使う人から見ると何�
 2026-11-22 の #1945 の追補の限界「C と C++、TypeScript と JavaScript は同じサーバーが 2 本起き得る」を解く。詳しくは ADR 0161 の同じ日の追補。
 
 - **決定 1 は変えない**: port・席の番号・worker・取り消しの表の形はそのまま。controller が席を引く鍵だけを（言語・root）から（命令の行・root）に改め、同じ命令の行の言語は 1 本の子を共有する。
-- **決定 6 の失敗**: 自動の再起動の回数（3 回）と `given_up` は 2026-11-20 の追補の「言語ごと」から**命令の行ごと**（`LanguageServerTrouble.command`・`server_command_key` の形）に改める。
+- **決定 6 の失敗**: 自動の再起動の回数（3 回）と `given_up` は 2026-11-20 の追補の「言語ごと」から**席の鍵（命令の行・root）ごと**（`LanguageServerTrouble.command` と `.root`・`server_command_key` の形と `same_folder`）に改める（同じ命令でも root の違う席は別の控え・#2007 のレビュー M1）。
 - **記録**: 席ごとのまま。行の頭の言語は子を起こした文書の言語（共有の席では最初の言語）。

@@ -8,12 +8,10 @@
 #include "LanguageRootGap.hpp"
 #include "LanguageRootRequest.hpp"
 #include "LanguageServers.hpp"
-#include "LanguageTable.hpp"
 
 #include <algorithm>
 #include <expected>
 #include <optional>
-#include <string_view>
 #include <utility>
 
 namespace nenenib::application
@@ -128,12 +126,11 @@ void EditorController::hold_language_root(core::Language language)
                             .root = std::move(root).value()};
 }
 
-// 設定に language の命令の行があるか（命令の無い言語のためには root を探さない）。
+// 設定に language の命令の行があるか（命令の無い言語のためには root を探さない・表引きは
+// language_server_command の 1 本・#2007 のレビュー R4）。
 bool EditorController::has_language_server_command(core::Language language) const
 {
-    const std::string_view name = core::language_name(language);
-    return std::ranges::any_of(state_.settings().lsp_commands,
-                               [name](const auto &entry) { return entry.first == name; });
+    return language_server_command(language).has_value();
 }
 
 // アクティブな文書の（フォルダ・言語・上限）の印を探す頼みを 1 回だけ出す（答えを待つ間は 2
