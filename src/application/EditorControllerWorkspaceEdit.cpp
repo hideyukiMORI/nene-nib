@@ -84,14 +84,16 @@ namespace
     return detail::named_line(message, language, name, {});
 }
 
-// サーバーが数える UTF-8 の本文か（BOM の有無は問わない・#2011 のレビュー R2）。
-[[nodiscard]] bool utf8_encoded(core::TextEncoding encoding) noexcept
+// 頼んだ席が開いていない文書を、サーバーがディスクのバイト列から Nib と同じ位置で数えるか
+// （#2011 のレビュー R2・R6 の N2）。BOM なしの UTF-8 だけ。BOM つきは clangd 19.1.5 が 1 行目の
+// BOM を 1 文字と数えた（D:/NeNeNib/scripts/20261124/s7a-rename の answers-bom.json）ので断る側。
+[[nodiscard]] bool plain_utf8(core::TextEncoding encoding) noexcept
 {
     switch (encoding)
     {
     case core::TextEncoding::utf8:
-    case core::TextEncoding::utf8_bom:
         return true;
+    case core::TextEncoding::utf8_bom:
     case core::TextEncoding::shift_jis:
     case core::TextEncoding::utf16_le:
     case core::TextEncoding::utf16_be:
@@ -100,12 +102,13 @@ namespace
     std::unreachable();
 }
 
-// 文書の改訂番号と、未保存の変更が無いか（判定は save_state_of の 1 か所）。
-[[nodiscard]] std::pair<std::uint64_t, bool> revision_and_saved(const core::EditHistory &history,
-                                                                const Document &document)
+// 文書の改訂番号と、未保存の変更が無いか（判定は save_state_of の 1 か所）と、文字コード。
+[[nodiscard]] std::tuple<std::uint64_t, bool, core::TextEncoding>
+revision_and_saved(const core::EditHistory &history, const Document &document)
 {
     return {static_cast<std::uint64_t>(history.revision()),
-            save_state_of(document, history.content_position()) == core::SaveState::saved};
+            save_state_of(document, history.content_position()) == core::SaveState::saved,
+            document.encoding};
 }
 
 // 頼んだときの写し copied（無ければ nullptr）から本文が動いたか。改訂番号が違う、または頼んだ席が
@@ -128,6 +131,27 @@ namespace
 [[nodiscard]] bool sent_by_seat(const OpenedRevision *copied) noexcept
 {
     return copied != nullptr && copied->sent;
+}
+
+// 頼んだ席が `didOpen` していなかった当て先の断り（無ければ値なし・#2011 のレビュー R6 の
+// N1・N2）。 サーバーはディスクの本文で数えるので、頼んだときも今も保存済みで、BOM なしの UTF-8
+// のときだけ 当てる。写しに無いタブ（頼んだ後に開いた・読んだ）は、読んでから 1
+// 度も編集していない（改訂番号が
+// 0）ときだけ（保存しても改訂番号は動かないので、保存の状態だけでは読んだ後の変更を言えない）。
+[[nodiscard]] std::optional<core::UiMessage> unsent_refusal(const OpenedRevision *copied,
+                                                            std::uint64_t revision, bool saved,
+                                                            core::TextEncoding encoding) noexcept
+{
+    if (copied == nullptr && revision != 0)
+    {
+        return core::UiMessage::notice_server_edit_stale;
+    }
+    if (!saved || (copied != nullptr && !copied->saved))
+    {
+        return core::UiMessage::notice_server_edit_unsent;
+    }
+    return plain_utf8(encoding) ? std::nullopt
+                                : std::optional{core::UiMessage::notice_server_edit_not_utf8};
 }
 } // namespace
 
@@ -158,7 +182,7 @@ void EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
     {
         return;
     }
-    run_server_edits(std::move(files).value());
+    run_server_edits(std::move(files).value(), context.slot);
 }
 
 // 読みが断った理由 → 1 行（決定 4）。
@@ -272,7 +296,7 @@ EditorController::server_edit_place(const core::FilePath &path)
     {
         return std::unexpected{unreachable()};
     }
-    if (!utf8_encoded(finished->document.value().encoding))
+    if (!plain_utf8(finished->document.value().encoding))
     {
         return std::unexpected{file_notice(core::UiMessage::notice_server_edit_not_utf8,
                                            state_.display_language(), path)};
@@ -296,19 +320,25 @@ EditorController::server_edit_check(AutosaveId tab, const core::LspFileEdits &fi
         return {};
     }
     const DocumentState *bundle = state_.parked_bundle_at(position.value());
-    const auto [revision, saved] = bundle != nullptr
-                                       ? revision_and_saved(bundle->history, bundle->document)
-                                       : revision_and_saved(state_.history(), state_.document());
+    const auto [revision, saved, encoding] =
+        bundle != nullptr ? revision_and_saved(bundle->history, bundle->document)
+                          : revision_and_saved(state_.history(), state_.document());
     const auto copied = std::ranges::find(context.opened, tab, &OpenedRevision::tab);
     const OpenedRevision *known = copied != context.opened.end() ? &*copied : nullptr;
     if (moved_since(known, file.version, revision))
     {
         return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }
-    if (!sent_by_seat(known) && !saved)
+    if (sent_by_seat(known))
     {
-        return std::unexpected{file_notice(core::UiMessage::notice_server_edit_unsent,
-                                           state_.display_language(), path)};
+        return {};
+    }
+    const auto refusal = unsent_refusal(known, revision, saved, encoding);
+    if (refusal.has_value())
+    {
+        return std::unexpected{refusal.value() == core::UiMessage::notice_server_edit_stale
+                                   ? ui_notice(refusal.value())
+                                   : file_notice(refusal.value(), state_.display_language(), path)};
     }
     return {};
 }
@@ -321,13 +351,36 @@ EditorController::reach_server_edit_tabs(const std::vector<ServerEditFile> &file
 {
     for (const ServerEditFile &file : files)
     {
-        const auto *tab = std::get_if<AutosaveId>(&file.place);
-        const auto position = tab != nullptr ? tab_position_of(*tab) : std::nullopt;
-        if (position.has_value() && reach_tab(position.value()) != TabReach::reached)
+        const auto reached = reach_server_edit_tab(file);
+        if (!reached.has_value())
         {
-            return std::unexpected{file_notice(core::UiMessage::notice_server_edit_unreachable,
-                                               state_.display_language(), file.path)};
+            return reached;
         }
+    }
+    return {};
+}
+
+// 1 ファイルぶん。まだ読んでいないタブだけを読み、読んだ本文の文字コードを照らす（席が開いていない
+// ディスクの本文・N2）。
+std::expected<void, core::DisplayText>
+EditorController::reach_server_edit_tab(const ServerEditFile &file)
+{
+    const auto *tab = std::get_if<AutosaveId>(&file.place);
+    const auto position = tab != nullptr ? tab_position_of(*tab) : std::nullopt;
+    if (!position.has_value() || !state_.unloaded_at(position.value()).has_value())
+    {
+        return {};
+    }
+    if (reach_tab(position.value()) != TabReach::reached)
+    {
+        return std::unexpected{file_notice(core::UiMessage::notice_server_edit_unreachable,
+                                           state_.display_language(), file.path)};
+    }
+    const DocumentState *bundle = state_.parked_bundle_at(position.value());
+    if (bundle == nullptr || !plain_utf8(bundle->document.encoding))
+    {
+        return std::unexpected{file_notice(core::UiMessage::notice_server_edit_not_utf8,
+                                           state_.display_language(), file.path)};
     }
     return {};
 }
@@ -399,11 +452,10 @@ EditorController::place_server_edit_spans(std::vector<ServerEditFile> &files,
 
 // 当てる（決定 5）。検査を通った後は replace が断る道が無い（入力の途中でなく、各区間は今の本文の
 // 上で組んだ・切り替えと開く道は本文を変えない）。
-void EditorController::run_server_edits(std::vector<ServerEditFile> files)
+void EditorController::run_server_edits(std::vector<ServerEditFile> files, LanguageServerSlot slot)
 {
     const auto &ids = state_.autosave_ids();
     const AutosaveId origin = ids.at(state_.active_tab());
-    const auto slot = holding_slot();
     std::vector<AutosaveId> order;
     for (const std::size_t position : state_.recency().order())
     {
@@ -441,25 +493,24 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files)
                         {std::to_string(changed), std::to_string(places)}));
 }
 
-// 当てる前に、頼んだ席 slot がまだ開いていないアクティブな文書（当て先）を今の `didOpen` の 1 本で
-// 開く（#2011 のレビュー M1 の (b)・ADR 0194 の決定 5）。当てる編集は replace の言語サーバーの口が
-// 積み、意図の終わりに `didChange` になる。席がこの文書を受ける（同じ言語・同じ
-// root・送れる大きさ）
+// 当てる前に、答えた席 slot（文脈の席・#2011 のレビュー R6 の
+// P1）がまだ開いていないアクティブな文書（当て先）を今の `didOpen` の 1 本で 開く（#2011 のレビュー
+// M1 の (b)・ADR 0194 の決定 5）。当てる編集は replace の言語サーバーの口が 積み、意図の終わりに
+// `didChange` になる。席がこの文書を受ける（同じ言語・同じ root・送れる大きさ）
 // ときだけで、ほかの席が開いている文書・受けない文書は開かない（次の頼みでは未保存なら断られる）。
-void EditorController::announce_server_edit_target(std::optional<LanguageServerSlot> slot)
+void EditorController::announce_server_edit_target(LanguageServerSlot slot)
 {
-    if (!slot.has_value() || holding_slot().has_value() ||
-        link_of(slot.value()).phase != LanguageServerPhase::running ||
-        serving_slot(state_.language()) != slot)
+    if (holding_slot().has_value() || link_of(slot).phase != LanguageServerPhase::running ||
+        serving_slot(state_.language()) != std::optional{slot})
     {
         return;
     }
-    auto uri = language_server_uri(slot.value());
+    auto uri = language_server_uri(slot);
     if (!uri.has_value())
     {
         return;
     }
-    open_language_server_document(slot.value(), state_.autosave_ids().at(state_.active_tab()),
+    open_language_server_document(slot, state_.autosave_ids().at(state_.active_tab()),
                                   std::move(uri).value());
 }
 

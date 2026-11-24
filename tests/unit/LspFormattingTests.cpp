@@ -1130,7 +1130,8 @@ void verify_tab_walk_busy()
     static_cast<void>(editing.controller().apply(app::WalkRecentTab{core::TabStep::next}));
     const auto frame = answered(editing, formatting_method, clangd_edits);
     expect(message_of(frame) == notice(editing, core::UiMessage::notice_formatting_busy) &&
-               frame.active_tab == 0 && body(editing) == source_text,
+               frame.active_tab == 0 && editing.controller().tab_walking() &&
+               body(editing) == source_text,
            "a formatting answer during a Ctrl+Tab walk is not applied");
 }
 } // namespace

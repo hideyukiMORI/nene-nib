@@ -496,6 +496,6 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_server_edit_applied_files, "已更改 {0} 个文件中的 {1} 处"},
     {UiMessage::notice_server_edit_unsent,
      "{0} 有语言服务器未收到的更改，因此未应用（请保存后重试）"},
-    {UiMessage::notice_server_edit_not_utf8, "{0} 不是 UTF-8，因此未应用"},
+    {UiMessage::notice_server_edit_not_utf8, "{0} 不是无 BOM 的 UTF-8，因此未应用"},
 }};
 } // namespace nenenib::core

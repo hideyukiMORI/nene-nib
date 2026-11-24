@@ -2,6 +2,8 @@
 
 #include "AutosaveId.hpp"
 #include "CompletionCandidates.hpp"
+#include "Document.hpp"
+#include "EditHistory.hpp"
 #include "JsonValue.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageQueryKind.hpp"
@@ -20,6 +22,7 @@
 #include "Offset.hpp"
 #include "OpenedRevision.hpp"
 #include "RenameAsked.hpp"
+#include "SaveState.hpp"
 #include "SearchLine.hpp"
 #include "ServerAbilities.hpp"
 #include "UiMessage.hpp"
@@ -210,9 +213,10 @@ void EditorController::request_rename(const std::string &name, const LspRequestC
         active_document_of(slot.value()).uri,
         core::lsp_position_of(state_.text(), context.at, link_of(slot.value()).encoding));
     params.emplace_back("newName", core::JsonValue{name});
-    send_language_request(
-        slot.value(), LspRequestKind::rename, core::JsonValue{std::move(params)},
-        LspEditContext{.request = context, .opened = opened_revisions(slot.value())});
+    send_language_request(slot.value(), LspRequestKind::rename, core::JsonValue{std::move(params)},
+                          LspEditContext{.request = context,
+                                         .opened = opened_revisions(slot.value()),
+                                         .slot = slot.value()});
 }
 
 // 帯の読み込み済みのタブごとの今の改訂番号と、頼んだ席 slot が `didOpen` しているか（決定 4・#2011
@@ -232,14 +236,16 @@ std::vector<OpenedRevision> EditorController::opened_revisions(LanguageServerSlo
         {
             continue;
         }
-        const auto revision =
-            bundle != nullptr ? bundle->history.revision() : state_.history().revision();
+        const core::EditHistory &history = bundle != nullptr ? bundle->history : state_.history();
+        const Document &document = bundle != nullptr ? bundle->document : state_.document();
         const AutosaveId tab = ids.at(position);
         opened.push_back(OpenedRevision{
             .tab = tab,
-            .revision = static_cast<std::uint64_t>(revision),
-            .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &document)
-                                        { return document.tab == tab; })});
+            .revision = static_cast<std::uint64_t>(history.revision()),
+            .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &sent)
+                                        { return sent.tab == tab; }),
+            .saved =
+                save_state_of(document, history.content_position()) == core::SaveState::saved});
     }
     return opened;
 }

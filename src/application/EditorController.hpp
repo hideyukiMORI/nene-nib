@@ -1174,6 +1174,8 @@ class EditorController final
                       const core::FilePath &path) const;
     [[nodiscard]] std::expected<void, core::DisplayText>
     reach_server_edit_tabs(const std::vector<ServerEditFile> &files);
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    reach_server_edit_tab(const ServerEditFile &file);
     using ServerEditSource = std::tuple<const core::TextBuffer *, core::Offset, DisplayInquiry>;
     [[nodiscard]] std::optional<ServerEditSource>
     server_edit_source(const ServerEditFile &file) const;
@@ -1182,10 +1184,10 @@ class EditorController final
     [[nodiscard]] std::expected<void, core::DisplayText>
     place_server_edit_spans(std::vector<ServerEditFile> &files,
                             core::LspPositionEncoding encoding) const;
-    void run_server_edits(std::vector<ServerEditFile> files);
+    void run_server_edits(std::vector<ServerEditFile> files, LanguageServerSlot slot);
     void enter_server_edit_file(ServerEditFile &file);
     void switch_for_server_edit(AutosaveId tab);
-    void announce_server_edit_target(std::optional<LanguageServerSlot> slot);
+    void announce_server_edit_target(LanguageServerSlot slot);
     void restore_recency(std::vector<AutosaveId> order, AutosaveId origin,
                          const std::vector<AutosaveId> &opened);
     [[nodiscard]] std::optional<std::string> shown_hover() const;

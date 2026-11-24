@@ -539,6 +539,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_server_edit_applied_files, "{0} 個のファイルの {1} か所を変えました"},
     {UiMessage::notice_server_edit_unsent,
      "{0} に言語サーバーへ送っていない変更があるので、当てませんでした（保存してからもう一度）"},
-    {UiMessage::notice_server_edit_not_utf8, "{0} は UTF-8 でないので、当てませんでした"},
+    {UiMessage::notice_server_edit_not_utf8,
+     "{0} は BOM なしの UTF-8 でないので、当てませんでした"},
 }};
 } // namespace nenenib::core
