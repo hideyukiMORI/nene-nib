@@ -68,6 +68,8 @@ bool palette_previews(PaletteScope scope) noexcept
         return true;
     case PaletteScope::commands:
     case PaletteScope::operations:
+    // クイックフィックスの候補はファイルの場所を持たない（#2005）。
+    case PaletteScope::code_actions:
         return false;
     }
     std::unreachable();

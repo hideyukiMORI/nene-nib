@@ -24,7 +24,7 @@ namespace nenenib::core
 // Ctrl+Shift+O）。
 // 通常モードの Windows の標準の鍵（施主決定 D82・#1395・ADR 0009 の追補）: Ctrl+N も新しいタブ、
 // Ctrl+Shift+Z はやり直す。どちらも見せる鍵は今までどおり Ctrl+T と Ctrl+Y（先の行）。
-inline constexpr std::array<OperationBinding, 91> operation_bindings{{
+inline constexpr std::array<OperationBinding, 92> operation_bindings{{
     {EditorOperation::open_file, OperationModes::ordinary, KeyChord{true, false, OperationKey::o}},
     // 通常モードでは Shift を見ていなかった今の振る舞いを保つ行で、Vim では開くの鍵（D71）。
     {EditorOperation::open_file, OperationModes::both, KeyChord{true, true, OperationKey::o}},
@@ -189,6 +189,9 @@ inline constexpr std::array<OperationBinding, 91> operation_bindings{{
     // こと 5 の仮の決め）。
     {EditorOperation::rename_symbol, OperationModes::both,
      KeyChord{false, false, OperationKey::f2}},
+    // クイックフィックス（#2005・ADR 0194 の決定 8）。Ctrl+. で両モード（VS Code と同じ・hide に
+    // 決めてほしいこと 5 の仮の決め）。
+    {EditorOperation::quick_fix, OperationModes::both, KeyChord{true, false, OperationKey::period}},
 }};
 
 // 鍵とモード → 操作。表を上から見て、鍵が同じでモードに効く最初の行。値なしは「割り当てが無い」。

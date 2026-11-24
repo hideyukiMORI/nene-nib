@@ -31,7 +31,7 @@ enum class VimPrefix : std::uint8_t
     leader,
     leader_leader,
     // `gr`（#1947）。次の鍵が `r` なら参照の問い、`n`
-    // なら名前の変更の問い（#2004）、ほかは失敗する。
+    // なら名前の変更の問い（#2004）、`a` ならクイックフィックスの問い（#2005）、ほかは失敗する。
     g_references
 };
 } // namespace nenenib::core

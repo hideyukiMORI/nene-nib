@@ -68,6 +68,8 @@ void verify_preview_cycle_key();
 void verify_reference_key();
 // F2 の写しと「新しい名前: 」のプロンプト（#2004・ADR 0194 の決定 7）。
 void verify_rename_key();
+// Ctrl+. の写し（#2005・ADR 0194 の決定 8）。
+void verify_quick_fix_key();
 // 通常モードの Windows の標準の鍵（Ctrl+N・Ctrl+Shift+Z・Ctrl / Shift+Insert・Shift+Delete・D82・
 // #1395）。
 void verify_standard_keys();

@@ -181,7 +181,7 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
   - 能力の無い席では頼まないこと。
   - `prepareRename` の読み。
   - 入力行の Enter / Esc。
-- S7 b の守り: **planned**（段 S7 b の PR で active にする）。
+- S7 b の守り: **active**（`nib_tests --lsp-code-action`・#2005。下の 7 つを替え玉のサーバーで縛る。`initialize` の能力は `--language-server` の `verify_abilities` も読む。Ctrl+. の写しは `nib_window_tests --quick-fix-key`）。
   - codeAction の読み（Command と CodeAction の両方）。
   - `context.diagnostics` に戻す形（code の型・data）。
   - Ctrl+P の出どころ。
@@ -189,6 +189,7 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
   - resolve。
   - 頼んでいない `workspace/applyEdit` への `applied: false`。
   - 入力の途中の `applied: false`。
+  - 実装の形（#2005）: `workspace/applyEdit` を照らす写しは、`workspace/executeCommand` を送ったとき（当てた edit の `didChange` を先に流した後）の `LspEditContext`（帯の読み込み済みのタブごとの改訂番号・頼んだ席が `didOpen` しているか・保存の状態）で、照合 (b)(c) と席が開いていない当て先の規則を `apply_workspace_edit` の 1 本がそのまま使う（(a) だけ `ServerEditOrigin::server_request` で飛ばす）。待ちは席の答えを待つ列にある `execute_command` の要求そのもので、答え（成功・誤り）・同じ種類の新しい要求の取り消し・tick の古さ・席の止まりのどれでも列から外れて下りる（別の旗を持たない）。当てた後は待っている要求の写しを当てた後の本文で置き直す（同じ意図の中で写すので使う人の打鍵は挟まらず、サーバーが当てたと見なす本文と同じ）ので、同じ命令の 2 通目の `workspace/applyEdit` も同じ照合で当たる。
 - オフの打鍵の道と速さ: **planned**（QLT-014・各段の PR の後に設計席が速さのゲートを回す）。
 
 ## 結果

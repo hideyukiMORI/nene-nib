@@ -1,16 +1,20 @@
 #include "LspDiagnostics.hpp"
 
 #include "Diagnostic.hpp"
+#include "DiagnosticCodeForm.hpp"
 #include "DiagnosticSeverity.hpp"
 #include "DiagnosticsCount.hpp"
 #include "JsonNull.hpp"
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
+#include "JsonWrite.hpp"
 #include "LspJsonRead.hpp"
 #include "LspPosition.hpp"
+#include "LspPositionJson.hpp"
 #include "Offset.hpp"
 #include "Utf8.hpp"
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -18,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -70,21 +75,69 @@ constexpr std::uint64_t highest_severity = 4;
     return text != nullptr && text->size() <= lsp_diagnostic_label_limit ? *text : std::string{};
 }
 
-// code の欄（LSP 3.17 は integer | string）。整数（負も・JSON の数が整数として読めるとき）は 10
-// 進の 文字列、文字列はそのまま（上限を越えたら空）、それ以外は空。
-[[nodiscard]] std::string code_member(const JsonObject &object)
+// code の欄（LSP 3.17 は integer | string）と JSON の型（#2005）。整数（負も・JSON の数が整数として
+// 読めるとき）は 10 進の文字列で number、文字列はそのままで text（上限を越えたら空で none）、
+// それ以外は空で none。
+[[nodiscard]] std::pair<std::string, DiagnosticCodeForm> code_member(const JsonObject &object)
 {
     const Member found = json_member(object, "code");
     if (!found.has_value())
     {
-        return {};
+        return {std::string{}, DiagnosticCodeForm::none};
     }
     if (const auto *number = std::get_if<JsonNumber>(&found.value().get().value);
         number != nullptr && number->integer.has_value())
     {
-        return std::to_string(number->integer.value());
+        return {std::to_string(number->integer.value()), DiagnosticCodeForm::number};
     }
-    return label_member(object, "code");
+    std::string text = label_member(object, "code");
+    const DiagnosticCodeForm form =
+        text.empty() ? DiagnosticCodeForm::none : DiagnosticCodeForm::text;
+    return {std::move(text), form};
+}
+
+// data の欄（#2005・ADR 0194 の決定 8）。JSON のまま持ち、書いた形が lsp_diagnostic_data_limit
+// バイトを超えたら持たない（無いのと同じ）。
+[[nodiscard]] std::optional<JsonValue> data_member(const JsonObject &object)
+{
+    const Member found = json_member(object, "data");
+    if (!found.has_value() || write_json(found.value().get()).size() > lsp_diagnostic_data_limit)
+    {
+        return std::nullopt;
+    }
+    return found.value().get();
+}
+
+// 本文のバイト位置の区間 → LSP の Range の JSON（lsp_position_of の 1 本）。
+[[nodiscard]] JsonValue range_json(const TextBuffer &text, const OffsetRange &range,
+                                   LspPositionEncoding encoding)
+{
+    JsonObject placed;
+    placed.emplace_back("start", lsp_position_json(lsp_position_of(text, range.begin, encoding)));
+    placed.emplace_back("end", lsp_position_json(lsp_position_of(text, range.end, encoding)));
+    return JsonValue{std::move(placed)};
+}
+
+// 戻す code の JSON（型は読んだときのもの）。数は 10 進の文字列から戻す。
+[[nodiscard]] std::optional<JsonValue> code_json(const Diagnostic &diagnostic)
+{
+    switch (diagnostic.code_form)
+    {
+    case DiagnosticCodeForm::none:
+        return std::nullopt;
+    case DiagnosticCodeForm::text:
+        return JsonValue{diagnostic.code};
+    case DiagnosticCodeForm::number:
+        break;
+    }
+    std::int64_t value = 0;
+    const char *const end = diagnostic.code.data() + diagnostic.code.size();
+    const auto parsed = std::from_chars(diagnostic.code.data(), end, value);
+    if (parsed.ec != std::errc{} || parsed.ptr != end)
+    {
+        return std::nullopt;
+    }
+    return JsonValue{json_integer(value)};
 }
 
 [[nodiscard]] std::optional<Diagnostic>
@@ -107,11 +160,14 @@ diagnostic_of(const JsonValue &value, const TextBuffer &text, LspPositionEncodin
     {
         return std::nullopt;
     }
+    auto [code, form] = code_member(*object);
     return Diagnostic{.range = placed.value(),
                       .severity = severity.value(),
                       .message = bounded_message(*message),
                       .source = label_member(*object, "source"),
-                      .code = code_member(*object)};
+                      .code = std::move(code),
+                      .code_form = form,
+                      .data = data_member(*object)};
 }
 
 // version の欄。無いか null なら値なし、0 以上の整数なら値、それ以外は不正。
@@ -142,6 +198,30 @@ std::optional<OffsetRange> lsp_range_to_offsets(const TextBuffer &text, const Ls
         return std::nullopt;
     }
     return OffsetRange{.begin = start, .end = end};
+}
+
+JsonValue lsp_diagnostic_json(const Diagnostic &diagnostic, const TextBuffer &text,
+                              LspPositionEncoding encoding)
+{
+    JsonObject object;
+    object.emplace_back("range", range_json(text, diagnostic.range, encoding));
+    object.emplace_back("severity",
+                        JsonValue{json_integer(static_cast<std::int64_t>(
+                            std::to_underlying(diagnostic.severity) + lowest_severity))});
+    if (auto code = code_json(diagnostic); code.has_value())
+    {
+        object.emplace_back("code", std::move(code).value());
+    }
+    if (!diagnostic.source.empty())
+    {
+        object.emplace_back("source", JsonValue{diagnostic.source});
+    }
+    object.emplace_back("message", JsonValue{diagnostic.message});
+    if (diagnostic.data.has_value())
+    {
+        object.emplace_back("data", diagnostic.data.value());
+    }
+    return JsonValue{std::move(object)};
 }
 
 std::expected<PublishedDiagnostics, LspDiagnosticsFailure>

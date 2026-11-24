@@ -93,6 +93,7 @@
 #include "LandingPlace.hpp"
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
+#include "LanguageCodeActions.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageFormatting.hpp"
 #include "LanguageQueryKind.hpp"
@@ -111,6 +112,8 @@
 #include "LineNumber.hpp"
 #include "LineView.hpp"
 #include "LinkCardView.hpp"
+#include "LspCodeAction.hpp"
+#include "LspCommand.hpp"
 #include "LspCompletionList.hpp"
 #include "LspEditContext.hpp"
 #include "LspFileEdits.hpp"
@@ -165,6 +168,7 @@
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEditFile.hpp"
+#include "ServerEditOrigin.hpp"
 #include "ServerErrorOutput.hpp"
 #include "ServerEvent.hpp"
 #include "ServerExited.hpp"
@@ -1158,12 +1162,15 @@ class EditorController final
     // 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5・
     // EditorControllerWorkspaceEdit.cpp）。先に全部を検査し（1 つでも断れば 1 つも変えずに理由の
     // 1 行）、ファイルごとにタブへ切り替えて replace を 1 回ずつ当て、頼んだタブへ戻る。
-    void apply_workspace_edit(const core::LspWorkspaceEdit &edit, const LspEditContext &context,
-                              core::LspPositionEncoding encoding);
+    std::optional<core::DisplayText> apply_workspace_edit(const core::LspWorkspaceEdit &edit,
+                                                          const LspEditContext &context,
+                                                          core::LspPositionEncoding encoding,
+                                                          ServerEditOrigin origin);
     [[nodiscard]] core::DisplayText
     server_edit_refusal(core::LspWorkspaceEditFailure failure) const;
     [[nodiscard]] std::expected<std::vector<ServerEditFile>, core::DisplayText>
-    server_edit_files(const core::LspWorkspaceEdit &edit, const LspEditContext &context);
+    server_edit_files(const core::LspWorkspaceEdit &edit, const LspEditContext &context,
+                      ServerEditOrigin origin);
     [[nodiscard]] std::expected<void, core::DisplayText>
     resolve_server_edit(std::vector<ServerEditFile> &files, const core::LspFileEdits &file,
                         const LspEditContext &context);
@@ -1190,6 +1197,30 @@ class EditorController final
     void announce_server_edit_target(LanguageServerSlot slot);
     void restore_recency(std::vector<AutosaveId> order, AutosaveId origin,
                          const std::vector<AutosaveId> &opened);
+    // クイックフィックス（#2005・ADR 0194 の決定 8〜10・EditorControllerCodeActions.cpp）。Ctrl+.・
+    // `gra`・操作が request_code_actions へ入り、答えは held_code_actions_ に控えて Ctrl+P の一覧を
+    // 記号 `=` で開く。選ぶと edit → command の順（edit が無く resolve を名乗れば resolve
+    // で引く）。 `workspace/executeCommand`
+    // の答えを待つ間（待つ列にその要求がある間）だけ、サーバーからの `workspace/applyEdit` を
+    // apply_workspace_edit の 1 本で当てる。
+    [[nodiscard]] bool request_code_actions();
+    [[nodiscard]] core::OffsetRange code_action_range() const;
+    [[nodiscard]] core::JsonValue code_action_context(const core::OffsetRange &range,
+                                                      core::LspPositionEncoding encoding) const;
+    void settle_code_actions_answer();
+    void append_code_action_choices(std::vector<core::CommandChoice> &entries) const;
+    [[nodiscard]] bool code_actions_shown() const;
+    void choose_code_action(const core::CommandChoice &choice);
+    void run_code_action(const core::LspCodeAction &action, const LspEditContext &context,
+                         core::LspPositionEncoding encoding);
+    void settle_code_action_resolve_answer();
+    void send_execute_command(LanguageServerSlot slot, const core::LspCommand &command);
+    void settle_execute_command_answer(const core::LspResponse &response);
+    void answer_apply_edit(LanguageServerSlot slot, const core::LspRequest &request);
+    [[nodiscard]] std::optional<std::string_view>
+    apply_edit_refusal(LanguageServerSlot slot, const core::LspRequest &request);
+    void renew_awaited_command(LanguageServerSlot slot);
+    void flush_language_server_documents(LanguageServerSlot slot);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -1239,6 +1270,7 @@ class EditorController final
     // 一覧の中の空の 1 行と、参照の一覧が何を頼んだ答えか（#1958 の決め 2・3）。
     [[nodiscard]] std::optional<core::DisplayText>
     palette_empty_line(core::PaletteScope scope) const;
+    [[nodiscard]] std::optional<bool> palette_listed_empty(core::PaletteScope scope) const;
     [[nodiscard]] std::optional<core::DisplayText> requested_subject() const;
     [[nodiscard]] std::optional<core::DisplayText>
     held_references_subject(core::PaletteScope scope) const;
@@ -2141,6 +2173,10 @@ class EditorController final
     // 控えた記号の候補の指す所。
     std::optional<std::pair<core::FilePath, LanguageSymbols>> held_symbols_;
     std::vector<PaletteReference> palette_symbols_;
+    // 最後に届いたクイックフィックスの答え（#2005・次の答えまで `=` の一覧に出す）。候補の command
+    // は actions の位置。今の一覧で候補を作ったか（一覧を開くたびに戻す）。
+    std::optional<LanguageCodeActions> held_code_actions_;
+    bool code_actions_listed_ = false;
     // 参照の答えを頼んだ所の 1 行（#1958 の決め 3）。参照の控えと一緒に置いて捨てる。
     std::optional<core::DisplayText> held_references_subject_;
     // 今の一覧で参照・記号の候補を作ったか・`%` で頼み直したか（一覧を開くたびに戻す・#1958）。

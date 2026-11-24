@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Diagnostic.hpp"
+#include "JsonValue.hpp"
 #include "LspDiagnosticsFailure.hpp"
 #include "LspNotification.hpp"
 #include "LspPositionEncoding.hpp"
@@ -26,6 +28,16 @@ inline constexpr std::size_t lsp_diagnostic_message_limit = 3840;
 // source と文字列の code の上限（バイト）。超えたら欄が無いのと同じ（空）。
 inline constexpr std::size_t lsp_diagnostic_label_limit = 128;
 
+// data の欄を持つ上限（書いた JSON のバイト・#2005・ADR 0194 の決定 8）。超えたら持たない。1 件の
+// 上限（4,096 ＋ 4,096）を上限の 1,000 件と掛けても 1 文書で 8 MiB に収まる（下の static_assert）。
+inline constexpr std::size_t lsp_diagnostic_data_limit = 4096;
+
+static_assert(lsp_diagnostics_limit *
+                      (lsp_diagnostic_message_limit + 2 * lsp_diagnostic_label_limit +
+                       lsp_diagnostic_data_limit) <=
+                  std::size_t{8} * 1024 * 1024,
+              "the diagnostics of one document with their data fit in 8 MiB");
+
 static_assert(lsp_diagnostics_limit *
                       (lsp_diagnostic_message_limit + 2 * lsp_diagnostic_label_limit) <=
                   std::size_t{4} * 1024 * 1024,
@@ -40,6 +52,13 @@ inline constexpr std::string_view lsp_publish_diagnostics_method =
 // も外なら末尾の空の区間＝EOF の診断として残す）。写した start が end より後ろなら値なし。
 [[nodiscard]] std::optional<OffsetRange>
 lsp_range_to_offsets(const TextBuffer &text, const LspRange &range, LspPositionEncoding encoding);
+
+// 文書の値の診断 → クイックフィックスの `context.diagnostics` へ戻す `Diagnostic` の JSON（#2005・
+// ADR 0194 の決定 8）。range は今の本文の位置から lsp_position_of で写し（編集で動いた分も今の
+// 本文の上の位置）、severity・code（読んだときの型）・source・message・data（JSON のまま）を
+// lsp_published_diagnostics が読んだ順と同じ鍵の順で書く。無い欄は書かない。OS に触れない純関数。
+[[nodiscard]] JsonValue lsp_diagnostic_json(const Diagnostic &diagnostic, const TextBuffer &text,
+                                            LspPositionEncoding encoding);
 
 // `textDocument/publishDiagnostics` の通知 → 文書の値の診断（ADR 0161 の決定 2・5）。text は診断を
 // 置く文書の今の本文。各 range は lsp_range_to_offsets で写し、写せない件・range / message の

@@ -122,6 +122,7 @@ namespace
 // Vim の鍵（一覧の空の行の案内に差し込む・ADR 0191 の決定 4・5）。鍵の名前は訳さない。
 constexpr std::string_view vim_references_keys = "grr";
 constexpr std::string_view vim_symbols_keys = "gO";
+constexpr std::string_view vim_code_action_keys = "gra";
 
 // 通常モードの操作の鍵の表示名（鍵が無ければ空）。
 [[nodiscard]] std::string chord_label_of(core::EditorOperation operation)
@@ -130,13 +131,34 @@ constexpr std::string_view vim_symbols_keys = "gO";
     return chord.has_value() ? core::key_chord_label(chord.value()) : std::string{};
 }
 
-// 参照（references）か記号の能力と、席がそれを持たないときの知らせ。
-[[nodiscard]] std::pair<bool ServerAbilities::*, core::UiMessage> refusal_of(bool references)
+// 参照・記号・クイックフィックスの一覧の能力と、席がそれを持たないときの知らせ（ほかの出どころは
+// 値なし）。
+[[nodiscard]] std::optional<std::pair<bool ServerAbilities::*, core::UiMessage>>
+refusal_of(core::PaletteScope scope)
 {
-    return references ? std::pair{&ServerAbilities::references,
-                                  core::UiMessage::notice_references_not_supported}
-                      : std::pair{&ServerAbilities::document_symbols,
-                                  core::UiMessage::notice_symbols_not_supported};
+    switch (scope)
+    {
+    case core::PaletteScope::references:
+        return std::pair{&ServerAbilities::references,
+                         core::UiMessage::notice_references_not_supported};
+    case core::PaletteScope::symbols:
+        return std::pair{&ServerAbilities::document_symbols,
+                         core::UiMessage::notice_symbols_not_supported};
+    case core::PaletteScope::code_actions:
+        return std::pair{&ServerAbilities::code_action,
+                         core::UiMessage::notice_code_action_not_supported};
+    case core::PaletteScope::files:
+    case core::PaletteScope::tabs:
+    case core::PaletteScope::bookmarks:
+    case core::PaletteScope::history:
+    case core::PaletteScope::folder:
+    case core::PaletteScope::commands:
+    case core::PaletteScope::operations:
+    case core::PaletteScope::project_hits:
+    case core::PaletteScope::diagnostics:
+        return std::nullopt;
+    }
+    std::unreachable();
 }
 
 // 参照の候補の題名。開いているタブは「相対パス:行:桁」、開いていないファイルは「相対パス:行」。
@@ -234,6 +256,12 @@ void EditorController::forget_listed_answers(AutosaveId document)
     if (held_symbols_.has_value() && held_symbols_.value().second.context.document == document)
     {
         held_symbols_.reset();
+    }
+    // クイックフィックスの控え（#2005）も同じ。
+    if (held_code_actions_.has_value() &&
+        held_code_actions_.value().context.request.document == document)
+    {
+        held_code_actions_.reset();
     }
 }
 
@@ -409,6 +437,15 @@ bool EditorController::palette_scope_is(core::PaletteScope scope) const
 // と同じ道・#1958 の決め 4）。
 void EditorController::settle_listed_answers()
 {
+    // クイックフィックス（`=`・#2005）は控えた答えを見せるだけで、頼み直さない。
+    if (palette_scope_is(core::PaletteScope::code_actions) && !code_actions_listed_)
+    {
+        code_actions_listed_ = true;
+        std::vector<core::CommandChoice> more;
+        append_code_action_choices(more);
+        extend_palette(more);
+        return;
+    }
     if (palette_scope_is(core::PaletteScope::references) && !references_listed_)
     {
         references_listed_ = true;
@@ -467,6 +504,7 @@ void EditorController::reset_listed_answers()
     references_listed_ = false;
     symbols_listed_ = false;
     symbols_asked_ = false;
+    code_actions_listed_ = false;
     palette_references_.clear();
     palette_symbols_.clear();
 }
@@ -507,11 +545,8 @@ EditorController::held_references_subject(core::PaletteScope scope) const
 std::optional<core::DisplayText>
 EditorController::palette_empty_line(core::PaletteScope scope) const
 {
-    const bool references = scope == core::PaletteScope::references;
-    const bool symbols = scope == core::PaletteScope::symbols;
-    const bool diagnostics = scope == core::PaletteScope::diagnostics;
-    if ((references && !palette_references_.empty()) || (symbols && !palette_symbols_.empty()) ||
-        (diagnostics && !palette_diagnostics_.empty()) || !(references || symbols || diagnostics))
+    const auto empty = palette_listed_empty(scope);
+    if (!empty.has_value() || !empty.value())
     {
         return std::nullopt;
     }
@@ -519,18 +554,23 @@ EditorController::palette_empty_line(core::PaletteScope scope) const
     {
         return ui_notice(core::UiMessage::palette_empty_language_server_off);
     }
-    if (diagnostics)
+    const auto refusal = refusal_of(scope);
+    if (!refusal.has_value())
     {
         return ui_notice(core::UiMessage::notice_no_diagnostics);
     }
     // 動いている席が能力を持たなければ、頼み方の代わりに鍵で頼んだときと同じ「答えません」
     // （#1958 の確かめレビュー L2）。
-    const auto [ability, refusal] = refusal_of(references);
-    if (lacks_ability(ability))
+    if (lacks_ability(refusal.value().first))
     {
-        return ui_notice(refusal);
+        return ui_notice(refusal.value().second);
     }
-    if (references)
+    if (scope == core::PaletteScope::code_actions)
+    {
+        return ui_notice(core::UiMessage::palette_empty_code_actions,
+                         {chord_label_of(core::EditorOperation::quick_fix), vim_code_action_keys});
+    }
+    if (scope == core::PaletteScope::references)
     {
         return ui_notice(
             core::UiMessage::palette_empty_references,
@@ -541,6 +581,33 @@ EditorController::palette_empty_line(core::PaletteScope scope) const
     return ui_notice(
         core::UiMessage::palette_empty_symbols,
         {vim_symbols_keys, chord_label_of(core::EditorOperation::list_operations), name});
+}
+
+// 言語サーバーの出どころの一覧が空か（候補を作ったときの列で数える・クイックフィックスは控えを
+// 出せるか）。ほかの出どころは値なし。
+std::optional<bool> EditorController::palette_listed_empty(core::PaletteScope scope) const
+{
+    switch (scope)
+    {
+    case core::PaletteScope::references:
+        return palette_references_.empty();
+    case core::PaletteScope::symbols:
+        return palette_symbols_.empty();
+    case core::PaletteScope::diagnostics:
+        return palette_diagnostics_.empty();
+    case core::PaletteScope::code_actions:
+        return !code_actions_shown();
+    case core::PaletteScope::files:
+    case core::PaletteScope::tabs:
+    case core::PaletteScope::bookmarks:
+    case core::PaletteScope::history:
+    case core::PaletteScope::folder:
+    case core::PaletteScope::commands:
+    case core::PaletteScope::operations:
+    case core::PaletteScope::project_hits:
+        return std::nullopt;
+    }
+    std::unreachable();
 }
 
 std::size_t EditorController::listed_hits_made() const noexcept
@@ -603,6 +670,7 @@ EditorController::listed_references_of(core::PaletteOrigin origin) const noexcep
         return &palette_references_;
     case core::PaletteOrigin::symbol:
         return &palette_symbols_;
+    case core::PaletteOrigin::code_action:
     case core::PaletteOrigin::tab:
     case core::PaletteOrigin::bookmarked_tab:
     case core::PaletteOrigin::bookmark:
@@ -632,6 +700,10 @@ void EditorController::land_palette_choice(const core::CommandChoice &choice)
         return;
     case core::PaletteOrigin::diagnostic:
         land_palette_diagnostic(choice);
+        return;
+    // クイックフィックス（#2005）は跳ばずに当てる。
+    case core::PaletteOrigin::code_action:
+        choose_code_action(choice);
         return;
     case core::PaletteOrigin::tab:
     case core::PaletteOrigin::bookmarked_tab:

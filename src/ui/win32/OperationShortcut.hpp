@@ -114,6 +114,10 @@ namespace nenenib::ui::win32
         return chord(core::OperationKey::backslash);
     case VK_OEM_COMMA:
         return chord(core::OperationKey::comma);
+    // クイックフィックスの Ctrl+.（#2005・ADR 0194 の決定 8）。IME が鍵を使うとき（Microsoft Pinyin
+    // の句読点の切り替え）は WM_KEYDOWN が VK_PROCESSKEY で届くので、ここへは来ない。
+    case VK_OEM_PERIOD:
+        return chord(core::OperationKey::period);
     case VK_F4:
         return shift ? chord(core::OperationKey::f4) : std::nullopt;
     default:

@@ -169,6 +169,9 @@ enum class UiMessage : std::uint16_t
     // 名前を変更の操作（#2004・ADR 0194 の決定 7）。
     operation_rename_symbol_name,
     operation_rename_symbol_description,
+    // クイックフィックス（#2005・ADR 0194 の決定 8）。
+    operation_quick_fix_name,
+    operation_quick_fix_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -511,10 +514,18 @@ enum class UiMessage : std::uint16_t
     // M1・R2）。
     notice_server_edit_unsent,
     notice_server_edit_not_utf8,
+    // クイックフィックス（#2005・ADR 0194 の決定 8・9）。Ctrl+P の一覧の記号 `=`
+    // の名前・能力の無い席・ Vim の INSERT で断る 1 行・空の答え・頼む前の空の一覧の 1 行（{0}
+    // は鍵・{1} は Vim の鍵）。
+    palette_mark_code_actions,
+    notice_code_action_not_supported,
+    notice_code_action_in_insert,
+    notice_code_actions_not_found,
+    palette_empty_code_actions,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_server_edit_not_utf8) + 1U;
+    std::to_underlying(UiMessage::palette_empty_code_actions) + 1U;
 } // namespace nenenib::core

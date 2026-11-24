@@ -64,6 +64,8 @@ enum class OperationKey : std::uint8_t
     // の「次の問題へ」）。両モード。
     f8,
     // 修飾なしの F2 の名前を変更（#2004・ADR 0194 の決定 7・VS Code と同じ）。両モード。
-    f2
+    f2,
+    // Ctrl+. のクイックフィックス（#2005・ADR 0194 の決定 8・VS Code と同じ）。両モード。
+    period
 };
 } // namespace nenenib::core

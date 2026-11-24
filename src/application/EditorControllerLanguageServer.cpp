@@ -18,6 +18,7 @@
 #include "LanguageServerTrouble.hpp"
 #include "LanguageServers.hpp"
 #include "LanguageTable.hpp"
+#include "LspCodeActions.hpp"
 #include "LspDiagnostics.hpp"
 #include "LspIncoming.hpp"
 #include "LspJsonRead.hpp"
@@ -72,6 +73,28 @@ namespace
     return core::JsonValue{std::move(list)};
 }
 
+// client の `textDocument.codeAction` の能力（#2005・ADR 0194 の決定 3）。`CodeAction` の literal
+// を受け（名乗らないと rust-analyzer は 0 件・clangd は Command だけ・下調べ §2）、`isPreferred` と
+// `data` を受け、`edit` を `codeAction/resolve` で後から引く（名乗らないと gopls は Command
+// に落ちる）。 `disabledSupport` は名乗らない（使えない項目が並ぶだけ・ts で 15 件ほど）。
+[[nodiscard]] core::JsonValue code_action_capabilities()
+{
+    core::JsonObject kinds;
+    kinds.emplace_back("valueSet", text_list({"", "quickfix", "refactor", "refactor.extract",
+                                              "refactor.inline", "refactor.rewrite", "source",
+                                              "source.organizeImports", "source.fixAll"}));
+    core::JsonObject literal;
+    literal.emplace_back("codeActionKind", core::JsonValue{std::move(kinds)});
+    core::JsonObject resolve;
+    resolve.emplace_back("properties", text_list({"edit"}));
+    core::JsonObject action;
+    action.emplace_back("codeActionLiteralSupport", core::JsonValue{std::move(literal)});
+    action.emplace_back("isPreferredSupport", core::JsonValue{true});
+    action.emplace_back("dataSupport", core::JsonValue{true});
+    action.emplace_back("resolveSupport", core::JsonValue{std::move(resolve)});
+    return core::JsonValue{std::move(action)};
+}
+
 // client の `textDocument` の能力（ADR 0190 の決定 3）。補完はスニペットを受けず説明は平文、hover
 // は 平文と markdown、定義は LocationLink を受ける。診断は `version`
 // だけを読む（`relatedInformation` `tags` `codeDescription`
@@ -120,6 +143,8 @@ namespace
     core::JsonObject rename;
     rename.emplace_back("prepareSupport", core::JsonValue{true});
     text_document.emplace_back("rename", core::JsonValue{std::move(rename)});
+    // クイックフィックス（#2005・ADR 0194 の決定 3）。
+    text_document.emplace_back("codeAction", code_action_capabilities());
     return core::JsonValue{std::move(text_document)};
 }
 
@@ -132,7 +157,11 @@ namespace
     edit.emplace_back("documentChanges", core::JsonValue{true});
     edit.emplace_back("failureHandling", core::JsonValue{std::string{"abort"}});
     core::JsonObject workspace;
+    // サーバーからの `workspace/applyEdit` を受け、`workspace/executeCommand` を送る（#2005・ADR
+    // 0194 の決定 3・6）。
+    workspace.emplace_back("applyEdit", core::JsonValue{true});
     workspace.emplace_back("workspaceEdit", core::JsonValue{std::move(edit)});
+    workspace.emplace_back("executeCommand", core::JsonValue{core::JsonObject{}});
     return core::JsonValue{std::move(workspace)};
 }
 
@@ -289,6 +318,25 @@ void read_rename(ServerAbilities &abilities, const core::JsonObject &capabilitie
     abilities.prepare_rename = flag != nullptr && *flag;
 }
 
+// `capabilities.codeActionProvider` と `executeCommandProvider`（#2005・ADR 0194 の決定 3）。
+// `CodeActionOptions.resolveProvider` が true なら `codeAction/resolve` に答え、
+// `ExecuteCommandOptions.commands` は送ってよい命令の名前。
+void read_code_action(ServerAbilities &abilities, const core::JsonObject &capabilities)
+{
+    abilities.code_action = provided(capabilities, "codeActionProvider");
+    if (const auto *options = core::json_object_member(capabilities, "codeActionProvider"))
+    {
+        const auto resolve = core::json_member(*options, "resolveProvider");
+        const bool *flag =
+            resolve.has_value() ? std::get_if<bool>(&resolve.value().get().value) : nullptr;
+        abilities.code_action_resolve = flag != nullptr && *flag;
+    }
+    if (const auto *commands = core::json_object_member(capabilities, "executeCommandProvider"))
+    {
+        abilities.execute_commands = texts_of(*commands, "commands");
+    }
+}
+
 // `capabilities` → サーバーの能力（ADR 0190 の決定 3）。補完は `completionProvider` の object が
 // あるときで、`triggerCharacters` の文字列だけを届いた順に持つ。
 [[nodiscard]] ServerAbilities server_abilities(const core::JsonObject *capabilities)
@@ -311,11 +359,15 @@ void read_rename(ServerAbilities &abilities, const core::JsonObject &capabilitie
                                   provided(*capabilities, "documentRangeFormattingProvider"),
                               .rename = false,
                               .prepare_rename = false,
+                              .code_action = false,
+                              .code_action_resolve = false,
+                              .execute_commands = {},
                               .sync = DocumentSync::none,
                               .save = SaveNotice::none};
     read_document_sync(abilities, *capabilities);
     read_signature_help(abilities, *capabilities);
     read_rename(abilities, *capabilities);
+    read_code_action(abilities, *capabilities);
     const auto *completion = core::json_object_member(*capabilities, "completionProvider");
     if (completion == nullptr)
     {
@@ -405,6 +457,12 @@ void read_rename(ServerAbilities &abilities, const core::JsonObject &capabilitie
         return "textDocument/prepareRename";
     case LspRequestKind::rename:
         return "textDocument/rename";
+    case LspRequestKind::code_action:
+        return "textDocument/codeAction";
+    case LspRequestKind::code_action_resolve:
+        return "codeAction/resolve";
+    case LspRequestKind::execute_command:
+        return "workspace/executeCommand";
     }
     return "initialize";
 }
@@ -719,7 +777,8 @@ void EditorController::drop_language_answers_of(LanguageServerSlot slot)
     if (answers.completion.has_value() || answers.hover.has_value() ||
         answers.definition.has_value() || answers.references.has_value() ||
         answers.symbols.has_value() || answers.formatting.has_value() ||
-        answers.rename_target.has_value() || answers.rename.has_value())
+        answers.rename_target.has_value() || answers.rename.has_value() ||
+        answers.code_actions.has_value() || answers.code_action_resolve.has_value())
     {
         state_ = state_.with_language_answers({});
     }
@@ -1009,8 +1068,16 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::range_formatting:
     case LspRequestKind::prepare_rename:
     case LspRequestKind::rename:
+    case LspRequestKind::code_action:
+    case LspRequestKind::code_action_resolve:
         receive_answer(slot, request, response);
         settle_language_answers(request.kind);
+        return;
+    // 命令の実行の答え（#2005・決定 6）。答えを待つ列から外れたので、この後の `workspace/applyEdit`
+    // は断る（待ちは列の 1 か所だけで、答え・取り消し・古さ・席の止まりのどれでも下りる）。誤りの
+    // 答えはサーバーの message を 1 行で出す。
+    case LspRequestKind::execute_command:
+        settle_execute_command_answer(response);
         return;
     }
 }
@@ -1046,8 +1113,15 @@ void EditorController::receive_lsp(LanguageServerSlot slot,
 
 // サーバーからの要求は MethodNotFound で断る（決定 5）。`window/workDoneProgress/create` だけは
 // result: null で受ける（ADR 0160 の 2026-11-22 の追補・token は最初の begin で覚える）。
+// `workspace/applyEdit` は Nib が送った `workspace/executeCommand` の答えを待つ間だけ当てる
+// （#2005・ADR 0194 の決定 6・answer_apply_edit）。
 void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRequest &request)
 {
+    if (request.method == core::lsp_apply_edit_method)
+    {
+        answer_apply_edit(slot, request);
+        return;
+    }
     ports_.language_server.send(slot, request.method == core::lsp_progress_create_method
                                           ? core::lsp_null_result_body(request.id)
                                           : core::lsp_method_not_found_body(request.id));
@@ -1234,6 +1308,9 @@ void EditorController::expire_lsp_request(LanguageServerSlot slot, const Pending
     case LspRequestKind::range_formatting:
     case LspRequestKind::prepare_rename:
     case LspRequestKind::rename:
+    case LspRequestKind::code_action:
+    case LspRequestKind::code_action_resolve:
+    case LspRequestKind::execute_command:
         send_lsp_cancel(slot, request.id);
         return;
     }

@@ -25,6 +25,7 @@
 #include "SaveState.hpp"
 #include "SearchLine.hpp"
 #include "ServerAbilities.hpp"
+#include "ServerEditOrigin.hpp"
 #include "UiMessage.hpp"
 #include "Utf8.hpp"
 
@@ -280,6 +281,7 @@ void EditorController::settle_rename_answer()
         state_ = state_.with_command_message(server_edit_refusal(answered.edit.error()));
         return;
     }
-    apply_workspace_edit(answered.edit.value(), answered.context, answered.encoding);
+    static_cast<void>(apply_workspace_edit(answered.edit.value(), answered.context,
+                                           answered.encoding, ServerEditOrigin::answer));
 }
 } // namespace nenenib::application

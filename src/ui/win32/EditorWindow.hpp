@@ -580,6 +580,8 @@ class EditorWindow final
     void run_format_selection();
     // 名前を変更（#2004）。
     void run_rename_symbol();
+    // クイックフィックス（#2005）。
+    void run_quick_fix();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

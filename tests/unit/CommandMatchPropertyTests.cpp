@@ -100,11 +100,11 @@ constexpr std::array<Letter, 9> other_letters{{{U'é', "\xC3\xA9"},
 constexpr std::array<PaletteOrigin, 5> origins{{PaletteOrigin::tab, PaletteOrigin::bookmarked_tab,
                                                 PaletteOrigin::bookmark, PaletteOrigin::history,
                                                 PaletteOrigin::folder}};
-constexpr std::array<PaletteScope, 11> all_scopes{
+constexpr std::array<PaletteScope, 12> all_scopes{
     {PaletteScope::files, PaletteScope::tabs, PaletteScope::bookmarks, PaletteScope::history,
      PaletteScope::folder, PaletteScope::commands, PaletteScope::operations,
      PaletteScope::project_hits, PaletteScope::diagnostics, PaletteScope::references,
-     PaletteScope::symbols}};
+     PaletteScope::symbols, PaletteScope::code_actions}};
 constexpr char32_t widening = U'日';
 
 [[nodiscard]] std::size_t below(Random &random, std::size_t bound)
@@ -304,7 +304,7 @@ constexpr char32_t widening = U'日';
     {
     case PaletteScope::files:
         return mark != PaletteOrigin::diagnostic && mark != PaletteOrigin::reference &&
-               mark != PaletteOrigin::symbol;
+               mark != PaletteOrigin::symbol && mark != PaletteOrigin::code_action;
     case PaletteScope::tabs:
         return mark == PaletteOrigin::tab || mark == PaletteOrigin::bookmarked_tab;
     case PaletteScope::bookmarks:
@@ -321,6 +321,8 @@ constexpr char32_t widening = U'日';
         return mark == PaletteOrigin::reference;
     case PaletteScope::symbols:
         return mark == PaletteOrigin::symbol;
+    case PaletteScope::code_actions:
+        return mark == PaletteOrigin::code_action;
     case PaletteScope::commands:
     case PaletteScope::operations:
         return false;

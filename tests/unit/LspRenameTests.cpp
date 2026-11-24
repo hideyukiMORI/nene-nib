@@ -468,12 +468,10 @@ void verify_capabilities()
     Editing editing(lsp_on());
     started(editing, prepared);
     const std::string &initialize = editing.language_server().sent().front();
-    expect(
-        contains(initialize, R"("rename":{"prepareSupport":true})") &&
-            contains(
-                initialize,
-                R"("workspace":{"workspaceEdit":{"documentChanges":true,"failureHandling":"abort"}})"),
-        "initialize offers rename with prepare support and document changes with abort");
+    expect(contains(initialize, R"("rename":{"prepareSupport":true})") &&
+               contains(initialize,
+                        R"("workspaceEdit":{"documentChanges":true,"failureHandling":"abort"})"),
+           "initialize offers rename with prepare support and document changes with abort");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.rename && abilities.prepare_rename, "renameProvider with prepareProvider");
     Editing plain(lsp_on());

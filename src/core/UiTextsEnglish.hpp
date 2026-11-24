@@ -194,6 +194,10 @@ inline constexpr UiTextColumn ui_texts_english{{
     {UiMessage::operation_rename_symbol_description,
      "Ask the language server to rename the name at the caret (its uses in other files change "
      "too)"},
+    {UiMessage::operation_quick_fix_name, "Quick fix"},
+    {UiMessage::operation_quick_fix_description,
+     "Ask the language server for fixes and refactorings at the caret or the selection, and apply "
+     "the one chosen from the list"},
     {UiMessage::app_error_window_class, "Could not register the window class."},
     {UiMessage::app_error_window_create, "Could not create the window."},
     {UiMessage::app_error_rendering_start, "Could not start drawing with Direct2D."},
@@ -576,5 +580,12 @@ inline constexpr UiTextColumn ui_texts_english{{
      "try again)"},
     {UiMessage::notice_server_edit_not_utf8,
      "{0} is not UTF-8 without a BOM, so the change was not applied"},
+    {UiMessage::palette_mark_code_actions, "Quick fixes"},
+    {UiMessage::notice_code_action_not_supported,
+     "This language server does not answer quick fixes"},
+    {UiMessage::notice_code_action_in_insert,
+     "Quick fixes are not asked in Insert mode (press Esc first)"},
+    {UiMessage::notice_code_actions_not_found, "No fixes are available here"},
+    {UiMessage::palette_empty_code_actions, "No fixes yet. Ask with {0} at the caret (Vim: {1})"},
 }};
 } // namespace nenenib::core

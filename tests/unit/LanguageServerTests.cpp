@@ -985,14 +985,15 @@ void verify_abilities()
     expect(
         contains(
             server.sent().front(),
-            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}},"formatting":{},"rangeFormatting":{},"rename":{"prepareSupport":true}})"),
+            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}},"formatting":{},"rangeFormatting":{},"rename":{"prepareSupport":true},"codeAction":{"codeActionLiteralSupport":{"codeActionKind":{"valueSet":["","quickfix","refactor","refactor.extract","refactor.inline","refactor.rewrite","source","source.organizeImports","source.fixAll"]}},"isPreferredSupport":true,"dataSupport":true,"resolveSupport":{"properties":["edit"]}}})"),
         "initialize offers didSave, versioned diagnostics, completion without snippets, hover "
         "text, definition links, references, document symbols and signature help");
     expect(
         contains(
             server.sent().front(),
-            R"("workspace":{"workspaceEdit":{"documentChanges":true,"failureHandling":"abort"}})"),
-        "initialize offers workspace edits with document changes and abort only (#2004)");
+            R"("workspace":{"applyEdit":true,"workspaceEdit":{"documentChanges":true,"failureHandling":"abort"},"executeCommand":{}})"),
+        "initialize offers applyEdit, workspace edits with document changes and abort only and "
+        "executeCommand (#2004・#2005)");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.completion && abilities.hover && abilities.definition &&
                abilities.trigger_characters == std::vector<std::string>{".", "->"},

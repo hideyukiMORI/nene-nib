@@ -22,6 +22,9 @@ enum class LanguageQueryKind : std::uint8_t
     format_document,
     format_selection,
     // 名前を変更（#2004・ADR 0194 の決定 7）。F2 と Vim の `grn` と操作「名前を変更」。
-    rename
+    rename,
+    // クイックフィックス（#2005・ADR 0194 の決定 8）。Ctrl+. と Vim の `gra` と操作「クイック
+    // フィックス」。
+    code_action
 };
 } // namespace nenenib::core

@@ -50,7 +50,7 @@ constexpr KeyChord ctrl_shift(OperationKey key)
 
 // 鍵 → 通常モードの操作・Vim の操作。表の全行の鍵と、表に無い鍵の組み合わせ。
 using ChordRow = std::tuple<KeyChord, Operation, Operation>;
-constexpr std::array<ChordRow, 68> chord_rows{{
+constexpr std::array<ChordRow, 69> chord_rows{{
     // Vim の Ctrl+O はジャンプの戻り（D71・#1037）。Vim の開くは Ctrl+Shift+O。
     {ctrl(OperationKey::o), EditorOperation::open_file, std::nullopt},
     {ctrl(OperationKey::s), EditorOperation::save, EditorOperation::save},
@@ -142,6 +142,8 @@ constexpr std::array<ChordRow, 68> chord_rows{{
     // 名前を変更の F2 は両モード（#2004・ADR 0194 の決定 7）。
     {KeyChord{false, false, OperationKey::f2}, EditorOperation::rename_symbol,
      EditorOperation::rename_symbol},
+    // クイックフィックスの Ctrl+. は両モード（#2005・ADR 0194 の決定 8）。
+    {ctrl(OperationKey::period), EditorOperation::quick_fix, EditorOperation::quick_fix},
     // メモ帳の新しいタブ Ctrl+N（D82・#1395）。通常モードだけで、Vim と Ctrl+Shift+N は値なし。
     {ctrl(OperationKey::n), EditorOperation::new_tab, std::nullopt},
     {ctrl_shift(OperationKey::n), std::nullopt, std::nullopt},
@@ -161,7 +163,7 @@ constexpr std::array<ChordRow, 68> chord_rows{{
 // 操作 → 通常モードで見せる鍵・Vim で見せる鍵（空は鍵なし）・通常で使えるか・Vim で使えるか。
 // EditorOperation の順。
 using ShownRow = std::tuple<EditorOperation, std::string_view, std::string_view, bool, bool>;
-constexpr std::array<ShownRow, 69> shown_rows{{
+constexpr std::array<ShownRow, 70> shown_rows{{
     {EditorOperation::open_file, "Ctrl+O", "Ctrl+Shift+O", true, true},
     {EditorOperation::save, "Ctrl+S", "Ctrl+S", true, true},
     {EditorOperation::save_as, "Ctrl+Shift+S", "Ctrl+Shift+S", true, true},
@@ -257,11 +259,13 @@ constexpr std::array<ShownRow, 69> shown_rows{{
     {EditorOperation::format_selection, "", "", true, true},
     // 名前を変更（#2004）。F2 で両モード。
     {EditorOperation::rename_symbol, "F2", "F2", true, true},
+    // クイックフィックス（#2005）。Ctrl+. で両モード。
+    {EditorOperation::quick_fix, "Ctrl+.", "Ctrl+.", true, true},
 }};
 
 // 鍵の表示名。全 OperationKey と、Ctrl → Shift → 鍵の並び。
 using LabelRow = std::pair<KeyChord, std::string_view>;
-constexpr std::array<LabelRow, 41> label_rows{{
+constexpr std::array<LabelRow, 42> label_rows{{
     {ctrl(OperationKey::o), "Ctrl+O"},
     {ctrl(OperationKey::s), "Ctrl+S"},
     {ctrl(OperationKey::t), "Ctrl+T"},
@@ -303,6 +307,7 @@ constexpr std::array<LabelRow, 41> label_rows{{
     {KeyChord{false, false, OperationKey::f12}, "F12"},
     {ctrl(OperationKey::i), "Ctrl+I"},
     {KeyChord{false, false, OperationKey::f2}, "F2"},
+    {ctrl(OperationKey::period), "Ctrl+."},
 }};
 
 std::string shown_label(EditorOperation operation, EditMode mode)
@@ -446,7 +451,7 @@ void verify_operation_choices()
 {
     const auto ordinary = japanese_choices("", EditMode::ordinary);
     const auto vim = japanese_choices("", EditMode::vim);
-    expect(ordinary.size() == 69 && vim.size() == 66,
+    expect(ordinary.size() == 70 && vim.size() == 67,
            "an empty query lists every operation available in the mode");
     std::vector<Operation> in_order;
     for (const auto &text : nenenib::core::operation_texts)
@@ -524,8 +529,8 @@ void verify_packaged_operation_choices()
         }
         return counted;
     };
-    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{69, 66, 64, 66} &&
-               sizes(Distribution::packaged) == std::vector<std::size_t>{67, 64, 62, 64},
+    expect(sizes(Distribution::unpackaged) == std::vector<std::size_t>{70, 67, 65, 67} &&
+               sizes(Distribution::packaged) == std::vector<std::size_t>{68, 65, 63, 65},
            "the packaged list has two rows fewer than the zip list in every mode");
     const auto packaged = nenenib::core::operation_choices(
         "", PaletteMode{EditMode::ordinary, ContextMenuMode::ordinary, Distribution::packaged},

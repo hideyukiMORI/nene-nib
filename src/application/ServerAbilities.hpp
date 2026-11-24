@@ -35,6 +35,11 @@ struct ServerAbilities
     // `renameProvider`（true か object）と、その `prepareProvider`（#2004・ADR 0194 の決定 3）。
     bool rename = false;
     bool prepare_rename = false;
+    // `codeActionProvider`（true か object）と、その `resolveProvider`、`executeCommandProvider` の
+    // `commands`（文字列だけを届いた順に・#2005・ADR 0194 の決定 3）。
+    bool code_action = false;
+    bool code_action_resolve = false;
+    std::vector<std::string> execute_commands = {};
     DocumentSync sync = DocumentSync::none;
     SaveNotice save = SaveNotice::none;
 };

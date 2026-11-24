@@ -50,6 +50,9 @@ namespace
         return core::UiMessage::notice_formatting_in_insert;
     case core::LanguageQueryKind::rename:
         return core::UiMessage::notice_rename_in_insert;
+    // クイックフィックス（#2005・答えの edit は入力の途中で当たらない）。
+    case core::LanguageQueryKind::code_action:
+        return core::UiMessage::notice_code_action_in_insert;
     }
     std::unreachable();
 }
@@ -124,6 +127,9 @@ using UnansweredAbility = std::pair<bool ServerAbilities::*, core::UiMessage>;
     case core::LanguageQueryKind::rename:
         return UnansweredAbility{&ServerAbilities::rename,
                                  core::UiMessage::notice_rename_not_supported};
+    case core::LanguageQueryKind::code_action:
+        return UnansweredAbility{&ServerAbilities::code_action,
+                                 core::UiMessage::notice_code_action_not_supported};
     }
     std::unreachable();
 }
@@ -157,8 +163,9 @@ void EditorController::perform(const core::VimLanguageQuery &effect)
         return;
     case core::LanguageQueryKind::references:
     case core::LanguageQueryKind::symbols:
-    // `grn`（#2004・ADR 0194 の決定 7）も `grr` と同じく頼めたら成功の歩。
+    // `grn`（#2004・ADR 0194 の決定 7）と `gra`（#2005・決定 8）も `grr` と同じく頼めたら成功の歩。
     case core::LanguageQueryKind::rename:
+    case core::LanguageQueryKind::code_action:
         vim_effect_landed_ = asked;
         return;
     }
@@ -189,6 +196,9 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
         return request_formatting(true);
     case core::LanguageQueryKind::rename:
         return request_rename_target();
+    case core::LanguageQueryKind::code_action:
+        definition_anchor_ = state_.selection().anchor;
+        return request_code_actions();
     }
     std::unreachable();
 }
@@ -273,6 +283,14 @@ void EditorController::settle_language_answers(LspRequestKind kind)
         return;
     case LspRequestKind::rename:
         settle_rename_answer();
+        return;
+    case LspRequestKind::code_action:
+        settle_code_actions_answer();
+        return;
+    case LspRequestKind::code_action_resolve:
+        settle_code_action_resolve_answer();
+        return;
+    case LspRequestKind::execute_command:
         return;
     }
 }

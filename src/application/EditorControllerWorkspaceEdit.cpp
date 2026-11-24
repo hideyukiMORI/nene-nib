@@ -32,6 +32,7 @@
 #include "SaveState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEditFile.hpp"
+#include "ServerEditOrigin.hpp"
 #include "TabReach.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
@@ -50,8 +51,9 @@
 #include <variant>
 #include <vector>
 
-// 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5）。名前の変更
-// （と S7 b のクイックフィックス・`workspace/applyEdit`）が同じ道を通る（ARC-001）。
+// 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5）。名前の変更と
+// クイックフィックスの edit・resolve の
+// edit・`workspace/applyEdit`（#2005）が同じ道を通る（ARC-001）。
 //
 // 検査（何も変えない段を先に済ませ、状態を動かす reach_tab は最後）:
 // - 入力の途中でない（server_edit_interrupts）。頼んだ文書と改訂番号が同じ（照合 (a)）。
@@ -97,6 +99,20 @@ namespace
     case core::TextEncoding::shift_jis:
     case core::TextEncoding::utf16_le:
     case core::TextEncoding::utf16_be:
+        return false;
+    }
+    std::unreachable();
+}
+
+// 照合 (a)（頼んだ文書と改訂番号）を照らすか。サーバーからの `workspace/applyEdit` には頼んだ文書が
+// 無い（#2005・ADR 0194 の決定 4）。
+[[nodiscard]] bool requests_document(ServerEditOrigin origin) noexcept
+{
+    switch (origin)
+    {
+    case ServerEditOrigin::answer:
+        return true;
+    case ServerEditOrigin::server_request:
         return false;
     }
     std::unreachable();
@@ -155,11 +171,14 @@ revision_and_saved(const core::EditHistory &history, const Document &document)
 }
 } // namespace
 
-void EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
-                                            const LspEditContext &context,
-                                            core::LspPositionEncoding encoding)
+// 当てたか今の本文と同じ結果なら値なし、断ったら理由の 1 行（知らせにも置く）。origin が
+// server_request（`workspace/applyEdit`・#2005）なら照合 (a) を飛ばす（ADR 0194 の決定 4）。
+std::optional<core::DisplayText>
+EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
+                                       const LspEditContext &context,
+                                       core::LspPositionEncoding encoding, ServerEditOrigin origin)
 {
-    auto files = server_edit_files(edit, context);
+    auto files = server_edit_files(edit, context, origin);
     if (files.has_value())
     {
         auto placed = reach_server_edit_tabs(files.value());
@@ -175,14 +194,15 @@ void EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
     if (!files.has_value())
     {
         state_ = state_.with_command_message(files.error());
-        return;
+        return files.error();
     }
     // 今の本文と同じ結果だけなら何も変えず、何も知らせない（undo の単位を積まない）。
     if (files.value().empty())
     {
-        return;
+        return std::nullopt;
     }
     run_server_edits(std::move(files).value(), context.slot);
+    return std::nullopt;
 }
 
 // 読みが断った理由 → 1 行（決定 4）。
@@ -207,13 +227,13 @@ core::DisplayText EditorController::server_edit_refusal(core::LspWorkspaceEditFa
 // 動かさない（まだ読んでいないタブは退避番号のまま置き、reach_server_edit_tabs が後で読む）。
 std::expected<std::vector<ServerEditFile>, core::DisplayText>
 EditorController::server_edit_files(const core::LspWorkspaceEdit &edit,
-                                    const LspEditContext &context)
+                                    const LspEditContext &context, ServerEditOrigin origin)
 {
     if (server_edit_interrupts())
     {
         return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_busy)};
     }
-    if (server_edit_stale(context.request))
+    if (requests_document(origin) && server_edit_stale(context.request))
     {
         return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }

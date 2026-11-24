@@ -16,7 +16,7 @@ constexpr std::array<OperationChoiceExpected, 2> expected_0{
 constexpr std::array<OperationChoiceExpected, 0> expected_1{{
 
 }};
-constexpr std::array<OperationChoiceExpected, 69> expected_2{
+constexpr std::array<OperationChoiceExpected, 70> expected_2{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+O", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -203,8 +203,12 @@ constexpr std::array<OperationChoiceExpected, 69> expected_2{
      {core::EditorOperation::rename_symbol, 68U, "名前を変更", 5U,
       "キャレットの所の名前を言語サーバーに変えてもらいます（ほかのファイルの使われ方も変わります"
       "）",
-      46U, "F2", "", core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 66> expected_3{
+      46U, "F2", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::quick_fix, 69U, "クイックフィックス", 9U,
+      "キャレットの所か選択の範囲の直し方とリファクタリングを言語サーバーに聞き、一覧から選んで当て"
+      "ます",
+      48U, "Ctrl+.", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 67> expected_3{
     {{core::EditorOperation::open_file, 0U, "ファイルを開く", 7U,
       "保存してあるファイルを選んで開きます", 18U, "Ctrl+Shift+O", "",
       core::CommandChoiceKind::operate, std::nullopt},
@@ -384,8 +388,12 @@ constexpr std::array<OperationChoiceExpected, 66> expected_3{
      {core::EditorOperation::rename_symbol, 68U, "名前を変更", 5U,
       "キャレットの所の名前を言語サーバーに変えてもらいます（ほかのファイルの使われ方も変わります"
       "）",
-      46U, "F2", "", core::CommandChoiceKind::operate, std::nullopt}}};
-constexpr std::array<OperationChoiceExpected, 69> expected_4{
+      46U, "F2", "", core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::quick_fix, 69U, "クイックフィックス", 9U,
+      "キャレットの所か選択の範囲の直し方とリファクタリングを言語サーバーに聞き、一覧から選んで当て"
+      "ます",
+      48U, "Ctrl+.", "", core::CommandChoiceKind::operate, std::nullopt}}};
+constexpr std::array<OperationChoiceExpected, 70> expected_4{
     {{core::EditorOperation::paste_html, 22U, "HTML のまま貼り付け", 12U,
       "クリップボードの HTML をタグごと貼ります", 23U, "", "", core::CommandChoiceKind::operate,
       std::nullopt},
@@ -534,6 +542,10 @@ constexpr std::array<OperationChoiceExpected, 69> expected_4{
      {core::EditorOperation::open_settings, 49U, "設定", 2U,
       "設定の面を開きます（閉じると保存します）", 20U, "Ctrl+,", "",
       core::CommandChoiceKind::operate, std::nullopt},
+     {core::EditorOperation::quick_fix, 69U, "クイックフィックス", 9U,
+      "キャレットの所か選択の範囲の直し方とリファクタリングを言語サーバーに聞き、一覧から選んで当て"
+      "ます",
+      48U, "Ctrl+.", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::recent_tab, 5U, "前に使ったタブへ", 8U, "最近使った順にタブを移ります",
       14U, "Ctrl+Tab", "", core::CommandChoiceKind::operate, std::nullopt},
      {core::EditorOperation::find_previous, 30U, "前を検索", 4U,
@@ -649,14 +661,14 @@ constexpr std::array<OperationChoiceSample, 10> samples{
       "operation-choice-v1\nmiss-"
       "ordinary\nordinary\nqqq\n1024\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820"
       "d98\n"},
-     {"", core::EditMode::ordinary, 256U, 2781696U, expected_2,
+     {"", core::EditMode::ordinary, 256U, 2859776U, expected_2,
       "operation-choice-v1\nall-"
       "ordinary\nordinary\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98"
       "\n"},
-     {"", core::EditMode::vim, 256U, 2674688U, expected_3,
+     {"", core::EditMode::vim, 256U, 2752768U, expected_3,
       "operation-choice-v1\nall-"
       "vim\nvim\n\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
-     {" ", core::EditMode::ordinary, 256U, 2781696U, expected_4,
+     {" ", core::EditMode::ordinary, 256U, 2859776U, expected_4,
       "operation-choice-v1\nspace-ordinary\nordinary\n "
       "\n256\n55b30a1557204a36ed235a4349521f2742ab0a887bf0f6765a358f0f68820d98\n"},
      {"cTrL+s", core::EditMode::vim, 1024U, 2013184U, expected_5,

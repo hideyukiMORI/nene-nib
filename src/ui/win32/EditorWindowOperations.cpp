@@ -523,6 +523,7 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::format_document, &EditorWindow::run_format_document},
         {core::EditorOperation::format_selection, &EditorWindow::run_format_selection},
         {core::EditorOperation::rename_symbol, &EditorWindow::run_rename_symbol},
+        {core::EditorOperation::quick_fix, &EditorWindow::run_quick_fix},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -879,6 +880,12 @@ void EditorWindow::run_format_selection()
 void EditorWindow::run_rename_symbol()
 {
     send(application::QueryLanguage{core::LanguageQueryKind::rename});
+}
+
+// クイックフィックス（#2005・ADR 0194 の決定 8）。答えは Ctrl+P の一覧の記号 `=` に出る。
+void EditorWindow::run_quick_fix()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::code_action});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

@@ -4,6 +4,8 @@
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
 #include "LanguageAnswers.hpp"
+#include "LanguageCodeActionResolve.hpp"
+#include "LanguageCodeActions.hpp"
 #include "LanguageCompletion.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageFormatting.hpp"
@@ -19,6 +21,8 @@
 #include "LanguageSymbols.hpp"
 #include "LspAnswerFailure.hpp"
 #include "LspAnswers.hpp"
+#include "LspCodeAction.hpp"
+#include "LspCodeActions.hpp"
 #include "LspCompletionContext.hpp"
 #include "LspCompletionList.hpp"
 #include "LspEditContext.hpp"
@@ -276,6 +280,56 @@ rename_target_answer(const PendingLspRequest &request, const core::LspResponse &
                           .server_error = {},
                           .encoding = encoding};
 }
+// クイックフィックスの答え（#2005・ADR 0194 の決定 9）。参照と同じく文書・改訂番号・キャレットが
+// 頼んだときと同じ答えだけを置く（ADR 0191 の決定 4）。誤りの答えはサーバーの message を添え、
+// 読めない答えは空の列。
+[[nodiscard]] std::optional<LanguageCodeActions>
+code_actions_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                    const LspRequestContext &current, core::LspPositionEncoding encoding)
+{
+    const auto *context = std::get_if<LspEditContext>(&request.context);
+    if (context == nullptr || !(context->request == current))
+    {
+        return std::nullopt;
+    }
+    if (!response.result.has_value())
+    {
+        return LanguageCodeActions{.context = *context,
+                                   .actions = {},
+                                   .server_error = response.result.error().message,
+                                   .encoding = encoding};
+    }
+    auto actions = core::lsp_code_actions(response.result.value());
+    return LanguageCodeActions{.context = *context,
+                               .actions = actions.has_value() ? std::move(actions).value()
+                                                              : std::vector<core::LspCodeAction>{},
+                               .server_error = {},
+                               .encoding = encoding};
+}
+
+// `codeAction/resolve` の答え（#2005・決定 10）。文脈は照合せずに添える（当てる前に比べる）。
+[[nodiscard]] std::optional<LanguageCodeActionResolve>
+code_action_resolve_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                           core::LspPositionEncoding encoding)
+{
+    const auto *context = std::get_if<LspEditContext>(&request.context);
+    if (context == nullptr)
+    {
+        return std::nullopt;
+    }
+    if (!response.result.has_value())
+    {
+        return LanguageCodeActionResolve{
+            .context = *context,
+            .action = std::unexpected{core::LspAnswerFailure::invalid_result},
+            .server_error = response.result.error().message,
+            .encoding = encoding};
+    }
+    return LanguageCodeActionResolve{.context = *context,
+                                     .action = core::lsp_code_action(response.result.value()),
+                                     .server_error = {},
+                                     .encoding = encoding};
+}
 } // namespace
 
 // ---------------------------------------------------------------- 文脈つきの要求（ADR 0190）
@@ -491,6 +545,16 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
     case LspRequestKind::rename:
         answers.rename = rename_answer(request, response, link_of(slot).encoding);
         break;
+    case LspRequestKind::code_action:
+        answers.code_actions =
+            code_actions_answer(request, response, current, link_of(slot).encoding);
+        break;
+    case LspRequestKind::code_action_resolve:
+        answers.code_action_resolve =
+            code_action_resolve_answer(request, response, link_of(slot).encoding);
+        break;
+    case LspRequestKind::execute_command:
+        return;
     }
     state_ = state_.with_language_answers(std::move(answers));
 }

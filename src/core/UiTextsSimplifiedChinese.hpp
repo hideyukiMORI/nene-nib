@@ -170,6 +170,9 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::operation_rename_symbol_name, "重命名"},
     {UiMessage::operation_rename_symbol_description,
      "请语言服务器重命名光标处的名称（其他文件中的用法也会更改）"},
+    {UiMessage::operation_quick_fix_name, "快速修复"},
+    {UiMessage::operation_quick_fix_description,
+     "向语言服务器请求光标处或所选范围的修复和重构，并应用从列表中选择的一项"},
     {UiMessage::app_error_window_class, "无法注册窗口类。"},
     {UiMessage::app_error_window_create, "无法创建窗口。"},
     {UiMessage::app_error_rendering_start, "无法使用 Direct2D 开始绘制。"},
@@ -497,5 +500,10 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_server_edit_unsent,
      "{0} 有语言服务器未收到的更改，因此未应用（请保存后重试）"},
     {UiMessage::notice_server_edit_not_utf8, "{0} 不是无 BOM 的 UTF-8，因此未应用"},
+    {UiMessage::palette_mark_code_actions, "快速修复"},
+    {UiMessage::notice_code_action_not_supported, "此语言服务器不响应快速修复"},
+    {UiMessage::notice_code_action_in_insert, "插入模式下不请求快速修复（请先按 Esc 退出）"},
+    {UiMessage::notice_code_actions_not_found, "此处没有可用的修复"},
+    {UiMessage::palette_empty_code_actions, "还没有修复。在光标处按 {0}（Vim 为 {1}）即可请求"},
 }};
 } // namespace nenenib::core

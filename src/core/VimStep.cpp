@@ -2293,17 +2293,36 @@ namespace
 
 // `gr` の後ろの 1 鍵（#1947・ADR 0191 の決定 4）。`r` は表に行が無かったときと同じ失敗の歩に参照の
 // 問いの効果を添え（`gd` と同じ）、`n` は名前の変更の問い（#2004・ADR 0194 の決定 7・Neovim の
-// `grn`）を同じ形で添え、ほかの鍵は失敗する。Esc は鳴らさずに打ち消すだけ。
-[[nodiscard]] VimStep g_references_step(const VimState &state, const VimKey &key)
+// `grn`）を、`a` はクイックフィックスの問い（#2005・ADR 0194 の決定 8・Neovim の `gra`）を同じ形で
+// 添え、ほかの鍵は失敗する。Esc は鳴らさずに打ち消すだけ。
+[[nodiscard]] std::optional<LanguageQueryKind> g_references_query(const VimKey &key) noexcept
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
-    if (character == nullptr || (character->code != U'r' && character->code != U'n'))
+    if (character == nullptr)
+    {
+        return std::nullopt;
+    }
+    switch (character->code)
+    {
+    case U'r':
+        return LanguageQueryKind::references;
+    case U'n':
+        return LanguageQueryKind::rename;
+    case U'a':
+        return LanguageQueryKind::code_action;
+    default:
+        return std::nullopt;
+    }
+}
+
+[[nodiscard]] VimStep g_references_step(const VimState &state, const VimKey &key)
+{
+    const auto query = g_references_query(key);
+    if (!query.has_value())
     {
         return escaped_or_refused(state, key);
     }
-    return detail::language_queried(
-        state, character->code == U'r' ? LanguageQueryKind::references : LanguageQueryKind::rename,
-        escaped_or_refused(state, key));
+    return detail::language_queried(state, query.value(), escaped_or_refused(state, key));
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,

@@ -80,4 +80,24 @@ void verify_rename_key()
                "新しい名前: ",
            "the rename line shows its prompt");
 }
+
+// Ctrl+. の写し（#2005・ADR 0194 の決定 8）。Ctrl+. は両モードでクイックフィックス、Ctrl なしの .
+// は 操作にならない（打った文字のまま）。
+void verify_quick_fix_key()
+{
+    using nenenib::core::EditMode;
+    using nenenib::core::EditorOperation;
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::operation_chord;
+    const auto chord = operation_chord(VK_OEM_PERIOD, true, false);
+    expect(chord.has_value() &&
+               operation_for(chord.value(), EditMode::ordinary) == EditorOperation::quick_fix &&
+               operation_for(chord.value(), EditMode::vim) == EditorOperation::quick_fix,
+           "Ctrl+. asks for quick fixes in both modes");
+    expect(!operation_chord(VK_OEM_PERIOD, false, false).has_value(),
+           "a period without Ctrl is not an operation");
+    const auto shifted = operation_chord(VK_OEM_PERIOD, true, true);
+    expect(!shifted.has_value() || !operation_for(shifted.value(), EditMode::ordinary).has_value(),
+           "Ctrl+Shift+. is not mapped");
+}
 } // namespace nenenib::tests::ui
