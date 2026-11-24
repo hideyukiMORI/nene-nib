@@ -62,6 +62,50 @@ namespace
     options.emplace_back("insertSpaces", core::JsonValue{false});
     return core::JsonValue{std::move(options)};
 }
+
+// whole の [from, from + length) が part と同じか。範囲が whole
+// の外なら偽（読む前に長さを確かめる・ 3 回目のレビュー P2）。
+[[nodiscard]] bool slice_is(std::string_view whole, std::size_t from,
+                            std::string_view part) noexcept
+{
+    return from <= whole.size() && part.size() <= whole.size() - from &&
+           whole.substr(from, part.size()) == part;
+}
+
+// 履歴の単位の編集が、脇に残した整形の単位と同じか（3 回目のレビュー P3）。始まり・消した長さ・
+// 戻り先が同じで、removed に pieces を当てると inserted になる。どの読みも範囲を確かめてから行う。
+[[nodiscard]] bool formatted_unit_fits(const FormattedUnit &unit, const core::Edit &edit)
+{
+    if (edit.at != unit.at || edit.restore != unit.restore ||
+        edit.removed.size() != unit.removed_length)
+    {
+        return false;
+    }
+    const std::string_view removed = edit.removed;
+    const std::string_view inserted = edit.inserted;
+    std::size_t read = 0;
+    std::size_t written = 0;
+    for (const core::VimBlockEdit &piece : unit.pieces)
+    {
+        if (piece.range.begin.value < unit.at.value + read ||
+            piece.range.end.value < piece.range.begin.value ||
+            piece.range.end.value - unit.at.value > removed.size())
+        {
+            return false;
+        }
+        const std::size_t begin = piece.range.begin.value - unit.at.value;
+        const std::string_view kept = removed.substr(read, begin - read);
+        if (!slice_is(inserted, written, kept) ||
+            !slice_is(inserted, written + kept.size(), piece.utf8))
+        {
+            return false;
+        }
+        written += kept.size() + piece.utf8.size();
+        read = piece.range.end.value - unit.at.value;
+    }
+    const std::string_view rest = removed.substr(read);
+    return slice_is(inserted, written, rest) && written + rest.size() == inserted.size();
+}
 } // namespace
 
 // 選択範囲の整形で頼む範囲。選択（VISUAL は Vim の規則の範囲・矩形は覆う行の全体）が空なら
@@ -117,8 +161,8 @@ bool EditorController::request_formatting(bool selection)
 // 入力の途中か（#1997 のレビュー L5・2 回目のレビュー P2・F1）。答えは合図（WorkCompleted）の中で
 // 届くので、入力行（Ctrl+P の一覧を含む）・右クリックのメニュー・IME の変換・補完の一覧・設定の
 // 画面が開いている間（faces_closed）と、Vim が次の鍵を待っている間（vim_waits_for_key）と、Vim の
-// INSERT を組み立てている間（矩形の `I` `A` の写し・`3i` の回数・`.` の記録が生きている間。当てると
-// replace の割り込みがどれも捨てる）は本文を変えない。
+// INSERT の間（矩形の `I` `A` の写し・`3i` の回数・`.` の記録は、当てると replace
+// の割り込みがどれも 捨てる）は本文を変えない。
 bool EditorController::formatting_interrupts() const noexcept
 {
     if (!faces_closed() || vim_waits_for_key())
@@ -132,10 +176,9 @@ bool EditorController::formatting_interrupts() const noexcept
     case core::EditMode::vim:
         break;
     }
-    const core::VimState &vim = state_.vim();
-    return vim.mode == core::VimMode::insert &&
-           (vim.block_insert.has_value() || vim.insert_repeat.has_value() ||
-            vim.recording.has_value());
+    // INSERT（REPLACE も同じ値で持つ）の間は、矩形の写し・回数・`.` の記録の有無に依らず当てない
+    // （3 回目のレビュー P1・頼む前に断る accept(QueryLanguage) と同じ条件）。
+    return state_.vim().mode == core::VimMode::insert;
 }
 
 // 当てずに知らせる理由（無ければ値なし）。文書か revision が頼んだときと違う・入力の途中・読めない
@@ -234,8 +277,25 @@ void EditorController::remember_formatted_unit(std::size_t before,
     const AutosaveId document = request_context().document;
     std::erase_if(formatted_units_, [document, before](const FormattedUnit &unit)
                   { return unit.document == document && unit.index >= before; });
-    formatted_units_.push_back(FormattedUnit{
-        .document = document, .index = before, .edit = edit.value(), .pieces = formatted.pieces});
+    formatted_units_.push_back(FormattedUnit{.document = document,
+                                             .index = before,
+                                             .at = edit.value().at,
+                                             .removed_length = edit.value().removed.size(),
+                                             .restore = edit.value().restore,
+                                             .pieces = formatted.pieces});
+}
+
+// 帯から消えたタブ（閉じた・一掃した）の分を脇の表から外す（3 回目のレビュー P3）。意図の終わりに
+// 呼ばれ、表が空なら欄を 1 つ読むだけで抜ける。
+void EditorController::forget_closed_formatted_units()
+{
+    if (formatted_units_.empty())
+    {
+        return;
+    }
+    const auto &ids = state_.autosave_ids();
+    std::erase_if(formatted_units_, [&ids](const FormattedUnit &unit)
+                  { return std::ranges::find(ids, unit.document) == ids.end(); });
 }
 
 // 履歴の index 番目の単位の編集の列（#1997 の 2 回目のレビュー P1）。脇に残した単位と文書・位置・
@@ -258,7 +318,7 @@ EditorController::formatted_pieces_at(std::size_t index, const core::Edit &edit,
     {
         return std::nullopt;
     }
-    if (!(found->edit == edit))
+    if (!formatted_unit_fits(*found, edit))
     {
         formatted_units_.erase(found);
         return std::nullopt;

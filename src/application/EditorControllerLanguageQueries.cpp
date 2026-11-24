@@ -73,8 +73,8 @@ void EditorController::accept(const QueryLanguage &intent)
     // （#1997 の 2 回目のレビュー F1・設計席の決め 2026-11-24）。
     if (refuses_in_insert(intent.kind, state_.mode(), state_.vim()))
     {
-        state_ = state_.with_command_message(
-            ui_notice(core::UiMessage::notice_formatting_in_insert));
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_formatting_in_insert));
         return;
     }
     if (query_language(intent.kind))

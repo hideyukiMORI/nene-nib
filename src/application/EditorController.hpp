@@ -1126,6 +1126,8 @@ class EditorController final
     formatting_refusal(const LanguageFormatting &answered) const;
     // 整形が積んだ単位を脇に残す（#1997 の 2 回目のレビュー P1）。積む前の履歴の位置を渡す。
     void remember_formatted_unit(std::size_t before, const core::FormattedSpan &formatted);
+    // 帯から消えたタブの分を脇の表から外す（3 回目のレビュー P3・意図の終わりの 1 か所）。
+    void forget_closed_formatted_units();
     // 履歴の index 番目の単位が整形の単位なら、その単位の編集の列（同じ文書・同じ位置・同じ編集の
     // ときだけ）。向きは direction（undo は逆向きの列・redo は同じ列）。ふつうの単位は値なし。
     [[nodiscard]] std::optional<std::vector<core::VimBlockEdit>>
