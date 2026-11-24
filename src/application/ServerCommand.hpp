@@ -14,4 +14,7 @@ namespace nenenib::application
 // ファイルが経路にならなければ値なし。絶対パスかどうかは adapter が見る（追補）。OS に触れない。
 [[nodiscard]] std::optional<ServerLaunch> server_launch_of(std::string_view command,
                                                            const core::FilePath &root);
+// 言語サーバーの席の鍵にする命令の行（ADR 0160 / 0161 の 2026-11-24 の追補・#1952）。前後の空白
+// （SP・HT）を落とすだけで、大小・引用符・間の空白の違いは別の命令のまま（賢く畳まない）。
+[[nodiscard]] std::string_view server_command_key(std::string_view command) noexcept;
 } // namespace nenenib::application

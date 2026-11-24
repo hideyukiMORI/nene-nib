@@ -183,6 +183,8 @@ void verify_lsp_sync_property_scope();
 void verify_language_server_contracts();
 // 席の部分（LanguageServerSlotTests.cpp・LSP 段 S2）。verify_language_server_contracts から呼ぶ。
 void verify_language_server_slots();
+// 席の共有の部分（LanguageServerShareTests.cpp・#1952）。verify_language_server_slots から呼ぶ。
+void verify_language_server_shares();
 // 記録と進み具合の部分（LanguageServerLogTests.cpp・LSP 段 S8）。verify_language_server_contracts
 // から呼ぶ。
 void verify_language_server_log();

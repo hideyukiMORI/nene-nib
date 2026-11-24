@@ -974,7 +974,8 @@ class EditorController final
     // 合わせる（オフで子が居なければ分岐 1 つ）。tick は古さの合図で使う人の操作ではない。
     // 席（2026-11-20 の追補・段 S2）: serving はその言語の文書を受ける席、active_language_server
     // はアクティブな文書を受ける席のつながり（無ければ空）、holding はアクティブな文書を開いた席。
-    // 失敗の数と given_up は言語ごと（trouble_of）。席が満ちたら yield
+    // 席の鍵は（命令の行・root）で、同じ命令の行の言語は 1 席を共有する（2026-11-24 の追補・
+    // #1952）。失敗の数と given_up は命令の行ごと（trouble_of）。席が満ちたら yield
     // が最も前に使った席を譲らせる。
     void reconcile_language_server();
     [[nodiscard]] std::optional<LanguageServerSlot> serving_slot(core::Language language) const;
@@ -982,8 +983,13 @@ class EditorController final
     [[nodiscard]] std::optional<LanguageServerSlot> holding_slot() const;
     [[nodiscard]] std::optional<LanguageServerSlot> free_slot() const;
     [[nodiscard]] LanguageServerLink &link_of(LanguageServerSlot slot);
-    [[nodiscard]] LanguageServerTrouble &trouble_of(core::Language language);
+    [[nodiscard]] LanguageServerTrouble &trouble_of(std::string_view command);
     [[nodiscard]] bool language_server_given_up(core::Language language) const;
+    // 設定の language の命令の行を席の鍵の形（server_command_key）で（行が無ければ値なし）。
+    [[nodiscard]] std::optional<std::string_view>
+    language_server_command(core::Language language) const;
+    // 知らせに出す言語の名前（いまの文書の言語がこの席の命令の行なら文書の言語・ほかは席の言語）。
+    [[nodiscard]] core::Language noticed_language(LanguageServerSlot slot) const;
     void resume_language_servers();
     void consider_language_server(core::Language language);
     void yield_language_server();
@@ -1005,7 +1011,7 @@ class EditorController final
     [[nodiscard]] std::optional<ServerLaunch>
     language_server_launch(core::Language language, const core::FilePath &root) const;
     void start_language_server(LanguageServerSlot slot, core::Language language,
-                               ServerLaunch launch);
+                               std::string command, ServerLaunch launch);
     // 席 slot がアクティブな文書を受ける・開いているなら、補完・hover・定義の答えを消す（止める・
     // 譲る道の入口で呼ぶ・ほかの席を止めてもアクティブな文書の答えは残す・#1916 のレビュー R1）。
     void drop_language_answers_of(LanguageServerSlot slot);
@@ -1598,7 +1604,7 @@ class EditorController final
     void act_on_language_server_row(std::size_t index);
     [[nodiscard]] bool used_commands(std::vector<std::pair<std::string, std::string>> &commands,
                                      std::size_t index) const;
-    void restart_language_servers_of(core::Language language);
+    void restart_language_servers_of(std::string_view command);
     void unfold_language_server_rows(const std::vector<LanguageServerRowView> &rows);
     // 命令の行が変わった言語の席を止め、失敗の控えを消し、起こすかを決め直す。
     void
