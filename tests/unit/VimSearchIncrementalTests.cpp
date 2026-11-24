@@ -1,4 +1,5 @@
 // scope `--vim-search-incremental` の単体テスト（ADR 0042 決定 2）。
+#include "BeginGoToLine.hpp"
 #include "CancelCommand.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
@@ -9,6 +10,7 @@
 #include "EditorFrame.hpp"
 #include "InputLineView.hpp"
 #include "InputText.hpp"
+#include "InsertText.hpp"
 #include "LineView.hpp"
 #include "Scopes.hpp"
 #include "SearchHop.hpp"
@@ -530,6 +532,23 @@ void verify_incsearch_hop_inert()
            "the `.` record keeps the search key without the hop start");
 }
 
+// 通常モードの「行へ移動」の入力行（Ctrl+G）も検索の行ではないので、hop は何もしない（打った番号と
+// キャレットをそのまま残す・決定 2）。
+void verify_go_to_line_ignores_hop()
+{
+    Editing session;
+    auto &controller = session.controller();
+    applied(controller, app::VisibleLines{vim_visible_lines});
+    applied(controller, app::InsertText{"alpha\nbeta\ngamma"});
+    const auto caret = controller.frame().caret.position;
+    applied(controller, app::BeginGoToLine{});
+    static_cast<void>(controller.apply_frame(app::CommandText{"2"}));
+    hop(controller, VimSearchDirection::forward);
+    const auto frame = controller.frame();
+    expect(typed_text(frame) == "2" && frame.caret.position == caret,
+           "the go-to-line input line ignores a hop");
+}
+
 // hop が見える範囲の外の当たりへ画面を動かし、Esc は入力前の先頭行とキャレットへ戻す（決定 1・2）。
 void verify_incsearch_hop_scroll()
 {
@@ -616,6 +635,7 @@ void verify_vim_search_incremental_contracts()
     verify_incsearch_hop_start();
     verify_incsearch_nowrapscan();
     verify_incsearch_hop_inert();
+    verify_go_to_line_ignores_hop();
     verify_incsearch_hop_scroll();
     verify_incsearch_composition();
     verify_incsearch_composition_cancelled();

@@ -971,6 +971,9 @@ void verify_vim_window_commands()
     expect(window_command(controller, "l").active_side == PaneSide::second &&
                window_command(controller, "k").active_side == PaneSide::first,
            "Ctrl-w l and Ctrl-w k both move to the only neighbour");
+    expect(window_command(controller, "h").active_side == PaneSide::second &&
+               window_command(controller, "j").active_side == PaneSide::first,
+           "Ctrl-w h and Ctrl-w j also move to the only neighbour");
     const EditorFrame again = window_command(controller, "s");
     expect(again.layout == SplitLayout::vertical && message_of(again) == "もう分かれています",
            "Ctrl-w s on two panes keeps the panes and says so");

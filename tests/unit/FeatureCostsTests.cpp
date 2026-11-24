@@ -16,6 +16,7 @@
 #include "FeatureStorage.hpp"
 #include "FinderPreview.hpp"
 #include "GuideVisibility.hpp"
+#include "IndentGuideStyle.hpp"
 #include "LineWrapping.hpp"
 #include "Minimap.hpp"
 #include "Scopes.hpp"
@@ -29,6 +30,7 @@
 #include "ThemeChoice.hpp"
 #include "ThemeDocument.hpp"
 #include "ThemeName.hpp"
+#include "UiMessage.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -274,6 +276,45 @@ void verify_user_theme_steps()
            "without a user theme the list wraps from system to the last built-in theme");
 }
 
+// 値の行の名前（#2013）: 置き方は自動 → 右 → 下 → 出さない の順に送り、それぞれの名前を見せる。
+// 単色・強めない・Vim の鍵も従う の名前。文字の大きさは戻す向きにも 0.5 pt。
+void verify_value_names()
+{
+    constexpr auto english = core::DisplayLanguage::english;
+    using core::SettingsValue;
+    auto settings = core::default_editor_settings();
+    std::vector<std::string> previews;
+    for (std::size_t step = 0; step < 4; ++step)
+    {
+        previews.push_back(
+            core::settings_value_text(settings, SettingsValue::finder_preview, english));
+        settings = core::settings_value_stepped(settings, SettingsValue::finder_preview, true,
+                                                std::nullopt);
+    }
+    expect(previews == std::vector<std::string>{"Automatic", "Right", "Below", "Off"} &&
+               settings.finder_preview == core::FinderPreview::automatic,
+           "the finder preview steps forward through its four places and wraps");
+    auto changed = core::default_editor_settings();
+    changed.indent_guide_style = core::IndentGuideStyle::plain;
+    changed.indent_guide_active = false;
+    changed.pane_resize_step_vim = true;
+    expect(core::settings_value_text(changed, SettingsValue::indent_guide_style, english) ==
+                   "One color" &&
+               core::settings_value_text(changed, SettingsValue::indent_guide_active, english) ==
+                   "Off" &&
+               core::settings_value_text(changed, SettingsValue::pane_resize_step_vim, english) ==
+                   "Follow Pane Resize Step",
+           "the plain style, the unemphasised guide and the following Vim keys show their names");
+    expect(
+        core::settings_value_stepped(changed, SettingsValue::indent_guide_style, true, std::nullopt)
+                .indent_guide_style == core::IndentGuideStyle::rainbow,
+        "the style steps from plain back to rainbow");
+    const auto smaller = core::settings_value_stepped(
+        core::default_editor_settings(), SettingsValue::font_size, false, std::nullopt);
+    expect(core::settings_value_text(smaller, SettingsValue::font_size, english) == "13",
+           "the font size steps back by 0.5 pt");
+}
+
 // 値の送り（段 1 の値の行）。
 void verify_values()
 {
@@ -325,6 +366,7 @@ void verify_values()
                                defaults),
            "the font family is shown only in this stage");
     verify_user_theme_steps();
+    verify_value_names();
 }
 
 // 切れる機能の名前は `:set` が受ける名前（決定 4・生成の寄せは後の工程）。
@@ -342,6 +384,38 @@ void verify_set_names()
         expect(asked.has_value(), "a switchable feature's name is a :set option");
     }
 }
+
+// 切った自分の鍵の機能を入れ直すと元の値に戻る。`no_` の名前の比べは長さ・接頭辞・名前の 3 つ
+// を見る（似た綴りは消さない）。段の題は 4 段とも名前を持つ（#2013）。
+void verify_switch_back_and_names()
+{
+    const auto defaults = core::default_editor_settings();
+    const auto wrap = core::feature_set(core::feature_set(defaults, EditorFeature::wrap, false),
+                                        EditorFeature::wrap, true);
+    const auto guide = core::feature_set(core::feature_set(defaults, EditorFeature::guide, false),
+                                         EditorFeature::guide, true);
+    expect(wrap.wrapping == core::LineWrapping::wrap &&
+               guide.guide == core::GuideVisibility::shown &&
+               core::feature_enabled(wrap, EditorFeature::wrap) &&
+               core::feature_enabled(guide, EditorFeature::guide),
+           "wrap and guide turned back on write their own keys again");
+    auto similar = defaults;
+    similar.features = {"xx_minimap", "no_minimapp", "no_abcdefg"};
+    expect(core::feature_set(similar, EditorFeature::minimap, true).features ==
+               std::vector<std::string>{"xx_minimap", "no_minimapp", "no_abcdefg", "minimap"},
+           "a name that only looks like no_minimap is kept");
+    using core::CostTier;
+    expect(core::cost_tier_title(CostTier::none) == core::UiMessage::settings_tier_none &&
+               core::cost_tier_title(CostTier::low) == core::UiMessage::settings_tier_low &&
+               core::cost_tier_title(CostTier::medium) == core::UiMessage::settings_tier_medium &&
+               core::cost_tier_title(CostTier::high) == core::UiMessage::settings_tier_high,
+           "each tier has its own title");
+    expect(core::speed_estimate_text(core::SpeedSummary{1040, 1, 0, 0, {}, std::nullopt},
+                                     core::DisplayLanguage::english) ==
+               "Estimated time per keystroke with these settings: 0.64 ms + Low × 1 "
+               "(about 1.04 ms)",
+           "the zero before the second decimal digit is kept (1.04)");
+}
 } // namespace
 
 void verify_feature_costs_scope()
@@ -354,5 +428,6 @@ void verify_feature_costs_scope()
     verify_rows();
     verify_values();
     verify_set_names();
+    verify_switch_back_and_names();
 }
 } // namespace nenenib::tests

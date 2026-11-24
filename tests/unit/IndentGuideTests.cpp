@@ -53,6 +53,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -267,6 +268,42 @@ void verify_guide_colors()
     expect(one.rainbow.count == 1 &&
                core::indent_guide_color(one, 0, true) == core::indent_guide_color(one, 1, true),
            "a one-color theme cycles a single color");
+    const auto none =
+        core::indent_guide_paint(core::IndentGuideStyle::rainbow, 0, aubergine.body, aubergine.ui);
+    expect(none.rainbow.count == 0 &&
+               core::indent_guide_color(none, 2, false) == aubergine.ui.panel_border &&
+               core::indent_guide_color(none, 2, true) == aubergine.ui.muted,
+           "a rainbow without colors falls back to the plain colors (#2013)");
+}
+
+// 幅と色の数の値の読みと送り（IndentGuide.hpp・#2013）: 幅は 2・4・8 だけで端で止まり、色の数は
+// 1 文字の 3〜6 だけで端で止まる。
+void verify_value_parsers()
+{
+    expect(core::indent_guide_width_of("2") == std::optional<std::uint8_t>{2} &&
+               core::indent_guide_width_of("4") == std::optional<std::uint8_t>{4} &&
+               core::indent_guide_width_of("8") == std::optional<std::uint8_t>{8} &&
+               !core::indent_guide_width_of("3").has_value() &&
+               !core::indent_guide_width_of("").has_value() &&
+               !core::indent_guide_width_of("16").has_value(),
+           "the guide width reads only 2, 4 and 8");
+    expect(core::indent_guide_width_stepped(2, true) == 4 &&
+               core::indent_guide_width_stepped(8, true) == 8 &&
+               core::indent_guide_width_stepped(4, false) == 2 &&
+               core::indent_guide_width_stepped(2, false) == 2,
+           "the guide width doubles and halves and stops at 2 and 8");
+    expect(core::indent_guide_colors_of("3") == std::optional<std::uint8_t>{3} &&
+               core::indent_guide_colors_of("6") == std::optional<std::uint8_t>{6} &&
+               !core::indent_guide_colors_of("2").has_value() &&
+               !core::indent_guide_colors_of("7").has_value() &&
+               !core::indent_guide_colors_of("").has_value() &&
+               !core::indent_guide_colors_of("33").has_value(),
+           "the color count reads one digit from 3 to 6");
+    expect(core::indent_guide_colors_stepped(3, false) == 3 &&
+               core::indent_guide_colors_stepped(4, false) == 3 &&
+               core::indent_guide_colors_stepped(6, true) == 6 &&
+               core::indent_guide_colors_stepped(5, true) == 6,
+           "the color count steps by one and stops at 3 and 6");
 }
 
 // ---------------------------------------------------------------- `:set` と設定の画面（決定 3・4）
@@ -598,6 +635,7 @@ void verify_indent_guides_scope()
     verify_continued_and_active();
     verify_rainbow_counts();
     verify_guide_colors();
+    verify_value_parsers();
     verify_switches();
     verify_values();
     verify_candidates();

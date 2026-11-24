@@ -121,6 +121,36 @@ void verify_vim_waiting()
            "F5 in VISUAL keeps the selection, so the next d deletes it");
 }
 
+// 回数とレジスタの名指しの待ちも Esc と同じに取り消す（Vim の `2<Esc>` `"a<Esc>`）。行と矩形の
+// VISUAL も、文字の VISUAL と同じく入れずに 1 行知らせて選択を残す（決定 3）。
+void verify_vim_waiting_count_and_visual_kinds()
+{
+    Editing editing;
+    open_vim_document(editing, "abc\n");
+    auto &controller = editing.controller();
+    vim_replay(controller, "2");
+    applied(controller, app::InsertDateTime{});
+    vim_replay(controller, "x");
+    expect(vim_body(controller.frame()) == "bc\n" && editing.wall_clock().calls() == 0,
+           "F5 after a count cancels the count, so the next x deletes one character");
+    vim_replay(controller, "\"a");
+    applied(controller, app::InsertDateTime{});
+    expect(!controller.vim_state().selected_register.has_value() &&
+               notice(controller.frame()) == insert_only,
+           "F5 after naming a register cancels the register");
+    for (const std::string_view keys : {"V", "<C-v>"})
+    {
+        vim_replay(controller, keys);
+        const auto mode = controller.frame().vim_mode;
+        applied(controller, app::InsertDateTime{});
+        expect(vim_body(controller.frame()) == "bc\n" &&
+                   notice(controller.frame()) == insert_only &&
+                   controller.frame().vim_mode == mode && editing.wall_clock().calls() == 0,
+               "F5 in line and block VISUAL inserts nothing and keeps the selection mode");
+        vim_replay(controller, "<Esc>");
+    }
+}
+
 // 決定 3（入力行）: `:` と検索の行が開いていれば、入力行に文字として入れる。本文は変えない。
 void verify_input_line()
 {
@@ -162,6 +192,7 @@ void verify_clock_contracts()
     verify_ordinary_insert();
     verify_vim();
     verify_vim_waiting();
+    verify_vim_waiting_count_and_visual_kinds();
     verify_input_line();
     verify_quiet_signals();
 }

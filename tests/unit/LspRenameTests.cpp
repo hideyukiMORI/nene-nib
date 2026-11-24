@@ -537,6 +537,15 @@ void verify_input_line()
                editing.language_server().requests(rename_method).empty() &&
                whole_vim_body(editing.controller()) == main_text,
            "Esc closes the line without asking");
+    // 頼んだ後にキャレットが動いたら、変えられる所の答えは使わない（文脈の照合・決定 1）。
+    static_cast<void>(asked(editing));
+    applied(editing.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                            core::SelectionAnchoring::collapse});
+    const auto moved = answered(editing, prepare_method, add_target);
+    expect(!moved.command_line.has_value() &&
+               editing.language_server().requests(rename_method).empty(),
+           "an answer after the caret moved opens no line");
 }
 
 void verify_rename_request_and_refusals()
@@ -864,6 +873,46 @@ void verify_not_utf8()
                    filled(editing, core::UiMessage::notice_server_edit_not_utf8, {"old.cpp"}) &&
                whole_vim_body(editing.controller()) == main_text && frame.tabs.size() == 2,
            "an unopened file that is not UTF-8 refuses the whole answer");
+    // BOM つきの UTF-16 も UTF-8 でないので同じく断る（plain_utf8 は BOM なしの UTF-8 だけ）。
+    for (const std::string_view bytes : {std::string_view{"\xFF\xFE"
+                                                          "a\0\n\0",
+                                                          6},
+                                         std::string_view{"\xFE\xFF"
+                                                          "\0a\0\n",
+                                                          6}})
+    {
+        Editing wide(lsp_on());
+        wide.files().hold_at("C:\\work\\wide.cpp", Bytes{std::string(bytes)});
+        started(wide, prepared);
+        renamed_to_sum(wide);
+        const auto refused =
+            answered(wide, rename_method,
+                     R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                         uri_edits("file:///C:/work/wide.cpp", edit_json(0, 0, 1, "x")) + "}}");
+        expect(message_of(refused) ==
+                       filled(wide, core::UiMessage::notice_server_edit_not_utf8, {"wide.cpp"}) &&
+                   whole_vim_body(wide.controller()) == main_text,
+               "an unopened UTF-16 file refuses the whole answer too");
+    }
+    // 読めない答え（changes が表でない）は 1 行で断り、本文を変えない（決定 4）。
+    Editing broken(lsp_on());
+    started(broken, prepared);
+    renamed_to_sum(broken);
+    const auto unread = answered(broken, rename_method, R"({"changes":5})");
+    expect(message_of(unread) == notice(broken, core::UiMessage::notice_server_edit_unreadable) &&
+               whole_vim_body(broken.controller()) == main_text,
+           "an unreadable rename answer says so and changes nothing");
+    // 今の本文と同じになる答えは何も変えず、何も知らせない（ADR 0194
+    // の「何も変わらなければ何も出さない」）。
+    Editing same(lsp_on());
+    started(same, prepared);
+    renamed_to_sum(same);
+    const auto kept =
+        answered(same, rename_method,
+                 R"({"changes":{)" + uri_edits(main_uri, edit_json(0, 4, 7, "add")) + "}}");
+    expect(message_of(kept).empty() && whole_vim_body(same.controller()) == main_text &&
+               kept.document.save_state == core::SaveState::saved,
+           "an answer that leaves the text as it is changes and says nothing");
 }
 
 // Ctrl+Tab の歩きの途中に届いた答えは当てない（#2011 のレビュー R1）。

@@ -199,6 +199,10 @@ void verify_ordinary_selection()
     expect(selected_of(controller) == std::optional<std::size_t>{4},
            "the first up selects the last row");
     applied(controller, app::CancelSelection{});
+    applied(controller,
+            app::MoveCaret{core::CaretMotion::next_line, core::SelectionAnchoring::extend});
+    expect(shown(controller).has_value() && !selected_of(controller).has_value(),
+           "Shift+Down is the body's selection key and does not select a row");
     applied(controller, app::CancelSelection{});
     expect(shown(controller).has_value(), "Esc without a selection changes nothing");
     applied(controller, app::NewLine{});
@@ -456,6 +460,10 @@ void verify_vim()
     expect(selected_of(controller) == std::optional<std::size_t>{1}, "j selects downwards");
     vim_press(controller, "k");
     expect(selected_of(controller) == std::optional<std::size_t>{0}, "k selects upwards");
+    vim_press(controller, "<Up>");
+    expect(selected_of(controller) == std::optional<std::size_t>{3},
+           "the up arrow selects upwards like k and wraps at the first row");
+    vim_press(controller, "<Down>");
     vim_press(controller, "<Esc>");
     expect(!selected_of(controller).has_value() && shown(controller).has_value(),
            "Esc clears the selection");

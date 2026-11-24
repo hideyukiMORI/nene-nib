@@ -6,15 +6,19 @@
 #include "ActOnLinkCard.hpp"
 #include "ClickPreviewLink.hpp"
 #include "Column.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "FilePath.hpp"
 #include "InsertText.hpp"
+#include "LayoutRect.hpp"
 #include "LineNumber.hpp"
 #include "LinkCard.hpp"
 #include "LinkCardAction.hpp"
+#include "LinkCardTexts.hpp"
+#include "LinkDestination.hpp"
 #include "LinkKind.hpp"
 #include "LinkOpenFailure.hpp"
 #include "MarkdownOutcome.hpp"
@@ -22,6 +26,9 @@
 #include "MarkdownStop.hpp"
 #include "Offset.hpp"
 #include "OpenDocument.hpp"
+#include "PreviewBlock.hpp"
+#include "PreviewBlockKind.hpp"
+#include "PreviewCodePiece.hpp"
 #include "PreviewFrame.hpp"
 #include "PreviewPlacement.hpp"
 #include "PreviewPoint.hpp"
@@ -35,6 +42,8 @@
 #include "SetPreviewPlacement.hpp"
 #include "TestSupport.hpp"
 #include "TogglePreview.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
@@ -43,6 +52,7 @@
 #include "WorkCompleted.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <string>
@@ -163,6 +173,16 @@ void verify_mismatched_click_does_nothing()
     expect(!controller.apply_frame(app::ClickPreviewLink{first, core::PreviewPoint{first.block, 0}})
                 .link_card.has_value(),
            "releasing outside the link opens nothing");
+    expect(!controller
+                .apply_frame(
+                    app::ClickPreviewLink{first, core::PreviewPoint{first.block + 1, first.offset}})
+                .link_card.has_value(),
+           "releasing on another element opens nothing");
+    expect(!controller
+                .apply_frame(
+                    app::ClickPreviewLink{core::PreviewPoint{999, 0}, core::PreviewPoint{999, 0}})
+                .link_card.has_value(),
+           "a click on an element the shown result does not have opens nothing");
     static_cast<void>(clicked(editing, 0));
     expect(!controller
                 .apply_frame(app::ClickPreviewLink{core::PreviewPoint{first.block, 0},
@@ -478,6 +498,121 @@ void verify_heading_jump_table_cell()
     expect(!jumped.link_card.has_value() && caret_at(jumped, 5),
            "a heading link inside a table cell jumps to the heading");
 }
+
+// 15. 札の文は種類ごと（LinkCard.hpp・#2013）。開ける札は「開く／書く・やめる・写す」、開けない札
+// （heading も同じ）は「写す・閉じる」。鍵の名前は訳さない。
+[[nodiscard]] bool texts_are(const core::LinkCardTexts &texts, const core::LinkCardTexts &wanted)
+{
+    return texts.title == wanted.title && texts.way == wanted.way && texts.hint == wanted.hint &&
+           texts.secondary == wanted.secondary && texts.primary == wanted.primary;
+}
+
+void verify_card_texts()
+{
+    constexpr auto english = core::DisplayLanguage::english;
+    expect(texts_are(core::link_card_texts(core::LinkKind::web, english),
+                     {"Open this link?", "Opens in the default browser",
+                      "Enter Open \xC2\xB7 Esc Cancel \xC2\xB7 Ctrl+C Copy", "Cancel", "Open"}),
+           "a web card opens in the browser");
+    expect(texts_are(core::link_card_texts(core::LinkKind::mail, english),
+                     {"Write an email?", "Writes a new email in the default mail app",
+                      "Enter Write \xC2\xB7 Esc Cancel \xC2\xB7 Ctrl+C Copy", "Cancel", "Write"}),
+           "a mail card writes an email");
+    expect(texts_are(core::link_card_texts(core::LinkKind::document, english),
+                     {"Open this file?", "Opens in a new Nib tab",
+                      "Enter Open \xC2\xB7 Esc Cancel \xC2\xB7 Ctrl+C Copy", "Cancel", "Open"}),
+           "a document card opens a Nib tab");
+    const core::LinkCardTexts refused{
+        "This link can't be opened",
+        "Programs and unknown kinds of destination aren't opened. Copy it and check it yourself",
+        "Ctrl+C Copy \xC2\xB7 Esc Close", "Close", "Copy"};
+    expect(texts_are(core::link_card_texts(core::LinkKind::refused, english), refused) &&
+               texts_are(core::link_card_texts(core::LinkKind::heading, english), refused),
+           "a refused card (and a heading, which has no card) only copies and closes");
+    constexpr auto japanese = core::DisplayLanguage::japanese;
+    expect(core::link_card_texts(core::LinkKind::web, japanese).title ==
+                   core::ui_text(core::UiMessage::link_card_title_web, japanese) &&
+               core::link_card_texts(core::LinkKind::web, japanese).primary ==
+                   core::ui_text(core::UiMessage::link_card_open, japanese),
+           "the card follows the display language");
+}
+
+// 16. 太字の範囲（LinkCard.hpp の link_card_emphasis）: web は `://` の後ろのホスト、mail は
+// `mailto:` の後ろの宛名、document は最後の区切りの後ろ、refused は `://` があればホストで無ければ
+// 最後の名前。空の範囲もある。
+void verify_card_emphasis()
+{
+    using Range = std::pair<std::size_t, std::size_t>;
+    const auto emphasis = [](core::LinkKind kind, std::string text)
+    { return core::link_card_emphasis(core::LinkDestination{kind, std::move(text)}); };
+    expect(emphasis(core::LinkKind::web, "https://www.vim.org/docs.php") == Range{8, 19} &&
+               emphasis(core::LinkKind::web, "https://a.b?x") == Range{8, 11} &&
+               emphasis(core::LinkKind::web, "https://a.b#f") == Range{8, 11} &&
+               emphasis(core::LinkKind::web, "https://host") == Range{8, 12},
+           "a web link shows its host up to the next / ? or #");
+    expect(emphasis(core::LinkKind::mail, "mailto:me@x.org?subject=a") == Range{7, 15} &&
+               emphasis(core::LinkKind::mail, "mailto:me@x.org") == Range{7, 15},
+           "a mail link shows the address up to ?");
+    expect(emphasis(core::LinkKind::refused, "ftp://h.example/x") == Range{6, 15} &&
+               emphasis(core::LinkKind::refused, "C:\\a\\b.exe") == Range{5, 10},
+           "a refused link shows its host, or its last name without ://");
+    expect(emphasis(core::LinkKind::document, "C:/w/note.md") == Range{5, 12} &&
+               emphasis(core::LinkKind::document, "C:/w/") == Range{5, 5},
+           "a document shows its last name, which can be empty");
+}
+
+// 17. 札の幅と矩形（物理画素）。幅は上限と領域の幅 − 2 × 端の空きの小さい方で負にならない。
+// 矩形はリンクの下、下にはみ出せば上、どちらにも入らなければ下端へ寄せて上端より上に出ない。
+void verify_card_rect()
+{
+    expect(core::link_card_width(1000, 96) == 400 && core::link_card_width(300, 96) == 284 &&
+               core::link_card_width(10, 96) == 0,
+           "the card width is the limit or the area less its edges, never negative");
+    expect(core::link_card_width(1000, 192) == 800 && core::link_card_width(500, 192) == 468,
+           "the card width scales with the DPI");
+    const core::LayoutRect area{0, 0, 1000, 600};
+    const std::pair<std::int32_t, std::int32_t> size{400, 150};
+    expect(core::link_card_rect({100, 100, 180, 120}, area, size, 96) ==
+               core::LayoutRect{100, 124, 500, 274},
+           "the card sits below the link after the gap");
+    expect(core::link_card_rect({800, 100, 880, 120}, area, size, 96).left == 592 &&
+               core::link_card_rect({2, 100, 80, 120}, area, size, 96).left == 8,
+           "the card moves left before the right edge and stays inside the left edge");
+    expect(core::link_card_rect({100, 500, 180, 520}, area, size, 96).top == 346,
+           "a card that would leave the bottom goes above the link");
+    expect(core::link_card_rect({100, 60, 180, 80}, {0, 0, 1000, 200}, size, 96).top == 50,
+           "a card that fits neither below nor above is pulled up to the bottom edge");
+    expect(core::link_card_rect({100, 20, 180, 40}, {0, 0, 1000, 100}, size, 96).top == 0,
+           "a card taller than the area does not go above the top");
+}
+
+// 18. 位置を含むリンクの番号（[begin, end)・当たらなければ無し）。
+void verify_link_at()
+{
+    core::PreviewBlock block{
+        .kind = core::PreviewBlockKind::paragraph,
+        .level = 0U,
+        .quote_depth = 0U,
+        .list_depth = 0U,
+        .marker = {},
+        .source_begin = core::Offset{0},
+        .text = "0123456789",
+        .spans = {},
+        .task = std::nullopt,
+        .table = std::nullopt,
+        .alert = std::nullopt,
+        .code_colors = std::nullopt,
+        .links = {{core::Offset{2}, core::Offset{5}, "a"}, {core::Offset{7}, core::Offset{9}, "b"}},
+        .piece = core::PreviewCodePiece::only};
+    expect(core::preview_link_at(block, 2) == std::optional<std::size_t>{0} &&
+               core::preview_link_at(block, 4) == std::optional<std::size_t>{0} &&
+               core::preview_link_at(block, 8) == std::optional<std::size_t>{1},
+           "an offset inside a link names that link");
+    expect(!core::preview_link_at(block, 0).has_value() &&
+               !core::preview_link_at(block, 5).has_value() &&
+               !core::preview_link_at(block, 9).has_value(),
+           "an offset before, between or at the end of links names none");
+}
 } // namespace
 void verify_link_card_scope()
 {
@@ -498,5 +633,9 @@ void verify_link_card_scope()
     verify_heading_jump_vim_pending();
     verify_heading_jump_full();
     verify_heading_jump_table_cell();
+    verify_card_texts();
+    verify_card_emphasis();
+    verify_card_rect();
+    verify_link_at();
 }
 } // namespace nenenib::tests
