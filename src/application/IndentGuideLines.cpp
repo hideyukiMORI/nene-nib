@@ -121,7 +121,7 @@ void mark_active_indent_guide(const EditorState &state, std::vector<LineView> &l
 {
     // 機能の有無を先に読む（オフの道の読みは 1 つ・決定 6）。
     if (!core::feature_enabled(state.settings(), core::EditorFeature::indent_guides) ||
-        lines.empty() || !state.settings().indent_guide_active)
+        lines.empty() || !state.settings().indent_guide_highlight_current)
     {
         return;
     }

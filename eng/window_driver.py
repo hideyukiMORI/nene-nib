@@ -254,9 +254,8 @@ SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
                         ("finder_preview", "auto"), ("caret_motion", "off"),
                         ("caret_motion_time", "120"), ("caret_sparks", "off"),
                         ("pane_resize_step", "5"), ("pane_resize_step_vim", "off"),
-                        ("indent_guide_style", "rainbow"),
-                        ("indent_guide_colors", "4"), ("indent_guide_active", "on"),
-                        ("indent_guide_width", "4"))
+                        ("indent_guide_style", "rainbow"), ("indent_guide_color_count", "4"),
+                        ("indent_guide_highlight_current", "on"), ("indent_guide_width", "4"))
 
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path

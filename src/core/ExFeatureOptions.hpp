@@ -15,9 +15,10 @@
 namespace nenenib::core::detail
 {
 // インデントガイドの形の option の名前（真偽の表・数の表・既定値の書き方が同じ名前を引く）。
-inline constexpr std::string_view indent_guide_active_option_name = "indentguideactive";
+inline constexpr std::string_view indent_guide_highlight_current_option_name =
+    "indentguidehighlightcurrent";
 inline constexpr std::string_view indent_guide_style_option_name = "indentguidestyle";
-inline constexpr std::string_view indent_guide_colors_option_name = "indentguidecolors";
+inline constexpr std::string_view indent_guide_color_count_option_name = "indentguidecolorcount";
 inline constexpr std::string_view indent_guide_width_option_name = "indentguidewidth";
 
 // `name=on` か `name=off` の文言。
@@ -30,8 +31,8 @@ switch_request(std::string_view option, std::span<const std::string_view> names)
 // listed の行から引く）。当たらなければ空。
 [[nodiscard]] std::optional<ExResult> listed_feature_option(std::string_view option,
                                                             const EditorSettings &settings);
-// インデントガイドの形の option（`indentguideactive` `indentguidestyle=` `indentguidecolors=`
-// `indentguidewidth=`）。当たらなければ空。
+// インデントガイドの形の option（`indentguidehighlightcurrent` `indentguidestyle=`
+// `indentguidecolorcount=` `indentguidewidth=`）。当たらなければ空。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_option(std::string_view option, const EditorSettings &settings);
 } // namespace nenenib::core::detail

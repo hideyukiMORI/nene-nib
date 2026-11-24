@@ -331,7 +331,7 @@ nenenib_system_link(nenenib_adapters ole32)
 
 # QLT-013: adapters/win32 のファイル読み書きは、GetTempPathW の下の試験ごとの一時フォルダ
 # （tests/adapters/TemporaryTestDirectory・#1103）で往復させる（ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
-nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp tests/adapters/SettingsVersionSixTests.cpp tests/adapters/SettingsLspCommandTests.cpp
+nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp tests/adapters/SettingsVersionSixTests.cpp tests/adapters/SettingsReleasedSixTests.cpp tests/adapters/SettingsLspCommandTests.cpp
     tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)
