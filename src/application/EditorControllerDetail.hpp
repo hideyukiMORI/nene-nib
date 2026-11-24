@@ -6,6 +6,8 @@
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
+#include "Edit.hpp"
+#include "EditLines.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "EditorState.hpp"
@@ -17,6 +19,7 @@
 #include "TextBuffer.hpp"
 #include "UiMessage.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimMarks.hpp"
 #include "VimPattern.hpp"
 
 #include <cstddef>
@@ -50,6 +53,12 @@ namespace nenenib::application::detail
 [[nodiscard]] bool untouched_untitled(const EditorState &state) noexcept;
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
 [[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline);
+// 編集で行がずれたマーク（ADR 0152 の決定 6）。lines の選択肢ごとに直し方が決まる（行の規則・
+// 矩形の行ごとの列・整形の編集の列）。before は編集の前の本文。replace と undo・Ctrl-r
+// （undone_marks）の 1 本（#1997 の 2 回目のレビュー P1）。
+[[nodiscard]] core::VimMarks edited_marks(const core::VimMarks &marks,
+                                          const core::TextBuffer &before, const core::Edit &edit,
+                                          const EditLines &lines);
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state);
 // 検索の入力行の語を照合器 VimPattern の文字列にした値（`/` `?` は打ったまま・「検索: 」は
 // literal_pattern で逃がした形・ADR 0174 の決定 4）。検索でない入力行（「行: 」）は値なし。

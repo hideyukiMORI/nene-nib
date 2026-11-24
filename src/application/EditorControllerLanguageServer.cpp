@@ -113,6 +113,9 @@ namespace
     core::JsonObject signature;
     signature.emplace_back("signatureInformation", core::JsonValue{std::move(information)});
     text_document.emplace_back("signatureHelp", core::JsonValue{std::move(signature)});
+    // 文書と選択範囲の整形（#1993・ADR 0191 の決定 2・7）。
+    text_document.emplace_back("formatting", core::JsonValue{core::JsonObject{}});
+    text_document.emplace_back("rangeFormatting", core::JsonValue{core::JsonObject{}});
     return core::JsonValue{std::move(text_document)};
 }
 
@@ -269,6 +272,9 @@ void read_signature_help(ServerAbilities &abilities, const core::JsonObject &cap
                               .signature_help = false,
                               .signature_triggers = {},
                               .signature_retriggers = {},
+                              .formatting = provided(*capabilities, "documentFormattingProvider"),
+                              .range_formatting =
+                                  provided(*capabilities, "documentRangeFormattingProvider"),
                               .sync = DocumentSync::none,
                               .save = SaveNotice::none};
     read_document_sync(abilities, *capabilities);
@@ -354,6 +360,10 @@ void read_signature_help(ServerAbilities &abilities, const core::JsonObject &cap
         return "textDocument/documentSymbol";
     case LspRequestKind::signature_help:
         return "textDocument/signatureHelp";
+    case LspRequestKind::formatting:
+        return "textDocument/formatting";
+    case LspRequestKind::range_formatting:
+        return "textDocument/rangeFormatting";
     }
     return "initialize";
 }
@@ -667,7 +677,7 @@ void EditorController::drop_language_answers_of(LanguageServerSlot slot)
     const auto &answers = state_.language_answers();
     if (answers.completion.has_value() || answers.hover.has_value() ||
         answers.definition.has_value() || answers.references.has_value() ||
-        answers.symbols.has_value())
+        answers.symbols.has_value() || answers.formatting.has_value())
     {
         state_ = state_.with_language_answers({});
     }
@@ -953,6 +963,8 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::references:
     case LspRequestKind::document_symbol:
     case LspRequestKind::signature_help:
+    case LspRequestKind::formatting:
+    case LspRequestKind::range_formatting:
         receive_answer(slot, request, response);
         settle_language_answers(request.kind);
         return;
@@ -1174,6 +1186,8 @@ void EditorController::expire_lsp_request(LanguageServerSlot slot, const Pending
     case LspRequestKind::references:
     case LspRequestKind::document_symbol:
     case LspRequestKind::signature_help:
+    case LspRequestKind::formatting:
+    case LspRequestKind::range_formatting:
         send_lsp_cancel(slot, request.id);
         return;
     }

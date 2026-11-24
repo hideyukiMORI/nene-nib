@@ -118,6 +118,10 @@ enum class EditorOperation : std::uint8_t
     list_symbols,
     // 引数の情報を表示（#1959・ADR 0191 の決定 6）。鍵なし（F1 の一覧から）。挿入中の `(` `,` では
     // 自動に頼む。
-    show_signature_help
+    show_signature_help,
+    // 文書を整形・選択範囲を整形（#1993・ADR 0191 の決定 7）。鍵なし（F1 の一覧から・Shift+Alt+F は
+    // ADR 0078 の Alt の守りに当たる）。選択が空なら選択範囲の整形はキャレットの行。
+    format_document,
+    format_selection
 };
 } // namespace nenenib::core
