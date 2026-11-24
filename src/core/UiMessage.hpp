@@ -507,10 +507,14 @@ enum class UiMessage : std::uint16_t
     notice_server_edit_giant_line,
     notice_server_edit_applied,
     notice_server_edit_applied_files,
+    // 頼んだ席が開いていない未保存のタブ・UTF-8 でないファイルへの編集を断る 1 行（#2011 のレビュー
+    // M1・R2）。
+    notice_server_edit_unsent,
+    notice_server_edit_not_utf8,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_server_edit_applied_files) + 1U;
+    std::to_underlying(UiMessage::notice_server_edit_not_utf8) + 1U;
 } // namespace nenenib::core

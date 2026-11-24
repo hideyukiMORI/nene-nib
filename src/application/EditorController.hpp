@@ -1169,10 +1169,14 @@ class EditorController final
                         const LspEditContext &context);
     [[nodiscard]] std::expected<std::variant<AutosaveId, UnopenedFile>, core::DisplayText>
     server_edit_place(const core::FilePath &path);
-    [[nodiscard]] bool server_edit_current(AutosaveId tab, const core::LspFileEdits &file,
-                                           const LspEditContext &context) const;
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    server_edit_check(AutosaveId tab, const core::LspFileEdits &file, const LspEditContext &context,
+                      const core::FilePath &path) const;
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    reach_server_edit_tabs(const std::vector<ServerEditFile> &files);
     using ServerEditSource = std::tuple<const core::TextBuffer *, core::Offset, DisplayInquiry>;
-    [[nodiscard]] ServerEditSource server_edit_source(const ServerEditFile &file) const;
+    [[nodiscard]] std::optional<ServerEditSource>
+    server_edit_source(const ServerEditFile &file) const;
     [[nodiscard]] std::expected<std::string, core::DisplayText>
     rename_initial(const LanguageRenameTarget &answered) const;
     [[nodiscard]] std::expected<void, core::DisplayText>
@@ -1181,6 +1185,9 @@ class EditorController final
     void run_server_edits(std::vector<ServerEditFile> files);
     void enter_server_edit_file(ServerEditFile &file);
     void switch_for_server_edit(AutosaveId tab);
+    void announce_server_edit_target(std::optional<LanguageServerSlot> slot);
+    void restore_recency(std::vector<AutosaveId> order, AutosaveId origin,
+                         const std::vector<AutosaveId> &opened);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。

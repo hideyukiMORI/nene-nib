@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
@@ -59,23 +58,27 @@ file_edits(const JsonValue &value, const JsonObject *annotations)
     return std::move(edits).value();
 }
 
-// ファイルの列へ足す。同じ URI が既にあれば届いた順につなぐ（版は先の項目のまま）。編集の無い
-// 項目は足さない。
-void add_file(std::vector<LspFileEdits> &files, const std::string &uri,
-              std::optional<std::uint64_t> version, std::vector<LspTextEdit> edits)
+// ファイルの列へ足す（編集の無い項目は足さない）。同じ URI の 2 つ目の項目は、LSP の文では 1 つ目を
+// 当てた後の本文の位置を指すので、元の本文の位置としてつながずに答え全体を断る（malformed・#2011 の
+// レビュー L2）。上限を超える 1 つ目で読むのをやめる（数万ファイルの答えを全部読まない・L1）。
+[[nodiscard]] std::expected<void, LspWorkspaceEditFailure>
+add_file(std::vector<LspFileEdits> &files, const std::string &uri,
+         std::optional<std::uint64_t> version, std::vector<LspTextEdit> edits)
 {
     if (edits.empty())
     {
-        return;
+        return {};
     }
-    const auto found = std::ranges::find(files, uri, &LspFileEdits::uri);
-    if (found != files.end())
+    if (std::ranges::find(files, uri, &LspFileEdits::uri) != files.end())
     {
-        found->edits.insert(found->edits.end(), std::make_move_iterator(edits.begin()),
-                            std::make_move_iterator(edits.end()));
-        return;
+        return std::unexpected{LspWorkspaceEditFailure::malformed};
+    }
+    if (files.size() >= lsp_workspace_edit_file_limit)
+    {
+        return std::unexpected{LspWorkspaceEditFailure::too_many_files};
     }
     files.push_back(LspFileEdits{.uri = uri, .version = version, .edits = std::move(edits)});
+    return {};
 }
 
 // `OptionalVersionedTextDocumentIdentifier.version`。欠けた欄と null は値なし、0 以上の整数は
@@ -127,8 +130,7 @@ read_document_change(std::vector<LspFileEdits> &files, const JsonValue &entry,
     {
         return std::unexpected{read.error()};
     }
-    add_file(files, *uri, version.value(), std::move(read).value());
-    return {};
+    return add_file(files, *uri, version.value(), std::move(read).value());
 }
 
 // `documentChanges` の配列。
@@ -169,7 +171,11 @@ uri_changes(const JsonValue &value, const JsonObject *annotations)
         {
             return std::unexpected{read.error()};
         }
-        add_file(files, uri, std::nullopt, std::move(read).value());
+        const auto added = add_file(files, uri, std::nullopt, std::move(read).value());
+        if (!added.has_value())
+        {
+            return std::unexpected{added.error()};
+        }
     }
     return files;
 }

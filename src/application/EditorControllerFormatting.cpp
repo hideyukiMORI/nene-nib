@@ -166,7 +166,9 @@ bool EditorController::request_formatting(bool selection)
 // の決定 11）が共用する 1 本。
 bool EditorController::server_edit_interrupts() const noexcept
 {
-    if (!faces_closed() || vim_waits_for_key())
+    // Ctrl+Tab の歩きの途中も入力の途中（切り替えと使った順を動かさない・#2011 のレビュー
+    // R1・読みを 留める reads_held と同じ条件）。
+    if (!faces_closed() || vim_waits_for_key() || state_.tab_walking())
     {
         return true;
     }

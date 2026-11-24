@@ -77,16 +77,19 @@ namespace core = nenenib::core;
 
 constexpr std::string_view main_path = "C:\\work\\main.cpp";
 constexpr std::string_view lib_path = "C:\\work\\lib.cpp";
-constexpr std::string_view header_path = "C:\\work\\lib.h";
+// ヘッダーは cpp の席が受ける .hpp（.h は C の言語で、この設定では C の席が無い）。
+constexpr std::string_view header_path = "C:\\work\\lib.hpp";
 constexpr std::string_view main_uri = "file:///C:/work/main.cpp";
 constexpr std::string_view lib_uri = "file:///C:/work/lib.cpp";
-constexpr std::string_view header_uri = "file:///C:/work/lib.h";
+constexpr std::string_view header_uri = "file:///C:/work/lib.hpp";
 constexpr std::string_view clangd_command = R"("C:\LLVM\bin\clangd.exe" --log=error)";
 constexpr std::string_view main_text = "int add(int a, int b);\nint main() { return add(1, 2); }\n";
 constexpr std::string_view lib_text = "int add(int a, int b) { return a + b; }\n";
 constexpr std::string_view header_text = "int add(int a, int b);\n";
 constexpr std::string_view renamed_main =
     "int sum(int a, int b);\nint main() { return sum(1, 2); }\n";
+constexpr std::string_view half_renamed_main =
+    "int sum(int a, int b);\nint main() { return add(1, 2); }\n";
 constexpr std::string_view renamed_lib = "int sum(int a, int b) { return a + b; }\n";
 constexpr std::string_view renamed_header = "int sum(int a, int b);\n";
 constexpr std::string_view prepared =
@@ -143,8 +146,8 @@ void caret_on_add(Editing &editing)
                             core::SelectionAnchoring::collapse});
 }
 
-// 3 つのファイルを置き、lib.h を開いてから main.cpp を開き、capabilities で `initialize` に答える。
-// lib.cpp はタブの無いファイル。キャレットは main.cpp の 2 行目の `add` の `d`。
+// 3 つのファイルを置き、lib.hpp を開いてから main.cpp を開き、capabilities で `initialize`
+// に答える。 lib.cpp はタブの無いファイル。キャレットは main.cpp の 2 行目の `add` の `d`。
 void started(Editing &editing, std::string_view capabilities)
 {
     editing.files().hold_at(std::string(main_path), Bytes{std::string(main_text)});
@@ -304,12 +307,11 @@ void verify_reading_forms()
     expect(both.has_value() && both.value().files.size() == 1 &&
                both.value().files.at(0).uri == main_uri,
            "documentChanges wins over changes");
-    const auto twice = read(R"({"documentChanges":[)" + document_edit(main_uri, "", add_to_sum()) +
-                            "," + document_edit(main_uri, "", edit_json(1, 20, 23, "sum")) + "]}");
-    expect(twice.has_value() && twice.value().files.size() == 1 &&
-               twice.value().files.at(0).edits.size() == 2 &&
-               twice.value().files.at(0).edits.at(1).range.start.line == 1,
-           "two items for one URI join in the order they came");
+    // 同じ URI の 2 つ目の項目は 1 つ目を当てた後の本文を指すので、つながずに全体を断る（L2）。
+    expect(failure_of(R"({"documentChanges":[)" + document_edit(main_uri, "", add_to_sum()) + "," +
+                      document_edit(main_uri, "", edit_json(1, 20, 23, "sum")) + "]}") ==
+               core::LspWorkspaceEditFailure::malformed,
+           "two items for one URI refuse the whole answer");
     const auto empty = read("null");
     const auto bare = read("{}");
     const auto no_edits = read(R"({"changes":{)" + uri_edits(main_uri, "") + "}}");
@@ -576,7 +578,7 @@ void verify_rename_across_files()
     expect(message_of(done) ==
                filled(editing, core::UiMessage::notice_server_edit_applied_files, {"3", "4"}),
            "the answer says how many places in how many files changed");
-    // 帯は lib.h・main.cpp の順で、開いていなかった lib.cpp
+    // 帯は lib.hpp・main.cpp の順で、開いていなかった lib.cpp
     // は当てたときのアクティブ（main.cpp）の右。
     expect(done.active_tab == 1 && done.tabs.size() == 3 &&
                tab_is(done, 0, header_path, core::SaveState::modified) &&
@@ -718,10 +720,11 @@ void verify_busy_and_deferred()
     started(busy, prepared);
     renamed_to_sum(busy);
     static_cast<void>(busy.controller().apply(app::OpenCommandPalette{}));
-    static_cast<void>(answered(busy, rename_method, clangd_changes()));
+    const auto arrived = answered(busy, rename_method, clangd_changes());
     const auto closed = busy.controller().apply_frame(app::CancelCommand{});
-    expect(whole_vim_body(busy.controller()) == main_text && closed.tabs.size() == 2,
-           "an answer that arrives while the Ctrl+P list is open changes nothing");
+    expect(message_of(arrived) == notice(busy, core::UiMessage::notice_server_edit_busy) &&
+               whole_vim_body(busy.controller()) == main_text && closed.tabs.size() == 2,
+           "an answer that arrives while the Ctrl+P list is open says so and changes nothing");
     Editing deferred(lsp_on());
     started(deferred, prepared);
     deferred.reads().defer_above(8);
@@ -732,6 +735,183 @@ void verify_busy_and_deferred()
                !deferred.reads().cancels().empty() && frame.tabs.size() == 2 &&
                whole_vim_body(deferred.controller()) == main_text,
            "a file the reading port moves to the background is cancelled and refused");
+}
+
+// 1 回目の名前の変更で開いた lib.cpp と書き換えた lib.hpp は、当てる前に頼んだ席へ `didOpen` され、
+// 続けて 2 回目の名前の変更が通る（#2011 のレビュー M1 の (b)）。
+[[nodiscard]] bool opened_to_server(Editing &editing, std::string_view uri)
+{
+    const auto opens = editing.language_server().notifications("textDocument/didOpen");
+    return std::ranges::any_of(opens,
+                               [uri](const std::string &body) { return contains(body, uri); });
+}
+
+void verify_rename_twice()
+{
+    Editing editing(lsp_on());
+    started(editing, prepared);
+    renamed_to_sum(editing);
+    static_cast<void>(answered(editing, rename_method, clangd_changes()));
+    const auto changes = editing.language_server().notifications("textDocument/didChange");
+    expect(opened_to_server(editing, lib_uri) && opened_to_server(editing, header_uri) &&
+               std::ranges::any_of(changes,
+                                   [](const std::string &body) { return contains(body, lib_uri); }),
+           "the files the rename changed are opened to the server and then changed");
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(
+        editing, prepare_method,
+        R"({"range":{"start":{"line":1,"character":20},"end":{"line":1,"character":23}},"placeholder":"sum"})"));
+    static_cast<void>(typed_name(editing, "total"));
+    const std::string to_total = edit_json(0, 4, 7, "total");
+    const auto again = answered(
+        editing, rename_method,
+        R"({"changes":{)" + uri_edits(main_uri, to_total + "," + edit_json(1, 20, 23, "total")) +
+            "," + uri_edits(lib_uri, to_total) + "," + uri_edits(header_uri, to_total) + "}}");
+    expect(message_of(again) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"3", "4"}) &&
+               contains(body_of_tab(editing, 2), "int total(int a, int b) {") &&
+               contains(body_of_tab(editing, 0), "int total(int a, int b);"),
+           "a second rename right after the first applies to the files the first one opened");
+}
+
+// lib.hpp を一度アクティブにして頼んだ席に開かせてから、main.cpp で頼む。
+void started_with_header_opened(Editing &editing)
+{
+    started(editing, prepared);
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+}
+
+// 照合 (b)(c): 頼んだ席が開いている lib.hpp を頼んだ後に打つ・lib.hpp の版が違う答えは、1
+// つも変えない （#2011 のレビュー R4）。
+void verify_other_tab_moved()
+{
+    Editing typed(lsp_on());
+    started_with_header_opened(typed);
+    renamed_to_sum(typed);
+    applied(typed.controller(), app::SwitchTab{0});
+    applied(typed.controller(), app::InsertText{"x"});
+    applied(typed.controller(), app::SwitchTab{1});
+    const auto moved = answered(typed, rename_method, clangd_changes());
+    expect(message_of(moved) == notice(typed, core::UiMessage::notice_server_edit_stale) &&
+               whole_vim_body(typed.controller()) == main_text && moved.tabs.size() == 2,
+           "a didOpen'd tab typed into after asking changes nothing anywhere");
+    Editing versioned(lsp_on());
+    started_with_header_opened(versioned);
+    renamed_to_sum(versioned);
+    const auto refused =
+        answered(versioned, rename_method,
+                 R"({"documentChanges":[)" + document_edit(main_uri, "0", add_to_sum()) + "," +
+                     document_edit(header_uri, "9", add_to_sum()) + "]}");
+    expect(message_of(refused) == notice(versioned, core::UiMessage::notice_server_edit_stale) &&
+               whole_vim_body(versioned.controller()) == main_text,
+           "an answered version of another opened tab other than its revision changes nothing");
+}
+
+constexpr std::string_view notes_path = "C:\\work\\notes.txt";
+constexpr std::string_view notes_uri = "file:///C:/work/notes.txt";
+
+// 頼んだ席が開いていない（言語の違う）タブの答えを当てた本文（当てられなければ空）と 1 行。
+[[nodiscard]] std::pair<std::string, std::string> unsent_tab(bool modified)
+{
+    Editing editing(lsp_on());
+    editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    if (modified)
+    {
+        applied(editing.controller(), app::InsertText{"x"});
+    }
+    started(editing, prepared);
+    renamed_to_sum(editing);
+    const auto frame = answered(editing, rename_method,
+                                R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                                    uri_edits(notes_uri, edit_json(0, 0, 3, "sum")) + "}}");
+    const std::string line = message_of(frame);
+    const bool expected =
+        modified
+            ? line == filled(editing, core::UiMessage::notice_server_edit_unsent, {"notes.txt"})
+            : line ==
+                  filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "2"});
+    return {expected ? whole_vim_body(editing.controller()) : std::string{"(wrong line)"}, line};
+}
+
+// 頼んだ席が開いていないタブは、未保存なら全体を断り、保存済みなら当てる（M1 の (a)）。
+void verify_unsent_tabs()
+{
+    expect(unsent_tab(true).first == main_text,
+           "an unsaved tab the server never opened refuses the whole answer");
+    expect(unsent_tab(false).first == half_renamed_main,
+           "a saved tab the server never opened is renamed from its disk text");
+}
+
+// タブの無いファイルは UTF-8 のときだけ当てる（#2011 のレビュー R2）。
+void verify_not_utf8()
+{
+    Editing editing(lsp_on());
+    editing.files().hold_at("C:\\work\\old.cpp", Bytes{std::string("\x93\xFA\n")});
+    editing.code_pages().decode_to(std::string("日\n"));
+    started(editing, prepared);
+    renamed_to_sum(editing);
+    const auto frame =
+        answered(editing, rename_method,
+                 R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                     uri_edits("file:///C:/work/old.cpp", edit_json(0, 0, 1, "x")) + "}}");
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_not_utf8, {"old.cpp"}) &&
+               whole_vim_body(editing.controller()) == main_text && frame.tabs.size() == 2,
+           "an unopened file that is not UTF-8 refuses the whole answer");
+}
+
+// Ctrl+Tab の歩きの途中に届いた答えは当てない（#2011 のレビュー R1）。
+void verify_tab_walk()
+{
+    Editing editing(lsp_on());
+    started(editing, prepared);
+    renamed_to_sum(editing);
+    static_cast<void>(editing.controller().apply(app::WalkRecentTab{core::TabStep::next}));
+    static_cast<void>(editing.controller().apply(app::WalkRecentTab{core::TabStep::next}));
+    const auto frame = answered(editing, rename_method, clangd_changes());
+    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_busy) &&
+               frame.active_tab == 1 && whole_vim_body(editing.controller()) == main_text,
+           "an answer during a Ctrl+Tab walk changes nothing and leaves the walk alone");
+}
+
+// null・空の答えと誤りの答えの 1 行（#2011 のレビュー R5）。
+void verify_answer_lines()
+{
+    Editing editing(lsp_on());
+    started(editing, prepared);
+    renamed_to_sum(editing);
+    expect(message_of(answered(editing, rename_method, "null")) ==
+               notice(editing, core::UiMessage::notice_rename_not_found),
+           "a null rename answer finds nothing to rename");
+    renamed_to_sum(editing);
+    expect(message_of(answered(editing, rename_method, "{}")) ==
+               notice(editing, core::UiMessage::notice_rename_not_found),
+           "an empty rename answer finds nothing to rename");
+    renamed_to_sum(editing);
+    const auto ids = editing.language_server().requests(rename_method);
+    const auto errored = delivered(
+        editing, app::ServerMessage{R"({"jsonrpc":"2.0","id":)" + std::to_string(ids.back()) +
+                                    R"(,"error":{"code":-32803,"message":"rename failed"}})"});
+    expect(message_of(errored) == "rename failed" &&
+               whole_vim_body(editing.controller()) == main_text,
+           "an error answer shows the server's message as it is");
+}
+
+// Vim の INSERT で押した F2 は頼む前に断る（整形と同じ・#2011 のレビュー R5）。
+void verify_insert_refusal()
+{
+    Editing insert(lsp_on());
+    started(insert, prepared);
+    applied(insert.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(insert.controller(), "i");
+    const auto refused = asked(insert);
+    expect(message_of(refused) == notice(insert, core::UiMessage::notice_rename_in_insert) &&
+               insert.language_server().requests(prepare_method).empty() &&
+               !refused.command_line.has_value(),
+           "F2 in Insert mode is refused before asking");
 }
 
 // まだ読んでいないタブ（前回のタブ）は reach_tab で読んでから当てる。
@@ -848,6 +1028,13 @@ void verify_lsp_rename_scope()
     verify_busy_and_deferred();
     verify_unread_tab();
     verify_clangd_answer();
+    verify_rename_twice();
+    verify_other_tab_moved();
+    verify_unsent_tabs();
+    verify_not_utf8();
+    verify_tab_walk();
+    verify_answer_lines();
+    verify_insert_refusal();
     verify_vim_grn();
 }
 } // namespace nenenib::tests

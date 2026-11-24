@@ -227,8 +227,8 @@ formatting_answer(const PendingLspRequest &request, const core::LspResponse &res
                               .encoding = encoding};
 }
 
-// 変えられる所の問いの答え（#2004・ADR 0194 の決定
-// 7）。文脈は照合せずに添える（使うときに比べる）。 誤りの答えは invalid_result で、サーバーの
+// 変えられる所の問いの答え（#2004・ADR 0194 の決定 7）。文脈は照合せずに
+// 添える（使うときに比べる）。誤りの答えは invalid_result で、サーバーの
 // message を添える。
 [[nodiscard]] std::optional<LanguageRenameTarget>
 rename_target_answer(const PendingLspRequest &request, const core::LspResponse &response,

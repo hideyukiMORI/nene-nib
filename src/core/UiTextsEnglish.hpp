@@ -569,7 +569,10 @@ inline constexpr UiTextColumn ui_texts_english{{
      "Could not read {0}, so the change was not applied"},
     {UiMessage::notice_server_edit_giant_line,
      "{0} has a giant line, so the change was not applied"},
-    {UiMessage::notice_server_edit_applied, "Changed {0} places"},
-    {UiMessage::notice_server_edit_applied_files, "Changed {1} places in {0} files"},
+    {UiMessage::notice_server_edit_applied, "Places changed: {0}"},
+    {UiMessage::notice_server_edit_applied_files, "Places changed: {1} in {0} files"},
+    {UiMessage::notice_server_edit_unsent, "{0} has changes the language server has not seen, so "
+                                           "it was not applied (save and try again)"},
+    {UiMessage::notice_server_edit_not_utf8, "{0} is not UTF-8, so the change was not applied"},
 }};
 } // namespace nenenib::core

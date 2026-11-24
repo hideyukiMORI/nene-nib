@@ -35,12 +35,13 @@
 #include <utility>
 #include <vector>
 
-// 名前の変更（#2004・ADR 0194 の決定 7）。F2・Vim の
-// `grn`・操作「名前を変更」で頼む。席が変えられる所
-// の問い（prepareRename）に答えるならその答えの範囲（placeholder があればそれ）を、答えないなら
-// キャレットの下の語を初めの文字にして入力行「新しい名前: 」を開き、Enter で `textDocument/rename`
-// を 頼む。答えの WorkspaceEdit は apply_workspace_edit の 1 本で当てる。LSP がオフ・言語サーバーが
-// 動いていない文書の打鍵の道には何も足さない（ADR 0190 の決定 10・D60）。
+// 名前の変更（#2004・ADR 0194 の決定 7）。F2・Vim の `grn`・操作
+// 「名前を変更」で頼む。席が変えられる所の問い（prepareRename）に答える
+// ならその答えの範囲（placeholder があればそれ）を、答えないならキャレットの
+// 下の語を初めの文字にして、入力行「新しい名前: 」を開く。Enter で
+// `textDocument/rename` を頼み、答えの WorkspaceEdit は apply_workspace_edit
+// の 1 本で当てる。LSP がオフ・言語サーバーが動いていない文書の打鍵の道には
+// 何も足さない（ADR 0190 の決定 10・D60）。
 namespace nenenib::application
 {
 namespace
@@ -214,28 +215,31 @@ void EditorController::request_rename(const std::string &name, const LspRequestC
         LspEditContext{.request = context, .opened = opened_revisions(slot.value())});
 }
 
-// 席が `didOpen` している文書ごとの今の改訂番号（決定 4）。アクティブは状態の欄、脇は読み込み済みの
-// 束から引く（`didOpen` した文書は読み込み済み）。
+// 帯の読み込み済みのタブごとの今の改訂番号と、頼んだ席 slot が `didOpen` しているか（決定 4・#2011
+// のレビュー
+// M1）。アクティブは状態の欄、脇は読み込み済みの束から引く。まだ読んでいないタブはディスクの
+// 本文なので写さない。
 std::vector<OpenedRevision> EditorController::opened_revisions(LanguageServerSlot slot) const
 {
+    const auto &documents = language_servers_.links.at(slot_index(slot)).documents;
+    const auto &ids = state_.autosave_ids();
     std::vector<OpenedRevision> opened;
-    for (const LanguageServerDocument &document :
-         language_servers_.links.at(slot_index(slot)).documents)
+    opened.reserve(ids.size());
+    for (std::size_t position = 0; position < ids.size(); ++position)
     {
-        const auto position = tab_position_of(document.tab);
-        if (!position.has_value())
-        {
-            continue;
-        }
-        const DocumentState *bundle = state_.parked_bundle_at(position.value());
-        if (bundle == nullptr && position.value() != state_.active_tab())
+        const DocumentState *bundle = state_.parked_bundle_at(position);
+        if (bundle == nullptr && position != state_.active_tab())
         {
             continue;
         }
         const auto revision =
             bundle != nullptr ? bundle->history.revision() : state_.history().revision();
-        opened.push_back(
-            OpenedRevision{.tab = document.tab, .revision = static_cast<std::uint64_t>(revision)});
+        const AutosaveId tab = ids.at(position);
+        opened.push_back(OpenedRevision{
+            .tab = tab,
+            .revision = static_cast<std::uint64_t>(revision),
+            .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &document)
+                                        { return document.tab == tab; })});
     }
     return opened;
 }

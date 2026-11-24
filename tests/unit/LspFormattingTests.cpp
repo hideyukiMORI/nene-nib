@@ -46,6 +46,7 @@
 #include "SplitPane.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
+#include "TabStep.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
@@ -58,6 +59,7 @@
 #include "VimState.hpp"
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
+#include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
@@ -1115,6 +1117,22 @@ void verify_switch_busy_and_sync()
     expect(done.document.save_state == core::SaveState::modified,
            "applying the formatting marks the document unsaved");
 }
+
+// Ctrl+Tab の歩きの途中に届いた整形の答えは当てない（入力の途中と同じ・#2011 のレビュー R1）。
+void verify_tab_walk_busy()
+{
+    Editing editing(lsp_on());
+    started(editing, both_providers);
+    applied(editing.controller(), app::NewTab{});
+    applied(editing.controller(), app::SwitchTab{0});
+    static_cast<void>(asked(editing, core::LanguageQueryKind::format_document));
+    static_cast<void>(editing.controller().apply(app::WalkRecentTab{core::TabStep::next}));
+    static_cast<void>(editing.controller().apply(app::WalkRecentTab{core::TabStep::next}));
+    const auto frame = answered(editing, formatting_method, clangd_edits);
+    expect(message_of(frame) == notice(editing, core::UiMessage::notice_formatting_busy) &&
+               frame.active_tab == 0 && body(editing) == source_text,
+           "a formatting answer during a Ctrl+Tab walk is not applied");
+}
 } // namespace
 
 void verify_lsp_formatting_scope()
@@ -1134,5 +1152,6 @@ void verify_lsp_formatting_scope()
     verify_busy_states();
     verify_recording_applies();
     verify_insert_refusal();
+    verify_tab_walk_busy();
 }
 } // namespace nenenib::tests
