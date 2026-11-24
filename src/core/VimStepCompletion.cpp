@@ -397,4 +397,20 @@ VimState vim_completion_settled(const VimState &state)
     }
     return detail::completion_settled(state);
 }
+
+bool vim_completion_ends(const VimState &state, const VimKey &key) noexcept
+{
+    return detail::completion_ends(state, key);
+}
+
+std::vector<VimKey> vim_completion_typed(const VimState &state, std::optional<std::size_t> index)
+{
+    if (state.insert_completion == nullptr)
+    {
+        return {};
+    }
+    VimInsertCompletion completion = *state.insert_completion;
+    completion.selected = index.value_or(completion.selected);
+    return detail::completion_typed_keys(completion);
+}
 } // namespace nenenib::core

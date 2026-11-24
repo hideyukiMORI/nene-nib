@@ -205,6 +205,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/BookmarkTests.cpp
     tests/unit/InsertCompletionTests.cpp
     tests/unit/CompletionFaceTests.cpp tests/unit/VimInsertCompletionTests.cpp
+    tests/unit/CompletionConfirmTests.cpp
     tests/unit/HistoryTests.cpp
     tests/unit/BackgroundWorkTests.cpp
     tests/unit/OpenAsyncTests.cpp
