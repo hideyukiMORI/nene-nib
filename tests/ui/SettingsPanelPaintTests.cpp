@@ -16,6 +16,7 @@
 #include "EditMode.hpp"
 #include "EditorFeature.hpp"
 #include "EditorOperation.hpp"
+#include "EditorSettings.hpp"
 #include "LanguageServerRowAction.hpp"
 #include "LanguageServerRowState.hpp"
 #include "LayoutRect.hpp"
@@ -24,6 +25,9 @@
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "RgbColor.hpp"
+#include "SettingsChoiceLayout.hpp"
+#include "SettingsChoiceView.hpp"
+#include "SettingsChoices.hpp"
 #include "SettingsItemKind.hpp"
 #include "SettingsKeyAction.hpp"
 #include "SettingsKeys.hpp"
@@ -53,6 +57,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace nenenib::tests::ui
 {
@@ -193,6 +198,20 @@ class PanelStrip final
             });
     }
     // 見えている行 row の上端が bitmap の shown_top に来る帯の上端。
+    // 帯の上端を top に置いた選ぶ欄の一覧の配置（幅 wide_width・#1926）。
+    [[nodiscard]] std::optional<core::SettingsChoiceLayout>
+    choice_layout_of(const app::SettingsView &view, std::int32_t top) const
+    {
+        const auto layout = layout_of(view, wide_width, top);
+        std::optional<core::SettingsChoiceLayout> choice;
+        static_cast<void>(target_.painted(
+            [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
+            {
+                const SettingsPanelPainter painter(surface, *brush, text_, layouts_);
+                choice = painter.arranged_choice(view, layout);
+            }));
+        return choice;
+    }
     [[nodiscard]] std::int32_t top_showing(const app::SettingsView &view, std::int32_t width,
                                            std::size_t row) const
     {
@@ -349,6 +368,63 @@ void verify_servers(const PanelStrip &strip, const core::Palette &palette)
            "a stopped server writes its state in the heavy (error) color");
 }
 
+// #1926: 選ぶ欄の一覧（配色の行に開いた 12 個・今の値 1・選ぼうとしている位置 0）。一覧は値の箱の
+// 下に右端をそろえて出て、地は background・選ぼうとしている行は text の枠・今の値の行に ✓（text）・
+// 送れるので右端に panel_border の棒・値の箱の枠は text。帯をずらして一覧の上端を bitmap に入れる。
+[[nodiscard]] app::SettingsView choice_view()
+{
+    auto view = sample_view(0);
+    std::vector<std::string> choices;
+    for (std::size_t index = 0; index < 12; ++index)
+    {
+        choices.push_back("scheme-" + std::to_string(index));
+    }
+    view.choice = app::SettingsChoiceView{std::move(choices), 1, 0, 0, {}};
+    return view;
+}
+
+void verify_choice_list(const PanelStrip &strip, const core::Palette &palette)
+{
+    const auto view = choice_view();
+    const auto first = strip.choice_layout_of(view, 0);
+    expect(first.has_value(), "an open list has a layout under the focused value box");
+    if (!first.has_value())
+    {
+        return;
+    }
+    // 一覧の上端が bitmap の y = 5 に来るよう帯をずらす。
+    const auto top = 5 - first.value().panel.top;
+    const auto layout = strip.layout_of(view, wide_width, top);
+    const auto shifted = strip.choice_layout_of(view, top);
+    if (!shifted.has_value())
+    {
+        return;
+    }
+    const auto &list = shifted.value();
+    const auto pixels = strip(view, wide_width, top);
+    const auto box = core::settings_control_box(layout, PanelStrip::row_box(layout, 0));
+    const auto chosen = core::settings_choice_row(list, 0);
+    const auto current = core::settings_choice_row(list, 1);
+    expect(list.panel.top == 5 && list.panel.right == box.right && !list.above && list.rows == 10 &&
+               list.panel.top == box.bottom + 4,
+           "the list opens under the value box with its right edge on the box");
+    expect(pixel_is(pixels, chosen.left + 20, chosen.top, palette.text) &&
+               pixel_is(pixels, current.left + 6, (current.top + current.bottom) / 2,
+                        palette.background),
+           "the row to choose has a text frame on the background of the list");
+    // 印の欄の上下 3 画素は除く（選ぼうとしている行の枠の線が通る）。
+    const auto inner = [&list](std::size_t index)
+    {
+        const auto mark = core::settings_choice_mark(list, index);
+        return core::LayoutRect{mark.left, mark.top + 3, mark.right, mark.bottom - 3};
+    };
+    expect(painted_with(pixels, inner(1), palette.text) > 0 &&
+               painted_with(pixels, inner(0), palette.text) == 0,
+           "only the current choice has a check mark");
+    expect(painted_with(pixels, core::settings_choice_thumb(list), palette.panel_border) > 0,
+           "a list longer than ten rows has a scroll bar");
+}
+
 // 細い窓（700 DIP 未満）は全幅で、`:set` の名前を描かない。
 void verify_narrow(const PanelStrip &strip, const core::Palette &palette)
 {
@@ -437,6 +513,70 @@ void verify_keys()
 }
 } // namespace
 
+namespace
+{
+// いちばん大きい面: 表の全部の行・本物の配色の一覧（約 126 個の名前の幅を測る）・言語サーバーの節を
+// 開いた 20 行（#1926 のレビュー R4 c）。全部が行の領域に入る高い帯で 2 回描き、2 回目に文字組みを
+// 作らず、保持が上限に届いていない（捨てて作り直していない）。
+[[nodiscard]] app::SettingsView largest_view()
+{
+    using State = app::LanguageServerRowState;
+    using Action = app::LanguageServerRowAction;
+    auto view = sample_view(0);
+    const auto settings = core::default_editor_settings();
+    view.rows.clear();
+    for (const auto &row : core::settings_rows)
+    {
+        view.rows.push_back(row_of(row.section, row.subject));
+        if (std::holds_alternative<core::SettingsValue>(row.subject))
+        {
+            view.rows.back().value =
+                core::settings_value_text(settings, std::get<core::SettingsValue>(row.subject),
+                                          core::DisplayLanguage::japanese);
+        }
+    }
+    for (std::size_t index = 0; index < 20; ++index)
+    {
+        const auto name = "language-" + std::to_string(index);
+        view.servers.push_back({name, "server-" + std::to_string(index), State::running,
+                                R"(C:\tools\)" + name + R"(\bin\server.exe)", true, Action::remove,
+                                name});
+    }
+    view.choice = app::SettingsChoiceView{
+        core::settings_choice_texts(settings, core::SettingsValue::theme, std::nullopt,
+                                    core::DisplayLanguage::japanese),
+        0,
+        0,
+        0,
+        {}};
+    return view;
+}
+
+void verify_largest_panel_fits(SoftwareTarget &target, const SettingsPanelText &text)
+{
+    const auto view = largest_view();
+    const auto palette = core::palette_for(core::Appearance::dark);
+    PaletteRowLayouts layouts{SettingsPanelPainter::retained};
+    const auto paint = [&]
+    {
+        static_cast<void>(target.painted(
+            [&](ID2D1RenderTarget &surface, ID2D1SolidColorBrush *brush)
+            {
+                SettingsPanelPainter painter(surface, *brush, text, layouts);
+                const auto layout =
+                    painter.arranged(view, core::LayoutRect{0, 0, wide_width, 8000});
+                painter.paint(view, layout, palette, heavy);
+            }));
+    };
+    paint();
+    const auto held = layouts.size();
+    paint();
+    expect(view.choice.has_value() && view.choice.value().choices.size() > 100 && held > 0 &&
+               held < SettingsPanelPainter::retained && layouts.size() == held,
+           "the largest panel with the color scheme list fits the layout cache without evictions");
+}
+} // namespace
+
 void verify_settings_panel_paint()
 {
     verify_keys();
@@ -469,11 +609,13 @@ void verify_settings_panel_paint()
         verify_tiers(strip, palette);
         verify_narrow(strip, palette);
         verify_servers(strip, palette);
+        verify_choice_list(strip, palette);
     }
     // accent が背景に近いテーマ（synthwave-84 の accent は選択範囲の地の色）でも「使う」と焦点が
     // 見える形のまま（レビュー M1）。
     const auto &faint = core::theme_of(core::BuiltinTheme::synthwave_84).ui;
     PaletteRowLayouts layouts{SettingsPanelPainter::retained};
     verify_servers(PanelStrip(target, text, layouts, faint), faint);
+    verify_largest_panel_fits(target, text);
 }
 } // namespace nenenib::tests::ui

@@ -427,5 +427,6 @@ void verify_settings_panel_scope()
     verify_summary_height();
     verify_intents();
     verify_operation();
+    verify_settings_choice_scope();
 }
 } // namespace nenenib::tests

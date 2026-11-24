@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LanguageServerRowView.hpp"
+#include "SettingsChoiceView.hpp"
 #include "SettingsRowView.hpp"
 #include "SettingsSection.hpp"
 #include "SettingsSectionTab.hpp"
@@ -28,6 +29,7 @@ namespace nenenib::application
 // - summary: 要約の 1 行と今の組（core::speed_summary）。
 // - changed: 開いたときの写しと違うか（「元に戻す」が効くか）。
 // - scroll: 行の領域の送り（物理画素・配置の入力・#1836）。
+// - choice: 焦点の行の選ぶ欄の一覧が開いていればその表示値（#1926）。
 struct SettingsView
 {
     std::array<SettingsSectionTab, 6> tabs;
@@ -41,5 +43,6 @@ struct SettingsView
     std::int32_t scroll = 0;
     bool lsp_listed = true;
     std::size_t servers_hidden = 0;
+    std::optional<SettingsChoiceView> choice = std::nullopt;
 };
 } // namespace nenenib::application

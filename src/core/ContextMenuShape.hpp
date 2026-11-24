@@ -21,6 +21,11 @@ inline constexpr std::int32_t context_menu_min_width_dips = 200;
 inline constexpr std::int32_t context_menu_gap_dips = 4;
 // 名前と鍵の表示の間の最小の空き。
 inline constexpr std::int32_t context_menu_key_gap_dips = 24;
+// 面の角丸（Ctrl+P の面と同じ 10）・選んだ行の角丸（6）と、選んだ行の地の左右の内側（4）。設定の
+// 選ぶ欄の一覧も同じ値を引く（#1926）。
+inline constexpr float context_menu_radius_dips = 10.0F;
+inline constexpr float context_menu_row_radius_dips = 6.0F;
+inline constexpr std::int32_t context_menu_row_inset_dips = 4;
 
 // 種類 kind のメニューでの置き場（表の列 context_menu か tab_menu・#1790）。
 [[nodiscard]] constexpr const std::optional<ContextMenuSlot> &
