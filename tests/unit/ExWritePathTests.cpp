@@ -11,6 +11,7 @@
 #include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -238,18 +239,49 @@ void verify_failed_save(bool named, FileFailure failure)
            "failure keeps the previous save point");
 }
 
+// 失敗の値の数（値は 0 から並ぶ・網羅の switch なので値が増えればここで落ちる）。
+[[nodiscard]] constexpr bool is_file_failure(FileFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case FileFailure::not_found:
+    case FileFailure::access_denied:
+    case FileFailure::unreadable:
+    case FileFailure::unwritable:
+    case FileFailure::too_large:
+    case FileFailure::too_large_to_decode:
+    case FileFailure::undecodable:
+    case FileFailure::unsupported_utf32:
+    case FileFailure::unencodable:
+    case FileFailure::already_exists:
+    case FileFailure::insufficient_memory:
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] consteval std::size_t file_failure_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_file_failure(static_cast<FileFailure>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
+// 失敗の写しの全部: E13 のほかはどれも同じ 1 行（D39・符号化できない文字は別の試験なので、その
+// 値の番は E13 を回す）。値は file_failure_count() の全部を回すので、足した値も同じ 1
+// 行で縛られる。
 void verify_failures()
 {
     for (const bool named : {false, true})
     {
-        for (const auto failure :
-             {FileFailure::access_denied, FileFailure::unwritable, FileFailure::already_exists,
-              // 書き込みの port がほかの失敗を返しても、E13 と符号化できない文字のほかは同じ 1 行。
-              FileFailure::not_found, FileFailure::unreadable, FileFailure::too_large,
-              FileFailure::too_large_to_decode, FileFailure::undecodable,
-              FileFailure::unsupported_utf32, FileFailure::insufficient_memory})
+        for (std::size_t index = 0; index < file_failure_count(); ++index)
         {
-            verify_failed_save(named, failure);
+            const auto failure = static_cast<FileFailure>(index);
+            verify_failed_save(
+                named, failure == FileFailure::unencodable ? FileFailure::already_exists : failure);
         }
     }
 }

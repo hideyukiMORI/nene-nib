@@ -14,6 +14,7 @@
 #include "DiagnosticSpan.hpp"
 #include "DiagnosticsCount.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -37,6 +38,7 @@
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
 #include "LspDiagnostics.hpp"
+#include "LspRequestKind.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCompletion.hpp"
@@ -66,6 +68,7 @@
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "StatusItems.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TabTipMeasure.hpp"
@@ -73,6 +76,8 @@
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "VimAction.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
@@ -86,6 +91,7 @@
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -322,9 +328,17 @@ void verify_exit_while_shutting_down()
     started(editing);
     static_cast<void>(run_ex(editing.controller(), "set nolsp"));
     const auto ended = delivered(editing, app::ServerExited{0});
-    // 失敗の知らせは言語の名前（cpp）を添える（決定 6）。終わりの後の行はそれを含まない。
-    expect(editing.language_server().stops() == 1 && !contains(message(ended), "cpp"),
+    // 同じ終わりを shutdown の前に受けたときの知らせ（決定 6）は出さない。
+    const std::string failure = core::ui_text_filled(core::UiMessage::notice_language_server_ended,
+                                                     core::DisplayLanguage::japanese, {"cpp"});
+    expect(editing.language_server().stops() == 1 && message(ended) != failure &&
+               saved_lsp(editing) == std::optional<bool>{false},
            "a child that ends after shutdown is stopped without a failure notice");
+    // 対照: shutdown を頼んでいない子の終わりは、その知らせを出す。
+    Editing crashed(lsp_settings(true));
+    started(crashed);
+    expect(message(delivered(crashed, app::ServerExited{0})) == failure,
+           "a child that ends on its own is told as a failure");
 }
 
 // 失敗は 1 行の知らせ・自動の再起動は 3 回まで・超えたら止まり `:set lsp` で再開（決定 6）。
@@ -1331,36 +1345,113 @@ void verify_request_expiry()
     expect(hover_text(editing) == "<none>", "the answer after the expiry is dropped");
 }
 
-// 補完・定義・参照・記号・引数の情報・整形の要求も、hover と同じく答えないまま 2 回の tick で
-// `$/cancelRequest` を送って捨て、知らせも止めもしない（ADR 0190 の決定 1）。
+// 要求の種類の数（値は 0 から並ぶ・網羅の switch なので種類が増えればここで落ちる）。
+[[nodiscard]] constexpr bool is_request_kind(app::LspRequestKind kind) noexcept
+{
+    switch (kind)
+    {
+    case app::LspRequestKind::initialize:
+    case app::LspRequestKind::shutdown:
+    case app::LspRequestKind::completion:
+    case app::LspRequestKind::hover:
+    case app::LspRequestKind::definition:
+    case app::LspRequestKind::references:
+    case app::LspRequestKind::document_symbol:
+    case app::LspRequestKind::signature_help:
+    case app::LspRequestKind::formatting:
+    case app::LspRequestKind::range_formatting:
+    case app::LspRequestKind::prepare_rename:
+    case app::LspRequestKind::rename:
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] consteval std::size_t request_kind_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_request_kind(static_cast<app::LspRequestKind>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
+using AskedKind = std::pair<app::LspRequestKind, std::string_view>;
+// 寿命の 2 つ（initialize・shutdown）は別の扱い（失敗に数える・止める）なので、ほかの全部。
+constexpr std::array<AskedKind, 10> asked_kinds{{
+    {app::LspRequestKind::completion, "textDocument/completion"},
+    {app::LspRequestKind::hover, "textDocument/hover"},
+    {app::LspRequestKind::definition, "textDocument/definition"},
+    {app::LspRequestKind::references, "textDocument/references"},
+    {app::LspRequestKind::document_symbol, "textDocument/documentSymbol"},
+    {app::LspRequestKind::signature_help, "textDocument/signatureHelp"},
+    {app::LspRequestKind::formatting, "textDocument/formatting"},
+    {app::LspRequestKind::range_formatting, "textDocument/rangeFormatting"},
+    {app::LspRequestKind::prepare_rename, "textDocument/prepareRename"},
+    {app::LspRequestKind::rename, "textDocument/rename"},
+}};
+static_assert(asked_kinds.size() + 2 == request_kind_count(),
+              "every request kind but the two of the lifecycle is listed");
+
+// 1 種類の要求を頼む（名前の変更は prepareProvider
+// の有無で変えられる所の問いと名前の変更を分ける）。
+[[nodiscard]] bool asked_once(app::EditorController &controller, app::LspRequestKind kind)
+{
+    switch (kind)
+    {
+    case app::LspRequestKind::initialize:
+    case app::LspRequestKind::shutdown:
+        return false;
+    case app::LspRequestKind::completion:
+        return controller.request_completion(1);
+    case app::LspRequestKind::hover:
+        return controller.request_hover();
+    case app::LspRequestKind::definition:
+        return controller.request_definition();
+    case app::LspRequestKind::references:
+        return controller.request_references();
+    case app::LspRequestKind::document_symbol:
+        return controller.request_document_symbols();
+    case app::LspRequestKind::signature_help:
+        return controller.request_signature_help(std::nullopt, false);
+    case app::LspRequestKind::formatting:
+        return controller.request_formatting(false);
+    case app::LspRequestKind::range_formatting:
+        applied(controller, app::SelectAll{});
+        return controller.request_formatting(true);
+    case app::LspRequestKind::prepare_rename:
+    case app::LspRequestKind::rename:
+        applied(controller, app::QueryLanguage{core::LanguageQueryKind::rename});
+        applied(controller, app::CommandText{"x"});
+        applied(controller, app::SubmitCommand{});
+        return true;
+    }
+    return false;
+}
+
+// 寿命のほかの要求は全部、答えないまま 2 回の tick で `$/cancelRequest` を送って捨て、知らせも止め
+// もしない（ADR 0190 の決定 1・名前の変更も同じ待ちの上限・ADR 0194 の 31 行）。
 void verify_every_request_expires()
 {
-    Editing editing(lsp_settings(true));
-    started_with(
-        editing,
-        R"({"textDocumentSync":2,"completionProvider":{},"definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true,"signatureHelpProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true})");
-    auto &controller = editing.controller();
-    applied(controller, app::SelectAll{});
-    const bool asked = controller.request_completion(1) && controller.request_definition() &&
-                       controller.request_references() && controller.request_document_symbols() &&
-                       controller.request_signature_help(std::nullopt, false) &&
-                       controller.request_formatting(true);
-    std::vector<std::int64_t> ids;
-    for (const std::string_view method :
-         {"textDocument/completion", "textDocument/definition", "textDocument/references",
-          "textDocument/documentSymbol", "textDocument/signatureHelp",
-          "textDocument/rangeFormatting"})
+    constexpr std::string_view abilities =
+        R"("textDocumentSync":2,"completionProvider":{},"hoverProvider":true,"definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true,"signatureHelpProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true)";
+    for (const auto &[kind, method] : asked_kinds)
     {
-        ids.push_back(last_request(editing, method));
+        Editing editing(lsp_settings(true));
+        const bool prepares = kind == app::LspRequestKind::prepare_rename;
+        started_with(editing, "{" + std::string(abilities) +
+                                  (prepares ? R"(,"renameProvider":{"prepareProvider":true}})"
+                                            : R"(,"renameProvider":true})"));
+        auto &controller = editing.controller();
+        const bool asked = asked_once(controller, kind);
+        const std::int64_t id = last_request(editing, method);
+        static_cast<void>(controller.apply_frame(app::LanguageServerTick{}));
+        const auto stale = controller.apply_frame(app::LanguageServerTick{});
+        expect(asked && id >= 0 && editing.language_server().cancelled() == std::vector{id} &&
+                   message(stale).empty() && editing.language_server().stops() == 0,
+               "every request kind but the lifecycle is cancelled after two ticks silently");
     }
-    static_cast<void>(controller.apply_frame(app::LanguageServerTick{}));
-    const auto stale = controller.apply_frame(app::LanguageServerTick{});
-    auto cancelled = editing.language_server().cancelled();
-    std::ranges::sort(cancelled);
-    std::ranges::sort(ids);
-    expect(asked && cancelled == ids && message(stale).empty() &&
-               editing.language_server().stops() == 0,
-           "every silent request kind is cancelled after two ticks without a notice");
 }
 
 // ---------------------------------------------- 段 L3: hover の札と定義へ（ADR 0190 の決定
@@ -2052,6 +2143,35 @@ void verify_unplaceable_diagnostics_dropped()
     }
 }
 
+// 起こせない理由の数（値は 0 から並ぶ・網羅の switch なので値が増えればここで落ちる）。
+[[nodiscard]] constexpr bool is_server_failure(app::ServerFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case app::ServerFailure::not_found:
+    case app::ServerFailure::cannot_start:
+    case app::ServerFailure::pipe_failed:
+    case app::ServerFailure::write_failed:
+    case app::ServerFailure::read_failed:
+    case app::ServerFailure::message_too_long:
+    case app::ServerFailure::header_too_long:
+    case app::ServerFailure::not_absolute:
+    case app::ServerFailure::script_refused:
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] consteval std::size_t server_failure_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_server_failure(static_cast<app::ServerFailure>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
 // 2026-11-20 の追補（#1897）: 起こせない理由を分けて 1 行で知らせる。
 void verify_start_failure_notices()
 {
@@ -2071,13 +2191,15 @@ void verify_start_failure_notices()
                 "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: cpp" &&
             told(app::ServerFailure::pipe_failed) == "言語サーバーを起こせませんでした: cpp",
         "missing, relative, script and other start failures are told apart");
-    // 「ほか」は全部同じ「起こせませんでした」（ADR 0160 の 2026-11-20 の追補）。
-    for (const auto failure :
-         {app::ServerFailure::cannot_start, app::ServerFailure::write_failed,
-          app::ServerFailure::read_failed, app::ServerFailure::message_too_long,
-          app::ServerFailure::header_too_long})
+    // 名指しの 3 つのほかは全部同じ「起こせませんでした」（ADR 0160 の 2026-11-20 の追補）。値は
+    // server_failure_count() の全部を回すので、足した値も「ほか」の行で縛られる。
+    for (std::size_t index = 0; index < server_failure_count(); ++index)
     {
-        expect(told(failure) == "言語サーバーを起こせませんでした: cpp",
+        const auto failure = static_cast<app::ServerFailure>(index);
+        const bool named = failure == app::ServerFailure::not_found ||
+                           failure == app::ServerFailure::not_absolute ||
+                           failure == app::ServerFailure::script_refused;
+        expect(named || told(failure) == "言語サーバーを起こせませんでした: cpp",
                "every other start failure says the server could not be started");
     }
 }

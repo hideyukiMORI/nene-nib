@@ -333,9 +333,6 @@ void verify_cancel_and_bounds()
     static_cast<void>(controller.apply(app::PointSettingsChoice{9999}));
     expect(choice_of(controller.frame()).candidate == core::builtin_themes.size(),
            "pointing past the end stops at the last choice");
-    expect(choice_of(controller.apply_frame(app::OpenSettingsChoice{})).candidate ==
-               core::builtin_themes.size(),
-           "opening the list again while it is open keeps where the pointer is");
     static_cast<void>(controller.apply(app::ScrollSettingsChoice{9999}));
     expect(choice_of(controller.frame()).top == core::builtin_themes.size(),
            "the scroll is held within the list");

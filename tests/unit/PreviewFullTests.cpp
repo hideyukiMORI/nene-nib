@@ -17,17 +17,18 @@
 #include "Column.hpp"
 #include "CommandEdit.hpp"
 #include "CommandText.hpp"
+#include "ContextMenuRow.hpp"
 #include "ContextMenuView.hpp"
 #include "CopyTabName.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
-#include "DiscardAutosave.hpp"
 #include "DisplayForm.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
 #include "EndSession.hpp"
 #include "ExplorerKey.hpp"
@@ -76,7 +77,6 @@
 #include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
 #include "ResizeExplorer.hpp"
-#include "RestoreAutosave.hpp"
 #include "RevealTab.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -109,7 +109,6 @@
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
-#include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
 #include "TogglePreviewTask.hpp"
@@ -122,6 +121,7 @@
 #include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -133,6 +133,7 @@
 #include <tuple>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::tests
 {
@@ -993,10 +994,12 @@ void verify_full_preview_resize()
         "releasing during the full preview writes the width and stays in full");
 }
 
-// 全面の間も今までどおり写す意図（ADR 0155 の改訂 17・passes_full_preview の表）。拒否される意図は
-// 「プレビュー中は編集できません」の 1 行を出す（4.）ので、表の意図はどれもその 1 行を出さない。
-// 意図ごとに新しい窓で全面を開いて 1 つだけ送る（前の意図の効果を次へ持ち越さない）。
-[[nodiscard]] bool refused_in_full(const app::EditorIntent &intent)
+// 全面の間も今までどおり写す意図（ADR 0155 の改訂 17 の「届く」鍵と、表の上の注釈が名指しする
+// 意図）。拒否される意図は「プレビュー中は編集できません」の 1 行を出す（4.）ので、どれもその 1
+// 行を 出さない。列は手で選んだ見本で、表の全部ではない（表の数を主張しない）。効き目まで見るのは
+// verify_full_preview_passes_effects の 4 つで、ほかは「断らない」だけを見る。意図ごとに新しい窓で
+// 全面を開いて 1 つだけ送る（前の意図の効果を次へ持ち越さない）。
+[[nodiscard]] EditorFrame sent_in_full(const app::EditorIntent &intent)
 {
     Editing editing;
     open_text(editing, "# title\n\ntext");
@@ -1004,7 +1007,24 @@ void verify_full_preview_resize()
     applied(editing.controller(), app::SwitchTab{0});
     applied(editing.controller(), app::SetPreviewPlacement{PreviewPlacement::full});
     serve_parsed(editing);
-    return message_of(editing.controller().apply_frame(intent)) == refused;
+    return editing.controller().apply_frame(intent);
+}
+
+[[nodiscard]] bool refused_in_full(const app::EditorIntent &intent)
+{
+    return message_of(sent_in_full(intent)) == refused;
+}
+
+// 通した意図が効く（帯のタブを閉じる・タブの一覧と Ctrl+P の面が開く・エクスプローラーが出る）。
+void verify_full_preview_passes_effects()
+{
+    const auto closed = sent_in_full(app::CloseTab{1});
+    expect(closed.tabs.size() == 1 && closed.full_preview.has_value(),
+           "closing another tab in full closes it and keeps the full preview");
+    expect(sent_in_full(app::OpenTabList{}).command_palette.has_value() &&
+               sent_in_full(app::OpenCommandPalette{}).command_palette.has_value(),
+           "the tab list and Ctrl+P open their face in full");
+    expect(sent_in_full(app::ToggleExplorer{}).explorer.has_value(), "the explorer shows in full");
 }
 
 void expect_all_pass(std::span<const app::EditorIntent> intents)
@@ -1027,9 +1047,6 @@ void verify_full_preview_passes_window()
         app::ScrollTabs{1},
         app::OpenTabList{},
         app::EndSession{app::SessionEnd::window_closed},
-        app::RestoreAutosave{},
-        app::DiscardAutosave{},
-        app::ToggleBookmark{},
         app::OpenOperationList{},
         app::SelectDisplay{core::DisplayForm::text},
         app::SelectLanguage{core::Language::plain},
@@ -1048,8 +1065,8 @@ void verify_full_preview_passes_window()
     expect(refused_in_full(app::InsertText{"x"}), "an edit outside the table is refused");
 }
 
-// 全面の右クリックは読む側のメニュー（ContextMenuMode::reading）。写せるのは全面の選択があるとき
-// だけで、切り取り・貼り付け・削除はいつも使えない（ADR 0078 の追補・メニューの表）。
+// 全面の右クリックは読む側のメニュー（ContextMenuMode::reading）。使えるのは全面の選択があるときの
+// コピーだけで、ほかの行はいつも使えない（ADR 0078 の追補 4・メニューの表）。
 void verify_full_preview_menu()
 {
     Editing editing;
@@ -1063,9 +1080,18 @@ void verify_full_preview_menu()
     applied(controller, app::SelectAll{});
     const auto chosen = controller.apply_frame(app::OpenContextMenu{10, 10, std::nullopt});
     const auto selected = chosen.context_menu.value_or(app::ContextMenuView{}).rows;
-    expect(unselected.size() > 3 && selected.size() > 3 && !unselected.at(1).enabled &&
-               selected.at(1).enabled && !selected.at(0).enabled && !selected.at(2).enabled &&
-               !selected.at(3).enabled,
+    const auto copy_only = [](const std::vector<app::ContextMenuRow> &rows, bool copies)
+    {
+        return !rows.empty() &&
+               std::ranges::all_of(rows,
+                                   [copies](const app::ContextMenuRow &row)
+                                   {
+                                       return row.enabled ==
+                                              (copies &&
+                                               row.operation == core::EditorOperation::copy);
+                                   });
+    };
+    expect(copy_only(unselected, false) && copy_only(selected, true),
            "the reading menu copies only with a preview selection and never edits");
 }
 
@@ -1127,5 +1153,6 @@ void verify_preview_full_scope()
     verify_full_preview_passes_window();
     verify_full_preview_passes_input();
     verify_full_preview_menu();
+    verify_full_preview_passes_effects();
 }
 } // namespace nenenib::tests

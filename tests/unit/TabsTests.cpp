@@ -1,3 +1,5 @@
+// scope `--tabs` の単体テスト（ADR 0042 決定 2・ADR 0056）。状態・切り替え・閉じる（決定 1〜4・
+// 6・7）と、開く（決定 5）と起動（決定 13）。
 #include "ActivateCommandChoice.hpp"
 #include "Appearance.hpp"
 #include "CancelCommand.hpp"
@@ -432,7 +434,8 @@ void verify_parked_bundle_edges()
     const auto parked = state.with_parked_diagnostics(0, none, 7, {});
     expect(active.parked().at(0) == state.parked().at(0) &&
                outside.parked().at(0) == state.parked().at(0) &&
-               parked.parked().at(0) != state.parked().at(0),
+               parked.parked_bundle_at(0) != nullptr &&
+               parked.parked_bundle_at(0)->diagnostics_version == 7,
            "diagnostics land only on a loaded parked bundle");
     expect(state.with_split(nenenib::core::SplitLayout::none).split().layout ==
                nenenib::core::SplitLayout::none,

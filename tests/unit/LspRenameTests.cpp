@@ -902,7 +902,8 @@ void verify_not_utf8()
     expect(message_of(unread) == notice(broken, core::UiMessage::notice_server_edit_unreadable) &&
                whole_vim_body(broken.controller()) == main_text,
            "an unreadable rename answer says so and changes nothing");
-    // 今の本文と同じになる答え（新しい名前が今と同じ文字）は何も変えず、何も知らせない。
+    // 今の本文と同じになる答えは何も変えず、何も知らせない（ADR 0194
+    // の「何も変わらなければ何も出さない」）。
     Editing same(lsp_on());
     started(same, prepared);
     renamed_to_sum(same);
