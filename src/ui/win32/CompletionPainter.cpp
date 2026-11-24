@@ -69,9 +69,24 @@ void CompletionPainter::paint(const application::CompletionView &view,
             target_.FillRoundedRectangle(D2D1::RoundedRect(to_rect(chosen), scaled(row_radius_dips),
                                                            scaled(row_radius_dips)),
                                          &brush_);
+            frame(chosen, palette.text);
         }
         paint_row(view.rows.at(shown), layout, index, palette);
     }
+}
+
+void CompletionPainter::frame(const core::LayoutRect &area, core::RgbColor color)
+{
+    const float half = scaled(1.0F) / 2.0F;
+    auto box = to_rect(area);
+    box.left += half;
+    box.top += half;
+    box.right -= half;
+    box.bottom -= half;
+    brush_.SetColor(to_color(color));
+    target_.DrawRoundedRectangle(
+        D2D1::RoundedRect(box, scaled(row_radius_dips), scaled(row_radius_dips)), &brush_,
+        scaled(1.0F));
 }
 
 void CompletionPainter::paint_row(const application::CompletionRowView &row,

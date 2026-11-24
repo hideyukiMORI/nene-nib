@@ -170,8 +170,9 @@ void EditorWindow::move_pointer(LPARAM data)
     {
         return;
     }
-    // 設定の面の上の動きは面の下の本文・エクスプローラー・境へ渡さない（#1836）。
-    if (over_settings(data))
+    // 設定の面の上の動きは面の下の本文・エクスプローラー・境へ渡さない（#1836）。選ぶ欄の一覧の上は
+    // 載せた行を選ぼうとしている行にする（#1926）。
+    if (point_settings_choice(data) || over_settings(data))
     {
         return;
     }

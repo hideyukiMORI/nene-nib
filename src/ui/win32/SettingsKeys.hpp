@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SettingsChoiceKeyAction.hpp"
 #include "SettingsKeyAction.hpp"
 
 #include <windows.h>
@@ -13,8 +14,9 @@ namespace nenenib::ui::win32
 // Vim のモードでも同じ鍵で、ここに無い鍵は捨てる（本文へ通さない）。窓を作らずに試せるようここに
 // 置く（nib_window_tests の `--settings-panel`）。
 // - ↑ ↓ と Tab / Shift+Tab は行の移動、PageUp / PageDown は 1 ページ、Home / End は最初と最後の行。
-// - Enter は切り替え（選ぶ欄は次の値）。Space は文字の側（WM_CHAR）が決める（探す欄が空なら
-//   切り替え・打ちかけなら空白）。← → は値を前後へ。
+// - Enter は切り替え（選ぶ欄は一覧を開く・#1926）。Space は文字の側（WM_CHAR）が決める（探す欄が
+//   空なら切り替えか一覧を開く・打ちかけなら空白）。← → は値を前後へ（開かずに送る）。F4 は選ぶ欄の
+//   一覧を開く（Alt+↓ は WM_SYSKEYDOWN の側）。
 // - Esc と Ctrl+, は閉じる（保存）。Ctrl+Z は元に戻す。Backspace は探す欄の 1 文字。
 // OS の仮想キーは開いた集合（CPP-017）。
 [[nodiscard]] constexpr SettingsKeyAction settings_key_action(WPARAM key, bool control,
@@ -58,8 +60,49 @@ namespace nenenib::ui::win32
         return SettingsKeyAction::next_value;
     case VK_BACK:
         return SettingsKeyAction::erase;
+    case VK_F4:
+        return SettingsKeyAction::open_choice;
     default:
         return SettingsKeyAction::swallow;
+    }
+}
+
+// 選ぶ欄の一覧が開いている間の WM_KEYDOWN の行き先（#1926・採用案 2026-11-24）。↑ ↓・Home / End・
+// PgUp / PgDn で選ぼうとしている行を動かし、Enter と Tab / Shift+Tab で決め（焦点は同じ行のまま）、
+// Esc と F4 で決めずに閉じる（面は閉じない）。Ctrl+, は面ごと閉じる。Backspace は打った字の 1 つ。
+// Space と字は文字の側（WM_CHAR）が決める。ここに無い鍵（Ctrl+Z・Ctrl+1〜6・← → など）は捨てる。
+[[nodiscard]] constexpr SettingsChoiceKeyAction settings_choice_key_action(WPARAM key,
+                                                                           bool control) noexcept
+{
+    if (control)
+    {
+        return key == VK_OEM_COMMA ? SettingsChoiceKeyAction::close_panel
+                                   : SettingsChoiceKeyAction::swallow;
+    }
+    switch (key)
+    {
+    case VK_UP:
+        return SettingsChoiceKeyAction::previous;
+    case VK_DOWN:
+        return SettingsChoiceKeyAction::next;
+    case VK_HOME:
+        return SettingsChoiceKeyAction::first;
+    case VK_END:
+        return SettingsChoiceKeyAction::last;
+    case VK_PRIOR:
+        return SettingsChoiceKeyAction::page_up;
+    case VK_NEXT:
+        return SettingsChoiceKeyAction::page_down;
+    case VK_RETURN:
+    case VK_TAB:
+        return SettingsChoiceKeyAction::choose;
+    case VK_ESCAPE:
+    case VK_F4:
+        return SettingsChoiceKeyAction::cancel;
+    case VK_BACK:
+        return SettingsChoiceKeyAction::erase;
+    default:
+        return SettingsChoiceKeyAction::swallow;
     }
 }
 
@@ -72,5 +115,18 @@ namespace nenenib::ui::win32
         return std::nullopt;
     }
     return static_cast<std::size_t>(key - '1');
+}
+
+// WM_SYSCOMMAND を既定の処理へ渡さずに捨てるか（#1926・レビュー R3）。設定の一覧の Alt+↓ / Alt+↑ を
+// 面が受けた（WM_SYSKEYDOWN を既定の処理へ渡さなかった）後に Alt を離すと、既定の処理が「Alt だけ
+// 押した」と数えて SC_KEYMENU（lParam が 0・窓のメニューのモード）を送ることがある。そうなると次の
+// ↓ が窓のメニューを開き、Esc がそのモードに食べられる（Shift+F10 の swallows_key_menu と同じ事故・
+// #1051）。捨てるのは alt_taken（受けた後で、次の Alt の押しの前）の間の lParam 0 の SC_KEYMENU
+// だけ。Alt+文字（lParam が文字）・F10・受けていない Alt は今のまま既定の処理へ渡す。
+[[nodiscard]] constexpr bool settings_swallows_key_menu(WPARAM word, LPARAM data,
+                                                        bool alt_taken) noexcept
+{
+    constexpr WPARAM command_mask = 0xFFF0;
+    return alt_taken && (word & command_mask) == SC_KEYMENU && data == 0;
 }
 } // namespace nenenib::ui::win32

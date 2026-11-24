@@ -1,7 +1,7 @@
 // #1833（ADR 0169 の決定 4・ADR 0190 の決定 5）: 補完の面の画素。WIC の bitmap（SoftwareTarget）に
-// CompletionPainter で描き、面の地が panel・選んだ行に current_line の面が敷かれて左右 4 DIP は地の
-// まま・出どころの印と名前が行の左に、補足が行の右端にあってその間に墨が無い・面の外に何も描かない
-// （影なし）・行の文字組みの保持が描き直しで増えないことを、ダークとライトで確かめる。配置は製品と
+// CompletionPainter で描き、面の地が panel・選んだ行に current_line の面と text の枠（#1929）が
+// 敷かれて左右 4 DIP は地のまま・出どころの印と名前が行の左に、補足が行の右端にあってその間に墨が
+// 無い・面の外に何も描かない（影なし）・行の文字組みの保持が描き直しで増えないことを、ダークとライトで確かめる。配置は製品と
 // 同じ core::completion_face_layout。窓・device は作らない。字の画素は字体に依るので、Segoe UI と
 // Consolas が無い機械では測らない（QLT-013）。
 #include "Appearance.hpp"
@@ -137,6 +137,10 @@ void verify_face(SoftwareTarget &target, const ContextMenuText &text, const core
                pixel_is(pixels, second.left + 2, second.top + 2, palette.panel) &&
                pixel_is(pixels, first.left + 8, first.top + 2, palette.panel),
            "the chosen row lays the current line face 4 DIP inside the row");
+    // #1929: 選んだ行は text の 1 DIP の枠で囲む（current_line と panel の差は色では見えない）。
+    expect(pixel_is(pixels, second.left + 20, second.top, palette.text) &&
+               !pixel_is(pixels, first.left + 20, first.top, palette.text),
+           "the chosen row has a text frame and the other rows have none");
     const auto mark = core::completion_face_mark(layout, 0);
     const auto label = core::completion_face_label(layout, 0);
     const auto detail = core::completion_face_detail(layout, 0);
@@ -185,6 +189,11 @@ void verify_vim_completion_keys()
     expect(!vim_completion_key('N', false, true, true).has_value() &&
                !vim_completion_key('Q', true, true, true).has_value(),
            "a key without Ctrl alone, and a key that is not a completion key, are not sent");
+    using nenenib::ui::win32::tab_closes_completion;
+    expect(tab_closes_completion(true, true) && !tab_closes_completion(false, true) &&
+               !tab_closes_completion(true, false),
+           "Shift+Tab closes an open completion face before the tab character (#1971), a plain "
+           "Tab goes to the face, and with no face nothing is sent first");
 }
 
 // 補完の 2 つ目の鍵（施主決定 D104）: 通常モードの Ctrl+I は操作「補完」で、Vim のモードの

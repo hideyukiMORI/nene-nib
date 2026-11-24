@@ -1,9 +1,11 @@
 #pragma once
 
 #include "EditorSettings.hpp"
+#include "SettingsChoiceOpen.hpp"
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace nenenib::application
@@ -13,7 +15,8 @@ namespace nenenib::application
 // 鍵（絞っても同じ行を指す）: core::settings_rows の添字か、その後ろに続く「言語サーバー」の節の
 // 行の通し番号（表の順・畳んだ行も数える）と、最後の「ほかの N 言語を見る」（LSP 段 S4・#1945）。
 // scroll は行の領域の送り（物理画素・ui が配置から 求めて ScrollSettings で置く・#1836）。
-// servers_unfolded は「ほかの N 言語を見る」を押したか（面を閉じるまで開いたまま）。
+// servers_unfolded は「ほかの N 言語を見る」を押したか（面を閉じるまで開いたまま）。choice は開いて
+// いる選ぶ欄の一覧（#1926・面を閉じると一緒に消える）。
 struct SettingsOpen
 {
     core::EditorSettings opened;
@@ -21,5 +24,6 @@ struct SettingsOpen
     std::size_t focus;
     std::int32_t scroll = 0;
     bool servers_unfolded = false;
+    std::optional<SettingsChoiceOpen> choice = std::nullopt;
 };
 } // namespace nenenib::application

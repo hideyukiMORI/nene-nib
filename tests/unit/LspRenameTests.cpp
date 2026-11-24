@@ -1103,9 +1103,23 @@ constexpr std::string_view c_header_uri = "file:///C:/work/lib.h";
 
 // cpp だけの設定で `.h`（C の言語）は席に開かれない。保存済みなら当たるが、当てた後は保存するまで
 // 次の名前の変更がそのファイルで断られる（#2011 のレビュー R6 の P4・ADR の限界）。
-void verify_c_header()
+// c と cpp に同じ命令を置くと、2 つの言語は同じ席を共有する（#1952・ADR 0161 の 2026-11-24 の
+// 追補）。
+[[nodiscard]] SettingsReading lsp_shared()
 {
-    Editing editing(lsp_on());
+    auto settings = core::default_editor_settings();
+    settings.lsp = true;
+    settings.lsp_commands = {{"c", std::string{clangd_command}},
+                             {"cpp", std::string{clangd_command}}};
+    return SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}};
+}
+
+// `.h`（C の言語）を指す名前の変更を 2 回。shared なら c と cpp が席を共有し、1 回目に当てた `.h`
+// は 席に開かれて 2 回目も当たる。cpp だけの設定では `.h` は席に開かれず、2 回目は保存するまで断る
+// （#2011 のレビュー R6 の P4・ADR の限界）。
+void verify_c_header(bool shared)
+{
+    Editing editing(shared ? lsp_shared() : lsp_on());
     editing.files().hold_at(std::string(main_path), Bytes{std::string(main_text)});
     editing.files().hold_at(std::string(c_header_path), Bytes{std::string(header_text)});
     static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
@@ -1118,11 +1132,13 @@ void verify_c_header()
         editing, rename_method,
         R"({"changes":{)" + uri_edits(main_uri, add_to_sum() + "," + edit_json(1, 20, 23, "sum")) +
             "," + uri_edits(c_header_uri, add_to_sum()) + "}}");
+    const bool opened = sent_index(editing, "textDocument/didOpen", c_header_uri) <
+                        editing.language_server().sent().size();
     expect(message_of(first) ==
                    filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "3"}) &&
-               sent_index(editing, "textDocument/didOpen", c_header_uri) ==
-                   editing.language_server().sent().size(),
-           "a saved C header is renamed but not opened to the cpp server");
+               opened == shared,
+           shared ? "a shared seat opens the renamed C header"
+                  : "a saved C header is renamed but not opened to the cpp-only seat");
     static_cast<void>(asked(editing));
     static_cast<void>(answered(
         editing, prepare_method,
@@ -1132,8 +1148,10 @@ void verify_c_header()
         answered(editing, rename_method,
                  R"({"changes":{)" + uri_edits(c_header_uri, edit_json(0, 4, 7, "total")) + "}}");
     expect(message_of(second) ==
-               filled(editing, core::UiMessage::notice_server_edit_unsent, {"lib.h"}),
-           "the next rename refuses the modified C header until it is saved");
+               (shared ? filled(editing, core::UiMessage::notice_server_edit_applied, {"1"})
+                       : filled(editing, core::UiMessage::notice_server_edit_unsent, {"lib.h"})),
+           shared ? "the next rename applies to the C header the shared seat opened"
+                  : "the next rename refuses the modified C header until it is saved");
 }
 
 // まだ読んでいないタブ（前回のタブ）は reach_tab で読んでから当てる。
@@ -1264,6 +1282,7 @@ void verify_lsp_rename_scope()
     verify_open_then_change_order();
     verify_same_file_spellings();
     verify_unread_tab_kept();
-    verify_c_header();
+    verify_c_header(false);
+    verify_c_header(true);
 }
 } // namespace nenenib::tests

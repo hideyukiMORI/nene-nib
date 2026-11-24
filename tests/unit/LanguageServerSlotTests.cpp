@@ -422,5 +422,6 @@ void verify_language_server_slots()
     verify_answers_survive_other_slots();
     verify_definition_lands_in_answering_units();
     verify_unsendable_keeps_slots();
+    verify_language_server_shares();
 }
 } // namespace nenenib::tests

@@ -114,3 +114,11 @@ clangd の索引中や jedi の起動の数秒は、使う人から見ると何�
 - **枠を増やさない・件数を隠さない・的を動かさない（#1950 のレビュー R2 / R3・設計席の決め）**: 言語サーバーの 1 行は診断の件数の欄（右端の 1 つ・ADR 0161 の決定 4）に件数の後ろに並べる（core の `status_server_text`・「E2 W1 · cpp: indexing 33%」・件数が 0 なら進み具合だけ）。欄の幅は、言語サーバーの席がアクティブな文書を受けている間（controller の `language_server_served()`・frame の `language_server_served`）は進み具合の有無を問わず 168 DIP（`StatusServerItem::server`・入らない窓では件数の 96 DIP で試してから畳む）で、受けていない文書の件数は今までどおり 96 DIP（`counts`）。窓の hit test も `status_server_item(counts, served)` の同じ値を引くので、進み具合が出たり消えたりしても文字コード・改行の欄の的は動かない。renderer は受けている文書の欄を同じ字体の左寄せ（`guide_status_format_`）で書き、欄の右で切る（`PushAxisAlignedClip`・件数は前にあるので切れない）。保持の枠の数（ADR 0079 / 0154・`status_layout_capacity`）は変わらない。畳む順は件数のときと同じ（言語 → 欄）。
 - **やらないこと**: `window/showMessageRequest` の選ぶ札・`workspace/configuration`・`$/setTrace`・記録のファイルへの保存。
 - **契約**: `nib_tests --language-server`（`LanguageServerLogTests.cpp`: 1 行の直し・輪の上限・知らせの種類・`$/progress` の読みと 1 行・欄の幅・`:LspLog` の Ex・記録を開く・オフで動かない・起動中と進み具合）。adapters `nib_language_server_tests` の `verify_error_output`（替え玉の `--stderr`・合図を出さずに次の本文と一緒に届く・子の終わりの前に渡す）と `verify_progress_messages`（`--progress`）。待ちの配列の本数の試験は 4 本に数え直した。#1950 のレビューの直しで `verify_stop_keeps_unread_log`（tick の「答えない」・`shutdown` の答えなし・答えの後ろの塊・起こしている間のオフ）と `verify_progress_forgotten_on_stop`、adapters の `verify_error_queue_bound`（R1）・`verify_stop_returns_unread_error_output`（M1・`--deaf --stderr`）・`verify_stop_resets_the_signal`（R4）を足した。待ちの配列の順（標準エラーの読みが書きと子より前・L2）は現実の量では害を見込まないので変えない。
+
+## 追補（2026-11-24・#1952・設計席の決め）: 席の鍵を（命令の行・root）にする
+
+2026-11-22 の #1945 の追補の限界「C と C++、TypeScript と JavaScript は同じサーバーが 2 本起き得る」を解く。詳しくは ADR 0161 の同じ日の追補。
+
+- **決定 1 は変えない**: port・席の番号・worker・取り消しの表の形はそのまま。controller が席を引く鍵だけを（言語・root）から（命令の行・root）に改め、同じ命令の行の言語は 1 本の子を共有する。
+- **決定 6 の失敗**: 自動の再起動の回数（3 回）と `given_up` は 2026-11-20 の追補の「言語ごと」から**席の鍵（命令の行・root）ごと**（`LanguageServerTrouble.command` と `.root`・`server_command_key` の形と `same_folder`）に改める（同じ命令でも root の違う席は別の控え・#2007 のレビュー M1）。
+- **記録**: 席ごとのまま。行の頭の言語は子を起こした文書の言語（共有の席では最初の言語）。

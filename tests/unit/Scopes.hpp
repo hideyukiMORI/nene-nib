@@ -70,6 +70,8 @@ void verify_completion_face_contracts();
 void verify_completion_face_scope();
 // 契約 --completion-face の Vim の INSERT の側（#1845・VimInsertCompletionTests.cpp）。
 void verify_vim_insert_completion();
+// 契約 --completion-face の自動で開いた面の確定（#1971・CompletionConfirmTests.cpp）。
+void verify_completion_confirm();
 
 // HistoryTests.cpp
 void verify_history_contracts();
@@ -127,6 +129,8 @@ void verify_indent_guides_scope();
 void verify_indent_guide_paths();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
+// SettingsChoiceTests.cpp（#1926・選ぶ欄の一覧・`--settings-panel` から呼ぶ）
+void verify_settings_choice_scope();
 void verify_language_server_candidates_scope();
 // MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
 void verify_minimap_property_scope();
@@ -188,6 +192,8 @@ void verify_lsp_sync_property_scope();
 void verify_language_server_contracts();
 // 席の部分（LanguageServerSlotTests.cpp・LSP 段 S2）。verify_language_server_contracts から呼ぶ。
 void verify_language_server_slots();
+// 席の共有の部分（LanguageServerShareTests.cpp・#1952）。verify_language_server_slots から呼ぶ。
+void verify_language_server_shares();
 // 記録と進み具合の部分（LanguageServerLogTests.cpp・LSP 段 S8）。verify_language_server_contracts
 // から呼ぶ。
 void verify_language_server_log();
