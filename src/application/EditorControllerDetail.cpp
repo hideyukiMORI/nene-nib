@@ -236,7 +236,8 @@ bool is_signal(const EditorIntent &intent) noexcept
            std::holds_alternative<TabTipTick>(intent) ||
            std::holds_alternative<FirstFramePresented>(intent) ||
            std::holds_alternative<PreviewScrollSettled>(intent) ||
-           std::holds_alternative<CaretMotionTick>(intent);
+           std::holds_alternative<CaretMotionTick>(intent) ||
+           std::holds_alternative<SettingsChoiceTimeout>(intent);
 }
 
 // 使う人の操作ではない意図。合図（is_signal）と、窓の寸法・外観・帯とエクスプローラーの
@@ -265,7 +266,17 @@ bool is_settings_intent(const EditorIntent &intent) noexcept
            std::holds_alternative<FilterSettings>(intent) ||
            std::holds_alternative<JumpSettingsSection>(intent) ||
            std::holds_alternative<FocusSettingsRow>(intent) ||
-           std::holds_alternative<ScrollSettings>(intent);
+           std::holds_alternative<ScrollSettings>(intent) || is_settings_choice_intent(intent);
+}
+
+bool is_settings_choice_intent(const EditorIntent &intent) noexcept
+{
+    return std::holds_alternative<OpenSettingsChoice>(intent) ||
+           std::holds_alternative<PointSettingsChoice>(intent) ||
+           std::holds_alternative<ScrollSettingsChoice>(intent) ||
+           std::holds_alternative<ChooseSettingsChoice>(intent) ||
+           std::holds_alternative<CloseSettingsChoice>(intent) ||
+           std::holds_alternative<TypeSettingsChoice>(intent);
 }
 
 } // namespace nenenib::application::detail

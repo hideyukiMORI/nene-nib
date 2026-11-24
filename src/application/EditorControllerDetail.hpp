@@ -36,7 +36,8 @@
 namespace nenenib::application::detail
 {
 // 合図（裏の仕事の完了と時計の合図: WorkCompleted・AutosaveTick・PreviewTick・
-// LanguageServerTick・MapTimeout・TabTipTick）。「この意図は合図か」を決める 1
+// LanguageServerTick・MapTimeout・TabTipTick・選ぶ欄の一覧の頭文字の 1 秒 SettingsChoiceTimeout・
+// #1926）。「この意図は合図か」を決める 1
 // 本で、not_user_operation と 上下の移動の狙いの横位置を保つ側（keeps_wanted_x）がこれを呼ぶ（ADR
 // 0062 の追補・#1296）。 合図を足すときはここに 1 行足す。
 [[nodiscard]] bool is_signal(const EditorIntent &intent) noexcept;
@@ -44,9 +45,13 @@ namespace nenenib::application::detail
 // begin_intent と `map` の待ちと、全面プレビューの振り分け（ADR 0155 の改訂 17）が共用する 1 本。
 [[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept;
 // 設定の面の意図（ADR 0170 の追補 2 の 8 つと、画面の工程の FocusSettingsRow・ScrollSettings・
-// #1836）。面を開いたまま受ける側と、全面プレビューの間も通す側
-// （passes_full_preview・#1835 の M1）が共用する 1 本。
+// #1836）と選ぶ欄の一覧の意図（is_settings_choice_intent・#1926）。面を開いたまま受ける側と、
+// 全面プレビューの間も通す側（passes_full_preview・#1835 の M1）が共用する 1 本。
 [[nodiscard]] bool is_settings_intent(const EditorIntent &intent) noexcept;
+// 選ぶ欄の一覧の意図（OpenSettingsChoice・PointSettingsChoice・ScrollSettingsChoice・
+// ChooseSettingsChoice・CloseSettingsChoice・TypeSettingsChoice・#1926）。一覧を開いたまま受ける
+// 側が読む。どれも使う人の操作なので keeps_tab_walk にも begin_intent の表にも書かない。
+[[nodiscard]] bool is_settings_choice_intent(const EditorIntent &intent) noexcept;
 // アクティブな文書が何も書いていない無題か（パス無し・本文 0 バイト・履歴 0）。F1 の本文の案内
 // （guide_context の untouched_untitled・ADR 0078）と起動画面（start_screen_shown・ADR 0172 の
 // 決定 1）が同じこの 1 本を読む。隠す外側の条件はそれぞれが持つ。

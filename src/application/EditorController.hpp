@@ -282,6 +282,10 @@ class EditorController final
     // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
     // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
     [[nodiscard]] bool settings_open() const noexcept;
+    // 設定の面の選ぶ欄の一覧が開いているか（#1926・レビュー
+    // R1）。右クリック・ホイール・窓の大きさ・
+    // マウスの動きの行き先を、最後に描いた配置ではなく状態から決めるための安い読み。
+    [[nodiscard]] bool settings_choice_open() const noexcept;
     // 設定の面の表示値（開いていなければ値なし）。frame に載る値と同じで、窓が鍵とマウスの後に
     // 焦点の行と送りを読む口（本文の frame を作らない・#1836）。
     [[nodiscard]] std::optional<SettingsView> settings_view() const;
@@ -1622,6 +1626,17 @@ class EditorController final
     void accept(const JumpSettingsSection &intent);
     void accept(const FocusSettingsRow &intent);
     void accept(const ScrollSettings &intent);
+    // 選ぶ欄の一覧（#1926・同じ群）。
+    void accept(const OpenSettingsChoice &);
+    void accept(const PointSettingsChoice &intent);
+    void accept(const ScrollSettingsChoice &intent);
+    void accept(const ChooseSettingsChoice &);
+    void accept(const CloseSettingsChoice &);
+    void accept(const TypeSettingsChoice &intent);
+    void accept(const SettingsChoiceTimeout &);
+    // 開いている一覧の選択肢の数（一覧が無ければ 0）と表示値。
+    [[nodiscard]] std::size_t settings_choice_count() const noexcept;
+    [[nodiscard]] std::optional<SettingsChoiceView> settings_choice_view() const;
     // 入口の 1
     // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
     // 写す前に閉じて保存する。
