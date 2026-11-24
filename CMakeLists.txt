@@ -256,6 +256,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/LanguageServerSlotTests.cpp
+    tests/unit/LanguageServerShareTests.cpp
     tests/unit/LanguageRootTests.cpp
     tests/unit/LanguageServerCandidateTests.cpp
     tests/unit/LanguageServerLogTests.cpp
