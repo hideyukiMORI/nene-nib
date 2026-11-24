@@ -29,7 +29,7 @@ namespace nenenib::ui::win32
 // 描く。スイッチのオンは accent・オフは toggle・つまみは on_accent。選ぶ欄と段の上下は地が
 // background で枠が panel_border。段の印は low が muted の ●・medium が accent の ●●・high が
 // heavy（構文の色の error）の ●●● で、裏で動く機能は「裏」の語を添える。焦点の行は
-// current_line の面。
+// current_line の面 ＋ text の 1 DIP の枠（#1929）。
 // 配置は core::settings_layout の 1 本（窓の当たりと同じ矩形）で、札・組・ボタンの文字の幅は
 // arranged が測って渡す。文字組みは PaletteRowLayouts の保持から引く（1 行ぶんの広い箱で作り、
 // 中央と右寄せは幅を測って置く）。欄に入り切らない文は末尾を「…」で切る。target は製品では Direct2D
