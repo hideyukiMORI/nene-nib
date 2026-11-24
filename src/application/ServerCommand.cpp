@@ -65,6 +65,16 @@ namespace
 }
 } // namespace
 
+std::string_view server_command_key(std::string_view command) noexcept
+{
+    command = skip_blanks(command);
+    while (!command.empty() && blank(command.back()))
+    {
+        command.remove_suffix(1);
+    }
+    return command;
+}
+
 std::optional<ServerLaunch> server_launch_of(std::string_view command, const core::FilePath &root)
 {
     auto words = command_words(command);
