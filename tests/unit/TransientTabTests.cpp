@@ -236,6 +236,10 @@ void verify_pins()
     applied(controller, app::PinTab{0});
     expect(transient_count(controller.frame()) == 1,
            "a double click on the title of another tab pins nothing");
+    const auto active = controller.frame().active_tab;
+    applied(controller, app::PinTab{99});
+    expect(transient_count(controller.frame()) == 1 && controller.frame().active_tab == active,
+           "a double click past the last tab neither switches nor pins");
     applied(controller, app::PinTab{4});
     expect(band(controller.frame()) == "a.txt|● b.txt|c.txt|d.txt|e.txt*",
            "a double click on the title of the transient tab pins it");

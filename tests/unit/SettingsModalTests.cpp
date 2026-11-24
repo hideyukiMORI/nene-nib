@@ -14,6 +14,7 @@
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "CommandText.hpp"
+#include "ComposeText.hpp"
 #include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -240,6 +241,28 @@ void verify_panel_intents_need_the_panel()
                    core::same_settings(frame.settings, before) && !panel_of(frame).changed,
                "a choice-list intent without an open list keeps the panel and the values");
     }
+}
+
+// 開いている面をもう一度開いても焦点はそのまま。変換の途中に開くと変換を取り消して開く（#1835 の
+// レビュー R2）。探す欄に当たりが無ければ上下は何もしない。
+void verify_open_again_and_over_composition()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    static_cast<void>(controller.apply(app::StepSettings{true}));
+    const auto again = controller.apply_frame(app::OpenSettings{});
+    expect(panel_of(again).focused == std::optional<std::size_t>{1},
+           "opening the open panel again keeps the focus");
+    static_cast<void>(controller.apply(app::FilterSettings{"zzzzzzzzqqqq"}));
+    const auto stepped = controller.apply_frame(app::StepSettings{true});
+    expect(stepped.settings_panel.has_value() && panel_of(stepped).rows.empty(),
+           "up and down with no matching row keep the empty panel");
+    static_cast<void>(controller.apply(app::CloseSettings{}));
+    static_cast<void>(controller.apply(app::ComposeText{composed_of("に", {}, 0)}));
+    const auto opened = controller.apply_frame(app::OpenSettings{});
+    expect(opened.settings_panel.has_value() && !opened.composition.has_value(),
+           "opening over the IME composition cancels the composition");
 }
 
 // 探す欄・焦点・節の札（追補 2・施主決定 D102）。
@@ -660,6 +683,7 @@ void verify_settings_modal_scope()
     verify_open_change_close();
     verify_revert();
     verify_panel_intents_need_the_panel();
+    verify_open_again_and_over_composition();
     verify_other_intents_close();
     verify_filter_and_sections();
     verify_presets();

@@ -47,6 +47,7 @@
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
+#include "VimTestSupport.hpp"
 #include "VisibleLines.hpp"
 #include "WalkRecentTab.hpp"
 #include "WorkCompleted.hpp"
@@ -60,6 +61,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace nenenib::tests
@@ -491,6 +493,40 @@ void verify_open_held_while_vim_waits()
     expect(first_line(first).empty(), "the key that ended the wait went to the earlier document");
 }
 
+// 窓で打ったのと同じく 1 鍵ずつ意図として送る（揃った結果を採るのは意図の終わり）。
+void typed_keys(app::EditorController &controller, std::string_view keys)
+{
+    for (const auto &key : vim_keys_of(keys))
+    {
+        static_cast<void>(controller.apply_frame(app::VimKeyPress{key}));
+    }
+}
+
+// 回数・1 鍵の引数・レジスタの名指しの待ちも、オペレータの待ちと同じく揃った結果を採らない
+// （追補 5 の「回数・オペレータ・次の 1 鍵・選んだレジスタ」）。待ちを終える鍵の後に開く。
+void verify_open_held_while_vim_counts()
+{
+    for (const auto &[waits, ends] :
+         {std::pair{"2", "l"}, std::pair{"f", "z"}, std::pair{"\"a", "l"}})
+    {
+        Editing editing;
+        open_small_then_defer(editing);
+        auto &controller = editing.controller();
+        applied(controller, app::SelectEditMode{core::EditMode::vim});
+        applied(controller, app::OpenDocument{path_of("C:\\work\\big.txt")});
+        const std::uint64_t ticket = last_ticket(editing);
+        typed_keys(controller, waits);
+        editing.reads().finish(ticket);
+        const auto waiting = controller.apply_frame(app::WorkCompleted{});
+        expect(waiting.tabs.size() == 1 && first_line(waiting) == "a",
+               "a finished read is held while a count, an argument or a register waits");
+        typed_keys(controller, ends);
+        expect(controller.frame().tabs.size() == 2 &&
+                   controller.frame().document.title.text() == "big.txt",
+               "the held read opens after the key that ends the wait");
+    }
+}
+
 // a.txt（裏へ回る）・c.txt・b.txt（見ていた）の 3 本の一覧。使った順は b → a → c。
 [[nodiscard]] SessionReading three_listed()
 {
@@ -704,6 +740,7 @@ void verify_open_async_contracts()
     verify_open_listed();
     verify_open_held_while_composing();
     verify_open_held_while_vim_waits();
+    verify_open_held_while_vim_counts();
     verify_walk_skips_reading_tabs();
     verify_adopted_read_drops_wanted_x();
     verify_open_under_input_line();

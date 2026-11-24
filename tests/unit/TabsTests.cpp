@@ -1,9 +1,3 @@
-#include "ScriptedDocumentReads.hpp"
-#include "ScriptedLanguageServer.hpp"
-#include "ScriptedShellRegistration.hpp"
-#include "ScriptedTextLayouts.hpp"
-// scope `--tabs` の単体テスト（ADR 0042 決定 2・ADR 0056）。状態・切り替え・閉じる（決定 1〜4・
-// 6・7）と、開く（決定 5）と起動（決定 13）。
 #include "ActivateCommandChoice.hpp"
 #include "Appearance.hpp"
 #include "CancelCommand.hpp"
@@ -14,6 +8,8 @@
 #include "CommandText.hpp"
 #include "ComposeText.hpp"
 #include "DevicePixels.hpp"
+#include "Diagnostic.hpp"
+#include "DiagnosticsCount.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -43,12 +39,14 @@
 #include "ScriptedClipboard.hpp"
 #include "ScriptedClock.hpp"
 #include "ScriptedCodePages.hpp"
+#include "ScriptedDocumentReads.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedFolders.hpp"
 #include "ScriptedFonts.hpp"
 #include "ScriptedHistory.hpp"
 #include "ScriptedImages.hpp"
 #include "ScriptedLanguageRoots.hpp"
+#include "ScriptedLanguageServer.hpp"
 #include "ScriptedLanguageServerSearch.hpp"
 #include "ScriptedLinkOpen.hpp"
 #include "ScriptedMarkdown.hpp"
@@ -58,7 +56,9 @@
 #include "ScriptedReveal.hpp"
 #include "ScriptedSession.hpp"
 #include "ScriptedSettings.hpp"
+#include "ScriptedShellRegistration.hpp"
 #include "ScriptedStartLists.hpp"
+#include "ScriptedTextLayouts.hpp"
 #include "ScriptedThemes.hpp"
 #include "ScriptedUiLanguage.hpp"
 #include "ScrollLines.hpp"
@@ -67,6 +67,7 @@
 #include "Selection.hpp"
 #include "SelectionPresence.hpp"
 #include "SettleRecentTab.hpp"
+#include "SplitLayout.hpp"
 #include "StoreVimRegister.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
@@ -415,6 +416,31 @@ void verify_parked_references()
     expect(closed.parked().size() == 1 && closed.active_tab() == 0 &&
                closed.parked().at(0) == switched.parked().at(1),
            "closing a parked tab keeps the other bundles as they are");
+}
+
+// 脇の束を読む口と置く口（ヘッダーの契約）: アクティブと範囲の外は nullptr で、診断を置いても
+// 何も変えない。読み込み済みの脇の束には置ける。1 枠への分け直しと none は何も変えない。
+void verify_parked_bundle_edges()
+{
+    auto state = EditorState::create(Appearance::dark, EditMode::ordinary).with_new_tab();
+    expect(state.parked_bundle_at(state.active_tab()) == nullptr &&
+               state.parked_bundle_at(9) == nullptr && state.parked_bundle_at(0) != nullptr,
+           "the active tab and a position past the band have no parked bundle");
+    const std::vector<nenenib::core::Diagnostic> none{};
+    const auto active = state.with_parked_diagnostics(state.active_tab(), none, 7, {});
+    const auto outside = state.with_parked_diagnostics(9, none, 7, {});
+    const auto parked = state.with_parked_diagnostics(0, none, 7, {});
+    expect(active.parked().at(0) == state.parked().at(0) &&
+               outside.parked().at(0) == state.parked().at(0) &&
+               parked.parked().at(0) != state.parked().at(0),
+           "diagnostics land only on a loaded parked bundle");
+    expect(state.with_split(nenenib::core::SplitLayout::none).split().layout ==
+               nenenib::core::SplitLayout::none,
+           "splitting into none changes nothing");
+    const auto split = state.with_split(nenenib::core::SplitLayout::vertical);
+    expect(split.with_split(nenenib::core::SplitLayout::horizontal).split().layout ==
+               nenenib::core::SplitLayout::vertical,
+           "a second split of two panes changes nothing");
 }
 // 契約の経路。どれも絶対パスの形（起動引数とダイアログが作る値と同じ）。
 [[nodiscard]] FilePath path_of(std::string_view text)
@@ -1662,6 +1688,7 @@ void verify_tabs_contracts()
     verify_vim_switched_document();
     verify_switch_closes_input();
     verify_parked_references();
+    verify_parked_bundle_edges();
     verify_open_same_file();
     verify_open_same_file_by_port();
     verify_open_into_blank_untitled();

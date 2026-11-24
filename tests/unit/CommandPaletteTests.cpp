@@ -5,6 +5,7 @@
 #include "BuiltinThemes.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
+#include "ClipboardFailure.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
 #include "CommandEdit.hpp"
@@ -352,6 +353,13 @@ void verify_palette_input_isolation()
     frame = controller.apply_frame(app::PasteCommand{});
     expect(frame.command_message.has_value(),
            "invalid paste reports inline without replacing input");
+    editor.clipboard().hold(std::unexpected(app::ClipboardFailure::read_failed));
+    frame = controller.apply_frame(app::PasteCommand{});
+    expect(frame.command_message.has_value() &&
+               frame.command_message.value().text() == "Clipboard unavailable" &&
+               frame.command_line.value_or(core::InputLineView{}).text ==
+                   ":set guifont=MS Gothic:h17",
+           "a clipboard that cannot be read says so and keeps the query");
     frame = controller.apply_frame(app::OpenCommandPalette{});
     expect(frame.command_palette.has_value() && editor.settings().writes() == 0,
            "Ctrl+P in the open palette keeps it open (ADR 0150 decision 2)");

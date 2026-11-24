@@ -49,6 +49,7 @@
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "ScrollLines.hpp"
+#include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
@@ -61,6 +62,7 @@
 #include "ServerStarted.hpp"
 #include "Session.hpp"
 #include "SessionTab.hpp"
+#include "SettingsFailure.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "StatusItems.hpp"
@@ -304,6 +306,13 @@ void verify_switch()
     const auto asked = run_ex(editing.controller(), "set lsp?");
     expect(message(asked) == "lsp=on" && server.launches().size() == 2,
            "set lsp? only tells the current value");
+    // 保存できなければ断り、子はそのまま（決定 7「保存できなければ断る」）。
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto refused = run_ex(editing.controller(), "set nolsp");
+    expect(message(refused) == "Settings could not be saved" &&
+               !contains(last_sent(editing), R"("method":"shutdown")") &&
+               saved_lsp(editing) == std::optional<bool>{true},
+           "set nolsp that cannot be saved is refused and keeps the server");
 }
 
 // 失敗は 1 行の知らせ・自動の再起動は 3 回まで・超えたら止まり `:set lsp` で再開（決定 6）。
@@ -1305,6 +1314,38 @@ void verify_request_expiry()
     expect(hover_text(editing) == "<none>", "the answer after the expiry is dropped");
 }
 
+// 補完・定義・参照・記号・引数の情報・整形の要求も、hover と同じく答えないまま 2 回の tick で
+// `$/cancelRequest` を送って捨て、知らせも止めもしない（ADR 0190 の決定 1）。
+void verify_every_request_expires()
+{
+    Editing editing(lsp_settings(true));
+    started_with(
+        editing,
+        R"({"textDocumentSync":2,"completionProvider":{},"definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true,"signatureHelpProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true})");
+    auto &controller = editing.controller();
+    applied(controller, app::SelectAll{});
+    const bool asked = controller.request_completion(1) && controller.request_definition() &&
+                       controller.request_references() && controller.request_document_symbols() &&
+                       controller.request_signature_help(std::nullopt, false) &&
+                       controller.request_formatting(true);
+    std::vector<std::int64_t> ids;
+    for (const std::string_view method :
+         {"textDocument/completion", "textDocument/definition", "textDocument/references",
+          "textDocument/documentSymbol", "textDocument/signatureHelp",
+          "textDocument/rangeFormatting"})
+    {
+        ids.push_back(last_request(editing, method));
+    }
+    static_cast<void>(controller.apply_frame(app::LanguageServerTick{}));
+    const auto stale = controller.apply_frame(app::LanguageServerTick{});
+    auto cancelled = editing.language_server().cancelled();
+    std::ranges::sort(cancelled);
+    std::ranges::sort(ids);
+    expect(asked && cancelled == ids && message(stale).empty() &&
+               editing.language_server().stops() == 0,
+           "every silent request kind is cancelled after two ticks without a notice");
+}
+
 // ---------------------------------------------- 段 L3: hover の札と定義へ（ADR 0190 の決定
 // 6〜8・#1834）
 
@@ -2074,6 +2115,7 @@ void verify_language_server_contracts()
     verify_cancel();
     verify_completion_answer();
     verify_request_expiry();
+    verify_every_request_expires();
     verify_language_queries();
     verify_abilities_one_by_one();
     verify_requests_need_a_sent_document();

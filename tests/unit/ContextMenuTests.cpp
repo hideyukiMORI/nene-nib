@@ -8,6 +8,7 @@
 #include "CommandChoice.hpp"
 #include "CommandPaletteView.hpp"
 #include "CommandText.hpp"
+#include "ComposeText.hpp"
 #include "ContextMenu.hpp"
 #include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
@@ -48,6 +49,7 @@
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "ToggleExplorer.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
@@ -357,6 +359,35 @@ void verify_close()
     expect(!controller.context_menu_active(), "the menu does not open over the input line");
 }
 
+// 変換の間とエクスプローラーに焦点がある間は開かない（ui もこの間は送らない）。開いたメニューで、
+// 選んでいない Enter・行の外のクリック・行の外を指すことは何もしない。
+void verify_menu_refusals()
+{
+    Editing composing;
+    prepare_line(composing.controller());
+    static_cast<void>(composing.controller().apply(app::ComposeText{composed_of("に", {}, 0)}));
+    static_cast<void>(composing.controller().apply(right_click(5.0F)));
+    expect(!composing.controller().context_menu_active(),
+           "the menu does not open over the IME composition");
+    Editing focused;
+    prepare_line(focused.controller());
+    static_cast<void>(focused.controller().apply(app::ToggleExplorer{}));
+    static_cast<void>(focused.controller().apply(right_click(5.0F)));
+    expect(!focused.controller().context_menu_active(),
+           "the menu does not open while the explorer has the focus");
+    Editing editing;
+    auto &controller = editing.controller();
+    prepare_line(controller);
+    static_cast<void>(controller.apply(right_click(5.0F)));
+    const auto unchosen = controller.apply_frame(app::ChooseContextMenu{std::nullopt});
+    const auto outside = controller.apply_frame(app::ChooseContextMenu{99});
+    static_cast<void>(controller.apply(app::PointContextMenu{99}));
+    expect(controller.context_menu_active() && !unchosen.operation_request.has_value() &&
+               !outside.operation_request.has_value() &&
+               !controller.context_menu_highlighted().has_value(),
+           "Enter with no row chosen, a row past the end and pointing past the end do nothing");
+}
+
 [[nodiscard]] Editing &vim_line(Editing &editing)
 {
     prepare_line(editing.controller());
@@ -625,6 +656,7 @@ void verify_context_menu_scope()
     verify_keep_selection();
     verify_choose_and_step();
     verify_close();
+    verify_menu_refusals();
     verify_vim_normal();
     verify_vim_visual();
     verify_reopen_while_open();

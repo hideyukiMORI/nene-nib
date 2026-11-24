@@ -34,6 +34,7 @@
 #include "SelectEditMode.hpp"
 #include "SessionEnd.hpp"
 #include "SettingsChoiceTimeout.hpp"
+#include "SettingsFailure.hpp"
 #include "StoreVimRegister.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
@@ -1194,6 +1195,14 @@ void verify_ex_commands()
     static_cast<void>(run_ex(controller, "nmap"));
     expect(message_is(controller, "Not supported: listing mappings"),
            "the list is not offered yet");
+    // 保存できなければ断って鳴らし、表に足さない（Q はまだ x にならない）。
+    editing.settings().fail(application::SettingsFailure::unwritable);
+    const auto rings = editing.bell().rings();
+    static_cast<void>(run_ex(controller, "nnoremap Q x"));
+    expect(message_is(controller, "Settings could not be saved") && editing.bell().rings() > rings,
+           "a map that cannot be saved is refused with a ring");
+    vim_replay(controller, "Q");
+    expect(whole_vim_body(controller) == "bcdef\n", "the refused map does not apply");
 }
 
 [[nodiscard]] std::optional<core::ExMapRequest> request_of(std::string_view text)
