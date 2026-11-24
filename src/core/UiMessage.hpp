@@ -166,6 +166,9 @@ enum class UiMessage : std::uint16_t
     operation_format_document_description,
     operation_format_selection_name,
     operation_format_selection_description,
+    // 名前を変更の操作（#2004・ADR 0194 の決定 7）。
+    operation_rename_symbol_name,
+    operation_rename_symbol_description,
     app_error_window_class,
     app_error_window_create,
     app_error_rendering_start,
@@ -486,10 +489,32 @@ enum class UiMessage : std::uint16_t
     notice_formatting_busy,
     // Vim の INSERT で頼んだ整形を頼まずに断る 1 行（#1997 の 2 回目のレビュー F1）。
     notice_formatting_in_insert,
+    // 名前の変更と、言語サーバーの編集（WorkspaceEdit）を当てる知らせ（#2004・ADR 0194 の決定
+    // 3〜7）。
+    notice_rename_not_supported,
+    notice_rename_in_insert,
+    prompt_rename,
+    notice_rename_refused,
+    notice_rename_not_found,
+    notice_server_edit_stale,
+    notice_server_edit_busy,
+    notice_server_edit_unreadable,
+    notice_server_edit_resource_operation,
+    notice_server_edit_needs_confirmation,
+    notice_server_edit_too_many_files,
+    notice_server_edit_not_a_file,
+    notice_server_edit_unreachable,
+    notice_server_edit_giant_line,
+    notice_server_edit_applied,
+    notice_server_edit_applied_files,
+    // 頼んだ席が開いていない未保存のタブ・UTF-8 でないファイルへの編集を断る 1 行（#2011 のレビュー
+    // M1・R2）。
+    notice_server_edit_unsent,
+    notice_server_edit_not_utf8,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_formatting_in_insert) + 1U;
+    std::to_underlying(UiMessage::notice_server_edit_not_utf8) + 1U;
 } // namespace nenenib::core

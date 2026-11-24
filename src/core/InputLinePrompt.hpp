@@ -28,6 +28,9 @@ enum class InputLinePrompt : std::uint8_t
     substitute_confirm,
     // イージーモーションの `\\f` `\\F` `\\s` の 1 文字の入力行（ADR 0163 の決定 4）。確定した最初の
     // 1 文字を跳び先の文字として engine へ流す。
-    jump_character
+    jump_character,
+    // 言語サーバーの名前の変更の「新しい名前: 」（#2004・ADR 0194 の決定 7）。初めの文字は今の
+    // 名前で、Enter で頼み Esc でやめる。照合器へも履歴へも渡らない。
+    rename
 };
 } // namespace nenenib::core

@@ -33,6 +33,9 @@ class SearchLine final
     [[nodiscard]] static SearchLine opened_replace_with(std::string_view preset);
     // 通常モードの「行: 」（空で開く）。
     [[nodiscard]] static SearchLine opened_go_to_line();
+    // 名前の変更の「新しい名前: 」（#2004・ADR 0194 の決定 7）。今の名前 preset
+    // を置く（入らなければ 空・opened_find と同じ）。
+    [[nodiscard]] static SearchLine opened_rename(std::string_view preset);
     [[nodiscard]] std::string_view text() const noexcept;
     [[nodiscard]] Offset caret() const noexcept;
     // 行があふれているか（CommandLine::overflowed と同じ規則・InputText の overflows・#1568）。

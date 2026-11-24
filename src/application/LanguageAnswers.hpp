@@ -4,6 +4,8 @@
 #include "LanguageDefinition.hpp"
 #include "LanguageFormatting.hpp"
 #include "LanguageHover.hpp"
+#include "LanguageRename.hpp"
+#include "LanguageRenameTarget.hpp"
 #include "LanguageSignature.hpp"
 #include "LanguageSymbols.hpp"
 
@@ -28,5 +30,9 @@ struct LanguageAnswers
     // 整形の答え（#1993・ADR 0191 の決定 7）。照合は当てるときにする（変わっていたら 1
     // 行知らせる）。
     std::optional<LanguageFormatting> formatting = std::nullopt;
+    // 名前の変更の答え（#2004・ADR 0194 の決定 7）。変えられる所の問いの答えと、名前の変更の答え。
+    // 照合はどちらも使うときにする。
+    std::optional<LanguageRenameTarget> rename_target = std::nullopt;
+    std::optional<LanguageRename> rename = std::nullopt;
 };
 } // namespace nenenib::application

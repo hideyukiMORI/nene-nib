@@ -522,6 +522,7 @@ constexpr std::array<OperationRunner, core::operation_texts.size()> EditorWindow
         {core::EditorOperation::show_signature_help, &EditorWindow::run_show_signature_help},
         {core::EditorOperation::format_document, &EditorWindow::run_format_document},
         {core::EditorOperation::format_selection, &EditorWindow::run_format_selection},
+        {core::EditorOperation::rename_symbol, &EditorWindow::run_rename_symbol},
     }};
 
 EditorWindow::OperationFunction EditorWindow::runner_of(core::EditorOperation operation) noexcept
@@ -872,6 +873,12 @@ void EditorWindow::run_format_document()
 void EditorWindow::run_format_selection()
 {
     send(application::QueryLanguage{core::LanguageQueryKind::format_selection});
+}
+
+// 名前を変更（#2004・ADR 0194 の決定 7）。新しい名前は入力行で聞く。
+void EditorWindow::run_rename_symbol()
+{
+    send(application::QueryLanguage{core::LanguageQueryKind::rename});
 }
 
 // 操作「ルートのフォルダを選ぶ」（ADR 0162 の決定 7）。FOS_PICKFOLDERS のダイアログで選んだ

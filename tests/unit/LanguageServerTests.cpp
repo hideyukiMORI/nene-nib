@@ -985,9 +985,14 @@ void verify_abilities()
     expect(
         contains(
             server.sent().front(),
-            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}},"formatting":{},"rangeFormatting":{}})"),
+            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}},"formatting":{},"rangeFormatting":{},"rename":{"prepareSupport":true}})"),
         "initialize offers didSave, versioned diagnostics, completion without snippets, hover "
         "text, definition links, references, document symbols and signature help");
+    expect(
+        contains(
+            server.sent().front(),
+            R"("workspace":{"workspaceEdit":{"documentChanges":true,"failureHandling":"abort"}})"),
+        "initialize offers workspace edits with document changes and abort only (#2004)");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.completion && abilities.hover && abilities.definition &&
                abilities.trigger_characters == std::vector<std::string>{".", "->"},

@@ -31,6 +31,9 @@ std::string prompt_text(core::InputLinePrompt prompt, std::string_view detail,
     // イージーモーションの 1 文字の入力行（ADR 0163 の決定 4）。
     case core::InputLinePrompt::jump_character:
         return std::string(core::ui_text(core::UiMessage::prompt_jump_character, language));
+    // 名前の変更の「新しい名前: 」（#2004・ADR 0194 の決定 7）。
+    case core::InputLinePrompt::rename:
+        return std::string(core::ui_text(core::UiMessage::prompt_rename, language));
     case core::InputLinePrompt::replace_with:
         return detail.empty()
                    ? std::string(core::ui_text(core::UiMessage::prompt_replace_with, language))
