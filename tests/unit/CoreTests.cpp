@@ -2209,6 +2209,28 @@ void verify_status_bar_fitted()
            "a short line and column beside a short mode text stays in the smallest window");
 }
 
+// モードの文の後ろの欄（録画と診断の文・ADR 0161 の 2026-11-24 の追補・#2025）。layout は
+// verify_status_bar_fitted と同じ 640 × 360 DIP（行と桁 304〜400・印 278〜302）。
+void verify_status_after_mode()
+{
+    using nenenib::core::status_after_mode;
+    using nenenib::core::width_of;
+    const auto layout = status_bar_layout(640, 360, 96);
+    expect(status_after_mode(layout, 180, false) ==
+                   LayoutRect{180, layout.band.top, 304, layout.band.bottom} &&
+               status_after_mode(layout, 180, true) ==
+                   LayoutRect{180, layout.band.top, 278, layout.band.bottom},
+           "the text after the mode ends before the line and column, or before the mark");
+    const auto narrow = status_bar_layout(360, 200, 96);
+    const auto full = status_after_mode(narrow, narrow.items.at(0).left + 5, false);
+    expect(
+        width_of(full) == 0 && full.left == narrow.items.at(0).left + 5,
+        "when the toggle and the mode fill the left side there is no room and nothing is written");
+    const auto dropped = nenenib::core::status_bar_fitted(narrow, 96, 40, 70);
+    expect(status_after_mode(dropped, 180, false).right == narrow.items.at(0).right,
+           "a dropped line and column leaves its place to the text after the mode");
+}
+
 void verify_status_bar_scaling()
 {
     const auto at_125 = status_bar_layout(800, 450, 120);
@@ -2794,6 +2816,7 @@ void verify_status_items_scope()
     verify_status_items();
     verify_status_position_boundaries();
     verify_diagnostic_status_items();
+    verify_status_after_mode();
 }
 
 void verify_theme_scope()
@@ -2837,6 +2860,7 @@ void verify_look()
     verify_status_bar_rectangles();
     verify_status_bar_scaling();
     verify_status_bar_fitted();
+    verify_status_after_mode();
     verify_status_bar_hits();
 }
 } // namespace nenenib::tests
