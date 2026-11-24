@@ -17,6 +17,7 @@
 #include "Column.hpp"
 #include "CommandEdit.hpp"
 #include "CommandText.hpp"
+#include "ContextMenuView.hpp"
 #include "CopyTabName.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
@@ -1047,6 +1048,27 @@ void verify_full_preview_passes_window()
     expect(refused_in_full(app::InsertText{"x"}), "an edit outside the table is refused");
 }
 
+// 全面の右クリックは読む側のメニュー（ContextMenuMode::reading）。写せるのは全面の選択があるとき
+// だけで、切り取り・貼り付け・削除はいつも使えない（ADR 0078 の追補・メニューの表）。
+void verify_full_preview_menu()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    open_text(editing, "# Title\n\ntext");
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    const auto plain = controller.apply_frame(app::OpenContextMenu{10, 10, std::nullopt});
+    const auto unselected = plain.context_menu.value_or(app::ContextMenuView{}).rows;
+    applied(controller, app::CloseContextMenu{});
+    applied(controller, app::SelectAll{});
+    const auto chosen = controller.apply_frame(app::OpenContextMenu{10, 10, std::nullopt});
+    const auto selected = chosen.context_menu.value_or(app::ContextMenuView{}).rows;
+    expect(unselected.size() > 3 && selected.size() > 3 && !unselected.at(1).enabled &&
+               selected.at(1).enabled && !selected.at(0).enabled && !selected.at(2).enabled &&
+               !selected.at(3).enabled,
+           "the reading menu copies only with a preview selection and never edits");
+}
+
 // 開く・保存・入力行・Ctrl+P・右クリックの面・リンクの札（passes_full_preview）。
 void verify_full_preview_passes_input()
 {
@@ -1104,5 +1126,6 @@ void verify_preview_full_scope()
     verify_full_preview_resize();
     verify_full_preview_passes_window();
     verify_full_preview_passes_input();
+    verify_full_preview_menu();
 }
 } // namespace nenenib::tests

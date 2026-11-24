@@ -857,6 +857,15 @@ void verify_truncated()
     expect(view_of(bottom).first_visible == core::ExplorerTree::entry_limit + 1 - 9 &&
                rows.size() == 9 && rows.back().more && rows.front().name == "f1992",
            "more entries than the limit end with the … row");
+    // 「…」の行はクリックしても Enter でも選ぶだけで、何も開かない（決定 4 の改め #1388）。
+    const std::size_t more = view_of(bottom).total - 1;
+    applied(editing.controller(), PointExplorer{more, ExplorerPointing::pressed});
+    applied(editing.controller(), PointExplorer{more, ExplorerPointing::released});
+    applied(editing.controller(), PointExplorer{more, ExplorerPointing::double_click});
+    const auto entered = key(editing, ExplorerKeyKind::enter);
+    expect(editing.reads().requests().empty() && entered.tabs.size() == 1 &&
+               view_of(entered).rows.back().more,
+           "the … row opens nothing by a click, a double click or Enter");
 }
 
 void verify_root_requests()

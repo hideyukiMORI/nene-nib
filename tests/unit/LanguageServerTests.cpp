@@ -315,6 +315,18 @@ void verify_switch()
            "set nolsp that cannot be saved is refused and keeps the server");
 }
 
+// `shutdown` を送った後に子が答えずに終わったのは頼んだ終わりで、失敗として知らせない（決定 6）。
+void verify_exit_while_shutting_down()
+{
+    Editing editing(lsp_settings(true));
+    started(editing);
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    const auto ended = delivered(editing, app::ServerExited{0});
+    // 失敗の知らせは言語の名前（cpp）を添える（決定 6）。終わりの後の行はそれを含まない。
+    expect(editing.language_server().stops() == 1 && !contains(message(ended), "cpp"),
+           "a child that ends after shutdown is stopped without a failure notice");
+}
+
 // 失敗は 1 行の知らせ・自動の再起動は 3 回まで・超えたら止まり `:set lsp` で再開（決定 6）。
 void verify_restart_limit()
 {
@@ -2092,6 +2104,7 @@ void verify_language_server_contracts()
     verify_lifecycle();
     verify_unreadable_messages_dropped();
     verify_switch();
+    verify_exit_while_shutting_down();
     verify_language_server_slots();
     verify_restart_limit();
     verify_failures_reset();
