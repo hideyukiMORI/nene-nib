@@ -396,7 +396,8 @@ records in `docs/quality/`.
   opened that is not UTF-8 without a BOM (or is over 4 MiB) is refused in one line. Known limits: a server that has not read the other files
   of the project yet may rename the name only in the open files; and if a tab that the server has not opened
   has unsaved changes, the whole rename is refused (save it and try again).
-  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). In a list
+  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). *New in 1.2.0*: while that
+  list is open in Vim INSERT mode, ↑ ↓ PageUp PageDown choose a row instead of moving the caret (decision D111). In a list
   opened by a trigger character (ordinary and Vim modes), clicking a row accepts it, Tab accepts the chosen row
   or the top one, and Enter accepts only a row chosen with the arrow keys or Ctrl-n / Ctrl-p. The settings
   drawer's language-server section lists the servers found on the PC and writes the command line when one is

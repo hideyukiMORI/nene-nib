@@ -105,7 +105,10 @@ def product_candidates():
 
 
 def probe_candidates():
-    return items(block(read(PROBE), "fixed_candidates = std::to_array<std::string_view>({"), {})
+    # clang-format may break the line after `=`, so the name and the initializer are found separately.
+    text = read(PROBE)
+    declared = text[text.index("fixed_candidates ="):]
+    return items(block(declared, "std::to_array<std::string_view>({"), {})
 
 
 def function_body(text, signature):
