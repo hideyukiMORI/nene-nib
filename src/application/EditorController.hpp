@@ -16,6 +16,7 @@
 #include "CompletionEntry.hpp"
 #include "CompletionList.hpp"
 #include "CompletionSession.hpp"
+#include "CompletionStep.hpp"
 #include "CompletionView.hpp"
 #include "CompositionView.hpp"
 #include "ContextMenuItem.hpp"
@@ -310,6 +311,9 @@ class EditorController final
     // 窓が Enter と Tab を面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
     // 打鍵で自動に開いて使う人がまだ選んでいない面の Enter は偽（#1971）。
     [[nodiscard]] bool completion_commits(CompletionCommitKey key) const;
+    // Vim の INSERT で補完の面が見えていて、↑↓・PageUp / PageDown を面の行を選ぶ意図 StepCompletion
+    // で送るか（#2024）。map の左辺の待ち・変換中・入力行の間は偽（鍵は今までどおり Vim へ）。
+    [[nodiscard]] bool completion_takes_arrows() const noexcept;
     // 帯のタブの退避番号の並び（帯の順）とアクティブなタブの位置（ADR 0078 の追補 #1790）。窓が
     // 「ほかのタブを閉じる」「右のタブを閉じる」で次に閉じるタブを引き直す安い読みで、frame を
     // 作らない。
@@ -1641,6 +1645,10 @@ class EditorController final
     [[nodiscard]] bool triggered_confirm_took(const core::VimKey &key);
     [[nodiscard]] bool engine_confirm_took(bool tab);
     [[nodiscard]] bool auto_tab_took();
+    // engine の外の面の Ctrl-y / Ctrl-e（↑↓ で選んでいれば Ctrl-y は確定・#2024）。
+    [[nodiscard]] bool auto_closing_key_took(core::VimSpecialKey pressed);
+    // engine の補完の中の ↑↓・PageUp / PageDown を Ctrl-n / Ctrl-p の歩にする（#2024）。
+    void step_engine_completion(CompletionStep step);
     // 自動で開いた面（engine の外）の index 番目の候補を、Ctrl-n で engine へ移してから確定する。
     // index は自動の面の行の位置で、engine の語に直せない候補なら面を閉じるだけ。
     void choose_auto_vim_row(std::size_t index);
