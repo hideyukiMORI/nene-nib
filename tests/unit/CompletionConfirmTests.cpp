@@ -7,6 +7,7 @@
 // map より確定が先なことも縛る。替え玉 ScriptedLanguageServer だけを使い、本物のサーバーも窓も
 // 使わない。
 #include "CaretMotion.hpp"
+#include "CaretView.hpp"
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
 #include "CompletionCommitKey.hpp"
@@ -472,6 +473,149 @@ void verify_vim_outside_close_and_same_word()
     expect(body(same) == "int main() {}\nx.size\ny.\t\n",
            "Shift+Tab (the window closes the face first) puts a tab character in");
 }
+
+// 窓が Vim の INSERT の ↑↓・PageUp / PageDown で送る意図（#2024）。
+app::EditorFrame arrowed(Editing &editing, app::CompletionStep step)
+{
+    return editing.controller().apply_frame(app::StepCompletion{step});
+}
+
+[[nodiscard]] app::CaretView caret_of(Editing &editing)
+{
+    return editing.controller().frame().caret;
+}
+
+// #2024: 自動で開いた面（engine の外）の ↓ ↑ は行を選ぶだけで本文もキャレットも変えない。選んだ後の
+// Enter・Tab・Ctrl-y はその行で確定し、Esc は何も入れずに NORMAL へ。
+void verify_vim_arrows_on_auto_face()
+{
+    Editing editing(lsp_settings());
+    capable(editing, true);
+    static_cast<void>(pressed(editing, "ox."));
+    static_cast<void>(answered(editing, three_items));
+    const app::CaretView caret = caret_of(editing);
+    const auto first = arrowed(editing, app::CompletionStep::next);
+    const auto second = arrowed(editing, app::CompletionStep::next);
+    expect(chosen(first) == "empty" && chosen(second) == "size" &&
+               body(editing) == "int main() {}\nx.\n" && caret_of(editing) == caret &&
+               editing.controller().vim_state().insert_completion == nullptr,
+           "Down on an automatic face chooses rows without touching the text or the caret");
+    static_cast<void>(pressed(editing, "<CR>"));
+    expect(body(editing) == "int main() {}\nx.size\n" && inserting(editing),
+           "Enter after Down commits the chosen row without breaking the line");
+    static_cast<void>(pressed(editing, "<Esc>"));
+    expect(dot_record_is(editing.controller().vim_state(), std::nullopt, "ox.size<Esc>"),
+           "the dot record holds the committed word as typed text");
+    static_cast<void>(pressed(editing, "u"));
+    expect(body(editing) == "int main() {}\n", "the insert with its commit is one undo unit");
+
+    static_cast<void>(pressed(editing, "oy."));
+    static_cast<void>(answered(editing, three_items));
+    expect(chosen(arrowed(editing, app::CompletionStep::previous)) == "swap",
+           "Up from no choice chooses the last row");
+    static_cast<void>(pressed(editing, "<Tab> z."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(arrowed(editing, app::CompletionStep::next));
+    static_cast<void>(pressed(editing, "<Esc>"));
+    expect(body(editing) == "int main() {}\ny.swap z.\n" &&
+               editing.controller().vim_state().mode == core::VimMode::normal,
+           "Tab commits the row chosen with Up, and Esc after Down puts nothing in");
+    static_cast<void>(pressed(editing, "A w."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(arrowed(editing, app::CompletionStep::next));
+    static_cast<void>(arrowed(editing, app::CompletionStep::next));
+    static_cast<void>(pressed(editing, "<C-y>"));
+    expect(body(editing) == "int main() {}\ny.swap z. w.size\n",
+           "Ctrl-y after Down commits the chosen row");
+}
+
+// #2024: 自動の面の ↓ ↑ は録画に積まず、確定した語を打った本文として積む（`@a` で同じ本文）。
+// engine の補完へ移った後の ↓ ↑ は Ctrl-n / Ctrl-p と同じ 1 歩（選ぶたびに本文へ）。
+void verify_vim_arrows_recording_and_engine()
+{
+    Editing editing(lsp_settings());
+    capable(editing, true);
+    static_cast<void>(pressed(editing, "qaov."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(arrowed(editing, app::CompletionStep::next));
+    static_cast<void>(pressed(editing, "<CR> u."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(arrowed(editing, app::CompletionStep::page_next));
+    static_cast<void>(pressed(editing, "<Tab> t."));
+    static_cast<void>(answered(editing, three_items));
+    static_cast<void>(pressed(editing, "<C-n>"));
+    const auto down = arrowed(editing, app::CompletionStep::next);
+    expect(chosen(down) == "size" && body(editing) == "int main() {}\nv.empty u.swap t.size\n",
+           "Down after Ctrl-n walks the engine's completion and puts the row in");
+    const auto up = arrowed(editing, app::CompletionStep::previous);
+    expect(chosen(up) == "empty", "Up walks it back");
+    static_cast<void>(pressed(editing, "<CR><Esc>q"));
+    const std::string typed = "v.empty u.swap t.empty";
+    expect(macro_of(editing, U'a') == "o" + typed + "\x1b" &&
+               body(editing) == "int main() {}\n" + typed + "\n",
+           "the macro holds the committed words and none of the arrow or completion keys");
+    static_cast<void>(pressed(editing, "@a"));
+    expect(body(editing) == "int main() {}\n" + typed + "\n" + typed + "\n",
+           "replaying the macro puts the same text in");
+}
+
+// #2024: 手で開いた面（Ctrl-n / Ctrl-p）の ↓ は列の向きの鍵と同じ 1 歩（Ctrl-p で始めた列は
+// Ctrl-p）、 PageDown / PageUp は面の行数ぶんで端に止まる。`.` と `@a` と `u` は Ctrl-n
+// で選んだときと同じ。面が 無いとき・左辺の待ちの間は窓が ↑↓
+// を面へ送らない（今までどおりキャレットを動かす）。
+void verify_vim_arrows_by_hand()
+{
+    constexpr std::string_view words = "a1 a2 a1 x a3 a2";
+    Editing editing;
+    open_vim_document(editing, std::string(words));
+    expect(!editing.controller().completion_takes_arrows(),
+           "with no face the arrows stay Vim keys");
+    static_cast<void>(pressed(editing, "qa0fxcwa<C-n>"));
+    expect(editing.controller().completion_takes_arrows(), "with a face the arrows choose rows");
+    const auto down = arrowed(editing, app::CompletionStep::next);
+    expect(chosen(down) == "a2" && body(editing) == "a1 a2 a1 a2 a3 a2",
+           "Down on a face opened by Ctrl-n is the next Ctrl-n");
+    static_cast<void>(pressed(editing, "<Esc>q"));
+    expect(dot_record_is(editing.controller().vim_state(), std::nullopt, "cwa2<Esc>"),
+           "the dot record holds the word chosen with Down as typed text");
+    static_cast<void>(pressed(editing, "u"));
+    expect(body(editing) == words, "the insert is one undo unit");
+    static_cast<void>(pressed(editing, "@a"));
+    expect(body(editing) == "a1 a2 a1 a2 a3 a2", "replaying the macro puts the same word in");
+
+    Editing backward;
+    open_vim_document(backward, std::string(words));
+    static_cast<void>(pressed(backward, "fxcwa<C-p>"));
+    static_cast<void>(arrowed(backward, app::CompletionStep::next));
+    Editing keyed;
+    open_vim_document(keyed, std::string(words));
+    static_cast<void>(pressed(keyed, "fxcwa<C-p><C-p>"));
+    expect(body(backward) == body(keyed),
+           "Down on a list started by Ctrl-p is the next Ctrl-p (the next row)");
+
+    Editing many;
+    std::string text;
+    for (char letter = 'a'; letter <= 'l'; ++letter)
+    {
+        text += std::string("w") + letter + "x ";
+    }
+    open_vim_document(many, text + "w");
+    static_cast<void>(pressed(many, "A<C-n>"));
+    const auto paged = arrowed(many, app::CompletionStep::page_next);
+    const auto back = arrowed(many, app::CompletionStep::page_previous);
+    const auto top = arrowed(many, app::CompletionStep::page_previous);
+    expect(many.controller().vim_state().insert_completion != nullptr && chosen(paged) == "wix" &&
+               chosen(back) == "wax" && chosen(top) == "wax",
+           "PageDown moves a face height down and PageUp stops at the top row");
+
+    Editing pending(lsp_settings({core::MapRow{insert_modes, "jk", "<Esc>", false}}));
+    capable(pending, true);
+    static_cast<void>(pressed(pending, "ox."));
+    static_cast<void>(answered(pending, three_items));
+    static_cast<void>(pressed(pending, "j"));
+    expect(!pending.controller().completion_takes_arrows(),
+           "while a map waits for its next key the arrows stay Vim keys");
+}
 } // namespace
 
 void verify_completion_confirm()
@@ -486,5 +630,8 @@ void verify_completion_confirm()
     verify_vim_unconvertible();
     verify_vim_pending_and_enter_map();
     verify_vim_outside_close_and_same_word();
+    verify_vim_arrows_on_auto_face();
+    verify_vim_arrows_recording_and_engine();
+    verify_vim_arrows_by_hand();
 }
 } // namespace nenenib::tests

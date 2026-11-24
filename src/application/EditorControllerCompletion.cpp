@@ -99,6 +99,7 @@ constexpr std::size_t typed_limit = 1024;
     case core::EditMode::vim:
         return std::holds_alternative<VimKeyPress>(intent) ||
                std::holds_alternative<ChooseCompletion>(intent) ||
+               std::holds_alternative<StepCompletion>(intent) ||
                std::holds_alternative<ScrollCompletion>(intent) ||
                detail::not_user_operation(intent);
     case core::EditMode::ordinary:
@@ -149,6 +150,25 @@ constexpr std::size_t typed_limit = 1024;
         return 0;
     case CompletionStep::page_next:
         return std::min(core::completion_face_rows, count) - 1;
+    }
+    std::unreachable();
+}
+
+// engine の補完の中の 1 つの面の歩が、Ctrl-n / Ctrl-p の何歩か（#2024）。selected が size 以上なら
+// 元の接頭辞（輪の端）。PageDown / PageUp は面の行数ぶんで列の端で止まる。
+[[nodiscard]] std::size_t engine_steps(CompletionStep step, std::size_t selected,
+                                       std::size_t size) noexcept
+{
+    const bool original = selected >= size;
+    switch (step)
+    {
+    case CompletionStep::previous:
+    case CompletionStep::next:
+        return 1;
+    case CompletionStep::page_next:
+        return std::min(core::completion_face_rows, original ? size : size - 1 - selected);
+    case CompletionStep::page_previous:
+        return original ? 0 : std::min(core::completion_face_rows, selected);
     }
     std::unreachable();
 }
@@ -574,6 +594,13 @@ void EditorController::accept(const StepCompletion &intent)
     {
         return;
     }
+    // Vim の engine の補完は engine が選ぶ（#2024）。engine の外の自動の面は通常モードと同じに選ぶ
+    // だけ（本文を変えない・録画に積まない）。
+    if (state_.mode() == core::EditMode::vim && state_.vim().insert_completion != nullptr)
+    {
+        step_engine_completion(intent.step);
+        return;
+    }
     auto &session = completion_.value();
     session.selected = awaits_choice(session)
                            ? first_choice(session.shown.size(), intent.step)
@@ -915,7 +942,17 @@ bool EditorController::triggered_confirm_took(const core::VimKey &key)
     {
         return engine_confirm_took(tab);
     }
-    return tab && !completion_.value().by_hand && has_rows(completion_.value()) && auto_tab_took();
+    if (completion_.value().by_hand || !has_rows(completion_.value()))
+    {
+        return false;
+    }
+    // ↑↓ で選んでいれば（#2024）、Enter も Tab もその行で確定する。
+    if (completion_.value().stepped)
+    {
+        choose_auto_vim_row(completion_.value().selected);
+        return true;
+    }
+    return tab && auto_tab_took();
 }
 
 // engine の補完へ移った面の Enter と Tab。選んでいる候補があればそれで確定し、元の接頭辞を選んで
@@ -940,6 +977,48 @@ bool EditorController::engine_confirm_took(bool tab)
     chosen_vim_row(0);
     close_completion();
     return true;
+}
+
+// engine の外の面の Ctrl-y と Ctrl-e（面を閉じて真）。↑↓ で選んでいる面の Ctrl-y はその行で確定し、
+// ほかは本文を変えずに閉じる（#2024）。
+bool EditorController::auto_closing_key_took(core::VimSpecialKey pressed)
+{
+    if (pressed == core::VimSpecialKey::control_y && completion_.has_value() &&
+        completion_.value().stepped)
+    {
+        choose_auto_vim_row(completion_.value().selected);
+        return true;
+    }
+    close_completion();
+    return true;
+}
+
+// Vim の INSERT の面の ↑↓・PageUp / PageDown（#2024）。engine の補完の中では、↓ は列の向きの鍵
+// （Ctrl-n で始めた列は Ctrl-n・Ctrl-p で始めた列は Ctrl-p）・↑ は逆の鍵の 1 歩で、Ctrl-n / Ctrl-p
+// を打ったのと同じ道（選ぶたびに本文へ・打鍵で自動に開いた面から移った補完なら録画に積まない）。
+// PageDown / PageUp は面の行数ぶん、列の端で止まる（元の接頭辞からの PageDown は先頭の側へ・PageUp
+// は動かない）。
+void EditorController::step_engine_completion(CompletionStep step)
+{
+    const auto &engine = *state_.vim().insert_completion;
+    const bool forward = engine.direction == core::CompletionDirection::forward;
+    const core::VimKey down{forward ? core::VimSpecialKey::control_n
+                                    : core::VimSpecialKey::control_p};
+    const core::VimKey up{forward ? core::VimSpecialKey::control_p
+                                  : core::VimSpecialKey::control_n};
+    const std::size_t steps = engine_steps(step, engine.selected, engine.words->size());
+    const bool downward = step == CompletionStep::next || step == CompletionStep::page_next;
+    for (std::size_t index = 0; index < steps && state_.vim().insert_completion != nullptr; ++index)
+    {
+        static_cast<void>(deliver_vim_key(downward ? down : up));
+    }
+}
+
+bool EditorController::completion_takes_arrows() const noexcept
+{
+    return state_.mode() == core::EditMode::vim && state_.vim().mode == core::VimMode::insert &&
+           completion_active() && state_.key_map_pending().empty() &&
+           !state_.composition().has_value() && !state_.command_input().has_value();
 }
 
 // engine の外の面の Tab。engine の語に直せる候補のいちばん上で確定する（無ければ偽・Vim のまま）。
@@ -1126,16 +1205,12 @@ bool EditorController::auto_vim_completion_took(const core::VimKey &key)
         return false;
     }
     const core::VimSpecialKey pressed = *special;
-    // 何も選んでいない面の Ctrl-y（確定）と Ctrl-e（取り消し）は、本文を変えずに面を閉じる。答えを
-    // 待っているだけ（面がまだ出ていない）なら Vim のまま。
+    // 何も選んでいない面の Ctrl-y（確定）と Ctrl-e（取り消し）は、本文を変えずに面を閉じる。↑↓ で
+    // 選んでいる面の Ctrl-y はその行で確定する（#2024）。答えを待っているだけ（面がまだ出ていない）
+    // なら Vim のまま。
     if (pressed == core::VimSpecialKey::control_y || pressed == core::VimSpecialKey::control_e)
     {
-        if (!has_rows(completion_.value()))
-        {
-            return false;
-        }
-        close_completion();
-        return true;
+        return has_rows(completion_.value()) && auto_closing_key_took(pressed);
     }
     if (pressed != core::VimSpecialKey::escape && pressed != core::VimSpecialKey::backspace &&
         pressed != core::VimSpecialKey::control_n && pressed != core::VimSpecialKey::control_p)
