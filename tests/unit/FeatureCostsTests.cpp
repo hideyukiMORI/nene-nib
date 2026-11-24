@@ -296,12 +296,12 @@ void verify_value_names()
            "the finder preview steps forward through its four places and wraps");
     auto changed = core::default_editor_settings();
     changed.indent_guide_style = core::IndentGuideStyle::plain;
-    changed.indent_guide_active = false;
+    changed.indent_guide_highlight_current = false;
     changed.pane_resize_step_vim = true;
     expect(core::settings_value_text(changed, SettingsValue::indent_guide_style, english) ==
                    "One color" &&
-               core::settings_value_text(changed, SettingsValue::indent_guide_active, english) ==
-                   "Off" &&
+               core::settings_value_text(changed, SettingsValue::indent_guide_highlight_current,
+                                         english) == "Off" &&
                core::settings_value_text(changed, SettingsValue::pane_resize_step_vim, english) ==
                    "Follow Pane Resize Step",
            "the plain style, the unemphasised guide and the following Vim keys show their names");

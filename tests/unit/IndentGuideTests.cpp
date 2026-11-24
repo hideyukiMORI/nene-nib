@@ -292,17 +292,17 @@ void verify_value_parsers()
                core::indent_guide_width_stepped(4, false) == 2 &&
                core::indent_guide_width_stepped(2, false) == 2,
            "the guide width doubles and halves and stops at 2 and 8");
-    expect(core::indent_guide_colors_of("3") == std::optional<std::uint8_t>{3} &&
-               core::indent_guide_colors_of("6") == std::optional<std::uint8_t>{6} &&
-               !core::indent_guide_colors_of("2").has_value() &&
-               !core::indent_guide_colors_of("7").has_value() &&
-               !core::indent_guide_colors_of("").has_value() &&
-               !core::indent_guide_colors_of("33").has_value(),
+    expect(core::indent_guide_color_count_of("3") == std::optional<std::uint8_t>{3} &&
+               core::indent_guide_color_count_of("6") == std::optional<std::uint8_t>{6} &&
+               !core::indent_guide_color_count_of("2").has_value() &&
+               !core::indent_guide_color_count_of("7").has_value() &&
+               !core::indent_guide_color_count_of("").has_value() &&
+               !core::indent_guide_color_count_of("33").has_value(),
            "the color count reads one digit from 3 to 6");
-    expect(core::indent_guide_colors_stepped(3, false) == 3 &&
-               core::indent_guide_colors_stepped(4, false) == 3 &&
-               core::indent_guide_colors_stepped(6, true) == 6 &&
-               core::indent_guide_colors_stepped(5, true) == 6,
+    expect(core::indent_guide_color_count_stepped(3, false) == 3 &&
+               core::indent_guide_color_count_stepped(4, false) == 3 &&
+               core::indent_guide_color_count_stepped(6, true) == 6 &&
+               core::indent_guide_color_count_stepped(5, true) == 6,
            "the color count steps by one and stops at 3 and 6");
 }
 
