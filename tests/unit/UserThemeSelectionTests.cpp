@@ -68,6 +68,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <expected>
 #include <functional>
 #include <optional>
@@ -377,6 +378,62 @@ constexpr std::array<std::pair<core::ThemeFailure, std::string_view>, 15> theme_
     {core::ThemeFailure::invalid_color, "Invalid RGB or RGBA color"},
     {core::ThemeFailure::insufficient_contrast, "Text/background contrast must be at least 4.5"},
 }};
+
+// 理由の表の行の番号。理由を足すとこの switch がコンパイルで落ちる（-Wswitch-enum・CPP-002）ので、
+// 表に行を足す（#2016 のレビュー 推奨 2）。
+[[nodiscard]] consteval std::size_t theme_failure_row(core::ThemeFailure failure) noexcept
+{
+    using core::ThemeFailure;
+    switch (failure)
+    {
+    case ThemeFailure::not_found:
+        return 0;
+    case ThemeFailure::unreadable:
+        return 1;
+    case ThemeFailure::too_large:
+        return 2;
+    case ThemeFailure::malformed:
+        return 3;
+    case ThemeFailure::duplicate_key:
+        return 4;
+    case ThemeFailure::unknown_key:
+        return 5;
+    case ThemeFailure::missing_field:
+        return 6;
+    case ThemeFailure::unsupported_version:
+        return 7;
+    case ThemeFailure::invalid_name:
+        return 8;
+    case ThemeFailure::name_mismatch:
+        return 9;
+    case ThemeFailure::reserved_name:
+        return 10;
+    case ThemeFailure::invalid_text:
+        return 11;
+    case ThemeFailure::invalid_appearance:
+        return 12;
+    case ThemeFailure::invalid_color:
+        return 13;
+    case ThemeFailure::insufficient_contrast:
+        return 14;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] consteval bool theme_failure_rows_in_order() noexcept
+{
+    for (std::size_t index = 0; index < theme_failure_texts.size(); ++index)
+    {
+        if (theme_failure_row(theme_failure_texts.at(index).first) != index)
+        {
+            return false;
+        }
+    }
+    return theme_failure_row(core::ThemeFailure::insufficient_contrast) + 1U ==
+           theme_failure_texts.size();
+}
+
+static_assert(theme_failure_rows_in_order(), "the reason table has one row for every ThemeFailure");
 
 // 理由の文は表のとおりで、知らせはテーマの名前を前に置く。比較は名前と理由の両方を見る。
 void verify_theme_failure_texts()

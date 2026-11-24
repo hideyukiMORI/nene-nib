@@ -706,6 +706,21 @@ void verify_ex_input_isolation()
     return !result.has_value() && result.error() == core::ExEvaluationFailure{failure};
 }
 
+// 番地の後ろに空白と数字の続く行（`:1 2resize 10`）。Vim は番地の後ろの空白を飛ばして足し算に
+// 読む（#2019 で実測する別件）。ここでは、今の Nib がこの形を断る（答えを返さない）ことだけを縛り、
+// どう読むかは縛らない（#2016 のレビュー 推奨 1）。
+void verify_ex_spaced_ranges()
+{
+    for (const std::string_view text :
+         {"1 2resize 10", "1 2tabnext", "1 2only", "1 2hardcopy", "1 2LspLog", "1 2version",
+          "1 2syntax on", "1 2preview", "1 2buffers", "1 2grep x", "1 2w"})
+    {
+        expect(
+            !core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark).has_value(),
+            (std::string(text) + ": a number after the range and a space is refused").c_str());
+    }
+}
+
 // 範囲つきの行（ADR 0022 の追補 #1526）。範囲を取らない命令は E481、範囲つきの形をまだ持たない
 // 命令は unsupported、未知の命令は unknown のまま。範囲だけの `'<,'>` `.` `.,.+N` は受ける。
 void verify_ex_ranges()
@@ -1863,6 +1878,52 @@ void verify_input_history_entries()
            "history values are immutable");
 }
 
+// 入力欄の編集の数と、履歴の歩きか。編集を足すとこの switch がコンパイルで落ちる（-Wswitch-enum・
+// CPP-002）ので、数と最後の値を直してから下の試験を見直す（#2016 のレビュー 推奨 2）。
+constexpr std::size_t command_edit_count = 16;
+
+[[nodiscard]] constexpr bool history_edit(core::CommandEdit edit) noexcept
+{
+    switch (edit)
+    {
+    case core::CommandEdit::history_previous:
+    case core::CommandEdit::history_next:
+        return true;
+    case core::CommandEdit::left:
+    case core::CommandEdit::right:
+    case core::CommandEdit::home:
+    case core::CommandEdit::end:
+    case core::CommandEdit::backspace:
+    case core::CommandEdit::erase:
+    case core::CommandEdit::erase_word:
+    case core::CommandEdit::erase_to_start:
+    case core::CommandEdit::complete_next:
+    case core::CommandEdit::complete_previous:
+    case core::CommandEdit::page_previous:
+    case core::CommandEdit::page_next:
+    case core::CommandEdit::list_first:
+    case core::CommandEdit::list_last:
+        return false;
+    }
+    std::unreachable();
+}
+
+static_assert(history_edit(core::CommandEdit::history_next) &&
+                  std::to_underlying(core::CommandEdit::history_next) + 1U == command_edit_count,
+              "the command edits are counted to their last value");
+
+[[nodiscard]] constexpr std::array<bool, command_edit_count> history_edits_table()
+{
+    std::array<bool, command_edit_count> table{};
+    for (std::size_t value = 0; value < command_edit_count; ++value)
+    {
+        table.at(value) = history_edit(static_cast<core::CommandEdit>(value));
+    }
+    return table;
+}
+
+constexpr auto history_edits = history_edits_table();
+
 // 接頭辞の歩き・端で止まる・末尾の次は歩きを始めたときの入力。
 void verify_input_history_walk()
 {
@@ -1892,13 +1953,20 @@ void verify_input_history_walk()
                history.shown(walk.value()).caret.value == 3,
            "Down past the newest returns to the input typed before the walk");
     // 上下のほかの編集は 14 種類とも歩かない（歩きの途中でも・#2013）。
-    for (auto edit = std::to_underlying(CommandEdit::left);
-         edit < std::to_underlying(CommandEdit::history_previous); ++edit)
+    std::size_t others = 0;
+    for (std::size_t value = 0; value < command_edit_count; ++value)
     {
-        expect(!history.stepped(typed, std::nullopt, CommandEdit{edit}).has_value() &&
-                   !history.stepped(typed, walk, CommandEdit{edit}).has_value(),
+        if (history_edits.at(value))
+        {
+            continue;
+        }
+        ++others;
+        const auto edit = static_cast<CommandEdit>(value);
+        expect(!history.stepped(typed, std::nullopt, edit).has_value() &&
+                   !history.stepped(typed, walk, edit).has_value(),
                "other edits are not history steps");
     }
+    expect(others == 14, "the fourteen other edits are all tried");
     const core::InputText none{"zz", core::Offset{2}};
     expect(!history.stepped(none, std::nullopt, CommandEdit::history_previous).has_value(),
            "no entry with the prefix leaves the input");
@@ -2597,6 +2665,7 @@ void verify_ex_settings()
     verify_ex_command_table();
     verify_ex_window_recheck();
     verify_ex_ranges();
+    verify_ex_spaced_ranges();
     verify_ex_visual_range_refusal();
     verify_ex_visual_range_cancel_and_count();
     verify_ex_operator_colon_typed();

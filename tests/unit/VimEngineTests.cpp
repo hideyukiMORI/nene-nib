@@ -30,6 +30,7 @@
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
 #include "VimAction.hpp"
+#include "VimAlignedLine.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
 #include "VimColumnWish.hpp"
@@ -59,6 +60,8 @@
 #include "VimRepeatFailure.hpp"
 #include "VimRepeatRecord.hpp"
 #include "VimRowSpan.hpp"
+#include "VimScreenAlignment.hpp"
+#include "VimScreenPlace.hpp"
 #include "VimScrollUnit.hpp"
 #include "VimSelect.hpp"
 #include "VimSpecialKey.hpp"
@@ -2148,10 +2151,52 @@ void verify_vim_count_insert_replay_crlf()
 
 // 特別な鍵の文字（VimKeyTable.hpp・#2013）: 窓の命令は Ctrl-v と Ctrl-w だけが 0x16 と 0x17、
 // 数の増減は Ctrl-a と Ctrl-x だけが 0x01 と 0x18 で、ほかの特別な鍵は文字を持たない。
+// 特別な鍵の数。鍵を足すと下の switch がコンパイルで落ちる（-Wswitch-enum・CPP-002）ので、数と
+// 最後の鍵を直してから表を見直す（#2016 のレビュー 推奨 2）。
+constexpr std::size_t special_key_count = 26;
+
+[[nodiscard]] consteval bool named_special_key(VimSpecialKey key) noexcept
+{
+    switch (key)
+    {
+    case VimSpecialKey::escape:
+    case VimSpecialKey::enter:
+    case VimSpecialKey::backspace:
+    case VimSpecialKey::arrow_left:
+    case VimSpecialKey::arrow_right:
+    case VimSpecialKey::arrow_up:
+    case VimSpecialKey::arrow_down:
+    case VimSpecialKey::control_r:
+    case VimSpecialKey::home:
+    case VimSpecialKey::end:
+    case VimSpecialKey::page_up:
+    case VimSpecialKey::page_down:
+    case VimSpecialKey::control_d:
+    case VimSpecialKey::control_u:
+    case VimSpecialKey::control_f:
+    case VimSpecialKey::control_b:
+    case VimSpecialKey::control_v:
+    case VimSpecialKey::control_w:
+    case VimSpecialKey::control_a:
+    case VimSpecialKey::control_x:
+    case VimSpecialKey::control_o:
+    case VimSpecialKey::control_e:
+    case VimSpecialKey::control_y:
+    case VimSpecialKey::delete_key:
+    case VimSpecialKey::control_n:
+    case VimSpecialKey::control_p:
+        return true;
+    }
+    std::unreachable();
+}
+
+static_assert(named_special_key(VimSpecialKey::control_p) &&
+                  std::to_underlying(VimSpecialKey::control_p) + 1U == special_key_count,
+              "the special keys are counted to their last value");
+
 void verify_vim_special_key_characters()
 {
-    constexpr auto last = static_cast<std::size_t>(VimSpecialKey::control_p);
-    for (std::size_t value = 0; value <= last; ++value)
+    for (std::size_t value = 0; value < special_key_count; ++value)
     {
         const auto key = static_cast<VimSpecialKey>(value);
         const auto window = core::vim_window_control_character(key);
@@ -2176,9 +2221,16 @@ void verify_vim_operator_tables()
 {
     using core::VimAction;
     using core::VimOperator;
-    expect(core::vim_screen_alignment_for(VimAction::align_center).has_value() &&
-               !core::vim_screen_alignment_for(VimAction::move_left).has_value(),
-           "only an alignment action has a screen alignment");
+    // `zz` は中央に置いてキャレットは動かさない、`z.` は中央に置いて最初の非空白へ（ADR 0146）。
+    const auto centre = core::vim_screen_alignment_for(VimAction::align_center);
+    const auto dotted = core::vim_screen_alignment_for(VimAction::align_center_first_non_blank);
+    expect(
+        centre.has_value() && centre.value().place == core::VimScreenPlace::center &&
+            !centre.value().first_non_blank && centre.value().line == core::VimAlignedLine::caret &&
+            dotted.has_value() && dotted.value().place == core::VimScreenPlace::center &&
+            dotted.value().first_non_blank && dotted.value().line == core::VimAlignedLine::caret &&
+            !core::vim_screen_alignment_for(VimAction::move_left).has_value(),
+        "zz and z. centre the caret line and only an alignment action has an alignment");
     expect(core::vim_operator_doubles(VimOperator::toggle_case, VimAction::toggle_case_character) &&
                core::vim_operator_doubles(VimOperator::lower_case, VimAction::undo) &&
                core::vim_operator_doubles(VimOperator::upper_case, VimAction::undo_line),

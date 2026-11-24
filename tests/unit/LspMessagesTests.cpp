@@ -23,6 +23,7 @@
 #include "TextBuffer.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -307,6 +308,21 @@ constexpr std::array<std::pair<Language, std::string_view>, 42> named_language_i
     {Language::terraform, "terraform"},
     {Language::svelte, "svelte"},
 }};
+
+// 表は全部の言語を 1 行ずつ持つ（言語を足すとここが落ちる・#2016 のレビュー 推奨 2）。
+[[nodiscard]] consteval bool every_language_named_once() noexcept
+{
+    return std::ranges::all_of(named_language_ids,
+                               [](const auto &row)
+                               {
+                                   return std::ranges::count(
+                                              named_language_ids, row.first,
+                                              &std::pair<Language, std::string_view>::first) == 1;
+                               });
+}
+
+static_assert(named_language_ids.size() == core::language_count() && every_language_named_once(),
+              "the languageId table has one row for every Language");
 
 void verify_language_ids()
 {

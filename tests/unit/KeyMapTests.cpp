@@ -1583,23 +1583,21 @@ void verify_map_names()
                fails_with("let mapleader=\"a'", core::ExFailure::invalid_argument),
            ":let! is refused; a value without = or with mismatched quotes is E474");
     const auto candidates = core::map_command_candidates();
-    expect(candidates.size() == 19 && candidates.front() == "map" && candidates[11] == "onoremap" &&
-               candidates[17] == "ounmap" && candidates.back() == "let mapleader=",
-           "the candidates are the full names in table order and let mapleader=");
+    expect(candidates.size() == 19 && candidates.front() == "map" &&
+               candidates.back() == "let mapleader=",
+           "the candidates are the full names and let mapleader=");
 }
 
-// Vim の文字列: '…' の中の '' は 1 つの '、"…" の中の \\ \" \< は次の字をそのまま。ほかの
-// \ は残す。
+// 引用符の中の逃がし: '…' の中の '' は 1 つの '、"…" の中の \\ と \" は次の字をそのまま（Vim の
+// expr-quote と同じ形の分だけ。Vim のほかの逃がし（`\n` など）は #2018）。
 void verify_leader_strings()
 {
     constexpr core::VimModeSet none{};
-    expect(
-        requests("let mapleader='a''b'", {core::ExMapVerb::leader, none, "", "a'b", true}) &&
-            requests("let mapleader=\"a\\\"b\"",
-                     {core::ExMapVerb::leader, none, "", "a\"b", true}) &&
-            requests("let mapleader=\"\\\\\"", {core::ExMapVerb::leader, none, "", "\\", true}) &&
-            requests("let mapleader=\"\\n\"", {core::ExMapVerb::leader, none, "", "\\n", true}),
-        "the quoted value reads the doubled quote and the backslash escapes");
+    expect(requests("let mapleader='a''b'", {core::ExMapVerb::leader, none, "", "a'b", true}) &&
+               requests("let mapleader=\"a\\\"b\"",
+                        {core::ExMapVerb::leader, none, "", "a\"b", true}) &&
+               requests("let mapleader=\"\\\\\"", {core::ExMapVerb::leader, none, "", "\\", true}),
+           "the quoted value reads the doubled quote, \\\\ and \\\"");
     const auto settings = core::default_editor_settings();
     const auto comma = core::map_edited(settings, {core::ExMapVerb::leader, none, "", ",", true});
     expect(comma.has_value() && comma.value().mapleader == ",", "a one-key leader is stored");

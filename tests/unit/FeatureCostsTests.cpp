@@ -414,7 +414,7 @@ void verify_switch_back_and_names()
                                      core::DisplayLanguage::english) ==
                "Estimated time per keystroke with these settings: 0.64 ms + Low × 1 "
                "(about 1.04 ms)",
-           "a total under a tenth keeps its leading zero");
+           "the zero before the second decimal digit is kept (1.04)");
 }
 } // namespace
 

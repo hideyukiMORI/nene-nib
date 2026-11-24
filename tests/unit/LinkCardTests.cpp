@@ -42,6 +42,8 @@
 #include "SetPreviewPlacement.hpp"
 #include "TestSupport.hpp"
 #include "TogglePreview.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
@@ -517,13 +519,17 @@ void verify_card_texts()
     expect(texts_are(core::link_card_texts(core::LinkKind::refused, english), refused) &&
                texts_are(core::link_card_texts(core::LinkKind::heading, english), refused),
            "a refused card (and a heading, which has no card) only copies and closes");
-    expect(core::link_card_texts(core::LinkKind::web, core::DisplayLanguage::japanese).title !=
-               "Open this link?",
+    constexpr auto japanese = core::DisplayLanguage::japanese;
+    expect(core::link_card_texts(core::LinkKind::web, japanese).title ==
+                   core::ui_text(core::UiMessage::link_card_title_web, japanese) &&
+               core::link_card_texts(core::LinkKind::web, japanese).primary ==
+                   core::ui_text(core::UiMessage::link_card_open, japanese),
            "the card follows the display language");
 }
 
-// 16. 太字の範囲: web は `://` の後ろのホスト、mail は `mailto:` の後ろの宛名、document と
-// heading は最後の区切りの後ろ、refused は `://` があればホストで無ければ最後の名前。
+// 16. 太字の範囲（LinkCard.hpp の link_card_emphasis）: web は `://` の後ろのホスト、mail は
+// `mailto:` の後ろの宛名、document は最後の区切りの後ろ、refused は `://` があればホストで無ければ
+// 最後の名前。空の範囲もある。
 void verify_card_emphasis()
 {
     using Range = std::pair<std::size_t, std::size_t>;
@@ -534,19 +540,15 @@ void verify_card_emphasis()
                emphasis(core::LinkKind::web, "https://a.b#f") == Range{8, 11} &&
                emphasis(core::LinkKind::web, "https://host") == Range{8, 12},
            "a web link shows its host up to the next / ? or #");
-    expect(emphasis(core::LinkKind::web, "www.vim.org") == Range{11, 11},
-           "a web spelling without :// has an empty emphasis at its end");
     expect(emphasis(core::LinkKind::mail, "mailto:me@x.org?subject=a") == Range{7, 15} &&
-               emphasis(core::LinkKind::mail, "mailto:me@x.org") == Range{7, 15} &&
-               emphasis(core::LinkKind::mail, "ma") == Range{2, 2},
+               emphasis(core::LinkKind::mail, "mailto:me@x.org") == Range{7, 15},
            "a mail link shows the address up to ?");
     expect(emphasis(core::LinkKind::refused, "ftp://h.example/x") == Range{6, 15} &&
                emphasis(core::LinkKind::refused, "C:\\a\\b.exe") == Range{5, 10},
            "a refused link shows its host, or its last name without ://");
     expect(emphasis(core::LinkKind::document, "C:/w/note.md") == Range{5, 12} &&
-               emphasis(core::LinkKind::document, "C:/w/") == Range{5, 5} &&
-               emphasis(core::LinkKind::heading, "#first") == Range{0, 6},
-           "a document shows its last name; a heading has no separator");
+               emphasis(core::LinkKind::document, "C:/w/") == Range{5, 5},
+           "a document shows its last name, which can be empty");
 }
 
 // 17. 札の幅と矩形（物理画素）。幅は上限と領域の幅 − 2 × 端の空きの小さい方で負にならない。

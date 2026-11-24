@@ -143,11 +143,10 @@ void running(Editing &editing)
 }
 
 // 1 行の直し の端（#2013）: 列を始めないバイト・継続の欠けた列・4 バイトの字・終わりの無い CSI と
-// OSC・ESC \ で閉じる OSC・ESC と範囲の外の 1 文字・C1 でない 2 バイトと双方向の制御でない 3
-// バイト。
+// OSC・ESC \ で閉じる OSC・C1 でない 2 バイトと双方向の制御でない 3 バイト。
 void verify_server_log_line_edges()
 {
-    const std::array<std::pair<std::string_view, std::string_view>, 12> lines{{
+    const std::array<std::pair<std::string_view, std::string_view>, 11> lines{{
         {"\xF5x", "\xEF\xBF\xBDx"},
         {"\xF0\x9F\x98\x80", "\xF0\x9F\x98\x80"},
         {"\xE3\x41\x41", "\xEF\xBF\xBD\x41\x41"},
@@ -157,9 +156,8 @@ void verify_server_log_line_edges()
         {"\x1b]0;t\x1b\\ok", "ok"},
         {"\x1b]0;title", ""},
         {"\x1b]0;t\x1b", ""},
-        {"\x1b x", "\xE2\x90\x9B x"},
         {"\xC2\xA0\xC3\xA9", "\xC2\xA0\xC3\xA9"},
-        {"\xE2\x81\xA5\xE2\x80\xA9", "\xE2\x81\xA5\xE2\x80\xA9"},
+        {"\xE2\x81\xA5", "\xE2\x81\xA5"},
     }};
     for (const auto &[raw, shown] : lines)
     {

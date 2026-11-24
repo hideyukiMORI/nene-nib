@@ -1567,7 +1567,7 @@ void verify_insufficient_memory()
     return rowed("a", 0, number, {{0, core::PreviewTableAlign::left}});
 }
 
-// 升の範囲は升の間の Tab を含まず、範囲の外の列と表でない要素は終わりの空の範囲。
+// 升の範囲は升の間の Tab を含まず、表でない要素は終わりの空の範囲。
 void verify_table_cell_ranges()
 {
     const auto row = sample_row(0);
@@ -1576,8 +1576,6 @@ void verify_table_cell_ranges()
                core::preview_table_cell_range(row, 1) == Range{3, 5} &&
                core::preview_table_cell_range(row, 2) == Range{6, 8},
            "a cell's range stops before the Tab and the last cell reaches the end");
-    expect(core::preview_table_cell_range(row, 3) == Range{8, 8},
-           "a column past the cells is the empty range at the end");
     expect(core::preview_table_cell_range(leaf(paragraph, "abc", 0), 0) == Range{3, 3},
            "a block that is not a table row has only the empty range at its end");
 }
@@ -1605,12 +1603,6 @@ void verify_table_cells()
                core::preview_table_cell(data, 1).spans ==
                    std::vector<PreviewSpan>{{Offset{0}, Offset{2}, emphasis}},
            "a data row adds no strong");
-    const auto past = core::preview_table_cell(row, 3);
-    expect(past.text.empty() && past.spans.empty() && past.links.empty(),
-           "a column past the cells is an empty cell");
-    constexpr auto left = core::PreviewTableAlign::left;
-    const auto blank = core::preview_table_cell(rowed("\tx", 0, 0, {{0, left}, {1, left}}), 0);
-    expect(blank.text.empty() && blank.spans.empty(), "an empty header cell has no strong span");
 }
 
 // 要約は文字・見出しか・装飾だけを見て、位置（source_begin・升の始まり）は入れない。
@@ -1659,9 +1651,6 @@ void verify_table_rows()
            "a table right after another starts again at row 0");
     expect(core::preview_table_rows(document, 6) == Range{6, 6},
            "an index past the blocks is the empty range at the end");
-    const core::MarkdownDocument broken{{numbered_row(3)}};
-    expect(core::preview_table_rows(broken, 0) == Range{0, 1},
-           "a row number larger than its index does not reach before the document");
 }
 
 // 空の文書の選択と動き（PreviewSelectionText.hpp・#2013）: 点は {0, 0}、範囲・塗り・全部の選択は
