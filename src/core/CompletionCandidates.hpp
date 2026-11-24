@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <string_view>
+#include <utility>
 
 namespace nenenib::core
 {
@@ -26,6 +27,13 @@ inline constexpr std::size_t completion_scan_bytes = std::size_t{256} * 1024U;
 // 決定 5）。
 [[nodiscard]] std::size_t completion_prefix_start(std::string_view content,
                                                   std::size_t caret) noexcept;
+
+// content（正しい UTF-8）の caret の所の語の範囲 [始まり, 終わり)（名前の変更の初めの文字・ADR 0194
+// の決定 7）。語の文字の規則は completion_prefix_start と同じ（同じ種類の語の文字の連なり）。
+// キャレットの下が語の文字ならその連なりの全体、下が語の文字でなく直前が語の文字なら手前の連なり、
+// どちらでもなければ空（caret から caret）。
+[[nodiscard]] std::pair<std::size_t, std::size_t>
+completion_word_around(std::string_view content, std::size_t caret) noexcept;
 
 // INSERT の Ctrl-n / Ctrl-p の候補の列（ADR 0169 の決定 2・Vim の insexpand.c の oracle の実測）。
 //

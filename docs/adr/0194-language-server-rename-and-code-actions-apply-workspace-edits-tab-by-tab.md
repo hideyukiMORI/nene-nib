@@ -168,7 +168,7 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
 
 ## 強制
 
-- S7 a の守り: **planned**（段 S7 a の PR で、足した scope を名指しして active に書き換える）。
+- S7 a の守り: **active**（`nib_tests --lsp-rename`・#2004。下の 9 つを替え玉のサーバーで縛る。`initialize` の能力は `--language-server` の `verify_abilities` も読む）。
   - `lsp_workspace_edit` の読み（両形・resource operation・注釈・上限）。
   - 照合の 2 段。
   - 検査で 1 つでも断れば 1 つも変えないこと。

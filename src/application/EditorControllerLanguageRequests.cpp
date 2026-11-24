@@ -8,6 +8,8 @@
 #include "LanguageDefinition.hpp"
 #include "LanguageFormatting.hpp"
 #include "LanguageHover.hpp"
+#include "LanguageRename.hpp"
+#include "LanguageRenameTarget.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerPhase.hpp"
@@ -19,18 +21,21 @@
 #include "LspAnswers.hpp"
 #include "LspCompletionContext.hpp"
 #include "LspCompletionList.hpp"
+#include "LspEditContext.hpp"
 #include "LspError.hpp"
 #include "LspFormatting.hpp"
 #include "LspLocation.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
 #include "LspPositionJson.hpp"
+#include "LspRename.hpp"
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
 #include "LspSignatureHelp.hpp"
 #include "LspSymbol.hpp"
 #include "LspSymbols.hpp"
+#include "LspWorkspaceEdits.hpp"
 #include "PendingLspContext.hpp"
 #include "PendingLspRequest.hpp"
 #include "ServerAbilities.hpp"
@@ -220,6 +225,56 @@ formatting_answer(const PendingLspRequest &request, const core::LspResponse &res
                               .edits = read.has_value() ? std::optional{std::move(read).value()}
                                                         : std::nullopt,
                               .encoding = encoding};
+}
+
+// 変えられる所の問いの答え（#2004・ADR 0194 の決定
+// 7）。文脈は照合せずに添える（使うときに比べる）。 誤りの答えは invalid_result で、サーバーの
+// message を添える。
+[[nodiscard]] std::optional<LanguageRenameTarget>
+rename_target_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                     core::LspPositionEncoding encoding)
+{
+    const auto *context = std::get_if<LspRequestContext>(&request.context);
+    if (context == nullptr)
+    {
+        return std::nullopt;
+    }
+    if (!response.result.has_value())
+    {
+        return LanguageRenameTarget{.context = *context,
+                                    .target =
+                                        std::unexpected{core::LspAnswerFailure::invalid_result},
+                                    .server_error = response.result.error().message,
+                                    .encoding = encoding};
+    }
+    return LanguageRenameTarget{.context = *context,
+                                .target = core::lsp_rename_target(response.result.value()),
+                                .server_error = {},
+                                .encoding = encoding};
+}
+
+// 名前の変更の答え（#2004・ADR 0194 の決定 4・7）。文脈と席の文書の写しは照合せずに添える（当てる
+// 前に比べる）。誤りの答えは malformed で、サーバーの message を添える。
+[[nodiscard]] std::optional<LanguageRename> rename_answer(const PendingLspRequest &request,
+                                                          const core::LspResponse &response,
+                                                          core::LspPositionEncoding encoding)
+{
+    const auto *context = std::get_if<LspEditContext>(&request.context);
+    if (context == nullptr)
+    {
+        return std::nullopt;
+    }
+    if (!response.result.has_value())
+    {
+        return LanguageRename{.context = *context,
+                              .edit = std::unexpected{core::LspWorkspaceEditFailure::malformed},
+                              .server_error = response.result.error().message,
+                              .encoding = encoding};
+    }
+    return LanguageRename{.context = *context,
+                          .edit = core::lsp_workspace_edit(response.result.value()),
+                          .server_error = {},
+                          .encoding = encoding};
 }
 } // namespace
 
@@ -429,6 +484,12 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
     case LspRequestKind::formatting:
     case LspRequestKind::range_formatting:
         answers.formatting = formatting_answer(request, response, link_of(slot).encoding);
+        break;
+    case LspRequestKind::prepare_rename:
+        answers.rename_target = rename_target_answer(request, response, link_of(slot).encoding);
+        break;
+    case LspRequestKind::rename:
+        answers.rename = rename_answer(request, response, link_of(slot).encoding);
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));

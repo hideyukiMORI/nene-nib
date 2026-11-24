@@ -2292,16 +2292,18 @@ namespace
 }
 
 // `gr` の後ろの 1 鍵（#1947・ADR 0191 の決定 4）。`r` は表に行が無かったときと同じ失敗の歩に参照の
-// 問いの効果を添え（`gd` と同じ）、ほかの鍵は失敗する。Esc は鳴らさずに打ち消すだけ。
+// 問いの効果を添え（`gd` と同じ）、`n` は名前の変更の問い（#2004・ADR 0194 の決定 7・Neovim の
+// `grn`）を同じ形で添え、ほかの鍵は失敗する。Esc は鳴らさずに打ち消すだけ。
 [[nodiscard]] VimStep g_references_step(const VimState &state, const VimKey &key)
 {
     const auto *const character = std::get_if<VimCharacter>(&key);
-    if (character == nullptr || character->code != U'r')
+    if (character == nullptr || (character->code != U'r' && character->code != U'n'))
     {
         return escaped_or_refused(state, key);
     }
-    return detail::language_queried(state, LanguageQueryKind::references,
-                                    escaped_or_refused(state, key));
+    return detail::language_queried(
+        state, character->code == U'r' ? LanguageQueryKind::references : LanguageQueryKind::rename,
+        escaped_or_refused(state, key));
 }
 
 [[nodiscard]] VimStep awaited_step(const VimState &state, const VimEditorView &view,

@@ -32,6 +32,9 @@ struct ServerAbilities
     // 2・7）。
     bool formatting = false;
     bool range_formatting = false;
+    // `renameProvider`（true か object）と、その `prepareProvider`（#2004・ADR 0194 の決定 3）。
+    bool rename = false;
+    bool prepare_rename = false;
     DocumentSync sync = DocumentSync::none;
     SaveNotice save = SaveNotice::none;
 };

@@ -62,6 +62,8 @@ enum class OperationKey : std::uint8_t
     i,
     // 修飾なしの F8 と Shift+F8 の次・前の診断へ（#1939・VS Code と Visual Studio
     // の「次の問題へ」）。両モード。
-    f8
+    f8,
+    // 修飾なしの F2 の名前を変更（#2004・ADR 0194 の決定 7・VS Code と同じ）。両モード。
+    f2
 };
 } // namespace nenenib::core

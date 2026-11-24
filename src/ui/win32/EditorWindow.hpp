@@ -578,6 +578,8 @@ class EditorWindow final
     // 文書を整形・選択範囲を整形（#1993）。
     void run_format_document();
     void run_format_selection();
+    // 名前を変更（#2004）。
+    void run_rename_symbol();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

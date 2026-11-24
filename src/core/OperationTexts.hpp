@@ -14,7 +14,7 @@ namespace nenenib::core
 // 文は文の表の名前で持ち、画面の言語の文は ui_text が引く。EditorOperation の順に全値を 1 回ずつ
 // 持つ（OperationTexts.cpp の static_assert が守る）。鍵の表示名はここに書かず key_chord_label で
 // 作る。読み（ひらがな）は画面に出ない検索の鍵なので operation_readings（OperationReadings.hpp）。
-inline constexpr std::array<OperationText, 68> operation_texts{{
+inline constexpr std::array<OperationText, 69> operation_texts{{
     {EditorOperation::open_file, UiMessage::operation_open_file_name,
      UiMessage::operation_open_file_description},
     // 保存・名前を付けて保存・タブを閉じるはタブのメニューにも載る（列 tab_menu・追補 #1790）。
@@ -173,6 +173,9 @@ inline constexpr std::array<OperationText, 68> operation_texts{{
      UiMessage::operation_format_document_description},
     {EditorOperation::format_selection, UiMessage::operation_format_selection_name,
      UiMessage::operation_format_selection_description},
+    // 名前を変更（#2004）。
+    {EditorOperation::rename_symbol, UiMessage::operation_rename_symbol_name,
+     UiMessage::operation_rename_symbol_description},
 }};
 
 // 操作の文字の行。switch ではなく表を引く。

@@ -66,6 +66,8 @@ void verify_closing_steps();
 // Ctrl+Shift+M はどのモードでも操作 toggle_preview（施主決定 D77・#1354）。
 void verify_preview_cycle_key();
 void verify_reference_key();
+// F2 の写しと「新しい名前: 」のプロンプト（#2004・ADR 0194 の決定 7）。
+void verify_rename_key();
 // 通常モードの Windows の標準の鍵（Ctrl+N・Ctrl+Shift+Z・Ctrl / Shift+Insert・Shift+Delete・D82・
 // #1395）。
 void verify_standard_keys();

@@ -122,6 +122,9 @@ enum class EditorOperation : std::uint8_t
     // 文書を整形・選択範囲を整形（#1993・ADR 0191 の決定 7）。鍵なし（F1 の一覧から・Shift+Alt+F は
     // ADR 0078 の Alt の守りに当たる）。選択が空なら選択範囲の整形はキャレットの行。
     format_document,
-    format_selection
+    format_selection,
+    // 名前を変更（#2004・ADR 0194 の決定 7）。F2 で両モード（VS Code と同じ・Vim の NORMAL の `grn`
+    // と同じ問い）。新しい名前は入力行で聞く。
+    rename_symbol
 };
 } // namespace nenenib::core

@@ -1,5 +1,6 @@
 #include "EditorControllerDetail.hpp"
 
+#include "ClipboardText.hpp"
 #include "InputLinePrompt.hpp"
 #include "LiteralPattern.hpp"
 #include "TabTitle.hpp"
@@ -22,6 +23,17 @@ namespace nenenib::application::detail
         return core::ScrollExtent::last_line;
     }
     std::unreachable();
+}
+
+std::vector<core::LspTextEdit> edits_with_document_newlines(std::vector<core::LspTextEdit> edits,
+                                                            core::LineEnding ending)
+{
+    const std::string_view newline = core::newline_of(ending);
+    for (core::LspTextEdit &edit : edits)
+    {
+        edit.new_text = with_document_newlines(core::clipboard_line_feeds(edit.new_text), newline);
+    }
+    return edits;
 }
 
 // LF だけの本文を文書の改行に直す（ARC-009。改行の形を決めるのは controller の 1 か所）。
@@ -79,6 +91,7 @@ std::optional<std::string> searched_text(const core::SearchLine &line)
     case core::InputLinePrompt::palette:
     case core::InputLinePrompt::substitute_confirm:
     case core::InputLinePrompt::jump_character:
+    case core::InputLinePrompt::rename:
         return std::nullopt;
     }
     std::unreachable();

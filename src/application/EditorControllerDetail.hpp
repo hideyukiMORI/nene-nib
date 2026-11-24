@@ -12,7 +12,9 @@
 #include "EditorIntent.hpp"
 #include "EditorState.hpp"
 #include "FilePath.hpp"
+#include "LineEnding.hpp"
 #include "LineNumber.hpp"
+#include "LspTextEdit.hpp"
 #include "ParkedTab.hpp"
 #include "ScrollExtent.hpp"
 #include "SearchLine.hpp"
@@ -53,6 +55,10 @@ namespace nenenib::application::detail
 [[nodiscard]] bool untouched_untitled(const EditorState &state) noexcept;
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
 [[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline);
+// 言語サーバーの編集の newText の改行を、貼り付けと同じく文書の改行の形 ending へ揃えた列（D19・
+// #1997 のレビュー R2）。整形と WorkspaceEdit（#2004）が当てる前に通る 1 本。
+[[nodiscard]] std::vector<core::LspTextEdit>
+edits_with_document_newlines(std::vector<core::LspTextEdit> edits, core::LineEnding ending);
 // 編集で行がずれたマーク（ADR 0152 の決定 6）。lines の選択肢ごとに直し方が決まる（行の規則・
 // 矩形の行ごとの列・整形の編集の列）。before は編集の前の本文。replace と undo・Ctrl-r
 // （undone_marks）の 1 本（#1997 の 2 回目のレビュー P1）。

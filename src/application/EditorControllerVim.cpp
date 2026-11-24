@@ -398,6 +398,7 @@ measured_span(std::vector<core::VimRowSpan> &spans, const core::VimRowRequest &r
     case core::InputLinePrompt::palette:
     case core::InputLinePrompt::substitute_confirm:
     case core::InputLinePrompt::jump_character:
+    case core::InputLinePrompt::rename:
         return std::nullopt;
     }
     std::unreachable();
