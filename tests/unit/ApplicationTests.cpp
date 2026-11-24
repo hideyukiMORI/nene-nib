@@ -2709,6 +2709,12 @@ void verify_ime_stance_table()
                    "Vim INSERT is as_left and NORMAL / VISUAL are closed without an input");
         }
     }
+    // 設定の面の間は閉じたままの構えだけを closed_once に替え、ほかはそのまま（#1836）。
+    using nenenib::application::ime_stance_in_settings;
+    expect(ime_stance_in_settings(ImeStance::closed) == ImeStance::closed_once &&
+               ime_stance_in_settings(ImeStance::as_left) == ImeStance::as_left &&
+               ime_stance_in_settings(ImeStance::closed_once) == ImeStance::closed_once,
+           "the settings panel turns only the closed stance into closed_once");
 }
 
 // controller の frame に載る構え（ADR 0061 の決定 1）。面を閉じると元のモードの値に戻る。

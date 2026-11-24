@@ -324,6 +324,34 @@ void verify_enter_opens_file()
            "a file that cannot be opened leaves one notice line and the history alone");
 }
 
+// 知らせの 1 行は 256 バイトまで（DisplayText）。長い名前は code point の境目で切って「…」を付け、
+// 文の頭は残す。
+void verify_long_name_notice_clipped()
+{
+    std::string name;
+    for (std::size_t index = 0; index < 100; ++index)
+    {
+        name += "\xE3\x81\x82";
+    }
+    name += ".txt";
+    Editing editing(shown_at(project));
+    applied(editing.controller(), app::VisibleLines{10});
+    static_cast<void>(
+        deliver(editing, {entry_of("C:\\proj\\" + name, false)}, FolderProgress::complete));
+    const auto notice =
+        editing.controller().apply_frame(PointExplorer{0, ExplorerPointing::double_click});
+    const std::string shown = message_of(notice);
+    constexpr std::string_view prefix = "開けませんでした: ";
+    constexpr std::string_view mark = "\xE2\x80\xA6";
+    const std::string kept =
+        shown.size() > prefix.size() + mark.size()
+            ? shown.substr(prefix.size(), shown.size() - prefix.size() - mark.size())
+            : std::string{};
+    expect(shown.size() <= 256 && shown.starts_with(prefix) && shown.ends_with(mark) &&
+               !kept.empty() && kept.size() % 3 == 0 && name.starts_with(kept),
+           "a long name is clipped at a code point with an ellipsis within one notice line");
+}
+
 void verify_pointing()
 {
     Editing editing(shown_at(project));
@@ -860,6 +888,11 @@ void verify_root_requests()
            "set noexplorer hides the panel");
     static_cast<void>(run_ex(controller, "set explorer"));
     expect(!view_of(controller.frame()).focused, "hiding the panel from Ex gave the focus back");
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto refused = controller.apply_frame(app::ExplorerRootChosen{path_of("E:\\other")});
+    expect(message_of(refused) == "Settings could not be saved" &&
+               view_of(refused).root == std::optional{path_of("D:\\picked")},
+           "a root that cannot be saved is refused and the panel keeps its root");
 }
 
 // Ctrl+Shift+R（#1495）の後に controller へ届くのは ExplorerRootChosen だけ（窓が表で拾い、Vim の
@@ -1292,6 +1325,7 @@ void verify_explorer_contracts()
     verify_keys();
     verify_keys_that_do_nothing();
     verify_enter_opens_file();
+    verify_long_name_notice_clipped();
     verify_pointing();
     verify_pointing_across_arrival();
     verify_click_opens_file();

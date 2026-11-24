@@ -5,6 +5,7 @@
 #include "CancelCommand.hpp"
 #include "CodePageFailure.hpp"
 #include "ComposeText.hpp"
+#include "DocumentDecoding.hpp"
 #include "DocumentFormat.hpp"
 #include "DocumentFormatKind.hpp"
 #include "EditMode.hpp"
@@ -253,6 +254,11 @@ void verify_format_unencodable()
                refused.document.save_state == core::SaveState::modified &&
                editing.files().written().empty(),
            "an unencodable body stops the save and keeps the chosen encoding");
+    expect(app::file_failure_of(app::CodePageFailure::undecodable) ==
+                   app::FileFailure::undecodable &&
+               app::file_failure_of(app::CodePageFailure::unencodable) ==
+                   app::FileFailure::unencodable,
+           "the code page failures keep their names as file failures");
 }
 
 // 決定 3: 保存の形と本文の形が同じなら写さない（本文の断片をそのまま渡す）。

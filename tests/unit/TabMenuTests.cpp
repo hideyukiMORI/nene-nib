@@ -3,9 +3,11 @@
 // から実行する項目・まだ読んでいないタブを読まない・port の呼ばれた回数（controller）と、まとめて
 // 閉じる相手の引き方（application の純関数）を測る。時計・ファイル・乱数を使わない。
 #include "AutosaveId.hpp"
+#include "BeginGoToLine.hpp"
 #include "ChooseContextMenu.hpp"
 #include "CloseContextMenu.hpp"
 #include "CloseTab.hpp"
+#include "ComposeText.hpp"
 #include "ContextMenu.hpp"
 #include "ContextMenuKind.hpp"
 #include "ContextMenuLayout.hpp"
@@ -262,6 +264,23 @@ void verify_tab_open()
            "copy file name writes the file name of the clicked tab without switching");
 }
 
+// 入力行と変換の間はタブのメニューも開かない（本文のメニューと同じ）。
+void verify_tab_menu_refusals()
+{
+    Editing typing;
+    open_three(typing);
+    applied(typing.controller(), app::BeginGoToLine{});
+    applied(typing.controller(), app::OpenTabMenu{50, 40, 0});
+    expect(!typing.controller().context_menu_active(),
+           "the tab menu does not open over an input line");
+    Editing composing;
+    open_three(composing);
+    applied(composing.controller(), app::ComposeText{composed_of("に", {}, 0)});
+    applied(composing.controller(), app::OpenTabMenu{50, 40, 0});
+    expect(!composing.controller().context_menu_active(),
+           "the tab menu does not open over the IME composition");
+}
+
 void verify_tab_untitled()
 {
     Editing editing;
@@ -482,6 +501,7 @@ void verify_tab_menu_contracts()
     verify_tab_layout();
     verify_swept();
     verify_tab_open();
+    verify_tab_menu_refusals();
     verify_tab_untitled();
     verify_tab_save_switches();
     verify_tab_closes();
