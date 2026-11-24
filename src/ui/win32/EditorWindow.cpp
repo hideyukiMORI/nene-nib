@@ -15,6 +15,7 @@
 #include "MinimapLayout.hpp"
 #include "PaneLayouts.hpp"
 #include "PreviewTick.hpp"
+#include "SettingsChoiceTimeout.hpp"
 #include "SplitLayout.hpp"
 #include "TabTipTick.hpp"
 #include "TitleBarWidth.hpp"
@@ -73,6 +74,7 @@ void EditorWindow::resize()
     {
         return;
     }
+    close_settings_choice_on_resize();
     RECT client{};
     GetClientRect(window_, &client);
     // 差し替えの前は子窓を client に合わせてから、そこに結んだ swap chain を合わせる（決定 5）。
@@ -212,6 +214,10 @@ void EditorWindow::receive_timer(WPARAM word)
         return;
     case WindowTimer::caret_motion:
         send_caret_motion();
+        return;
+    case WindowTimer::settings_choice:
+        KillTimer(window_, word);
+        send(application::SettingsChoiceTimeout{});
         return;
     }
 }

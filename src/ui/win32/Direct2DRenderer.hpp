@@ -52,6 +52,7 @@
 #include "RenderFailure.hpp"
 #include "RendererSources.hpp"
 #include "RgbColor.hpp"
+#include "SettingsChoiceLayout.hpp"
 #include "SettingsControl.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsPanelFormats.hpp"
@@ -155,6 +156,16 @@ class Direct2DRenderer final
     settings_revealed(const application::SettingsView &view, core::DisplayLanguage language,
                       std::optional<core::SettingsSection> section);
     [[nodiscard]] std::optional<core::LayoutRect> settings_search_rectangle() const;
+    // 設定の面の選ぶ欄の一覧（#1926）。
+    // - settings_choice_layout: 最後に描いた一覧の配置（一覧を描いていなければ値なし・当たり）。
+    // - settings_choice_revealed: view の選ぼうとしている行が見える一覧の送り（今のままでよければ
+    //   値なし）。配置は最後に描いた帯で view から作り直す。
+
+    [[nodiscard]] const std::optional<core::SettingsChoiceLayout> &
+    settings_choice_layout() const noexcept;
+    [[nodiscard]] std::optional<std::size_t>
+    settings_choice_revealed(const application::SettingsView &view, core::DisplayLanguage language);
+
     // 最後に描いたプレビューの枠の点（クライアントの物理画素）の下の文字の位置（ADR 0155 の改訂
     // 18）。全面プレビューのドラッグの選択が引く。
     [[nodiscard]] std::optional<core::PreviewPoint> preview_point_at(std::int32_t x,
@@ -545,6 +556,9 @@ class Direct2DRenderer final
     // 1 行で返る（書式も配置も作らない）。
     void draw_settings(const application::EditorFrame &frame, const core::LayoutRect &area);
     [[nodiscard]] bool settings_formats_made();
+    // view の選ぶ欄の一覧の配置を最後に描いた帯で作り直す（一覧が無ければ値なし・#1926）。
+    [[nodiscard]] std::optional<core::SettingsChoiceLayout>
+    settings_choice_arranged(const application::SettingsView &view, core::DisplayLanguage language);
     [[nodiscard]] std::expected<void, RenderFailure> draw(const application::EditorFrame &frame,
                                                           ID2D1Bitmap1 *surface);
     // ミニマップの命令の失敗で落ちた frame を描き直す（1 度目は bitmap を捨てて直接、それでも
@@ -655,6 +669,8 @@ class Direct2DRenderer final
     std::optional<LinkCardPaint> link_card_paint_;
     PaletteRowLayouts settings_layouts_{SettingsPanelPainter::retained};
     std::optional<core::SettingsLayout> settings_layout_;
+    // 最後に描いた選ぶ欄の一覧の配置（#1926・一覧が閉じているか面を閉じたら値なし）。
+    std::optional<core::SettingsChoiceLayout> settings_choice_layout_;
     core::LayoutRect settings_area_{};
     // other の枠のプレビュー。要素の layout の保持は frame をまたいで再利用する（ADR 0155）。
     PreviewPane preview_;

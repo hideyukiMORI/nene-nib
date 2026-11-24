@@ -16,6 +16,7 @@
 #include "PointContextMenu.hpp"
 #include "PointerClicks.hpp"
 #include "SelectionAnchoring.hpp"
+#include "SettingsKeys.hpp"
 #include "StepContextMenu.hpp"
 #include "SwitchPane.hpp"
 #include "TabRightPress.hpp"
@@ -253,9 +254,11 @@ LRESULT EditorWindow::context_menu_message(UINT message, WPARAM word, LPARAM dat
     case WM_NCRBUTTONDOWN:
         close_context_menu_outside();
         return DefWindowProcW(window_, message, word, data);
-    // Shift+F10 の後の SC_KEYMENU を捨てる（ContextMenuKey.hpp）。ほかの WM_SYSCOMMAND は既定へ。
+    // Shift+F10 の後の SC_KEYMENU を捨てる（ContextMenuKey.hpp）。設定の一覧の Alt+↓ / Alt+↑ の後の
+    // SC_KEYMENU も捨てる（SettingsKeys.hpp・#1926 のレビュー R3）。ほかの WM_SYSCOMMAND は既定へ。
     case WM_SYSCOMMAND:
-        return swallows_key_menu(word, data, controller_.context_menu_active(), held(VK_SHIFT))
+        return swallows_key_menu(word, data, controller_.context_menu_active(), held(VK_SHIFT)) ||
+                       take_settings_key_menu(word, data)
                    ? 0
                    : DefWindowProcW(window_, message, word, data);
     default:
