@@ -1,5 +1,6 @@
 #include "EditorController.hpp"
 #include "EditorControllerDetail.hpp"
+#include "FormattingPieces.hpp"
 #include "PaneView.hpp"
 
 #include "CaretMove.hpp"
@@ -41,6 +42,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::application
 {
@@ -233,17 +235,12 @@ constexpr std::size_t single_page_line = 1;
     std::unreachable();
 }
 
-// 編集で行がずれたマーク（ADR 0152 の決定 6）。行をその場で書き換えた置き換え（kept）は Vim が
-// mark_adjust を呼ばないので動かさない（#1360）。矩形は行ごとの置き換えで直す（#1361）。
-[[nodiscard]] core::VimMarks
-edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const core::Edit &edit,
-             const std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> &lines)
+// 編集で行がずれたマーク（ADR 0152 の決定 6）の選択肢ごとの 1 つ。行をその場で書き換えた置き換え
+// （kept）は Vim が mark_adjust を呼ばないので動かさない（#1360）。
+[[nodiscard]] core::VimMarks marks_by(const core::VimMarks &marks, const core::TextBuffer &before,
+                                      const core::Edit &edit, core::VimLineMarks lines)
 {
-    if (const auto *const block_lines = std::get_if<std::span<const core::VimBlockEdit>>(&lines))
-    {
-        return core::marks_block_adjusted(marks, before, *block_lines);
-    }
-    switch (std::get<core::VimLineMarks>(lines))
+    switch (lines)
     {
     case core::VimLineMarks::kept:
         return marks;
@@ -251,6 +248,41 @@ edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const 
         return core::marks_adjusted(marks, before, edit);
     }
     std::unreachable();
+}
+
+// 矩形は行ごとの置き換えで直す（#1361）。
+[[nodiscard]] core::VimMarks marks_by(const core::VimMarks &marks, const core::TextBuffer &before,
+                                      const core::Edit & /*edit*/,
+                                      std::span<const core::VimBlockEdit> block_lines)
+{
+    return core::marks_block_adjusted(marks, before, block_lines);
+}
+
+// 整形の編集の列も編集ごとに直す（#1997 のレビュー R1）。
+[[nodiscard]] core::VimMarks marks_by(const core::VimMarks &marks, const core::TextBuffer &before,
+                                      const core::Edit & /*edit*/,
+                                      const FormattingPieces &formatted)
+{
+    return core::marks_block_adjusted(marks, before, formatted.pieces);
+}
+
+// もう 1 つの枠を編集ごとに写す列（ADR 0148 の決定 9）。整形の道だけが列を返し、ほかは空（畳んだ
+// 1 つの Edit で写す・矩形の中のキャレットは矩形の始まりへ畳む）。
+[[nodiscard]] std::span<const core::VimBlockEdit> other_pane_pieces(core::VimLineMarks /*lines*/)
+{
+    return {};
+}
+
+[[nodiscard]] std::span<const core::VimBlockEdit>
+other_pane_pieces(std::span<const core::VimBlockEdit> /*block_lines*/)
+{
+    return {};
+}
+
+[[nodiscard]] std::span<const core::VimBlockEdit>
+other_pane_pieces(const FormattingPieces &formatted)
+{
+    return formatted.pieces;
 }
 
 // 境界が動いたか（同じ向き・同じ帯の長さで first の長さが違う）。帯の長さが違えば窓の大きさ・面の
@@ -264,6 +296,15 @@ edited_marks(const core::VimMarks &marks, const core::TextBuffer &before, const 
            before.value().first != after.value().first;
 }
 } // namespace
+
+// 選択肢が増えたら marks_by の多重定義が無くてコンパイルが落ちる（CPP-002・#1997 の 2 回目の
+// レビュー P3）。
+core::VimMarks detail::edited_marks(const core::VimMarks &marks, const core::TextBuffer &before,
+                                    const core::Edit &edit, const EditLines &lines)
+{
+    return std::visit([&marks, &before, &edit](const auto &chosen)
+                      { return marks_by(marks, before, edit, chosen); }, lines);
+}
 
 std::pair<core::OffsetRange, std::string>
 EditorController::vim_end_of_line_kept(const core::OffsetRange &range, std::string_view text) const
@@ -288,9 +329,8 @@ EditorController::vim_end_of_line_kept(const core::OffsetRange &range, std::stri
     return {range, std::string(text)};
 }
 
-void EditorController::replace(
-    const core::OffsetRange &asked, std::string_view typed, core::EditBoundary boundary,
-    std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines)
+void EditorController::replace(const core::OffsetRange &asked, std::string_view typed,
+                               core::EditBoundary boundary, EditLines lines)
 {
     // 編集を始める瞬間のキャレット。Vim の u と Ctrl-r の戻り先で、書くのはここだけ（ADR 0052 の
     // 決定 2）。
@@ -330,7 +370,7 @@ void EditorController::replace(
     const bool started =
         history.position() != before &&
         (!replay_history_.has_value() || before == replay_history_.value().position());
-    auto marks = edited_marks(state_.vim_marks(), state_.text(), edit, lines);
+    auto marks = detail::edited_marks(state_.vim_marks(), state_.text(), edit, lines);
     marks.last_change = core::vim_last_change_of(state_.text(), edit);
     marks = core::vim_change_recorded(marks, marks.last_change.value(), started);
     state_ = state_.with_vim_marks(std::move(marks));
@@ -338,10 +378,35 @@ void EditorController::replace(
     forget_syntax_before(edit);
     note_minimap_edit(next, edit);
     language_server_edit(edit);
-    adjust_other(edit, next);
+    adjust_other_by(edit, lines, next);
     state_ = state_.with_words_edited(edit).with_edit(std::move(next), core::collapsed_at(caret),
                                                       std::move(history), std::move(document));
     follow_caret();
+}
+
+// もう 1 つの枠を写す（ADR 0148 の決定 9）。整形の道（FormattingPieces）だけは、畳んだ 1 つの Edit
+// でなく編集ごとに写す（区間の中の位置を端へ寄せない・#1997 のレビュー R1）。矩形の道は今までどおり
+// 畳んだ 1 つの Edit で写す（矩形の中のキャレットは矩形の始まりへ畳む）。列は今の本文（編集の前）の
+// 上の区間で、undo は逆向きの列を渡す。
+void EditorController::adjust_other_by(const core::Edit &edit, const EditLines &lines,
+                                       const core::TextBuffer &after)
+{
+    const std::span<const core::VimBlockEdit> pieces =
+        std::visit([](const auto &chosen) { return other_pane_pieces(chosen); }, lines);
+    if (pieces.empty() || !state_.split().other.has_value())
+    {
+        adjust_other(std::span<const core::Edit>{&edit, 1}, after);
+        return;
+    }
+    std::vector<core::Edit> edits;
+    edits.reserve(pieces.size());
+    for (const core::VimBlockEdit &piece : pieces)
+    {
+        edits.push_back(core::Edit{piece.range.begin,
+                                   state_.text().text_range(piece.range.begin, piece.range.end),
+                                   piece.utf8, edit.restore});
+    }
+    adjust_other(edits, after);
 }
 
 // 空の単位（ADR 0181 の決定 3）。本文の置き換えの口（LSP・ミニマップ・構文の覚え・マークの行の
@@ -765,13 +830,18 @@ void EditorController::undo_edit()
     const core::Offset end{at.value + edit.value().inserted.size()};
     auto next = state_.text().replaced(at, end, edit.value().removed);
     const core::Offset caret{at.value + edit.value().removed.size()};
-    // undo は編集の逆向き（inserted を removed に戻す）。
+    // undo は編集の逆向き（inserted を removed に戻す）。整形の単位は逆向きの編集の列でマークと
+    // もう 1 つの枠を直す（#1997 の 2 回目のレビュー P1）。
     forget_syntax_before(edit.value());
     const core::Edit undone{at, edit.value().inserted, edit.value().removed, at};
+    const auto pieces = formatted_pieces_at(state_.history().position() - 1, edit.value(),
+                                            core::HistoryDirection::undo);
+    const EditLines lines = pieces.has_value() ? EditLines{FormattingPieces{pieces.value()}}
+                                               : EditLines{core::VimLineMarks::shifted};
     note_minimap_edit(next, undone);
     language_server_edit(undone);
-    adjust_other(undone, next);
-    undone_marks(undone);
+    adjust_other_by(undone, lines, next);
+    undone_marks(undone, lines);
     state_ = state_.with_words_edited(undone).with_edit(
         std::move(next), core::collapsed_at(caret), state_.history().undone(), state_.document());
     follow_caret();
@@ -799,8 +869,14 @@ void EditorController::redo_edit()
     forget_syntax_before(edit.value());
     note_minimap_edit(next, edit.value());
     language_server_edit(edit.value());
-    adjust_other(core::Edit{at, edit.value().removed, edit.value().inserted, at}, next);
-    undone_marks(edit.value());
+    const core::Edit redone{at, edit.value().removed, edit.value().inserted, at};
+    // 整形の単位は同じ編集の列で直す（#1997 の 2 回目のレビュー P1）。
+    const auto pieces = formatted_pieces_at(state_.history().position(), edit.value(),
+                                            core::HistoryDirection::redo);
+    const EditLines lines = pieces.has_value() ? EditLines{FormattingPieces{pieces.value()}}
+                                               : EditLines{core::VimLineMarks::shifted};
+    adjust_other_by(redone, lines, next);
+    undone_marks(edit.value(), lines);
     state_ = state_.with_words_edited(edit.value())
                  .with_edit(std::move(next), core::collapsed_at(caret), state_.history().redone(),
                             state_.document());

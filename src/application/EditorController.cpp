@@ -629,6 +629,7 @@ EditorDelivery EditorController::apply(const EditorIntent &intent)
     }
     fit_command_rows();
     ask_display();
+    forget_closed_formatted_units();
     reconcile_language_server();
     auto delivered = timed(delivery());
     // 契約の破れは配達に 1 回だけ載せ、ここで消す（ADR 0133 の追補 2026-10-18）。次の apply の

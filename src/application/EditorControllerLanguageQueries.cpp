@@ -15,6 +15,7 @@
 #include "OpenedAs.hpp"
 #include "ProjectHitLanding.hpp"
 #include "QueryLanguage.hpp"
+#include "ServerAbilities.hpp"
 #include "UiMessage.hpp"
 #include "VimLanguageQuery.hpp"
 #include "VimMode.hpp"
@@ -30,6 +31,35 @@ namespace nenenib::application
 {
 // ------------------------------------- 言語サーバーへの問いと答えの使い方（ADR 0190 の決定 6〜8）
 
+namespace
+{
+// 頼む前に断る問いか。整形（文書・選択範囲）を Vim の INSERT で頼んだときだけ（決定 7 の追補）。
+[[nodiscard]] bool refuses_in_insert(core::LanguageQueryKind kind, core::EditMode mode,
+                                     const core::VimState &vim) noexcept
+{
+    switch (kind)
+    {
+    case core::LanguageQueryKind::definition:
+    case core::LanguageQueryKind::hover:
+    case core::LanguageQueryKind::references:
+    case core::LanguageQueryKind::symbols:
+    case core::LanguageQueryKind::signature_help:
+        return false;
+    case core::LanguageQueryKind::format_document:
+    case core::LanguageQueryKind::format_selection:
+        break;
+    }
+    switch (mode)
+    {
+    case core::EditMode::ordinary:
+        return false;
+    case core::EditMode::vim:
+        break;
+    }
+    return vim.mode == core::VimMode::insert;
+}
+} // namespace
+
 // 操作「定義へ移動」（F12）と「情報を表示」。言語サーバーが動いていない文書（要求を出せない文書）
 // では 1 行知らせる。
 void EditorController::accept(const QueryLanguage &intent)
@@ -37,6 +67,14 @@ void EditorController::accept(const QueryLanguage &intent)
     // 設定の面が開いていた（この意図の入口で閉じた）なら、問いを出さない（面どうしの排他）。
     if (settings_closed_now_)
     {
+        return;
+    }
+    // Vim の INSERT で頼んだ整形は、答えが届いても入力の途中で当たらないので、頼まずに 1 行で断る
+    // （#1997 の 2 回目のレビュー F1・設計席の決め 2026-11-24）。
+    if (refuses_in_insert(intent.kind, state_.mode(), state_.vim()))
+    {
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_formatting_in_insert));
         return;
     }
     if (query_language(intent.kind))
@@ -47,32 +85,46 @@ void EditorController::accept(const QueryLanguage &intent)
     state_ = state_.with_command_message(ui_notice(unanswered_notice(intent.kind)));
 }
 
-// 問いを出せなかったときの 1 行（ADR 0191 の決定 2）。能力の無い席は「〜に答えません」。
-core::UiMessage EditorController::unanswered_notice(core::LanguageQueryKind kind) const
+namespace
+{
+// 能力の欄と「〜に答えません」の 1 行の組（ADR 0191 の決定 2）。
+using UnansweredAbility = std::pair<bool ServerAbilities::*, core::UiMessage>;
+
+// 問いの種類 → 分けて知らせる能力（定義へと hover は分けない）。
+[[nodiscard]] std::optional<UnansweredAbility> unanswered_ability(core::LanguageQueryKind kind)
 {
     switch (kind)
     {
     case core::LanguageQueryKind::definition:
     case core::LanguageQueryKind::hover:
-        break;
+        return std::nullopt;
     case core::LanguageQueryKind::references:
-        if (lacks_ability(&ServerAbilities::references))
-        {
-            return core::UiMessage::notice_references_not_supported;
-        }
-        break;
+        return UnansweredAbility{&ServerAbilities::references,
+                                 core::UiMessage::notice_references_not_supported};
     case core::LanguageQueryKind::symbols:
-        if (lacks_ability(&ServerAbilities::document_symbols))
-        {
-            return core::UiMessage::notice_symbols_not_supported;
-        }
-        break;
+        return UnansweredAbility{&ServerAbilities::document_symbols,
+                                 core::UiMessage::notice_symbols_not_supported};
     case core::LanguageQueryKind::signature_help:
-        if (lacks_ability(&ServerAbilities::signature_help))
-        {
-            return core::UiMessage::notice_signature_not_supported;
-        }
-        break;
+        return UnansweredAbility{&ServerAbilities::signature_help,
+                                 core::UiMessage::notice_signature_not_supported};
+    case core::LanguageQueryKind::format_document:
+        return UnansweredAbility{&ServerAbilities::formatting,
+                                 core::UiMessage::notice_formatting_not_supported};
+    case core::LanguageQueryKind::format_selection:
+        return UnansweredAbility{&ServerAbilities::range_formatting,
+                                 core::UiMessage::notice_range_formatting_not_supported};
+    }
+    std::unreachable();
+}
+} // namespace
+
+// 問いを出せなかったときの 1 行（ADR 0191 の決定 2）。能力の無い席は「〜に答えません」。
+core::UiMessage EditorController::unanswered_notice(core::LanguageQueryKind kind) const
+{
+    const auto ability = unanswered_ability(kind);
+    if (ability.has_value() && lacks_ability(ability.value().first))
+    {
+        return ability.value().second;
     }
     return core::UiMessage::notice_language_server_not_running;
 }
@@ -89,6 +141,8 @@ void EditorController::perform(const core::VimLanguageQuery &effect)
     case core::LanguageQueryKind::definition:
     case core::LanguageQueryKind::hover:
     case core::LanguageQueryKind::signature_help:
+    case core::LanguageQueryKind::format_document:
+    case core::LanguageQueryKind::format_selection:
         return;
     case core::LanguageQueryKind::references:
     case core::LanguageQueryKind::symbols:
@@ -116,6 +170,10 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
         return request_document_symbols();
     case core::LanguageQueryKind::signature_help:
         return invoke_signature_help();
+    case core::LanguageQueryKind::format_document:
+        return request_formatting(false);
+    case core::LanguageQueryKind::format_selection:
+        return request_formatting(true);
     }
     std::unreachable();
 }
@@ -191,6 +249,10 @@ void EditorController::settle_language_answers(LspRequestKind kind)
     case LspRequestKind::signature_help:
         settle_signature_answer();
         return;
+    case LspRequestKind::formatting:
+    case LspRequestKind::range_formatting:
+        settle_formatting_answer();
+        return;
     }
 }
 
@@ -217,14 +279,25 @@ bool EditorController::awaits_nothing() const noexcept
     case core::EditMode::vim:
         break;
     }
+    return state_.vim().mode == core::VimMode::normal && !vim_waits_for_key();
+}
+
+bool EditorController::vim_waits_for_key() const noexcept
+{
+    switch (state_.mode())
+    {
+    case core::EditMode::ordinary:
+        return false;
+    case core::EditMode::vim:
+        break;
+    }
     const core::VimState &vim = state_.vim();
     // `map` の左辺の途中で積んだ鍵（engine に届いていない）・イージーモーションの印・INSERT の
     // `Ctrl-o` の後の 1 命令の待ちも「待っている」（#1843 の再確認 P1・L1）。
-    return vim.mode == core::VimMode::normal && !vim.count.has_value() &&
-           !vim.pending.has_value() && !vim.input_wait.has_value() &&
-           !vim.selected_register.has_value() && !vim.register_count.has_value() &&
-           !vim.easy_motion.has_value() && !vim.insert_restart.has_value() &&
-           state_.key_map_pending().empty();
+    return vim.count.has_value() || vim.pending.has_value() || vim.input_wait.has_value() ||
+           vim.selected_register.has_value() || vim.register_count.has_value() ||
+           vim.easy_motion.has_value() || vim.insert_restart.has_value() ||
+           !state_.key_map_pending().empty();
 }
 
 // hover の答え（決定 6）。入力行・面・メニュー・変換が開いている間と、窓が非アクティブの間に
