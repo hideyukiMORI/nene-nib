@@ -587,5 +587,7 @@ inline constexpr UiTextColumn ui_texts_english{{
      "Quick fixes are not asked in Insert mode (press Esc first)"},
     {UiMessage::notice_code_actions_not_found, "No fixes are available here"},
     {UiMessage::palette_empty_code_actions, "No fixes yet. Ask with {0} at the caret (Vim: {1})"},
+    {UiMessage::notice_code_action_waiting,
+     "The language server has not answered the previous fix yet, so this fix was not applied"},
 }};
 } // namespace nenenib::core

@@ -1162,10 +1162,9 @@ class EditorController final
     // 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5・
     // EditorControllerWorkspaceEdit.cpp）。先に全部を検査し（1 つでも断れば 1 つも変えずに理由の
     // 1 行）、ファイルごとにタブへ切り替えて replace を 1 回ずつ当て、頼んだタブへ戻る。
-    std::optional<core::DisplayText> apply_workspace_edit(const core::LspWorkspaceEdit &edit,
-                                                          const LspEditContext &context,
-                                                          core::LspPositionEncoding encoding,
-                                                          ServerEditOrigin origin);
+    std::expected<std::vector<AutosaveId>, core::DisplayText>
+    apply_workspace_edit(const core::LspWorkspaceEdit &edit, const LspEditContext &context,
+                         core::LspPositionEncoding encoding, ServerEditOrigin origin);
     [[nodiscard]] core::DisplayText
     server_edit_refusal(core::LspWorkspaceEditFailure failure) const;
     [[nodiscard]] std::expected<std::vector<ServerEditFile>, core::DisplayText>
@@ -1191,7 +1190,8 @@ class EditorController final
     [[nodiscard]] std::expected<void, core::DisplayText>
     place_server_edit_spans(std::vector<ServerEditFile> &files,
                             core::LspPositionEncoding encoding) const;
-    void run_server_edits(std::vector<ServerEditFile> files, LanguageServerSlot slot);
+    std::vector<AutosaveId> run_server_edits(std::vector<ServerEditFile> files,
+                                             LanguageServerSlot slot);
     void enter_server_edit_file(ServerEditFile &file);
     void switch_for_server_edit(AutosaveId tab);
     void announce_server_edit_target(LanguageServerSlot slot);
@@ -1214,12 +1214,18 @@ class EditorController final
     void run_code_action(const core::LspCodeAction &action, const LspEditContext &context,
                          core::LspPositionEncoding encoding);
     void settle_code_action_resolve_answer();
-    void send_execute_command(LanguageServerSlot slot, const core::LspCommand &command);
+    void send_execute_command(LanguageServerSlot slot, const core::LspCommand &command,
+                              const LspEditContext &context);
+    [[nodiscard]] LspEditContext advanced_context(LspEditContext context,
+                                                  const std::vector<AutosaveId> &tabs) const;
+    [[nodiscard]] std::optional<OpenedRevision> opened_revision_at(LanguageServerSlot slot,
+                                                                   std::size_t position) const;
+    [[nodiscard]] bool awaits_command(LanguageServerSlot slot) const;
     void settle_execute_command_answer(const core::LspResponse &response);
     void answer_apply_edit(LanguageServerSlot slot, const core::LspRequest &request);
     [[nodiscard]] std::optional<std::string_view>
     apply_edit_refusal(LanguageServerSlot slot, const core::LspRequest &request);
-    void renew_awaited_command(LanguageServerSlot slot);
+    void renew_awaited_command(LanguageServerSlot slot, const std::vector<AutosaveId> &tabs);
     void flush_language_server_documents(LanguageServerSlot slot);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を

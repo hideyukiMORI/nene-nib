@@ -226,29 +226,40 @@ void EditorController::request_rename(const std::string &name, const LspRequestC
 // 本文なので写さない。
 std::vector<OpenedRevision> EditorController::opened_revisions(LanguageServerSlot slot) const
 {
-    const auto &documents = language_servers_.links.at(slot_index(slot)).documents;
     const auto &ids = state_.autosave_ids();
     std::vector<OpenedRevision> opened;
     opened.reserve(ids.size());
     for (std::size_t position = 0; position < ids.size(); ++position)
     {
-        const DocumentState *bundle = state_.parked_bundle_at(position);
-        if (bundle == nullptr && position != state_.active_tab())
+        auto revision = opened_revision_at(slot, position);
+        if (revision.has_value())
         {
-            continue;
+            opened.push_back(std::move(revision).value());
         }
-        const core::EditHistory &history = bundle != nullptr ? bundle->history : state_.history();
-        const Document &document = bundle != nullptr ? bundle->document : state_.document();
-        const AutosaveId tab = ids.at(position);
-        opened.push_back(OpenedRevision{
-            .tab = tab,
-            .revision = static_cast<std::uint64_t>(history.revision()),
-            .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &sent)
-                                        { return sent.tab == tab; }),
-            .saved =
-                save_state_of(document, history.content_position()) == core::SaveState::saved});
     }
     return opened;
+}
+
+// 帯の position 番目のタブの今の写し（まだ読んでいないタブは値なし・#2022 のレビュー M1 で 1 タブ
+// ずつ進めるために分けた）。
+std::optional<OpenedRevision> EditorController::opened_revision_at(LanguageServerSlot slot,
+                                                                   std::size_t position) const
+{
+    const auto &documents = language_servers_.links.at(slot_index(slot)).documents;
+    const DocumentState *bundle = state_.parked_bundle_at(position);
+    if (bundle == nullptr && position != state_.active_tab())
+    {
+        return std::nullopt;
+    }
+    const core::EditHistory &history = bundle != nullptr ? bundle->history : state_.history();
+    const Document &document = bundle != nullptr ? bundle->document : state_.document();
+    const AutosaveId tab = state_.autosave_ids().at(position);
+    return OpenedRevision{
+        .tab = tab,
+        .revision = static_cast<std::uint64_t>(history.revision()),
+        .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &sent)
+                                    { return sent.tab == tab; }),
+        .saved = save_state_of(document, history.content_position()) == core::SaveState::saved};
 }
 
 // 名前の変更の答え（決定 7）。誤りの答えはサーバーの message を 1 行で、null・空の答えは「名前を

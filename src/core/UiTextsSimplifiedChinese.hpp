@@ -505,5 +505,7 @@ inline constexpr UiTextColumn ui_texts_simplified_chinese{{
     {UiMessage::notice_code_action_in_insert, "插入模式下不请求快速修复（请先按 Esc 退出）"},
     {UiMessage::notice_code_actions_not_found, "此处没有可用的修复"},
     {UiMessage::palette_empty_code_actions, "还没有修复。在光标处按 {0}（Vim 为 {1}）即可请求"},
+    {UiMessage::notice_code_action_waiting,
+     "仍在等待语言服务器对上一个修复的答复，因此未应用所选修复"},
 }};
 } // namespace nenenib::core

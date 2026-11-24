@@ -35,6 +35,7 @@
 #include "NoticeLine.hpp"
 #include "Offset.hpp"
 #include "OffsetRange.hpp"
+#include "OpenedRevision.hpp"
 #include "PaletteOrigin.hpp"
 #include "PaletteScope.hpp"
 #include "PendingLspRequest.hpp"
@@ -76,6 +77,24 @@ constexpr std::string_view preferred_mark = "*";
 {
     return diagnostic.range.begin.value <= range.end.value &&
            range.begin.value <= diagnostic.range.end.value;
+}
+
+// 題の改行・Tab・制御文字を空白に畳む（項目を捨てずに出す・#2022 のレビュー L1）。長い題は一覧の
+// 今の切り方（clipped_display_text）に任せる。
+[[nodiscard]] std::string folded_title(std::string_view title)
+{
+    constexpr unsigned char first_printable = 0x20;
+    constexpr unsigned char delete_character = 0x7F;
+    std::string folded{title};
+    for (char &byte : folded)
+    {
+        const auto code = static_cast<unsigned char>(byte);
+        if (code < first_printable || code == delete_character)
+        {
+            byte = ' ';
+        }
+    }
+    return folded;
 }
 
 // 候補の command（答えの列の位置の 10 進）→ 位置。
@@ -260,7 +279,7 @@ void EditorController::append_code_action_choices(std::vector<core::CommandChoic
     const auto &actions = held_code_actions_.value().actions;
     for (std::size_t index = 0; index < actions.size(); ++index)
     {
-        auto label = core::clipped_display_text(actions.at(index).title);
+        auto label = core::clipped_display_text(folded_title(actions.at(index).title));
         if (!label.has_value())
         {
             continue;
@@ -299,7 +318,25 @@ void EditorController::choose_code_action(const core::CommandChoice &choice)
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_server_edit_stale));
         return;
     }
+    // 前の命令の答えを待つ間は次の項目を走らせない（取り消した命令の `workspace/applyEdit` が後の
+    // 命令の写しで照らされる道を作らない・#2022 のレビュー R1）。
+    if (awaits_command(held.context.slot))
+    {
+        state_ =
+            state_.with_command_message(ui_notice(core::UiMessage::notice_code_action_waiting));
+        return;
+    }
+    // 選んだ時点で VISUAL を抜ける（Command だけの項目でも edit の道と同じ結果のモード・R3）。
+    leave_visual_for_formatting();
     run_code_action(held.actions.at(index.value()), held.context, held.encoding);
+}
+
+// 席 slot が送った `workspace/executeCommand` の答えを待っているか（待つ列にその要求がある）。
+bool EditorController::awaits_command(LanguageServerSlot slot) const
+{
+    const auto &pending = language_servers_.links.at(slot_index(slot)).pending;
+    return std::ranges::find(pending, LspRequestKind::execute_command, &PendingLspRequest::kind) !=
+           pending.end();
 }
 
 // edit → command の順（決定 10・LSP の文）。edit は apply_workspace_edit の 1 本で当て、断ったら
@@ -309,6 +346,7 @@ void EditorController::run_code_action(const core::LspCodeAction &action,
                                        const LspEditContext &context,
                                        core::LspPositionEncoding encoding)
 {
+    LspEditContext advanced = context;
     if (action.edit.has_value())
     {
         const auto edit = core::lsp_workspace_edit(action.edit.value());
@@ -317,12 +355,13 @@ void EditorController::run_code_action(const core::LspCodeAction &action,
             state_ = state_.with_command_message(server_edit_refusal(edit.error()));
             return;
         }
-        if (apply_workspace_edit(edit.value(), context, encoding, ServerEditOrigin::answer)
-                .has_value())
+        const auto applied =
+            apply_workspace_edit(edit.value(), context, encoding, ServerEditOrigin::answer);
+        if (!applied.has_value())
         {
             return;
         }
-        leave_visual_for_formatting();
+        advanced = advanced_context(context, applied.value());
     }
     else if (action.resolvable && link_of(context.slot).phase == LanguageServerPhase::running &&
              link_of(context.slot).abilities.code_action_resolve)
@@ -333,8 +372,30 @@ void EditorController::run_code_action(const core::LspCodeAction &action,
     }
     if (action.command.has_value())
     {
-        send_execute_command(context.slot, action.command.value());
+        send_execute_command(context.slot, action.command.value(), advanced);
     }
+}
+
+// 写し context を、Nib がサーバーの編集で当てたタブ tabs だけ今の値へ進める（当てた後の改訂番号・
+// 席が開いているか・保存の状態・新しく開いたタブは足す）。ほかのタブは頼んだ時点の値のまま残すので、
+// 頼んだ後に使う人が打った・保存したタブは照合で断られる（#2022 のレビュー M1）。
+LspEditContext EditorController::advanced_context(LspEditContext context,
+                                                  const std::vector<AutosaveId> &tabs) const
+{
+    for (const AutosaveId tab : tabs)
+    {
+        const auto position = tab_position_of(tab);
+        const auto revision = position.has_value()
+                                  ? opened_revision_at(context.slot, position.value())
+                                  : std::nullopt;
+        std::erase_if(context.opened,
+                      [tab](const OpenedRevision &copied) { return copied.tab == tab; });
+        if (revision.has_value())
+        {
+            context.opened.push_back(revision.value());
+        }
+    }
+    return context;
 }
 
 // resolve の答え（決定 10）。誤りの答えはサーバーの message を 1 行で、読めない答えは「読めない」。
@@ -358,6 +419,19 @@ void EditorController::settle_code_action_resolve_answer()
                              : ui_notice(core::UiMessage::notice_server_edit_unreadable));
         return;
     }
+    // edit の有無に依らず、頼んだ文書と入力の途中を照らしてから進める（Command
+    // だけの答えでも、頼んだ 時点の本文で作った引数を変わった本文へ送らない・決定 10・#2022
+    // のレビュー M3）。
+    if (server_edit_interrupts())
+    {
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_server_edit_busy));
+        return;
+    }
+    if (server_edit_stale(answered.context.request))
+    {
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_server_edit_stale));
+        return;
+    }
     core::LspCodeAction resolved = std::move(answered.action).value();
     resolved.resolvable = false;
     run_code_action(resolved, answered.context, answered.encoding);
@@ -369,7 +443,8 @@ void EditorController::settle_code_action_resolve_answer()
 // が命令より先に届くように席の文書の変更を先に流し、その後の写しを文脈に置く
 // （`workspace/applyEdit` の照合 (b)(c)）。同じ種類の古い要求は取り消す（待ちは 1 つだけ）。
 void EditorController::send_execute_command(LanguageServerSlot slot,
-                                            const core::LspCommand &command)
+                                            const core::LspCommand &command,
+                                            const LspEditContext &context)
 {
     const auto &link = link_of(slot);
     if (link.phase != LanguageServerPhase::running ||
@@ -379,10 +454,8 @@ void EditorController::send_execute_command(LanguageServerSlot slot,
         return;
     }
     flush_language_server_documents(slot);
-    send_language_request(
-        slot, LspRequestKind::execute_command, core::lsp_execute_command_params(command),
-        LspEditContext{
-            .request = request_context(), .opened = opened_revisions(slot), .slot = slot});
+    send_language_request(slot, LspRequestKind::execute_command,
+                          core::lsp_execute_command_params(command), context);
 }
 
 // 席 slot が開いた文書の未送信の変更を全部流す（命令より先に届ける）。
@@ -435,6 +508,11 @@ EditorController::apply_edit_refusal(LanguageServerSlot slot, const core::LspReq
         return "Nib is not waiting for a workspace/executeCommand";
     }
     const LspEditContext copied = *context;
+    // 入力の途中は画面に何も出さず、返事だけを返す（#2022 のレビュー L6）。
+    if (server_edit_interrupts())
+    {
+        return "the editor is in the middle of input";
+    }
     const auto *params = core::json_object_of(request.params);
     const auto member = params != nullptr ? core::json_member(*params, "edit") : std::nullopt;
     const auto edit = member.has_value()
@@ -445,34 +523,32 @@ EditorController::apply_edit_refusal(LanguageServerSlot slot, const core::LspReq
         state_ = state_.with_command_message(server_edit_refusal(edit.error()));
         return failure_reason(edit.error());
     }
-    if (server_edit_interrupts())
-    {
-        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_server_edit_busy));
-        return "the editor is in the middle of input";
-    }
-    if (apply_workspace_edit(edit.value(), copied, link_of(slot).encoding,
-                             ServerEditOrigin::server_request)
-            .has_value())
+    const auto applied = apply_workspace_edit(edit.value(), copied, link_of(slot).encoding,
+                                              ServerEditOrigin::server_request);
+    if (!applied.has_value())
     {
         return "the documents changed since the command was sent or could not be edited";
     }
-    // 当てた後の本文はサーバーが当てたと見なす本文と同じなので、同じ命令の次の
-    // `workspace/applyEdit`
-    // はこの写しで照らす（同じ意図の中で写すので、使う人の打鍵は挟まらない）。
-    renew_awaited_command(slot);
+    // 同じ命令の次の `workspace/applyEdit` は、当てたタブだけを進めた写しで照らす（M1）。返事の前に
+    // 当てた編集の `didChange` を流し、サーバーが `applied: true` を受けた時点で本文が揃っている
+    // ようにする（M2）。
+    renew_awaited_command(slot, applied.value());
+    flush_language_server_documents(slot);
     return std::nullopt;
 }
 
-// 待っている命令の文脈の写しを今の本文で置き直す（apply_edit_refusal が当てた後だけ）。
-void EditorController::renew_awaited_command(LanguageServerSlot slot)
+// 待っている命令の写しを、当てたタブ tabs だけ進める（apply_edit_refusal が当てた後だけ）。
+void EditorController::renew_awaited_command(LanguageServerSlot slot,
+                                             const std::vector<AutosaveId> &tabs)
 {
     auto &pending = link_of(slot).pending;
     const auto awaited =
         std::ranges::find(pending, LspRequestKind::execute_command, &PendingLspRequest::kind);
-    if (awaited != pending.end())
+    const auto *context =
+        awaited != pending.end() ? std::get_if<LspEditContext>(&awaited->context) : nullptr;
+    if (context != nullptr)
     {
-        awaited->context = LspEditContext{
-            .request = request_context(), .opened = opened_revisions(slot), .slot = slot};
+        awaited->context = advanced_context(*context, tabs);
     }
 }
 } // namespace nenenib::application

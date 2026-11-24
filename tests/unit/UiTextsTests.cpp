@@ -85,8 +85,8 @@ void verify_columns()
         }
     }
     expect(
-        core::ui_message_count == 458,
-        "the table has 458 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+        core::ui_message_count == 459,
+        "the table has 459 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
         "project search mark 1 of #1003, the project search face 8 of #1763, the "
         "easymotion prompt of ADR 0163, the 5 context menu operations 10 of #1051, the finder "
         "preview 4 of #1785, the preview failures 3 more of #1793, the packaged "
@@ -104,7 +104,7 @@ void verify_columns()
         "#1959, the typing sparks rows 2 of #1979, the indent guide rows and values 14 of #1975, "
         "the pane resize rows 6 of #1972, the formatting operations 4 and notices 6 of "
         "#1993, the rename operation 2, prompt 1 and notices 17 of #2004 and the quick fix "
-        "operation 2, the mark 1 and notices 4 of #2005)");
+        "operation 2, the mark 1 and notices 5 of #2005)");
     expect(placed == 57,
            "57 messages take placeholders (T1a 26, the search progress 3, the "
            "preview line 1, the definition count 1, the settings summary 4, "

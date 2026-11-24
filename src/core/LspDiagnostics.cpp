@@ -6,6 +6,7 @@
 #include "DiagnosticsCount.hpp"
 #include "JsonNull.hpp"
 #include "JsonNumber.hpp"
+#include "JsonParse.hpp"
 #include "JsonValue.hpp"
 #include "JsonWrite.hpp"
 #include "LspJsonRead.hpp"
@@ -98,14 +99,15 @@ constexpr std::uint64_t highest_severity = 4;
 
 // data の欄（#2005・ADR 0194 の決定 8）。JSON のまま持ち、書いた形が lsp_diagnostic_data_limit
 // バイトを超えたら持たない（無いのと同じ）。
-[[nodiscard]] std::optional<JsonValue> data_member(const JsonObject &object)
+[[nodiscard]] std::string data_member(const JsonObject &object)
 {
     const Member found = json_member(object, "data");
-    if (!found.has_value() || write_json(found.value().get()).size() > lsp_diagnostic_data_limit)
+    if (!found.has_value())
     {
-        return std::nullopt;
+        return {};
     }
-    return found.value().get();
+    std::string written = write_json(found.value().get());
+    return written.size() <= lsp_diagnostic_data_limit ? written : std::string{};
 }
 
 // 本文のバイト位置の区間 → LSP の Range の JSON（lsp_position_of の 1 本）。
@@ -217,9 +219,9 @@ JsonValue lsp_diagnostic_json(const Diagnostic &diagnostic, const TextBuffer &te
         object.emplace_back("source", JsonValue{diagnostic.source});
     }
     object.emplace_back("message", JsonValue{diagnostic.message});
-    if (diagnostic.data.has_value())
+    if (auto data = parse_json(diagnostic.data); data.has_value())
     {
-        object.emplace_back("data", diagnostic.data.value());
+        object.emplace_back("data", std::move(data).value());
     }
     return JsonValue{std::move(object)};
 }

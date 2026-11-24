@@ -522,10 +522,12 @@ enum class UiMessage : std::uint16_t
     notice_code_action_in_insert,
     notice_code_actions_not_found,
     palette_empty_code_actions,
+    // 前の直しの命令の答えを待つ間に選んだ項目を断る 1 行（#2022 のレビュー R1）。
+    notice_code_action_waiting,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::palette_empty_code_actions) + 1U;
+    std::to_underlying(UiMessage::notice_code_action_waiting) + 1U;
 } // namespace nenenib::core

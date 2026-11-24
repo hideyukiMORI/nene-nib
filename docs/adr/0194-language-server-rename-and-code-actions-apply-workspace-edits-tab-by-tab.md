@@ -189,7 +189,13 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
   - resolve。
   - 頼んでいない `workspace/applyEdit` への `applied: false`。
   - 入力の途中の `applied: false`。
-  - 実装の形（#2005）: `workspace/applyEdit` を照らす写しは、`workspace/executeCommand` を送ったとき（当てた edit の `didChange` を先に流した後）の `LspEditContext`（帯の読み込み済みのタブごとの改訂番号・頼んだ席が `didOpen` しているか・保存の状態）で、照合 (b)(c) と席が開いていない当て先の規則を `apply_workspace_edit` の 1 本がそのまま使う（(a) だけ `ServerEditOrigin::server_request` で飛ばす）。待ちは席の答えを待つ列にある `execute_command` の要求そのもので、答え（成功・誤り）・同じ種類の新しい要求の取り消し・tick の古さ・席の止まりのどれでも列から外れて下りる（別の旗を持たない）。当てた後は待っている要求の写しを当てた後の本文で置き直す（同じ意図の中で写すので使う人の打鍵は挟まらず、サーバーが当てたと見なす本文と同じ）ので、同じ命令の 2 通目の `workspace/applyEdit` も同じ照合で当たる。
+  - 実装の形（#2005・#2022 のレビュー R8）:
+    - 写しの土台は、一覧を開くクイックフィックスを頼んだ時点の `LspEditContext`（帯の読み込み済みのタブごとの改訂番号・頼んだ席が `didOpen` しているか・保存の状態）。選んだ項目の `edit` と、当てた `workspace/applyEdit` で **Nib が当てたタブだけ**を当てた後の値へ進め（新しく開いたタブは足す）、ほかのタブは頼んだ時点の値のまま残す。一覧を開いてから選ぶまで・命令を送ってから届くまで・1 通目と 2 通目の間に使う人が別のタブで打った・保存した分は写しに入らず、照合 (b) と席が開いていない当て先の規則で断る。
+    - 照らすのは `apply_workspace_edit` の 1 本で、`workspace/applyEdit` だけ (a) を `ServerEditOrigin::server_request` で飛ばす。resolve の答えは、edit の有無に依らず頼んだ文書と入力の途中を照らしてから進める（Command だけの答えも）。
+    - 当てたら、`applied: true` の返事の前に当てた編集の `didChange` を流す（返事を受けた時点のサーバーの本文が揃う）。
+    - 待ちは席の答えを待つ列にある `execute_command` の要求そのもので、答え（成功・誤り）・tick の古さ・席の止まりのどれでも列から外れて下りる（別の旗を持たない）。待つ間は次の項目を選んでも走らせず 1 行で断る（取り消した命令の `workspace/applyEdit` が後の命令の写しで照らされる道を作らない）。
+    - 命令は `executeCommandProvider.commands` にある名前だけ送る（無い名前は client の側の命令で Nib には実行できないので、何も送らず何も出さない）。edit も command も無く resolve もできない項目は、選んでも何も起きない。
+    - 入力の途中に届いた `workspace/applyEdit` は、画面に何も出さず `applied: false` だけを返す。
 - オフの打鍵の道と速さ: **planned**（QLT-014・各段の PR の後に設計席が速さのゲートを回す）。
 
 ## 結果
@@ -216,6 +222,8 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
 - Command の結果で窓や URL を開く項目（gopls の Browse…）は、Nib では何も起きない（`window/showDocument` は MethodNotFound）。
 - Vim の VISUAL の `gra` は無い。
 - `changeAnnotations` の確かめの問いは無い（断る）。
+- クイックフィックスの `context.diagnostics` は Nib が持つ欄（range・severity・code・source・message・data）だけを戻す。`tags` `relatedInformation` `codeDescription` は戻さない（rust-analyzer と ts は自分の持つ診断か code と range で照らすので、実害は小さい）。次のときは受けた JSON と同じにならない: severity の無い診断（Nib は error を補って 1 を戻す）・128 バイトを超える文字列の code（落ちて戻らない）・3,840 バイトで切った message（message で照らすサーバーは長い診断に直しを返せない）・4 KiB を超える `data`（落とす）。往復は clangd と ts の実物の答えで確かめた（#2022）。
+- Ctrl+. は、IME が鍵を使うとき（Microsoft Pinyin の句読点の切り替え）は `WM_KEYDOWN` が `VK_PROCESSKEY` で届いて IME に渡る（分岐は足していない・hide の実機の確かめの項目）。
 
 ## 却下した選択肢
 

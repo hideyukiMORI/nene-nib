@@ -171,9 +171,12 @@ revision_and_saved(const core::EditHistory &history, const Document &document)
 }
 } // namespace
 
-// 当てたか今の本文と同じ結果なら値なし、断ったら理由の 1 行（知らせにも置く）。origin が
-// server_request（`workspace/applyEdit`・#2005）なら照合 (a) を飛ばす（ADR 0194 の決定 4）。
-std::optional<core::DisplayText>
+// 当てたら当てたタブの退避番号の列（今の本文と同じ結果なら空）、断ったら理由の 1 行（知らせにも
+// 置く）。origin が server_request（`workspace/applyEdit`・#2005）なら照合 (a) を飛ばす（ADR 0194
+// の 決定
+// 4）。当てたタブの列は、クイックフィックスが命令の写しを当てたタブだけ進めるのに使う（#2022 の
+// レビュー M1）。
+std::expected<std::vector<AutosaveId>, core::DisplayText>
 EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
                                        const LspEditContext &context,
                                        core::LspPositionEncoding encoding, ServerEditOrigin origin)
@@ -194,15 +197,14 @@ EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
     if (!files.has_value())
     {
         state_ = state_.with_command_message(files.error());
-        return files.error();
+        return std::unexpected{files.error()};
     }
     // 今の本文と同じ結果だけなら何も変えず、何も知らせない（undo の単位を積まない）。
     if (files.value().empty())
     {
-        return std::nullopt;
+        return std::vector<AutosaveId>{};
     }
-    run_server_edits(std::move(files).value(), context.slot);
-    return std::nullopt;
+    return run_server_edits(std::move(files).value(), context.slot);
 }
 
 // 読みが断った理由 → 1 行（決定 4）。
@@ -471,8 +473,10 @@ EditorController::place_server_edit_spans(std::vector<ServerEditFile> &files,
 }
 
 // 当てる（決定 5）。検査を通った後は replace が断る道が無い（入力の途中でなく、各区間は今の本文の
-// 上で組んだ・切り替えと開く道は本文を変えない）。
-void EditorController::run_server_edits(std::vector<ServerEditFile> files, LanguageServerSlot slot)
+// 上で組んだ・切り替えと開く道は本文を変えない）。当てたタブ（新しく開いたタブを含む）の退避番号を
+// 当てた順に返す。
+std::vector<AutosaveId> EditorController::run_server_edits(std::vector<ServerEditFile> files,
+                                                           LanguageServerSlot slot)
 {
     const auto &ids = state_.autosave_ids();
     const AutosaveId origin = ids.at(state_.active_tab());
@@ -482,6 +486,7 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files, Langu
         order.push_back(ids.at(position));
     }
     std::vector<AutosaveId> opened;
+    std::vector<AutosaveId> edited;
     std::size_t places = 0;
     const std::size_t changed = files.size();
     for (ServerEditFile &file : files)
@@ -497,6 +502,7 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files, Langu
             opened.push_back(state_.autosave_ids().at(state_.active_tab()));
         }
         announce_server_edit_target(slot);
+        edited.push_back(state_.autosave_ids().at(state_.active_tab()));
         const core::FormattedSpan &span = file.span.value();
         places += span.pieces.size();
         const std::size_t before = state_.history().position();
@@ -511,6 +517,7 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files, Langu
             ? ui_notice(core::UiMessage::notice_server_edit_applied, {std::to_string(places)})
             : ui_notice(core::UiMessage::notice_server_edit_applied_files,
                         {std::to_string(changed), std::to_string(places)}));
+    return edited;
 }
 
 // 当てる前に、答えた席 slot（文脈の席・#2011 のレビュー R6 の

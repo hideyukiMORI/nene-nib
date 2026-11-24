@@ -44,6 +44,7 @@
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
+#include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
 #include "TextPosition.hpp"
@@ -339,10 +340,9 @@ void verify_diagnostic_round_trip()
     }
     const auto &read = published.value().diagnostics;
     expect(read.at(0).code == "expected_semi" &&
-               read.at(0).code_form == core::DiagnosticCodeForm::text &&
-               read.at(0).data.has_value() && read.at(1).code == "2304" &&
-               read.at(1).code_form == core::DiagnosticCodeForm::number &&
-               !read.at(1).data.has_value(),
+               read.at(0).code_form == core::DiagnosticCodeForm::text && !read.at(0).data.empty() &&
+               read.at(1).code == "2304" &&
+               read.at(1).code_form == core::DiagnosticCodeForm::number && read.at(1).data.empty(),
            "a diagnostic keeps the JSON type of its code and its data");
     expect(core::lsp_diagnostic_json(read.at(0), text, core::LspPositionEncoding::utf16) ==
                    core::parse_json(semi_diagnostic).value_or(core::JsonValue{}) &&
@@ -358,7 +358,7 @@ void verify_diagnostic_round_trip()
                               .params = big.value_or(core::JsonValue{})},
         text, core::LspPositionEncoding::utf16);
     expect(dropped.has_value() && dropped.value().diagnostics.size() == 1 &&
-               !dropped.value().diagnostics.front().data.has_value() &&
+               dropped.value().diagnostics.front().data.empty() &&
                dropped.value().diagnostics.front().code_form == core::DiagnosticCodeForm::none,
            "data over the limit and a code that is not an integer or a string are not kept");
 }
@@ -563,9 +563,8 @@ void verify_apply_edit_refusals()
     const auto refused = apply_edit_sent(busy, "b1", semi_edit);
     expect(contains(reply_to(busy, "b1"),
                     R"("applied":false,"failureReason":"the editor is in the middle of input")") &&
-               whole_vim_body(busy.controller()) == main_text &&
-               message_of(refused) == notice(busy, core::UiMessage::notice_server_edit_busy),
-           "an applyEdit in the middle of input is refused without waiting");
+               whole_vim_body(busy.controller()) == main_text && message_of(refused).empty(),
+           "an applyEdit in the middle of input is refused without waiting or a notice");
 
     Editing errored(lsp_on());
     awaiting(errored);
@@ -867,6 +866,213 @@ void verify_real_answers()
         expect(commanded, ("the command follows the edit (" + name + ")").c_str());
     }
 }
+// ---------------------------------------------------------------- #2022 のレビュー R8
+
+// other.cpp の other を thing にする編集（changes の形・版なし）。
+constexpr std::string_view other_edit =
+    R"({"changes":{"file:///C:/work/other.cpp":[{"range":{"start":{"line":0,"character":4},)"
+    R"("end":{"line":0,"character":9}},"newText":"thing"}]}})";
+
+// other.cpp と main.cpp を開き、席に両方を開かせる（other.cpp は席が起きた後に一度アクティブに
+// する）。main.cpp がアクティブ。
+void started_both(Editing &editing)
+{
+    started(editing, able, true);
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SwitchTab{1});
+}
+
+// other.cpp のタブで text を打って main.cpp へ戻る（使う人の別のタブの打鍵）。
+void typed_in_other(Editing &editing, std::string_view text)
+{
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::InsertText{std::string{text}});
+    applied(editing.controller(), app::SwitchTab{1});
+}
+
+// other.cpp の本文（main.cpp へ戻る）。
+[[nodiscard]] std::string other_body(Editing &editing)
+{
+    applied(editing.controller(), app::SwitchTab{0});
+    std::string body = whole_vim_body(editing.controller());
+    applied(editing.controller(), app::SwitchTab{1});
+    return body;
+}
+
+void awaiting_both(Editing &editing)
+{
+    started_both(editing);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, action_method, four_actions()));
+    static_cast<void>(editing.controller().apply_frame(app::ActivateCommandChoice{1}));
+}
+
+// M1: 写しの土台は頼んだ時点で、進めるのは Nib が当てたタブだけ。一覧を開いてから選ぶまで・命令を
+// 送ってから届くまで・1 通目と 2 通目の間に別のタブで打った分は写しに入らず、断る。
+void verify_snapshot_from_request()
+{
+    Editing listed(lsp_on());
+    started_both(listed);
+    static_cast<void>(asked(listed));
+    static_cast<void>(answered(listed, action_method, four_actions()));
+    static_cast<void>(listed.controller().apply(app::CancelCommand{}));
+    typed_in_other(listed, "y");
+    static_cast<void>(listed.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(listed.controller().apply_frame(app::CommandText{"="}));
+    static_cast<void>(listed.controller().apply_frame(app::ActivateCommandChoice{1}));
+    static_cast<void>(apply_edit_sent(listed, "a1", other_edit));
+    expect(contains(reply_to(listed, "a1"), R"("applied":false)") &&
+               !contains(other_body(listed), "thing"),
+           "a tab typed in between opening the list and choosing is refused");
+
+    Editing sent(lsp_on());
+    awaiting_both(sent);
+    typed_in_other(sent, "y");
+    static_cast<void>(apply_edit_sent(sent, "b1", other_edit));
+    expect(contains(reply_to(sent, "b1"), R"("applied":false)") &&
+               !contains(other_body(sent), "thing"),
+           "a tab typed in after the command was sent is refused");
+
+    Editing between(lsp_on());
+    awaiting_both(between);
+    static_cast<void>(apply_edit_sent(between, "c1", semi_edit));
+    typed_in_other(between, "y");
+    static_cast<void>(apply_edit_sent(between, "c2", other_edit));
+    expect(contains(reply_to(between, "c1"), R"("applied":true)") &&
+               contains(reply_to(between, "c2"), R"("applied":false)") &&
+               !contains(other_body(between), "thing"),
+           "a tab typed in between the first and the second applyEdit is refused");
+
+    Editing quiet(lsp_on());
+    awaiting_both(quiet);
+    static_cast<void>(apply_edit_sent(quiet, "d1", semi_edit));
+    static_cast<void>(apply_edit_sent(quiet, "d2", other_edit));
+    static_cast<void>(apply_edit_sent(quiet, "d3", rename_edit));
+    expect(contains(reply_to(quiet, "d2"), R"("applied":true)") &&
+               contains(reply_to(quiet, "d3"), R"("applied":true)") &&
+               contains(other_body(quiet), "thing") &&
+               whole_vim_body(quiet.controller()) ==
+                   "int count = 1;\nint main() { return value; }\n",
+           "without typing the later applyEdits of the same command apply");
+}
+
+// M2: `applied: true` の返事の前に、当てた編集の `didChange` が出る。
+void verify_change_before_reply()
+{
+    Editing editing(lsp_on());
+    awaiting(editing);
+    static_cast<void>(apply_edit_sent(editing, "o1", semi_edit));
+    const std::size_t change = sent_index(editing, R"("method":"textDocument/didChange")");
+    const std::size_t reply = sent_index(editing, R"("id":"o1","result")");
+    expect(change < reply && reply < editing.language_server().sent().size(),
+           "the didChange of the applied edit goes out before the applied reply");
+}
+
+// M3: resolve の答えが Command だけでも、頼んだ文書が変わっていれば命令を送らない。
+void verify_resolved_command_checked()
+{
+    Editing editing(lsp_on());
+    started(editing, able);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, action_method, four_actions()));
+    static_cast<void>(editing.controller().apply_frame(app::ActivateCommandChoice{3}));
+    applied(editing.controller(), app::InsertText{"x"});
+    const auto frame =
+        answered(editing, resolve_method,
+                 R"({"title":"Extract","command":{"title":"c","command":"fix.rename"}})");
+    expect(editing.language_server().requests(execute_method).empty() &&
+               message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale),
+           "a resolved Command is not sent after the asked document changed");
+}
+
+// R1: 命令の答えを待つ間は次の項目を走らせず、前の命令の applyEdit は前の写しで当たる。
+void verify_one_command_at_a_time()
+{
+    Editing editing(lsp_on());
+    awaiting(editing);
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply_frame(app::CommandText{"="}));
+    const auto refused = editing.controller().apply_frame(app::ActivateCommandChoice{2});
+    expect(message_of(refused) == notice(editing, core::UiMessage::notice_code_action_waiting) &&
+               editing.language_server().requests(execute_method).size() == 1 &&
+               editing.language_server().cancelled().empty() &&
+               whole_vim_body(editing.controller()) == main_text,
+           "another item is refused while a command is awaited and nothing is cancelled");
+    static_cast<void>(apply_edit_sent(editing, "w1", semi_edit));
+    expect(contains(reply_to(editing, "w1"), R"("applied":true)"),
+           "the awaited command's applyEdit still applies with its own snapshot");
+}
+
+// R4: 同じタブのまま席が文書を閉じたら控えを捨てる（`:set nolsp`）。
+void verify_held_forgotten_by_seat()
+{
+    Editing editing(lsp_on());
+    started(editing, able);
+    static_cast<void>(asked(editing));
+    static_cast<void>(editing.controller().apply(app::WindowDeactivated{}));
+    static_cast<void>(answered(editing, action_method, four_actions()));
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    const auto typed = editing.controller().apply_frame(app::CommandText{"="});
+    expect(typed.command_palette.has_value() && typed.command_palette.value().rows.empty(),
+           "the held items are forgotten when the seat closes the asked document");
+}
+
+// L5 と L1: 数の id・edit の無い params・席の止まり・ほかの席・通常モードの選択・題の制御文字。
+void verify_more_shapes()
+{
+    Editing numbered(lsp_on());
+    awaiting(numbered);
+    static_cast<void>(delivered(
+        numbered, app::ServerMessage{R"({"jsonrpc":"2.0","id":77,"method":"workspace/applyEdit",)"
+                                     R"("params":{"edit":)" +
+                                     std::string{semi_edit} + "}}"}));
+    expect(contains(numbered.language_server().sent().back(),
+                    R"({"jsonrpc":"2.0","id":77,"result":{"applied":true}})"),
+           "a numeric id is answered with the same id");
+
+    Editing bare(lsp_on());
+    awaiting(bare);
+    static_cast<void>(delivered(
+        bare, app::ServerMessage{
+                  R"({"jsonrpc":"2.0","id":"n1","method":"workspace/applyEdit","params":{}})"}));
+    expect(contains(reply_to(bare, "n1"),
+                    R"("applied":false,"failureReason":"the workspace edit is malformed")"),
+           "an applyEdit without an edit is refused as malformed");
+
+    Editing stopped(lsp_on());
+    awaiting(stopped);
+    static_cast<void>(run_ex(stopped.controller(), "set nolsp"));
+    static_cast<void>(apply_edit_sent(stopped, "z1", semi_edit));
+    expect(!contains(reply_to(stopped, "z1"), R"("applied":true)") &&
+               whole_vim_body(stopped.controller()) == main_text,
+           "stopping the seat lowers the wait");
+}
+
+// 通常モードの選択の範囲と、題の制御文字。
+void verify_selection_and_titles()
+{
+    Editing selected(lsp_on());
+    started(selected, able);
+    applied(selected.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                            core::SelectionAnchoring::collapse});
+    applied(selected.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{6}},
+                            core::SelectionAnchoring::extend});
+    static_cast<void>(asked(selected));
+    expect(contains(selected.language_server().sent().back(),
+                    R"("range":{"start":{"line":0,"character":0},"end":{"line":0,"character":5}})"),
+           "an ordinary selection asks for its range");
+
+    Editing titled(lsp_on());
+    started(titled, able);
+    static_cast<void>(asked(titled));
+    const auto listed = answered(titled, action_method, R"([{"title":"a\nb\tc","edit":{}}])");
+    expect(listed.command_palette.has_value() && listed.command_palette.value().rows.size() == 1 &&
+               listed.command_palette.value().rows.front().label.text() == "a b c",
+           "control characters in a title fold into spaces instead of dropping the item");
+}
 } // namespace
 
 void verify_lsp_code_action_scope()
@@ -885,5 +1091,12 @@ void verify_lsp_code_action_scope()
     verify_empty_stale_and_held();
     verify_vim();
     verify_real_answers();
+    verify_snapshot_from_request();
+    verify_change_before_reply();
+    verify_resolved_command_checked();
+    verify_one_command_at_a_time();
+    verify_held_forgotten_by_seat();
+    verify_more_shapes();
+    verify_selection_and_titles();
 }
 } // namespace nenenib::tests

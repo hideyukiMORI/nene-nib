@@ -553,5 +553,7 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::notice_code_actions_not_found, "ここで使える直し方はありません"},
     {UiMessage::palette_empty_code_actions,
      "直し方はまだありません。キャレットの所で {0}（Vim は {1}）で頼めます"},
+    {UiMessage::notice_code_action_waiting,
+     "前の直しの言語サーバーの答えを待っているので、選んだ直しは当てませんでした"},
 }};
 } // namespace nenenib::core
