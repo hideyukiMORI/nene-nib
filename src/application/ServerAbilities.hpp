@@ -28,6 +28,10 @@ struct ServerAbilities
     bool signature_help = false;
     std::vector<std::string> signature_triggers = {};
     std::vector<std::string> signature_retriggers = {};
+    // `documentFormattingProvider` `documentRangeFormattingProvider`（#1993・ADR 0191 の決定
+    // 2・7）。
+    bool formatting = false;
+    bool range_formatting = false;
     DocumentSync sync = DocumentSync::none;
     SaveNotice save = SaveNotice::none;
 };

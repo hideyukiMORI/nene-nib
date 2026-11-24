@@ -575,6 +575,9 @@ class EditorWindow final
     void run_list_symbols();
     // 引数の情報を表示（#1959）。
     void run_show_signature_help();
+    // 文書を整形・選択範囲を整形（#1993）。
+    void run_format_document();
+    void run_format_selection();
     void run_choose_line_ending();
     void run_print();
     void run_register_shell();

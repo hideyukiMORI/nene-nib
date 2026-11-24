@@ -19,6 +19,9 @@ enum class LspRequestKind : std::uint8_t
     // 記号（#1955・ADR 0191 の決定 1・5）。
     document_symbol,
     // 引数の情報（#1959・ADR 0191 の決定 1・6）。
-    signature_help
+    signature_help,
+    // 整形（#1993・ADR 0191 の決定 1・7）。文書の全体と選択範囲。
+    formatting,
+    range_formatting
 };
 } // namespace nenenib::application

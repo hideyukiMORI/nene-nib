@@ -2,6 +2,7 @@
 
 #include "LanguageCompletion.hpp"
 #include "LanguageDefinition.hpp"
+#include "LanguageFormatting.hpp"
 #include "LanguageHover.hpp"
 #include "LanguageSignature.hpp"
 #include "LanguageSymbols.hpp"
@@ -24,5 +25,8 @@ struct LanguageAnswers
     std::optional<LanguageSymbols> symbols = std::nullopt;
     // 引数の情報の答え（#1959・ADR 0191 の決定 6）。札の欄は controller の signature_tip_。
     std::optional<LanguageSignature> signature = std::nullopt;
+    // 整形の答え（#1993・ADR 0191 の決定 7）。照合は当てるときにする（変わっていたら 1
+    // 行知らせる）。
+    std::optional<LanguageFormatting> formatting = std::nullopt;
 };
 } // namespace nenenib::application

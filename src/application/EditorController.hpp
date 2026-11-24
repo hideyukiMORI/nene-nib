@@ -38,6 +38,7 @@
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
+#include "EditLines.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
@@ -77,10 +78,13 @@
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "FontSize.hpp"
+#include "FormattedSpan.hpp"
+#include "FormattedUnit.hpp"
 #include "FoundLanguageServer.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
+#include "HistoryDirection.hpp"
 #include "ImageOutcome.hpp"
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
@@ -89,6 +93,7 @@
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageDefinition.hpp"
+#include "LanguageFormatting.hpp"
 #include "LanguageQueryKind.hpp"
 #include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
@@ -422,6 +427,8 @@ class EditorController final
     // 引数の情報（#1959・ADR 0191 の決定 6）。trigger は打った `triggerCharacters` の 1 文字
     // （手で頼んだら値なし）。
     [[nodiscard]] bool request_signature_help(std::optional<std::string> trigger, bool retrigger);
+    // 整形（#1993・ADR 0191 の決定 7）。selection が真なら選択範囲（rangeFormatting）。
+    [[nodiscard]] bool request_formatting(bool selection);
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // Ctrl+P の一覧のために参照と記号の当たりを作った数（#1958 のレビュー R1 の契約が読む）。
@@ -961,7 +968,9 @@ class EditorController final
     // 2 枠で操作中の枠を閉じる（`:q` 系と `Ctrl-w c`・ADR 0148 の決定 5・ADR 0155 の決定 4）。
     void close_operated_pane();
     // 操作中の枠の編集を、同じ文書を出しているもう 1 つの枠に写す（決定 9）。
-    void adjust_other(const core::Edit &edit, const core::TextBuffer &after);
+    void adjust_other(std::span<const core::Edit> edits, const core::TextBuffer &after);
+    void adjust_other_by(const core::Edit &edit, const EditLines &lines,
+                         const core::TextBuffer &after);
     // 編集の始まりの行が覚えの行より前なら、その文書の構文の覚えを捨てる（ADR 0156 の追補 #827）。
     // 編集の 1 か所（replace・undo・redo）が本文を置く前に呼ぶ。
     void forget_syntax_before(const core::Edit &edit);
@@ -1108,6 +1117,22 @@ class EditorController final
     [[nodiscard]] bool invoke_signature_help();
     [[nodiscard]] std::optional<core::LspSignature> shown_signature(const EditorFrame &frame) const;
     void drop_signature_tip() noexcept;
+    // 整形の答えを当てる（#1993・EditorControllerFormatting.cpp）。
+    void settle_formatting_answer();
+    [[nodiscard]] core::OffsetRange formatting_range() const;
+    void leave_visual_for_formatting();
+    [[nodiscard]] bool formatting_interrupts() const noexcept;
+    [[nodiscard]] std::optional<core::UiMessage>
+    formatting_refusal(const LanguageFormatting &answered) const;
+    // 整形が積んだ単位を脇に残す（#1997 の 2 回目のレビュー P1）。積む前の履歴の位置を渡す。
+    void remember_formatted_unit(std::size_t before, const core::FormattedSpan &formatted);
+    // 帯から消えたタブの分を脇の表から外す（3 回目のレビュー P3・意図の終わりの 1 か所）。
+    void forget_closed_formatted_units();
+    // 履歴の index 番目の単位が整形の単位なら、その単位の編集の列（同じ文書・同じ位置・同じ編集の
+    // ときだけ）。向きは direction（undo は逆向きの列・redo は同じ列）。ふつうの単位は値なし。
+    [[nodiscard]] std::optional<std::vector<core::VimBlockEdit>>
+    formatted_pieces_at(std::size_t index, const core::Edit &edit,
+                        core::HistoryDirection direction);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -1216,6 +1241,10 @@ class EditorController final
     // 選択の起点が問いのときのまま）。
     [[nodiscard]] bool faces_closed() const noexcept;
     [[nodiscard]] bool awaits_nothing() const noexcept;
+    // Vim が次の鍵を待っているか（回数・オペレータ・1 鍵の待ち・レジスタの名指し・イージー
+    // モーション・INSERT の `Ctrl-o`・`map` の左辺の途中）。通常モードは偽。awaits_nothing と整形の
+    // 当てない条件（formatting_interrupts）が読む 1 本（#1997 の 2 回目のレビュー P2）。
+    [[nodiscard]] bool vim_waits_for_key() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -1686,8 +1715,7 @@ class EditorController final
     // 行ごとに直し（marks_block_adjusted・#1361）、VimLineMarks::kept（VimReplaceRange が渡す）なら
     // 行をその場で書き換えた置き換えでマークの行を動かさない（#1360）。
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
-                 std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
-                     core::VimLineMarks::shifted);
+                 EditLines lines = core::VimLineMarks::shifted);
     // Vim のモードで eol の旗が立つ文書の置き換えの範囲と本文（ADR 0188 の決定 3 (a)）。空の本文に
     // 本文を足すなら最後の改行も足し、engine を通らない編集が除いた本文を全部消すなら最後の改行も
     // 消す（空で旗が立つ本文にする）。ほかは頼まれたまま。
@@ -1766,7 +1794,7 @@ class EditorController final
     // incsearch の preview（ADR 0041 の決定 3・5）。
     void update_search_preview();
     void restore_search_origin(const ScrollState &origin);
-    void undone_marks(const core::Edit &edit);
+    void undone_marks(const core::Edit &edit, const EditLines &lines = core::VimLineMarks::shifted);
     void check_vim_marks();
     void adopt_vim_marks(const std::optional<core::VimMarks> &marks);
     void undo_edit();
@@ -1996,6 +2024,10 @@ class EditorController final
     // 保存時点を写す after_units_folded の unsure）。起点を置く所と再生の終わりが倒す。
     bool replay_undone_ = false;
     bool replay_save_unsure_ = false;
+    // 整形が積んだ undo の単位と編集の列（#1997 の 2 回目のレビュー P1）。整形を当てたときだけ
+    // 足し、同じ文書の同じ位置かその後ろの古い物は足すときに外す。照合に外れた物は引いたときに
+    // 外す。
+    std::vector<FormattedUnit> formatted_units_;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;
