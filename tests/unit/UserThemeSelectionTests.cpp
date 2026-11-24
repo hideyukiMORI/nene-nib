@@ -67,6 +67,7 @@
 #include "VisibleLines.hpp"
 
 #include <algorithm>
+#include <array>
 #include <expected>
 #include <functional>
 #include <optional>
@@ -357,10 +358,51 @@ void verify_user_completion_order()
            "failed custom name remains a completion");
 }
 
+// 読めなかった理由ごとの文（docs/i18n/inventory-2026-11-13.tsv の theme_failure_* の 15
+// 行・#2013）。
+constexpr std::array<std::pair<core::ThemeFailure, std::string_view>, 15> theme_failure_texts{{
+    {core::ThemeFailure::not_found, "Theme file not found"},
+    {core::ThemeFailure::unreadable, "Theme file could not be read"},
+    {core::ThemeFailure::too_large, "Theme file exceeds 16 KiB"},
+    {core::ThemeFailure::malformed, "Expected key=value lines"},
+    {core::ThemeFailure::duplicate_key, "Duplicate theme field"},
+    {core::ThemeFailure::unknown_key, "Unknown theme field"},
+    {core::ThemeFailure::missing_field, "Required theme field missing"},
+    {core::ThemeFailure::unsupported_version, "Unsupported theme version"},
+    {core::ThemeFailure::invalid_name, "Invalid theme filename or name"},
+    {core::ThemeFailure::name_mismatch, "Theme name does not match filename"},
+    {core::ThemeFailure::reserved_name, "Reserved theme name"},
+    {core::ThemeFailure::invalid_text, "Invalid UTF-8 or theme attribution"},
+    {core::ThemeFailure::invalid_appearance, "Appearance must be dark or light"},
+    {core::ThemeFailure::invalid_color, "Invalid RGB or RGBA color"},
+    {core::ThemeFailure::insufficient_contrast, "Text/background contrast must be at least 4.5"},
+}};
+
+// 理由の文は表のとおりで、知らせはテーマの名前を前に置く。比較は名前と理由の両方を見る。
+void verify_theme_failure_texts()
+{
+    for (const auto &[failure, text] : theme_failure_texts)
+    {
+        expect(core::theme_failure_reason(failure) == text,
+               "each theme failure has the inventory's reason text");
+        expect(core::theme_failure_message(core::ThemeLookupFailure{user_name("ocean"), failure})
+                       .text() == "ocean: " + std::string(text),
+               "the theme failure message is the name, a colon and the reason");
+    }
+    const core::ThemeLookupFailure missing{user_name("ocean"), core::ThemeFailure::not_found};
+    expect(missing == core::ThemeLookupFailure{user_name("ocean"), core::ThemeFailure::not_found},
+           "the same name and reason are equal");
+    expect(
+        !(missing == core::ThemeLookupFailure{user_name("ocean"), core::ThemeFailure::malformed}),
+        "a different reason is a different failure");
+    expect(!(missing == core::ThemeLookupFailure{user_name("lake"), core::ThemeFailure::not_found}),
+           "a different name is a different failure");
+}
 } // namespace
 
 void verify_user_theme_selection()
 {
+    verify_theme_failure_texts();
     verify_theme_catalog();
     verify_user_theme_commands();
     verify_user_completion_order();

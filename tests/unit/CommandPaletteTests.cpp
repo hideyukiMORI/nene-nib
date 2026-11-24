@@ -1776,6 +1776,32 @@ void verify_palette_scrolling_wraps()
            "wrapping down puts the first choice on the top row");
 }
 
+// 候補の無い面の送りは何も変えない。面の上下の履歴と Ctrl+W / Ctrl+U は選択も入力も変えない
+// （ADR 0150 の決定 2・D82・#1550・#2013）。
+void verify_palette_paging_still()
+{
+    using core::CommandEdit;
+    const auto nothing = core::CommandPalette::opened({}, ":zzzzqqq", core::EditMode::ordinary);
+    for (const auto edit : {CommandEdit::page_next, CommandEdit::page_previous,
+                            CommandEdit::list_first, CommandEdit::list_last})
+    {
+        const auto paged = nothing.edited(edit);
+        expect(nothing.count() == 0 && paged.count() == 0 && paged.selected() == 0 &&
+                   paged.input().text() == ":zzzzqqq",
+               "paging an empty list changes nothing");
+    }
+    const auto chosen =
+        core::CommandPalette::opened({}, ":", core::EditMode::ordinary).selected_at(4);
+    for (const auto edit : {CommandEdit::history_previous, CommandEdit::history_next,
+                            CommandEdit::erase_word, CommandEdit::erase_to_start})
+    {
+        const auto kept = chosen.edited(edit);
+        expect(kept.selected() == 4 && kept.input().text() == ":" &&
+                   kept.shares_result_with(chosen),
+               "history steps and Ctrl+W / Ctrl+U leave the list as it is");
+    }
+}
+
 void verify_palette_paging()
 {
     using core::CommandEdit;
@@ -1799,6 +1825,7 @@ void verify_palette_paging()
     const auto typed = palette.inserted("tab").value();
     expect(typed.selected() == 0 && typed.first() == 0 && typed.visible() == 1,
            "typing filters again from the top and keeps the visible rows");
+    verify_palette_paging_still();
 }
 
 void verify_palette_wheel()

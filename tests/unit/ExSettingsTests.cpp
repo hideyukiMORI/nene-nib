@@ -1391,12 +1391,40 @@ void verify_ex_relativenumber()
     }
 }
 
+// `^=` は掛け算（Vim の OP_PREPENDING）。0 を掛けると 0、32 ビットの long を超える答えと `+=` の
+// あふれは E474 と同じ失敗（#1561・#2013）。
+void verify_ex_scrolloff_operations()
+{
+    auto margin = core::default_editor_settings();
+    margin.scrolloff = 7;
+    const auto zero = core::evaluate_ex("set so^=0", margin, Appearance::dark);
+    const auto twice = core::evaluate_ex("set so^=2", margin, Appearance::dark);
+    expect(carries_settings(zero) && settings_of(zero).scrolloff == 0 && carries_settings(twice) &&
+               settings_of(twice).scrolloff == 14,
+           "^= multiplies the current margin");
+    for (const auto text : {"set so^=2147483647", "set so+=2147483647"})
+    {
+        const auto refused = core::evaluate_ex(text, margin, Appearance::dark);
+        expect(!refused.has_value() && std::holds_alternative<core::ExFailure>(refused.error()) &&
+                   std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
+               "an answer past the 32-bit long is an invalid argument");
+    }
+}
+
 // 数の書き方は Vim の vim_str2nr（`010` は 8 進・`08` は 10 進・`0x10` は 16 進・実測・#1561）。
 void verify_ex_scrolloff_numbers()
 {
     const auto defaults = core::default_editor_settings();
-    for (const auto &[text, value] : std::array<std::pair<std::string_view, std::size_t>, 4>{
-             {{"set so=010", 8}, {"set so=08", 8}, {"set so=0x10", 16}, {"set so:3", 3}}})
+    // `0X` `0b` `0B` と 9 を含む `09`（10 進）も同じ vim_str2nr（#2013）。
+    for (const auto &[text, value] :
+         std::array<std::pair<std::string_view, std::size_t>, 8>{{{"set so=010", 8},
+                                                                  {"set so=08", 8},
+                                                                  {"set so=0x10", 16},
+                                                                  {"set so:3", 3},
+                                                                  {"set so=0X10", 16},
+                                                                  {"set so=0b11", 3},
+                                                                  {"set so=0B11", 3},
+                                                                  {"set so=09", 9}}})
     {
         const auto read = core::evaluate_ex(text, defaults, Appearance::dark);
         expect(carries_settings(read) && settings_of(read).scrolloff == value,
@@ -1409,6 +1437,7 @@ void verify_ex_scrolloff_numbers()
                    std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
                "a negative or non-decimal margin is an invalid argument");
     }
+    verify_ex_scrolloff_operations();
 }
 
 // 追従の余白（#1041）。`so=N` は 0〜999 を置き、`so?` と名前だけの `so` は問い。
@@ -1862,8 +1891,14 @@ void verify_input_history_walk()
                history.shown(walk.value()).text == "set" &&
                history.shown(walk.value()).caret.value == 3,
            "Down past the newest returns to the input typed before the walk");
-    expect(!history.stepped(typed, std::nullopt, CommandEdit::complete_next).has_value(),
-           "other edits are not history steps");
+    // 上下のほかの編集は 14 種類とも歩かない（歩きの途中でも・#2013）。
+    for (auto edit = std::to_underlying(CommandEdit::left);
+         edit < std::to_underlying(CommandEdit::history_previous); ++edit)
+    {
+        expect(!history.stepped(typed, std::nullopt, CommandEdit{edit}).has_value() &&
+                   !history.stepped(typed, walk, CommandEdit{edit}).has_value(),
+               "other edits are not history steps");
+    }
     const core::InputText none{"zz", core::Offset{2}};
     expect(!history.stepped(none, std::nullopt, CommandEdit::history_previous).has_value(),
            "no entry with the prefix leaves the input");
@@ -2253,7 +2288,11 @@ void verify_palette_set_value_staged()
 
 // 面の `:` で打った行のうち、設定の族でない引数つきの行（ファイルを書く・閉じる・本文を変える・
 // map・タブ・開く）は、打った行を候補にしない（V-1663 の M1・設計席の決め）。
-constexpr std::array<std::string_view, 12> palette_unoffered_lines{"w! C:\\work\\other.txt",
+// タブの移動・枠の大きさ・`:g` の行も同じ（#2013）。
+constexpr std::array<std::string_view, 15> palette_unoffered_lines{"tabnext 2",
+                                                                   "resize 10",
+                                                                   "g/a b/d",
+                                                                   "w! C:\\work\\other.txt",
                                                                    "saveas! C:\\work\\other.txt",
                                                                    "wq C:\\work\\new.txt",
                                                                    "x C:\\work\\new.txt",

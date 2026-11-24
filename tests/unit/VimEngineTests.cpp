@@ -29,6 +29,7 @@
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "Utf8.hpp"
+#include "VimAction.hpp"
 #include "VimCaret.hpp"
 #include "VimCharacter.hpp"
 #include "VimColumnWish.hpp"
@@ -39,6 +40,7 @@
 #include "VimKey.hpp"
 #include "VimKeyPress.hpp"
 #include "VimKeySource.hpp"
+#include "VimKeyTable.hpp"
 #include "VimLayoutView.hpp"
 #include "VimLineRows.hpp"
 #include "VimMacroRecording.hpp"
@@ -47,6 +49,7 @@
 #include "VimNavigate.hpp"
 #include "VimNewLine.hpp"
 #include "VimNoEffect.hpp"
+#include "VimOperator.hpp"
 #include "VimPendingOperator.hpp"
 #include "VimRegister.hpp"
 #include "VimRegisterKind.hpp"
@@ -2142,6 +2145,50 @@ void verify_vim_count_insert_replay_crlf()
     expect(controller.frame().caret.position == TextPosition{LineNumber{2}, Column{1}},
            "the caret rests on the emptied line");
 }
+
+// 特別な鍵の文字（VimKeyTable.hpp・#2013）: 窓の命令は Ctrl-v と Ctrl-w だけが 0x16 と 0x17、
+// 数の増減は Ctrl-a と Ctrl-x だけが 0x01 と 0x18 で、ほかの特別な鍵は文字を持たない。
+void verify_vim_special_key_characters()
+{
+    constexpr auto last = static_cast<std::size_t>(VimSpecialKey::control_p);
+    for (std::size_t value = 0; value <= last; ++value)
+    {
+        const auto key = static_cast<VimSpecialKey>(value);
+        const auto window = core::vim_window_control_character(key);
+        const auto number = core::vim_number_control_character(key);
+        const bool window_key = key == VimSpecialKey::control_v || key == VimSpecialKey::control_w;
+        const bool number_key = key == VimSpecialKey::control_a || key == VimSpecialKey::control_x;
+        expect(window.has_value() == window_key && number.has_value() == number_key,
+               "only Ctrl-v Ctrl-w name a window character and only Ctrl-a Ctrl-x a number one");
+        expect(core::vim_window_command_for(key).has_value() == window_key,
+               "a special key reaches a window command only through its character");
+    }
+    expect(core::vim_window_control_character(VimSpecialKey::control_v) == U'\x16' &&
+               core::vim_window_control_character(VimSpecialKey::control_w) == U'\x17' &&
+               core::vim_number_control_character(VimSpecialKey::control_a) == U'\x01' &&
+               core::vim_number_control_character(VimSpecialKey::control_x) == U'\x18',
+           "the control characters are the ASCII codes");
+}
+
+// 位置合わせは位置合わせの動作だけ。`g~~` `guu` `gUU` は 2 打目が `~` `u` `U` のときだけ重ねで、
+// `gUu` `gu~` は重ねではない（Vim の nv_operator の同じ鍵の 2 度打ち）。
+void verify_vim_operator_tables()
+{
+    using core::VimAction;
+    using core::VimOperator;
+    expect(core::vim_screen_alignment_for(VimAction::align_center).has_value() &&
+               !core::vim_screen_alignment_for(VimAction::move_left).has_value(),
+           "only an alignment action has a screen alignment");
+    expect(core::vim_operator_doubles(VimOperator::toggle_case, VimAction::toggle_case_character) &&
+               core::vim_operator_doubles(VimOperator::lower_case, VimAction::undo) &&
+               core::vim_operator_doubles(VimOperator::upper_case, VimAction::undo_line),
+           "g~~ guu gUU double their operator");
+    expect(!core::vim_operator_doubles(VimOperator::upper_case, VimAction::undo) &&
+               !core::vim_operator_doubles(VimOperator::lower_case,
+                                           VimAction::toggle_case_character) &&
+               !core::vim_operator_doubles(VimOperator::toggle_case, VimAction::undo_line),
+           "gUu gu~ g~U are not doubled");
+}
 } // namespace
 
 // scope 専用の契約は verify_vim_scope_contracts の表が回す（Issue #97）。ここは scope を持たない
@@ -2180,6 +2227,8 @@ void verify_vim_engine()
     verify_vim_other_keys();
     verify_vim_normal_stops_at_failure();
     verify_vim_tab_steps();
+    verify_vim_special_key_characters();
+    verify_vim_operator_tables();
     verify_vim_fixtures();
 }
 } // namespace nenenib::tests

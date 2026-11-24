@@ -188,6 +188,17 @@ void verify_share_round_trip()
            "the even share is half the band");
     expect(!core::split_extent(client, 96U, font, PaneSplit{}).has_value(),
            "one pane has no extent");
+    // 帯が 2 つの最小より狭いか空なら、ドラッグも鍵も等分（#2013）。
+    for (const core::SplitExtent narrow : {core::SplitExtent{PaneDimension::width, 0, 150, 75, 100},
+                                           core::SplitExtent{PaneDimension::width, 0, 0, 0, 0}})
+    {
+        expect(core::split_share_at(narrow, 120) == SplitShare{} &&
+                   core::sized_share(narrow, PaneSide::first,
+                                     PaneSizing{PaneResize::grow, PaneDimension::width, 1},
+                                     10) == std::optional{SplitShare{}} &&
+                   core::split_first_length(narrow, SplitShare{1, 4}) == narrow.available / 2,
+               "a band too narrow for two minimums keeps the even share");
+    }
 }
 
 // 鍵の大きさの変え方（Vim の実測: 操作中の枠が増減し、もう 1 つの枠が残りを取る）。
@@ -225,6 +236,30 @@ void verify_sized_share()
            "a height command on a vertical split does nothing");
 }
 
+// 上下の分割の境界は上下に 3 DIP 広く、左右は境界の幅のまま（#2013）。
+void verify_stacked_divider_hit()
+{
+    const auto panes =
+        core::pane_layouts(core::LayoutRect{0, 0, 1000, 700}, 96U, core::default_font_size(),
+                           PaneSplit{SplitLayout::horizontal, SplitShare{}});
+    if (!panes.divider.has_value())
+    {
+        expect(false, "two stacked panes have a divider");
+        return;
+    }
+    const auto divider = panes.divider.value();
+    const auto centre = (divider.left + divider.right) / 2;
+    expect(core::split_divider_hit(panes, 96U, centre, divider.top - 3) &&
+               core::split_divider_hit(panes, 96U, centre, divider.bottom + 2) &&
+               core::split_divider_hit(panes, 96U, divider.left, divider.top),
+           "the stacked divider catches the pointer a few DIPs above and below");
+    expect(!core::split_divider_hit(panes, 96U, centre, divider.top - 4) &&
+               !core::split_divider_hit(panes, 96U, centre, divider.bottom + 3) &&
+               !core::split_divider_hit(panes, 96U, divider.left - 1, divider.top) &&
+               !core::split_divider_hit(panes, 96U, divider.right, divider.top),
+           "the stacked divider does not reach past its own width");
+}
+
 void verify_divider_hit()
 {
     const auto panes =
@@ -247,6 +282,10 @@ void verify_divider_hit()
     const auto one = core::pane_layouts(core::LayoutRect{0, 0, 1000, 700}, 96U,
                                         core::default_font_size(), PaneSplit{});
     expect(!core::split_divider_hit(one, 96U, 500, middle), "one pane has no divider");
+    expect(!core::split_divider_hit(panes, 96U, divider.right + 3, middle) &&
+               !core::split_divider_hit(panes, 96U, divider.left, divider.bottom),
+           "the vertical divider's reach ends 3 DIPs past its right edge and at its bottom");
+    verify_stacked_divider_hit();
 }
 
 // ---------------------------------------------------------------- 意図と frame

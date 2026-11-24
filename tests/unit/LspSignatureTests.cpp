@@ -215,6 +215,65 @@ void verify_reading_parameters()
            "a null activeParameter highlights nothing and the signature's own null wins");
 }
 
+// 札を出さない答え（null・署名が無い・形が違う署名）と、署名はあるが強める範囲が読めない答え。
+[[nodiscard]] bool no_tip(std::string_view json)
+{
+    const auto parsed = core::parse_json(json);
+    return parsed.has_value() && core::lsp_signature_help(parsed.value()).has_value() &&
+           !core::lsp_signature_help(parsed.value()).value().has_value();
+}
+
+[[nodiscard]] bool plain_tip(std::string_view json, std::string_view label)
+{
+    const auto tip = read(json);
+    return tip.has_value() && tip.value().label == label && tip.value().active_begin == 0 &&
+           tip.value().active_end == 0;
+}
+
+// #2013: 補助平面の字は UTF-16 で 2 単位。`[start, end]` が 2 つの数でない・逆順・label
+// の無い引数・ 空や見つからない文字列は強めない。`(` の無い label
+// は先頭から探し、読めない前の引数は起点を 動かさない。label
+// の無い署名・配列でない署名の列・オブジェクトでない署名は札を出さず、 activeSignature
+// が列の外なら最初の署名。
+void verify_reading_malformed()
+{
+    const auto emoji =
+        read(R"j({"signatures":[{"label":"e(😀 a, b)","parameters":[{"label":[5,6]}]}]})j");
+    expect(emoji.has_value() && emoji.value().active_begin == 7 && emoji.value().active_end == 8,
+           "a supplementary character counts as two UTF-16 units");
+    for (const std::string_view bad :
+         {R"j([1])j", R"j([1,2,3])j", R"j(["a",2])j", R"j([1,"b"])j", R"j([5,2])j", R"j(3)j"})
+    {
+        const std::string json = R"j({"signatures":[{"label":"f(x, y)","parameters":[{"label":)j" +
+                                 std::string(bad) + "}]}]}";
+        expect(plain_tip(json, "f(x, y)"), "an unreadable offsets pair highlights nothing");
+    }
+    expect(plain_tip(R"j({"signatures":[{"label":"f(x)","parameters":[3]}]})j", "f(x)") &&
+               plain_tip(R"j({"signatures":[{"label":"f(x)","parameters":[{"x":1}]}]})j", "f(x)") &&
+               plain_tip(R"j({"signatures":[{"label":"f(x)","parameters":[{"label":""}]}]})j",
+                         "f(x)") &&
+               plain_tip(R"j({"signatures":[{"label":"f(x)","parameters":[{"label":"zz"}]}]})j",
+                         "f(x)"),
+           "a parameter without a usable label highlights nothing");
+    const auto bare = read(R"j({"signatures":[{"label":"x y","parameters":[{"label":"y"}]}]})j");
+    expect(bare.has_value() && bare.value().active_begin == 2 && bare.value().active_end == 3,
+           "a label without ( is searched from its start");
+    const auto skipped = read(
+        R"j({"activeParameter":1,"signatures":[{"label":"f(a, b)","parameters":[{"label":"zz"},{"label":"b"}]}]})j");
+    expect(skipped.has_value() && skipped.value().active_begin == 5 &&
+               skipped.value().active_end == 6,
+           "an unreadable earlier parameter does not move the start of the search");
+    expect(no_tip(R"j({"signatures":[{"label":""}]})j") &&
+               no_tip(R"j({"signatures":[{"parameters":[]}]})j") &&
+               no_tip(R"j({"signatures":3})j") && no_tip(R"j({})j") &&
+               no_tip(R"j({"signatures":[1]})j"),
+           "an empty or missing label, a non-list and a non-object signature show no tip");
+    const auto chosen =
+        read(R"j({"activeSignature":9,"signatures":[{"label":"one()"},{"label":"two()"}]})j");
+    expect(chosen.has_value() && chosen.value().label == "one()",
+           "an activeSignature outside the list chooses the first signature");
+}
+
 [[nodiscard]] bool overlapping(const core::LayoutRect &one, const core::LayoutRect &other)
 {
     return one.left < other.right && other.left < one.right && one.top < other.bottom &&
@@ -590,6 +649,7 @@ void verify_lsp_signature_scope()
 {
     verify_reading();
     verify_reading_parameters();
+    verify_reading_malformed();
     verify_tip_avoids_completion();
     verify_typing();
     verify_vim_insert();

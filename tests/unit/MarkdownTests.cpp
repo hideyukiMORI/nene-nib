@@ -29,6 +29,7 @@
 #include "PreviewSpan.hpp"
 #include "PreviewStyle.hpp"
 #include "PreviewTableAlign.hpp"
+#include "PreviewTableCell.hpp"
 #include "PreviewTableRow.hpp"
 #include "Scopes.hpp"
 #include "SyntaxRole.hpp"
@@ -1548,6 +1549,173 @@ void verify_insufficient_memory()
     expect(!still_stopped.has_value() && still_stopped.error() == MarkdownFailure::stopped,
            "a predicate that answers true is still stopped, not insufficient_memory");
 }
+
+// 見出しの行「ab<Tab>cd<Tab>ef」（升は 0・3・6）。cd に emphasis、ef にリンク、升をまたぐリンクと
+// 空のリンク（#2013・PreviewTableCell.hpp の契約）。
+// number が 0 なら見出しの行、1 からはデータの行（rowed と同じ）。
+[[nodiscard]] PreviewBlock sample_row(std::uint32_t number)
+{
+    constexpr auto left = core::PreviewTableAlign::left;
+    auto row = rowed("ab\tcd\tef", 40, number, {{0, left}, {3, left}, {6, left}});
+    row.spans = {PreviewSpan{Offset{3}, Offset{5}, emphasis}};
+    row.links = {to(6, 8, "u"), to(1, 4, "across"), to(7, 7, "empty")};
+    return row;
+}
+
+[[nodiscard]] PreviewBlock numbered_row(std::uint32_t number)
+{
+    return rowed("a", 0, number, {{0, core::PreviewTableAlign::left}});
+}
+
+// 升の範囲は升の間の Tab を含まず、範囲の外の列と表でない要素は終わりの空の範囲。
+void verify_table_cell_ranges()
+{
+    const auto row = sample_row(0);
+    using Range = std::pair<std::size_t, std::size_t>;
+    expect(core::preview_table_cell_range(row, 0) == Range{0, 2} &&
+               core::preview_table_cell_range(row, 1) == Range{3, 5} &&
+               core::preview_table_cell_range(row, 2) == Range{6, 8},
+           "a cell's range stops before the Tab and the last cell reaches the end");
+    expect(core::preview_table_cell_range(row, 3) == Range{8, 8},
+           "a column past the cells is the empty range at the end");
+    expect(core::preview_table_cell_range(leaf(paragraph, "abc", 0), 0) == Range{3, 3},
+           "a block that is not a table row has only the empty range at its end");
+}
+
+// 見出しの升は全体に strong を先頭に持ち、升の中の装飾とリンクは升の位置へ写す。升をまたぐ
+// リンクと空のリンクは写さない。データの行は strong を足さない。
+void verify_table_cells()
+{
+    const auto row = sample_row(0);
+    const auto first = core::preview_table_cell(row, 0);
+    expect(first.kind == PreviewBlockKind::table_row && first.text == "ab" &&
+               first.spans == std::vector<PreviewSpan>{{Offset{0}, Offset{2}, strong}} &&
+               first.links.empty() && !first.table.has_value() && first.source_begin == Offset{0},
+           "a header cell is strong over its text, without the row's position or cells");
+    const auto second = core::preview_table_cell(row, 1);
+    expect(second.text == "cd" &&
+               second.spans == std::vector<PreviewSpan>{{Offset{0}, Offset{2}, strong},
+                                                        {Offset{0}, Offset{2}, emphasis}},
+           "a span inside a cell moves to the cell's offsets after the header's strong");
+    const auto third = core::preview_table_cell(row, 2);
+    expect(third.text == "ef" && third.links == std::vector<core::PreviewLink>{to(0, 2, "u")},
+           "a link inside the cell moves to the cell; a crossing or empty link is dropped");
+    const auto data = sample_row(1);
+    expect(core::preview_table_cell(data, 0).spans.empty() &&
+               core::preview_table_cell(data, 1).spans ==
+                   std::vector<PreviewSpan>{{Offset{0}, Offset{2}, emphasis}},
+           "a data row adds no strong");
+    const auto past = core::preview_table_cell(row, 3);
+    expect(past.text.empty() && past.spans.empty() && past.links.empty(),
+           "a column past the cells is an empty cell");
+    constexpr auto left = core::PreviewTableAlign::left;
+    const auto blank = core::preview_table_cell(rowed("\tx", 0, 0, {{0, left}, {1, left}}), 0);
+    expect(blank.text.empty() && blank.spans.empty(), "an empty header cell has no strong span");
+}
+
+// 要約は文字・見出しか・装飾だけを見て、位置（source_begin・升の始まり）は入れない。
+void verify_table_digest()
+{
+    const auto row = sample_row(0);
+    const std::uint64_t digest = core::preview_table_digest(std::vector<PreviewBlock>{row});
+    auto moved = row;
+    moved.source_begin = Offset{900};
+    moved.links.clear();
+    expect(core::preview_table_digest(std::vector<PreviewBlock>{moved}) == digest,
+           "the position and the links of a row do not change the digest");
+    auto texted = row;
+    texted.text = "ab\tcd\teg";
+    const auto plain = sample_row(1);
+    auto restyled = row;
+    restyled.spans.front().style = strong;
+    auto widened = row;
+    widened.spans.front().end = Offset{4};
+    for (const auto &changed : {texted, plain, restyled, widened})
+    {
+        expect(core::preview_table_digest(std::vector<PreviewBlock>{changed}) != digest,
+               "the text, the header mark and every span field change the digest");
+    }
+    expect(core::preview_table_digest(std::vector<PreviewBlock>{}) == 14695981039346656037ULL,
+           "no rows digest to the FNV-1a 64 offset basis");
+    expect(core::preview_table_digest(std::vector<PreviewBlock>{row, row}) != digest,
+           "the number of rows changes the digest");
+}
+
+// 表の行の範囲は行の番号が 1 ずつ続く所まで。表でない要素と終わりの外は自分の 1 つだけ。
+void verify_table_rows()
+{
+    const core::MarkdownDocument document{{leaf(paragraph, "p", 0), numbered_row(0),
+                                           numbered_row(1), numbered_row(2), numbered_row(0),
+                                           numbered_row(1)}};
+    using Range = std::pair<std::size_t, std::size_t>;
+    expect(core::preview_table_rows(document, 0) == Range{0, 1},
+           "a block that is not a table row is its own range");
+    expect(core::preview_table_rows(document, 2) == Range{1, 4} &&
+               core::preview_table_rows(document, 1) == Range{1, 4} &&
+               core::preview_table_rows(document, 3) == Range{1, 4},
+           "every row of a table names the whole table");
+    expect(core::preview_table_rows(document, 4) == Range{4, 6} &&
+               core::preview_table_rows(document, 5) == Range{4, 6},
+           "a table right after another starts again at row 0");
+    expect(core::preview_table_rows(document, 6) == Range{6, 6},
+           "an index past the blocks is the empty range at the end");
+    const core::MarkdownDocument broken{{numbered_row(3)}};
+    expect(core::preview_table_rows(broken, 0) == Range{0, 1},
+           "a row number larger than its index does not reach before the document");
+}
+
+// 空の文書の選択と動き（PreviewSelectionText.hpp・#2013）: 点は {0, 0}、範囲・塗り・全部の選択は
+// 無し。
+void verify_preview_empty_document()
+{
+    const core::MarkdownDocument empty{{}};
+    const core::PreviewSelection some{0, 0, 3, 2};
+    expect(
+        core::preview_point_clamped(empty, core::PreviewPoint{4, 7}) == core::PreviewPoint{0, 0} &&
+            core::preview_point_moved(empty, core::PreviewPoint{4, 7},
+                                      core::CaretMotion::document_end) == core::PreviewPoint{0, 0},
+        "an empty document has only the point 0, 0");
+    expect(!core::preview_selection_range(empty, some).has_value() &&
+               !core::preview_selected_bytes(empty, some, 0).has_value() &&
+               !core::preview_selection_all(empty).has_value() &&
+               core::preview_selection_text(empty, some).empty(),
+           "an empty document has no selection");
+}
+
+// 段落「abc」・水平線・段落「de」・HTML「<p>」。塗る範囲は要素ごとで水平線と空の範囲は塗らない。
+// 文書の頭と終わりへ動き、語と PgUp / PgDn は（切り詰めた点から）動かない。HTML ブロックは末尾の
+// 改行を 1 つ落として見せる。
+void verify_preview_selection_edges()
+{
+    const core::MarkdownDocument document{{leaf(paragraph, "abc", 0), leaf(rule, "", 5),
+                                           leaf(paragraph, "de", 10), leaf(html, "<p>\n", 14)}};
+    const core::PreviewSelection across{0, 1, 2, 1};
+    using Bytes = std::optional<std::pair<std::size_t, std::size_t>>;
+    expect(core::preview_selected_bytes(document, across, 0) == Bytes{{1, 3}} &&
+               !core::preview_selected_bytes(document, across, 1).has_value() &&
+               core::preview_selected_bytes(document, across, 2) == Bytes{{0, 1}} &&
+               !core::preview_selected_bytes(document, across, 3).has_value(),
+           "each element paints its own part of the selection; a rule and outside paint none");
+    expect(
+        !core::preview_selected_bytes(document, core::PreviewSelection{0, 3, 2, 0}, 0).has_value(),
+        "an element whose part of the selection is empty paints nothing");
+    expect(core::preview_selection_text(document, across) == "bc\nd",
+           "copying across a rule skips it");
+    expect(core::preview_shown_text(document.blocks.at(3)) == "<p>",
+           "an HTML block drops its last newline");
+    const auto moved = [&document](core::PreviewPoint point, core::CaretMotion motion)
+    { return core::preview_point_moved(document, point, motion); };
+    expect(moved({2, 1}, core::CaretMotion::document_start) == core::PreviewPoint{0, 0} &&
+               moved({0, 1}, core::CaretMotion::document_end) == core::PreviewPoint{3, 3},
+           "Ctrl+Home and Ctrl+End go to the head and the end of the document");
+    for (const auto motion : {core::CaretMotion::previous_word, core::CaretMotion::next_word,
+                              core::CaretMotion::page_up, core::CaretMotion::page_down})
+    {
+        expect(moved({0, 1}, motion) == core::PreviewPoint{0, 1} &&
+                   moved({9, 9}, motion) == core::PreviewPoint{3, 3},
+               "word and page motions keep the clamped point");
+    }
+}
 } // namespace
 
 void verify_markdown_scope()
@@ -1590,5 +1758,11 @@ void verify_markdown_scope()
     verify_carriage_returns();
     verify_stop_and_size();
     verify_insufficient_memory();
+    verify_table_cell_ranges();
+    verify_table_cells();
+    verify_table_digest();
+    verify_table_rows();
+    verify_preview_empty_document();
+    verify_preview_selection_edges();
 }
 } // namespace nenenib::tests
