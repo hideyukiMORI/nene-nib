@@ -4,6 +4,7 @@
 // ファイルは固定のタブで未保存・文書ごとに 1 回の undo・頼んだタブへ戻る・使った順は動かさない）、
 // 鍵（F2・`grn`・入力行）と能力を替え玉 ScriptedLanguageServer で確かめる。
 #include "CancelCommand.hpp"
+#include "CloseTab.hpp"
 #include "CommandEdit.hpp"
 #include "CommandText.hpp"
 #include "CompletionCandidates.hpp"
@@ -1300,6 +1301,113 @@ void verify_vim_grn()
                    core::TextPosition{core::LineNumber{2}, core::Column{22}},
            "u brings the document and the caret before the rename back");
 }
+
+// 答えを待つ間に lib.hpp（頼んだ席が開いていたタブ・帯の 0）をどうするか（#2039）。
+enum class HeaderFate : std::uint8_t
+{
+    discarded,
+    saved,
+    reopened,
+    renamed_language,
+};
+
+// main.cpp と lib.hpp を当てる答え（clangd は lib.hpp をバッファの本文で数えている）。
+[[nodiscard]] std::string main_and_header()
+{
+    return R"({"changes":{)" +
+           uri_edits(main_uri, add_to_sum() + "," + edit_json(1, 20, 23, "sum")) + "," +
+           uri_edits(header_uri, add_to_sum()) + "}}";
+}
+
+// lib.hpp に未保存の変更を置いて main.cpp で頼み、答えの前に lib.hpp を fate のとおりにして、
+// main.cpp へ戻ってから答える。
+[[nodiscard]] app::EditorFrame header_changed_while_waiting(Editing &editing, HeaderFate fate)
+{
+    started_with_header_opened(editing);
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::InsertText{"x"});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::SwitchTab{0});
+    switch (fate)
+    {
+    case HeaderFate::discarded:
+        applied(editing.controller(), app::CloseTab{0});
+        break;
+    case HeaderFate::saved:
+        applied(editing.controller(), app::InsertText{"y"});
+        applied(editing.controller(),
+                app::SaveDocument{path_of(header_path), core::TextEncoding::utf8});
+        applied(editing.controller(), app::CloseTab{0});
+        break;
+    case HeaderFate::reopened:
+        applied(editing.controller(), app::CloseTab{0});
+        applied(editing.controller(), app::OpenDocument{path_of(header_path)});
+        break;
+    case HeaderFate::renamed_language:
+        static_cast<void>(run_ex(editing.controller(), "set ft=text"));
+        applied(editing.controller(), app::SwitchTab{1});
+        return answered(editing, rename_method, main_and_header());
+    }
+    applied(editing.controller(), app::SwitchTab{0});
+    return answered(editing, rename_method, main_and_header());
+}
+
+// 写しに在ったタブが消えた後は、ディスクから読んだ本文・開き直したタブに当てず全体を断る。席が
+// 頼んだ後にその文書だけを閉じたタブも照らせないので断る（レビュー R10 の N2・C1）。
+void verify_closed_copied_tab()
+{
+    for (const auto &[fate, said] :
+         {std::pair{HeaderFate::discarded, "a tab closed unsaved while waiting refuses the answer"},
+          std::pair{HeaderFate::saved, "a tab typed into, saved and closed refuses the answer"},
+          std::pair{HeaderFate::reopened, "a tab closed and opened again refuses the answer"},
+          std::pair{HeaderFate::renamed_language,
+                    "a tab the seat closed after asking refuses the answer"}})
+    {
+        Editing editing(lsp_on());
+        const auto frame = header_changed_while_waiting(editing, fate);
+        const std::size_t main_tab = fate == HeaderFate::renamed_language ? 1 : 0;
+        const std::size_t tabs = fate == HeaderFate::discarded || fate == HeaderFate::saved ? 1 : 2;
+        expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+                   frame.active_tab == main_tab && frame.tabs.size() == tabs &&
+                   whole_vim_body(editing.controller()) == main_text &&
+                   tab_is(frame, main_tab, main_path, core::SaveState::saved),
+               said);
+    }
+}
+
+// 関係の無いタブ（写しに在った notes.txt）を閉じただけで、当て先が全部写しに在って今も在るタブ
+// なら当てる（#2039 の断りすぎない側）。
+void verify_unrelated_tab_closed()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::CloseTab{2});
+    const auto frame = answered(editing, rename_method, main_and_header());
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "3"}) &&
+               frame.tabs.size() == 2 && whole_vim_body(editing.controller()) == renamed_main &&
+               body_of_tab(editing, 0) == renamed_header,
+           "closing an unrelated tab keeps an answer on tabs that are all still open");
+    Editing unopened(lsp_on());
+    started_with_header_opened(unopened);
+    unopened.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(unopened.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(unopened.controller(), app::SwitchTab{1});
+    caret_on_add(unopened);
+    renamed_to_sum(unopened);
+    applied(unopened.controller(), app::CloseTab{2});
+    const auto refused = answered(unopened, rename_method, clangd_changes());
+    expect(message_of(refused) == notice(unopened, core::UiMessage::notice_server_edit_stale) &&
+               refused.tabs.size() == 2 && whole_vim_body(unopened.controller()) == main_text,
+           "after a copied tab is closed, a file without a tab refuses the whole answer");
+}
 } // namespace
 
 void verify_lsp_rename_scope()
@@ -1335,5 +1443,7 @@ void verify_lsp_rename_scope()
     verify_unread_tab_kept();
     verify_c_header(false);
     verify_c_header(true);
+    verify_closed_copied_tab();
+    verify_unrelated_tab_closed();
 }
 } // namespace nenenib::tests
