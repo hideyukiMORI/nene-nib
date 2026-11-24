@@ -6,6 +6,7 @@
 #include "LanguageAnswers.hpp"
 #include "LanguageCompletion.hpp"
 #include "LanguageDefinition.hpp"
+#include "LanguageFormatting.hpp"
 #include "LanguageHover.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
@@ -19,6 +20,7 @@
 #include "LspCompletionContext.hpp"
 #include "LspCompletionList.hpp"
 #include "LspError.hpp"
+#include "LspFormatting.hpp"
 #include "LspLocation.hpp"
 #include "LspPosition.hpp"
 #include "LspPositionEncoding.hpp"
@@ -199,6 +201,26 @@ references_answer(const PendingLspRequest &request, const core::LspResponse &res
     return LanguageSignature{.context = *context,
                              .signature = read.has_value() ? read.value() : std::nullopt};
 }
+
+// 整形の答え（#1993・ADR 0191 の決定 7）。文脈は照合せずに要求のものを添える（当てる前に比べ、
+// 変わっていたら 1 行知らせる）。誤りの答えと読めない答えは編集の列なし。
+[[nodiscard]] std::optional<LanguageFormatting>
+formatting_answer(const PendingLspRequest &request, const core::LspResponse &response,
+                  core::LspPositionEncoding encoding)
+{
+    const auto *context = std::get_if<LspRequestContext>(&request.context);
+    if (context == nullptr)
+    {
+        return std::nullopt;
+    }
+    auto read = response.result.has_value()
+                    ? core::lsp_text_edits(response.result.value())
+                    : std::unexpected{core::LspAnswerFailure::invalid_result};
+    return LanguageFormatting{.context = *context,
+                              .edits = read.has_value() ? std::optional{std::move(read).value()}
+                                                        : std::nullopt,
+                              .encoding = encoding};
+}
 } // namespace
 
 // ---------------------------------------------------------------- 文脈つきの要求（ADR 0190）
@@ -319,7 +341,9 @@ std::optional<LanguageServerSlot> EditorController::requestable_slot(bool Server
     }
     const auto uri = language_server_uri(slot.value());
     LanguageServerDocument &document = active_document_of(slot.value());
-    if (!uri.has_value() || document.uri != uri.value())
+    // 開いた言語も照合する（`:set ft=` の後・同期の前に、共有の席で別の languageId の文書として
+    // 出さない・#2007 のレビュー L2）。
+    if (!uri.has_value() || document.uri != uri.value() || document.language != state_.language())
     {
         return std::nullopt;
     }
@@ -403,6 +427,10 @@ void EditorController::receive_answer(LanguageServerSlot slot, const PendingLspR
         break;
     case LspRequestKind::signature_help:
         answers.signature = signature_answer(request, response, current);
+        break;
+    case LspRequestKind::formatting:
+    case LspRequestKind::range_formatting:
+        answers.formatting = formatting_answer(request, response, link_of(slot).encoding);
         break;
     }
     state_ = state_.with_language_answers(std::move(answers));

@@ -84,24 +84,26 @@ void verify_columns()
                    "every text is non-empty and has the Japanese placeholders");
         }
     }
-    expect(core::ui_message_count == 421,
-           "the table has 421 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
-           "project search mark 1 of #1003, the project search face 8 of #1763, the "
-           "easymotion prompt of ADR 0163, the 5 context menu operations 10 of #1051, the finder "
-           "preview 4 of #1785, the preview failures 3 more of #1793, the packaged "
-           "registration notice 1 of #1809, the completion operation 2 and notice 1 of "
-           "#1833, the language queries 9 of #1834, the settings panel 54 of #1828, its screen "
-           "4 of #1836, the screen fixes 8 of #1836 and the tab menu 5 operations 10 and "
-           "notices 3 of #1790, the link card 17 of #1869, its heading notice 1 and the "
-           "language server start notices 3 of #1897, the diagnostics 4 operations 8 and "
-           "the mark and notices 3 of #1939, the 3 pane size operations 6 of #1941, the "
-           "language server rows 12 of #1945 less the command line note 1, the language "
-           "server log 4 of #1942, the caret motion rows 4 of #1933, the references "
-           "operation 2 and the mark and notices 4 of #1947, the symbols operation 2 and "
-           "the mark and notices 3 of #1955, the symbols cut notice, the 3 empty lines and "
-           "the references subject of #1958, the signature operation 2 and notices 2 of "
-           "#1959, the typing sparks rows 2 of #1979, the indent guide rows and values 14 of #1975 "
-           "and the pane resize rows 6 of #1972)");
+    expect(
+        core::ui_message_count == 431,
+        "the table has 431 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+        "project search mark 1 of #1003, the project search face 8 of #1763, the "
+        "easymotion prompt of ADR 0163, the 5 context menu operations 10 of #1051, the finder "
+        "preview 4 of #1785, the preview failures 3 more of #1793, the packaged "
+        "registration notice 1 of #1809, the completion operation 2 and notice 1 of "
+        "#1833, the language queries 9 of #1834, the settings panel 54 of #1828, its screen "
+        "4 of #1836, the screen fixes 8 of #1836 and the tab menu 5 operations 10 and "
+        "notices 3 of #1790, the link card 17 of #1869, its heading notice 1 and the "
+        "language server start notices 3 of #1897, the diagnostics 4 operations 8 and "
+        "the mark and notices 3 of #1939, the 3 pane size operations 6 of #1941, the "
+        "language server rows 12 of #1945 less the command line note 1, the language "
+        "server log 4 of #1942, the caret motion rows 4 of #1933, the references "
+        "operation 2 and the mark and notices 4 of #1947, the symbols operation 2 and "
+        "the mark and notices 3 of #1955, the symbols cut notice, the 3 empty lines and "
+        "the references subject of #1958, the signature operation 2 and notices 2 of "
+        "#1959, the typing sparks rows 2 of #1979, the indent guide rows and values 14 of #1975, "
+        "the pane resize rows 6 of #1972 and the formatting operations 4 and notices 6 of "
+        "#1993)");
     expect(placed == 49, "49 messages take placeholders (T1a 26, the search progress 3, the "
                          "preview line 1, the definition count 1, the settings summary 4, "
                          "the settings no-match line 1, the link card hints 2 and the language "

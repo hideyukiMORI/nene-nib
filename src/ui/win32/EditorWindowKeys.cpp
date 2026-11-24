@@ -5,6 +5,7 @@
 #include "CaretMotion.hpp"
 #include "ClipboardAction.hpp"
 #include "ClipboardKeys.hpp"
+#include "CloseCompletion.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
@@ -673,6 +674,11 @@ void EditorWindow::press_vim_key(WPARAM word)
     }
     if (word == VK_TAB)
     {
+        // Shift+Tab は自動で開いた面を確定しない（#1971）。先に面を閉じてから Tab の文字を渡す。
+        if (tab_closes_completion(held(VK_SHIFT), controller_.completion_open()))
+        {
+            send(application::CloseCompletion{});
+        }
         send(application::VimKeyPress{core::VimKey{core::VimCharacter{tab_character}}});
         return;
     }

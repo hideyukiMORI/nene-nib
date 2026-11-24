@@ -11,6 +11,7 @@
 #include "CommandChoice.hpp"
 #include "CommandEdit.hpp"
 #include "CommandPalette.hpp"
+#include "CompletionCommitKey.hpp"
 #include "CompletionDirection.hpp"
 #include "CompletionEntry.hpp"
 #include "CompletionList.hpp"
@@ -38,6 +39,7 @@
 #include "Edit.hpp"
 #include "EditBoundary.hpp"
 #include "EditHistory.hpp"
+#include "EditLines.hpp"
 #include "EditorDelivery.hpp"
 #include "EditorFrame.hpp"
 #include "EditorIntent.hpp"
@@ -77,10 +79,13 @@
 #include "FolderBatch.hpp"
 #include "FontFamilies.hpp"
 #include "FontSize.hpp"
+#include "FormattedSpan.hpp"
+#include "FormattedUnit.hpp"
 #include "FoundLanguageServer.hpp"
 #include "GridLineMarks.hpp"
 #include "GridRowView.hpp"
 #include "GridTally.hpp"
+#include "HistoryDirection.hpp"
 #include "ImageOutcome.hpp"
 #include "IntentMark.hpp"
 #include "JsonValue.hpp"
@@ -89,6 +94,7 @@
 #include "Language.hpp"
 #include "LanguageAnswers.hpp"
 #include "LanguageDefinition.hpp"
+#include "LanguageFormatting.hpp"
 #include "LanguageQueryKind.hpp"
 #include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
@@ -276,6 +282,10 @@ class EditorController final
     // 設定の面が開いているか（ADR 0170 の 2026-11-18 の追補 2）。窓が鍵の行き先を決めるための安い
     // 読みで、frame を作らない（鍵の振り分けは ui の工程）。
     [[nodiscard]] bool settings_open() const noexcept;
+    // 設定の面の選ぶ欄の一覧が開いているか（#1926・レビュー
+    // R1）。右クリック・ホイール・窓の大きさ・
+    // マウスの動きの行き先を、最後に描いた配置ではなく状態から決めるための安い読み。
+    [[nodiscard]] bool settings_choice_open() const noexcept;
     // 設定の面の表示値（開いていなければ値なし）。frame に載る値と同じで、窓が鍵とマウスの後に
     // 焦点の行と送りを読む口（本文の frame を作らない・#1836）。
     [[nodiscard]] std::optional<SettingsView> settings_view() const;
@@ -286,9 +296,10 @@ class EditorController final
     // まだ見えていない面を含む・窓が非アクティブになったときに閉じるかを決める）。
     [[nodiscard]] bool completion_active() const noexcept;
     [[nodiscard]] bool completion_open() const noexcept;
-    // 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。窓が Enter と
-    // Tab を 面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
-    [[nodiscard]] bool completion_commits() const;
+    // key で確定する候補の確定が本文を変えるか（面が見えていなければ偽・#1844 の L1）。
+    // 窓が Enter と Tab を面へ送るかを決める安い読みで、偽なら窓は面を閉じて鍵を本文へ通す。
+    // 打鍵で自動に開いて使う人がまだ選んでいない面の Enter は偽（#1971）。
+    [[nodiscard]] bool completion_commits(CompletionCommitKey key) const;
     // 帯のタブの退避番号の並び（帯の順）とアクティブなタブの位置（ADR 0078 の追補 #1790）。窓が
     // 「ほかのタブを閉じる」「右のタブを閉じる」で次に閉じるタブを引き直す安い読みで、frame を
     // 作らない。
@@ -422,6 +433,8 @@ class EditorController final
     // 引数の情報（#1959・ADR 0191 の決定 6）。trigger は打った `triggerCharacters` の 1 文字
     // （手で頼んだら値なし）。
     [[nodiscard]] bool request_signature_help(std::optional<std::string> trigger, bool retrigger);
+    // 整形（#1993・ADR 0191 の決定 7）。selection が真なら選択範囲（rangeFormatting）。
+    [[nodiscard]] bool request_formatting(bool selection);
     // 文脈の照合を通った最新の答え（決定 1）。状態の 1 欄を読むだけ。
     [[nodiscard]] const LanguageAnswers &language_answers() const noexcept;
     // Ctrl+P の一覧のために参照と記号の当たりを作った数（#1958 のレビュー R1 の契約が読む）。
@@ -961,7 +974,9 @@ class EditorController final
     // 2 枠で操作中の枠を閉じる（`:q` 系と `Ctrl-w c`・ADR 0148 の決定 5・ADR 0155 の決定 4）。
     void close_operated_pane();
     // 操作中の枠の編集を、同じ文書を出しているもう 1 つの枠に写す（決定 9）。
-    void adjust_other(const core::Edit &edit, const core::TextBuffer &after);
+    void adjust_other(std::span<const core::Edit> edits, const core::TextBuffer &after);
+    void adjust_other_by(const core::Edit &edit, const EditLines &lines,
+                         const core::TextBuffer &after);
     // 編集の始まりの行が覚えの行より前なら、その文書の構文の覚えを捨てる（ADR 0156 の追補 #827）。
     // 編集の 1 か所（replace・undo・redo）が本文を置く前に呼ぶ。
     void forget_syntax_before(const core::Edit &edit);
@@ -974,16 +989,24 @@ class EditorController final
     // 合わせる（オフで子が居なければ分岐 1 つ）。tick は古さの合図で使う人の操作ではない。
     // 席（2026-11-20 の追補・段 S2）: serving はその言語の文書を受ける席、active_language_server
     // はアクティブな文書を受ける席のつながり（無ければ空）、holding はアクティブな文書を開いた席。
-    // 失敗の数と given_up は言語ごと（trouble_of）。席が満ちたら yield
-    // が最も前に使った席を譲らせる。
+    // 席の鍵は（命令の行・root）で、同じ命令の行の言語は 1 席を共有する（2026-11-24 の追補・
+    // #1952）。失敗の数と given_up は席の鍵（命令の行・root）ごと（trouble_of）。席が満ちたら
+    // yield が最も前に使った席を譲らせる。
     void reconcile_language_server();
     [[nodiscard]] std::optional<LanguageServerSlot> serving_slot(core::Language language) const;
     [[nodiscard]] const LanguageServerLink &active_language_server() const;
     [[nodiscard]] std::optional<LanguageServerSlot> holding_slot() const;
     [[nodiscard]] std::optional<LanguageServerSlot> free_slot() const;
     [[nodiscard]] LanguageServerLink &link_of(LanguageServerSlot slot);
-    [[nodiscard]] LanguageServerTrouble &trouble_of(core::Language language);
+    [[nodiscard]] LanguageServerTrouble &trouble_of(std::string_view command,
+                                                    const std::optional<core::FilePath> &root);
+    [[nodiscard]] bool seat_given_up(std::string_view command, const core::FilePath &root) const;
     [[nodiscard]] bool language_server_given_up(core::Language language) const;
+    // 設定の language の命令の行を席の鍵の形（server_command_key）で（行が無ければ値なし）。
+    [[nodiscard]] std::optional<std::string_view>
+    language_server_command(core::Language language) const;
+    // 知らせに出す言語の名前（いまの文書の言語がこの席の命令の行なら文書の言語・ほかは席の言語）。
+    [[nodiscard]] core::Language noticed_language(LanguageServerSlot slot) const;
     void resume_language_servers();
     void consider_language_server(core::Language language);
     void yield_language_server();
@@ -1005,7 +1028,7 @@ class EditorController final
     [[nodiscard]] std::optional<ServerLaunch>
     language_server_launch(core::Language language, const core::FilePath &root) const;
     void start_language_server(LanguageServerSlot slot, core::Language language,
-                               ServerLaunch launch);
+                               std::string command, ServerLaunch launch);
     // 席 slot がアクティブな文書を受ける・開いているなら、補完・hover・定義の答えを消す（止める・
     // 譲る道の入口で呼ぶ・ほかの席を止めてもアクティブな文書の答えは残す・#1916 のレビュー R1）。
     void drop_language_answers_of(LanguageServerSlot slot);
@@ -1108,6 +1131,22 @@ class EditorController final
     [[nodiscard]] bool invoke_signature_help();
     [[nodiscard]] std::optional<core::LspSignature> shown_signature(const EditorFrame &frame) const;
     void drop_signature_tip() noexcept;
+    // 整形の答えを当てる（#1993・EditorControllerFormatting.cpp）。
+    void settle_formatting_answer();
+    [[nodiscard]] core::OffsetRange formatting_range() const;
+    void leave_visual_for_formatting();
+    [[nodiscard]] bool formatting_interrupts() const noexcept;
+    [[nodiscard]] std::optional<core::UiMessage>
+    formatting_refusal(const LanguageFormatting &answered) const;
+    // 整形が積んだ単位を脇に残す（#1997 の 2 回目のレビュー P1）。積む前の履歴の位置を渡す。
+    void remember_formatted_unit(std::size_t before, const core::FormattedSpan &formatted);
+    // 帯から消えたタブの分を脇の表から外す（3 回目のレビュー P3・意図の終わりの 1 か所）。
+    void forget_closed_formatted_units();
+    // 履歴の index 番目の単位が整形の単位なら、その単位の編集の列（同じ文書・同じ位置・同じ編集の
+    // ときだけ）。向きは direction（undo は逆向きの列・redo は同じ列）。ふつうの単位は値なし。
+    [[nodiscard]] std::optional<std::vector<core::VimBlockEdit>>
+    formatted_pieces_at(std::size_t index, const core::Edit &edit,
+                        core::HistoryDirection direction);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -1216,6 +1255,10 @@ class EditorController final
     // 選択の起点が問いのときのまま）。
     [[nodiscard]] bool faces_closed() const noexcept;
     [[nodiscard]] bool awaits_nothing() const noexcept;
+    // Vim が次の鍵を待っているか（回数・オペレータ・1 鍵の待ち・レジスタの名指し・イージー
+    // モーション・INSERT の `Ctrl-o`・`map` の左辺の途中）。通常モードは偽。awaits_nothing と整形の
+    // 当てない条件（formatting_interrupts）が読む 1 本（#1997 の 2 回目のレビュー P2）。
+    [[nodiscard]] bool vim_waits_for_key() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
     void accept(const AutosaveTick &);
@@ -1526,6 +1569,28 @@ class EditorController final
     // 自動で開いた面が出ている間の Ctrl-n / Ctrl-p で、面の候補を engine の写しにする（#1962）。
     // 写せる候補が無ければ偽（呼ぶ側は ADR 0169 の本文の語の道へ落ちる）。
     [[nodiscard]] bool offer_auto_vim_completion();
+    // 自動で開いた面に出ている行ごとの、engine の語に直した候補（直せない行は空・#1962）。
+    [[nodiscard]] std::vector<std::optional<core::CompletionEntry>> auto_vim_rows() const;
+    // 打鍵で自動に開いた面が出ている間の engine へ流す鍵（step_vim から・#1971）。engine の補完へ
+    // 移った面は、補完の鍵でない鍵の前に確定してマクロに語を積み、Ctrl-y は確定して閉じる。補完の
+    // 鍵はマクロに積まない。
+    [[nodiscard]] std::optional<core::VimRepeatFailure> triggered_step_vim(const core::VimKey &key);
+    // 打鍵で自動に開いた面が Ctrl-n から engine の補完へ移って開いているか（#1971）。
+    [[nodiscard]] bool triggered_in_engine() const noexcept;
+    // 打鍵で自動に開いた面の補完の鍵（Ctrl-n Ctrl-p Ctrl-e）か。マクロの録画に積まず、確定した
+    // 語を打った本文として積む（#1971・D109）。
+    [[nodiscard]] bool triggered_completion_key(const core::VimKey &key) const noexcept;
+    // 自動で開いた面の Enter と Tab（#1971）。確定したら真（鍵は Vim に渡さない）。
+    [[nodiscard]] bool triggered_confirm_took(const core::VimKey &key);
+    [[nodiscard]] bool engine_confirm_took(bool tab);
+    [[nodiscard]] bool auto_tab_took();
+    // 自動で開いた面（engine の外）の index 番目の候補を、Ctrl-n で engine へ移してから確定する。
+    // index は自動の面の行の位置で、engine の語に直せない候補なら面を閉じるだけ。
+    void choose_auto_vim_row(std::size_t index);
+    // engine の補完の index 番目の候補で確定する（面の行のクリックと同じ 1 歩）。
+    void chosen_vim_row(std::size_t index);
+    // 打鍵で自動に開いた面の確定で入った語を、打った本文としてマクロの録画に積む（#1971）。
+    void record_triggered_typed(std::optional<std::size_t> index);
     // 言語サーバーが起きている窓か打ったときの粒がオンの窓で打った Vim の鍵（#1962・#1979）。
     // accept(VimKeyPress)が「起きている」と粒の真偽の後ろでだけ呼ぶ。自動で開いた面の鍵を先に読み、
     // 鍵を流した後に typed_vim_character。
@@ -1561,6 +1626,17 @@ class EditorController final
     void accept(const JumpSettingsSection &intent);
     void accept(const FocusSettingsRow &intent);
     void accept(const ScrollSettings &intent);
+    // 選ぶ欄の一覧（#1926・同じ群）。
+    void accept(const OpenSettingsChoice &);
+    void accept(const PointSettingsChoice &intent);
+    void accept(const ScrollSettingsChoice &intent);
+    void accept(const ChooseSettingsChoice &);
+    void accept(const CloseSettingsChoice &);
+    void accept(const TypeSettingsChoice &intent);
+    void accept(const SettingsChoiceTimeout &);
+    // 開いている一覧の選択肢の数（一覧が無ければ 0）と表示値。
+    [[nodiscard]] std::size_t settings_choice_count() const noexcept;
+    [[nodiscard]] std::optional<SettingsChoiceView> settings_choice_view() const;
     // 入口の 1
     // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
     // 写す前に閉じて保存する。
@@ -1598,7 +1674,7 @@ class EditorController final
     void act_on_language_server_row(std::size_t index);
     [[nodiscard]] bool used_commands(std::vector<std::pair<std::string, std::string>> &commands,
                                      std::size_t index) const;
-    void restart_language_servers_of(core::Language language);
+    void restart_language_servers_of(std::string_view command);
     void unfold_language_server_rows(const std::vector<LanguageServerRowView> &rows);
     // 命令の行が変わった言語の席を止め、失敗の控えを消し、起こすかを決め直す。
     void
@@ -1686,8 +1762,7 @@ class EditorController final
     // 行ごとに直し（marks_block_adjusted・#1361）、VimLineMarks::kept（VimReplaceRange が渡す）なら
     // 行をその場で書き換えた置き換えでマークの行を動かさない（#1360）。
     void replace(const core::OffsetRange &range, std::string_view text, core::EditBoundary boundary,
-                 std::variant<core::VimLineMarks, std::span<const core::VimBlockEdit>> lines =
-                     core::VimLineMarks::shifted);
+                 EditLines lines = core::VimLineMarks::shifted);
     // Vim のモードで eol の旗が立つ文書の置き換えの範囲と本文（ADR 0188 の決定 3 (a)）。空の本文に
     // 本文を足すなら最後の改行も足し、engine を通らない編集が除いた本文を全部消すなら最後の改行も
     // 消す（空で旗が立つ本文にする）。ほかは頼まれたまま。
@@ -1766,7 +1841,7 @@ class EditorController final
     // incsearch の preview（ADR 0041 の決定 3・5）。
     void update_search_preview();
     void restore_search_origin(const ScrollState &origin);
-    void undone_marks(const core::Edit &edit);
+    void undone_marks(const core::Edit &edit, const EditLines &lines = core::VimLineMarks::shifted);
     void check_vim_marks();
     void adopt_vim_marks(const std::optional<core::VimMarks> &marks);
     void undo_edit();
@@ -1996,6 +2071,10 @@ class EditorController final
     // 保存時点を写す after_units_folded の unsure）。起点を置く所と再生の終わりが倒す。
     bool replay_undone_ = false;
     bool replay_save_unsure_ = false;
+    // 整形が積んだ undo の単位と編集の列（#1997 の 2 回目のレビュー P1）。整形を当てたときだけ
+    // 足し、同じ文書の同じ位置かその後ろの古い物は足すときに外す。照合に外れた物は引いたときに
+    // 外す。
+    std::vector<FormattedUnit> formatted_units_;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;

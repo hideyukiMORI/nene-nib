@@ -561,10 +561,11 @@ EditorFrame EditorController::press_vim_keys(std::span<const core::VimKey> keys)
 }
 
 // undo と Ctrl-r の編集でマークを直す（ADR 0152 の決定 6）。最後の変更は編集の行の行頭（Vim の
-// u_undoredo の changed_lines）。edit は今の本文に効く向きの編集。
-void EditorController::undone_marks(const core::Edit &edit)
+// u_undoredo の changed_lines）。edit は今の本文に効く向きの編集。整形の単位は lines に今の本文に
+// 効く向きの編集の列を添える（#1997 の 2 回目のレビュー P1）。
+void EditorController::undone_marks(const core::Edit &edit, const EditLines &lines)
 {
-    auto marks = core::marks_adjusted(state_.vim_marks(), state_.text(), edit);
+    auto marks = detail::edited_marks(state_.vim_marks(), state_.text(), edit, lines);
     marks.last_change = core::VimMarkPosition{state_.text().position_of(edit.at).line, 0};
     // undo と Ctrl-r は新しい単位を始めない（Vim の u_undoredo は b_new_change
     // を立てない・#1037）。
@@ -965,9 +966,40 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
     load_vim_clipboard(key);
+    // 打鍵で自動に開いた面が出ている間は録画の形が違う（#1971）。面が無ければ欄を 1 つ読むだけ。
+    if (completion_.has_value() && completion_.value().triggered)
+    {
+        return triggered_step_vim(key);
+    }
     // 補完を始める鍵の直前に候補の写しを置き、鍵の後に engine の補完を面へ写す（#1845・ADR 0169 の
     // 決定 3）。補完の鍵でなく面も開いていなければ、どちらも欄を 1 つ読むだけで抜ける。
     offer_vim_completion(key);
+    const auto failure = stepped_vim(VimStepSource{key});
+    follow_vim_completion();
+    return failure;
+}
+
+// 打鍵で自動に開いた面から移った engine の補完は、補完の鍵をマクロに積まず、確定した語を打った本文
+// として積む（D109・#1971）。補完の鍵でない鍵の前に確定して語を積み（engine が鍵の前に確定するのと
+// 同じ判定 vim_completion_ends）、Ctrl-y は確定して閉じるだけ（engine の Ctrl-y と同じ状態）。
+std::optional<core::VimRepeatFailure> EditorController::triggered_step_vim(const core::VimKey &key)
+{
+    if (triggered_in_engine())
+    {
+        const auto *special = std::get_if<core::VimSpecialKey>(&key);
+        if (special != nullptr && *special == core::VimSpecialKey::control_y)
+        {
+            close_completion();
+            return std::nullopt;
+        }
+        if (core::vim_completion_ends(state_.vim(), key))
+        {
+            close_completion();
+        }
+    }
+    offer_vim_completion(key);
+    const ScopedValue<core::VimKeySource> source{
+        unit_source_, triggered_completion_key(key) ? core::VimKeySource::mapped : unit_source_};
     const auto failure = stepped_vim(VimStepSource{key});
     follow_vim_completion();
     return failure;

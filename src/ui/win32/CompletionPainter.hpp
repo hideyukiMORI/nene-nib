@@ -21,7 +21,8 @@ namespace nenenib::ui::win32
 // 補完の面を描く経路（ADR 0169 の決定 4・ADR 0190 の決定 5）。面は地 panel・縁 1 DIP の
 // panel_border・角丸は Ctrl+P の面と同じ 10 DIP。行は左から出どころの印（muted の 1 文字・
 // core::completion_source_mark）・候補の名前（text）・補足（muted・右寄せ・欄があるときだけ）で、
-// 選んだ行は current_line の角丸（6 DIP・行の左右 4 DIP の内側）。影は付けない。配置は
+// 選んだ行は current_line の角丸（6 DIP・行の左右 4 DIP の内側）＋ text の 1 DIP の枠（#1929・
+// 設定の焦点の行と同じ形・current_line と panel の差は色では見分けられない）。影は付けない。配置は
 // core::completion_face_layout の 1 本で、行の文字組みは PaletteRowLayouts の保持から引く。書式は
 // 右クリックのメニューと同じ組（名前は面の行の名前の書式・印と補足は鍵の表示の書式）を借りる。
 // target は製品では Direct2D の描画先、tests/ui は WIC の bitmap の描画先。色は Palette のトークン
@@ -47,6 +48,8 @@ class CompletionPainter final
                core::RgbColor color);
     [[nodiscard]] PaletteRowLayouts::TextLayout made(std::string_view text, TextStyle style,
                                                      const core::LayoutRect &area) const;
+    // 選んだ行の 1 DIP の枠（線の中心を半分だけ内側に置き、行の角丸の中に収める）。
+    void frame(const core::LayoutRect &area, core::RgbColor color);
     [[nodiscard]] float scaled(float dips) const noexcept;
 
     ID2D1RenderTarget &target_;

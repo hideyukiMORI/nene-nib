@@ -68,6 +68,11 @@ constexpr std::array<UINT, 5> context_menu_messages{WM_RBUTTONDOWN, WM_RBUTTONUP
 constexpr std::array<UINT, 11> pointer_messages{
     WM_LBUTTONDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONUP,   WM_MBUTTONDOWN,    WM_MBUTTONUP, WM_MOUSEMOVE,
     WM_MOUSELEAVE,  WM_MOUSEWHEEL,    WM_MOUSEHWHEEL, WM_CAPTURECHANGED, WM_SETCURSOR};
+// 鍵の通知とフォーカスを失ったとき（key_message の 1 本へ）。WM_SYSKEYDOWN
+// は設定の面が開いている間の Alt+↓ / Alt+↑ だけ面が受け（選ぶ欄の一覧・#1926）、ほかは key_message
+// が既定処理へ渡す。
+constexpr std::array<UINT, 5> key_messages{WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_CHAR,
+                                           WM_KILLFOCUS};
 
 // 窓の class を登録する（#1580・ADR 0185）。
 // アイコンは exe の resource を共有で引くだけ（LR_SHARED）。ファイルを読まず、解放もしない。
@@ -310,6 +315,10 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     {
         return context_menu_message(message, word, data);
     }
+    if (std::ranges::find(key_messages, message) != key_messages.end())
+    {
+        return key_message(message, word, data);
+    }
     // OS のメッセージ番号は開いた集合なので、既定分岐だけは許される（CPP-017）。
     switch (message)
     {
@@ -339,11 +348,6 @@ LRESULT EditorWindow::dispatch(UINT message, WPARAM word, LPARAM data) noexcept
     case WM_DROPFILES:
         open_dropped_files(word);
         return 0;
-    case WM_KEYDOWN:
-    case WM_KEYUP:
-    case WM_CHAR:
-    case WM_KILLFOCUS:
-        return key_message(message, word, data);
     case WM_IME_STARTCOMPOSITION:
     case WM_IME_COMPOSITION:
     case WM_IME_ENDCOMPOSITION:

@@ -33,6 +33,7 @@
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "SessionEnd.hpp"
+#include "SettingsChoiceTimeout.hpp"
 #include "StoreVimRegister.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
@@ -1129,6 +1130,10 @@ void verify_flush_before_intents()
     const auto worked = work.controller().apply(application::WorkCompleted{});
     expect(shown_body(work.controller()) == "abc\n" && !worked.map_timer.has_value(),
            "WorkCompleted keeps the waiting j");
+    // 設定の一覧の頭文字の 1 秒の合図も合図の側で、待ちを保つ（#1926 のレビュー R4 a）。
+    const auto typed_signal = work.controller().apply(application::SettingsChoiceTimeout{});
+    expect(shown_body(work.controller()) == "abc\n" && !typed_signal.map_timer.has_value(),
+           "SettingsChoiceTimeout keeps the waiting j");
     vim_replay(work.controller(), "j");
     expect(whole_vim_body(work.controller()) == "abc\n" &&
                work.controller().vim_state().mode == core::VimMode::normal,

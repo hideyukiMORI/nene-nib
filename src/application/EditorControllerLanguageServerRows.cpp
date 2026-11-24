@@ -19,6 +19,7 @@
 #include "LanguageServerRowState.hpp"
 #include "LanguageServerRowView.hpp"
 #include "LanguageServerSlot.hpp"
+#include "LanguageServerTrouble.hpp"
 #include "LanguageTable.hpp"
 #include "ServerCommand.hpp"
 #include "SettingsRows.hpp"
@@ -212,14 +213,15 @@ void erase_row_commands(Commands &commands, std::size_t index, std::string_view 
                   });
 }
 
-// before と after で命令の行が違う名前（消えた・変わった・足した）。
+// before と after で命令の行が違う名前（消えた・変わった・足した）。「違う」は席の鍵と同じ
+// server_command_key の比べ（前後の空白だけの違いは変わっていない・#2007 のレビュー R3）。
 [[nodiscard]] std::vector<std::string> changed_names(const Commands &before, const Commands &after)
 {
     std::vector<std::string> names;
     for (const auto &[name, command] : before)
     {
         const auto *now = command_named(after, name);
-        if (now == nullptr || *now != command)
+        if (now == nullptr || server_command_key(*now) != server_command_key(command))
         {
             names.push_back(name);
         }
@@ -232,6 +234,13 @@ void erase_row_commands(Commands &commands, std::size_t index, std::string_view 
         }
     }
     return names;
+}
+
+// 命令の行 command の全部の root の失敗の控えを消す（無ければ何もしない）。
+void forget_trouble(std::vector<LanguageServerTrouble> &troubles, std::string_view command)
+{
+    std::erase_if(troubles, [command](const LanguageServerTrouble &trouble)
+                  { return trouble.command == command; });
 }
 
 // 畳んでいても出す行か（先頭のよく使う言語・設定に行がある・見つかった）。
@@ -260,14 +269,17 @@ void erase_row_commands(Commands &commands, std::size_t index, std::string_view 
 }
 } // namespace
 
-// 設定に行がある言語の状態（席の段・止めたか）。languages のどれかの席の最も進んだ段。
+// 設定に行がある言語の状態（席の段・止めたか）。languages のどれかの命令の行で起きた席の最も進んだ
+// 段（席の鍵は命令の行・2026-11-24 の追補・共有していても行ごとに同じ状態を見せる）。
 LanguageServerRowState
 EditorController::configured_state(std::span<const core::Language> languages) const
 {
     bool starting = false;
     for (const auto &link : language_servers_.links)
     {
-        if (!link.language.has_value() || !std::ranges::contains(languages, link.language.value()))
+        if (link.command.empty() ||
+            std::ranges::none_of(languages, [this, &link](core::Language language)
+                                 { return language_server_command(language) == link.command; }))
         {
             continue;
         }
@@ -506,8 +518,11 @@ void EditorController::unfold_language_server_rows(const std::vector<LanguageSer
     settings_.value().focus = core::settings_rows.size() + first;
 }
 
-// 命令の行が変わった言語（「使う」「外す」「元に戻す」・#1945）。その言語の席を止め、失敗の控えを
-// 消し、起こすかを決め直す（行があれば今の規則どおり `lsp=on` でその言語の文書があれば起きる）。
+// 命令の行が変わった言語（「使う」「外す」「元に戻す」・#1945）。その言語の前の命令の行の席を
+// 全部の root で止め、前と後の命令の行の全部の root の失敗の控えを消し（諦めた命令の行に足した
+// 言語も、もう一度試す）、起こすかを決め直す（行があれば今の規則どおり `lsp=on` でその言語の
+// 文書があれば起きる）。席の鍵は命令の行を含むので、前の命令の行を共有していたほかの言語の文書も
+// 閉じ、アクティブになったときに今の命令の行の席で開き直す（2026-11-24 の追補・#1952）。
 void EditorController::follow_language_server_commands(const Commands &before,
                                                        const Commands &after)
 {
@@ -517,23 +532,27 @@ void EditorController::follow_language_server_commands(const Commands &before,
     }
     for (const auto &name : changed_names(before, after))
     {
-        const auto language = core::language_of_name(name);
-        if (language.has_value())
+        if (const auto *previous = command_named(before, name))
         {
-            restart_language_servers_of(language.value());
+            restart_language_servers_of(server_command_key(*previous));
+        }
+        // 後の命令の行の席は止めない（同じ命令の行で動いている席には、この言語の文書も加わる）。
+        if (const auto *next = command_named(after, name))
+        {
+            forget_trouble(language_servers_.troubles, server_command_key(*next));
         }
     }
     language_servers_.considered.reset();
 }
 
-// language の失敗の控えを消し、その言語の席を止める（行が残っていれば今の規則で起こし直す）。
-void EditorController::restart_language_servers_of(core::Language language)
+// 命令の行 command の全部の root の失敗の控えを消し、その命令の行で起きた席を root を問わず止める
+// （行が残っていれば今の規則で起こし直す）。
+void EditorController::restart_language_servers_of(std::string_view command)
 {
-    std::erase_if(language_servers_.troubles,
-                  [language](const auto &trouble) { return trouble.language == language; });
+    forget_trouble(language_servers_.troubles, command);
     for (const LanguageServerSlot slot : language_server_slots)
     {
-        if (link_of(slot).language == std::optional{language})
+        if (link_of(slot).phase != LanguageServerPhase::idle && link_of(slot).command == command)
         {
             shut_language_server(slot);
         }

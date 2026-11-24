@@ -5,12 +5,15 @@
 #include "DevicePixels.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
+#include "SettingsChoices.hpp"
 #include "SettingsPanel.hpp"
 #include "SettingsPanelPainter.hpp"
 #include "SettingsPart.hpp"
 #include "SettingsSection.hpp"
 #include "UiLocale.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -86,6 +89,7 @@ void Direct2DRenderer::draw_settings(const application::EditorFrame &frame,
             settings_layouts_.clear();
             settings_layout_.reset();
         }
+        settings_choice_layout_.reset();
         return;
     }
     if (!settings_formats_made())
@@ -99,5 +103,42 @@ void Direct2DRenderer::draw_settings(const application::EditorFrame &frame,
     settings_area_ = area;
     settings_layout_ = painter.arranged(view, area);
     painter.paint(view, settings_layout_.value(), frame.palette, frame.body.error);
+    // 一覧の配置は描いたときの 1 回を当たりにも使う（1 frame に 2 回作らない・レビューの軽い 2）。
+    settings_choice_layout_ = painter.painted_choice();
+}
+
+const std::optional<core::SettingsChoiceLayout> &
+Direct2DRenderer::settings_choice_layout() const noexcept
+{
+    return settings_choice_layout_;
+}
+
+// 一覧の配置は view から作り直す（描く前に 2 通来ても今の値で寄せる・settings_revealed と同じ）。
+std::optional<core::SettingsChoiceLayout>
+Direct2DRenderer::settings_choice_arranged(const application::SettingsView &view,
+                                           core::DisplayLanguage language)
+{
+    if (!settings_layout_.has_value() || !view.choice.has_value() || !settings_formats_made())
+    {
+        return std::nullopt;
+    }
+    const SettingsPanelPainter painter(*context_.Get(), *brush_.Get(),
+                                       settings_formats_.text(dwrite_.Get(), dpi_, language),
+                                       settings_layouts_);
+    return painter.arranged_choice(view, painter.arranged(view, settings_area_));
+}
+
+std::optional<std::size_t>
+Direct2DRenderer::settings_choice_revealed(const application::SettingsView &view,
+                                           core::DisplayLanguage language)
+{
+    const auto layout = settings_choice_arranged(view, language);
+    if (!layout.has_value() || !view.choice.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &choice = view.choice.value();
+    const auto top = core::settings_choice_revealing(layout.value(), choice.candidate);
+    return top == choice.top ? std::nullopt : std::optional{top};
 }
 } // namespace nenenib::ui::win32

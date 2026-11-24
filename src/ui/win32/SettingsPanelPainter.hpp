@@ -7,6 +7,9 @@
 #include "Palette.hpp"
 #include "PaletteRowLayouts.hpp"
 #include "RgbColor.hpp"
+#include "RgbaColor.hpp"
+#include "SettingsChoiceLayout.hpp"
+#include "SettingsChoiceView.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsLayoutItem.hpp"
 #include "SettingsPanelText.hpp"
@@ -18,6 +21,7 @@
 #include <cstdint>
 #include <d2d1.h>
 #include <dwrite.h>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -29,7 +33,9 @@ namespace nenenib::ui::win32
 // 描く。スイッチのオンは accent・オフは toggle・つまみは on_accent。選ぶ欄と段の上下は地が
 // background で枠が panel_border。段の印は low が muted の ●・medium が accent の ●●・high が
 // heavy（構文の色の error）の ●●● で、裏で動く機能は「裏」の語を添える。焦点の行は
-// current_line の面。
+// current_line の面 ＋ text の 1 DIP の枠（#1929）。選ぶ欄の一覧（#1926）は面のほかの全部の上に
+// 描く（地 background・枠 panel_border・今の値に ✓・選ぼうとしている行は selection の面 ＋ text の
+// 枠・値の箱の枠は text）。
 // 配置は core::settings_layout の 1 本（窓の当たりと同じ矩形）で、札・組・ボタンの文字の幅は
 // arranged が測って渡す。文字組みは PaletteRowLayouts の保持から引く（1 行ぶんの広い箱で作り、
 // 中央と右寄せは幅を測って置く）。欄に入り切らない文は末尾を「…」で切る。target は製品では Direct2D
@@ -39,8 +45,9 @@ class SettingsPanelPainter final
   public:
     // 保持の上限。行ごとに名前・説明・`:set` の名前・値・段の語と、札・組・見出し・ボタン。言語
     // サーバーの節の行（表の 15 行と表に無い言語の行）は 1 行に名前・サーバー・状態・2
-    // 行目・ボタン。
-    static constexpr std::size_t retained = 320;
+    // 行目・ボタン。選ぶ欄の一覧は全部の選択肢の幅を測る（配色の 126 前後・見える 10 行の文字組みは
+    // 測った文字組みと同じ鍵）ので、その分を足す（#1926）。
+    static constexpr std::size_t retained = 480;
 
     SettingsPanelPainter(ID2D1RenderTarget &target, ID2D1SolidColorBrush &brush,
                          const SettingsPanelText &text, PaletteRowLayouts &layouts) noexcept;
@@ -50,8 +57,19 @@ class SettingsPanelPainter final
     // heavy は本文の構文の色の error（段の印の「重い」と言語サーバーの節の「止めました」）。
     void paint(const application::SettingsView &view, const core::SettingsLayout &layout,
                const core::Palette &palette, core::RgbColor heavy);
+    // 選ぶ欄の一覧の配置（一覧が開いていなければ値なし・#1926）。錨は焦点の行の値の箱、出してよい所は
+    // 面の行の領域の幅で面の上下いっぱい、幅は選択肢の名前を測って渡す。
+    // 最後の paint が描いた一覧の配置（描いていなければ値なし・窓の当たりがこれを引く）。
+    [[nodiscard]] const std::optional<core::SettingsChoiceLayout> &painted_choice() const noexcept;
+    [[nodiscard]] std::optional<core::SettingsChoiceLayout>
+    arranged_choice(const application::SettingsView &view,
+                    const core::SettingsLayout &layout) const;
 
   private:
+    void paint_choice(const application::SettingsChoiceView &choice,
+                      const core::SettingsChoiceLayout &layout);
+    void paint_check(const core::LayoutRect &mark);
+    void fill_translucent(const core::LayoutRect &area, float radius_dips, core::RgbaColor color);
     void paint_header(const core::SettingsLayout &layout);
     void paint_search(const application::SettingsView &view, const core::SettingsLayout &layout);
     void paint_chips(const application::SettingsView &view, const core::SettingsLayout &layout);
@@ -126,5 +144,6 @@ class SettingsPanelPainter final
     PaletteRowLayouts &layouts_;
     core::Palette palette_{};
     core::RgbColor heavy_{};
+    std::optional<core::SettingsChoiceLayout> painted_choice_;
 };
 } // namespace nenenib::ui::win32

@@ -6,6 +6,8 @@
 #include "DisplayText.hpp"
 #include "DocumentState.hpp"
 #include "DocumentView.hpp"
+#include "Edit.hpp"
+#include "EditLines.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "EditorState.hpp"
@@ -17,6 +19,7 @@
 #include "TextBuffer.hpp"
 #include "UiMessage.hpp"
 #include "UnloadedDocument.hpp"
+#include "VimMarks.hpp"
 #include "VimPattern.hpp"
 
 #include <cstddef>
@@ -33,7 +36,8 @@
 namespace nenenib::application::detail
 {
 // 合図（裏の仕事の完了と時計の合図: WorkCompleted・AutosaveTick・PreviewTick・
-// LanguageServerTick・MapTimeout・TabTipTick）。「この意図は合図か」を決める 1
+// LanguageServerTick・MapTimeout・TabTipTick・選ぶ欄の一覧の頭文字の 1 秒 SettingsChoiceTimeout・
+// #1926）。「この意図は合図か」を決める 1
 // 本で、not_user_operation と 上下の移動の狙いの横位置を保つ側（keeps_wanted_x）がこれを呼ぶ（ADR
 // 0062 の追補・#1296）。 合図を足すときはここに 1 行足す。
 [[nodiscard]] bool is_signal(const EditorIntent &intent) noexcept;
@@ -41,15 +45,25 @@ namespace nenenib::application::detail
 // begin_intent と `map` の待ちと、全面プレビューの振り分け（ADR 0155 の改訂 17）が共用する 1 本。
 [[nodiscard]] bool not_user_operation(const EditorIntent &intent) noexcept;
 // 設定の面の意図（ADR 0170 の追補 2 の 8 つと、画面の工程の FocusSettingsRow・ScrollSettings・
-// #1836）。面を開いたまま受ける側と、全面プレビューの間も通す側
-// （passes_full_preview・#1835 の M1）が共用する 1 本。
+// #1836）と選ぶ欄の一覧の意図（is_settings_choice_intent・#1926）。面を開いたまま受ける側と、
+// 全面プレビューの間も通す側（passes_full_preview・#1835 の M1）が共用する 1 本。
 [[nodiscard]] bool is_settings_intent(const EditorIntent &intent) noexcept;
+// 選ぶ欄の一覧の意図（OpenSettingsChoice・PointSettingsChoice・ScrollSettingsChoice・
+// ChooseSettingsChoice・CloseSettingsChoice・TypeSettingsChoice・#1926）。一覧を開いたまま受ける
+// 側が読む。どれも使う人の操作なので keeps_tab_walk にも begin_intent の表にも書かない。
+[[nodiscard]] bool is_settings_choice_intent(const EditorIntent &intent) noexcept;
 // アクティブな文書が何も書いていない無題か（パス無し・本文 0 バイト・履歴 0）。F1 の本文の案内
 // （guide_context の untouched_untitled・ADR 0078）と起動画面（start_screen_shown・ADR 0172 の
 // 決定 1）が同じこの 1 本を読む。隠す外側の条件はそれぞれが持つ。
 [[nodiscard]] bool untouched_untitled(const EditorState &state) noexcept;
 [[nodiscard]] core::ScrollExtent scroll_extent_for(core::EditMode mode) noexcept;
 [[nodiscard]] std::string with_document_newlines(std::string_view utf8, std::string_view newline);
+// 編集で行がずれたマーク（ADR 0152 の決定 6）。lines の選択肢ごとに直し方が決まる（行の規則・
+// 矩形の行ごとの列・整形の編集の列）。before は編集の前の本文。replace と undo・Ctrl-r
+// （undone_marks）の 1 本（#1997 の 2 回目のレビュー P1）。
+[[nodiscard]] core::VimMarks edited_marks(const core::VimMarks &marks,
+                                          const core::TextBuffer &before, const core::Edit &edit,
+                                          const EditLines &lines);
 [[nodiscard]] const core::SearchLine *previewed_line(const EditorState &state);
 // 検索の入力行の語を照合器 VimPattern の文字列にした値（`/` `?` は打ったまま・「検索: 」は
 // literal_pattern で逃がした形・ADR 0174 の決定 4）。検索でない入力行（「行: 」）は値なし。

@@ -52,13 +52,14 @@ std::optional<core::FilePath> tab_path_at(const EditorState &state, std::size_t 
 }
 } // namespace detail
 
-void EditorController::adjust_other(const core::Edit &edit, const core::TextBuffer &after)
+void EditorController::adjust_other(std::span<const core::Edit> edits,
+                                    const core::TextBuffer &after)
 {
     // 1 枠では状態を写さない（1 打鍵の道に写しを足さない）。本文を置く前に呼ぶ（先頭行の行頭は
     // 編集の前の本文で引く）。
     if (state_.split().other.has_value())
     {
-        state_ = state_.with_other_adjusted(edit, after);
+        state_ = state_.with_other_adjusted(edits, after);
     }
 }
 

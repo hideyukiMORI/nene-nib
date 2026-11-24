@@ -7,6 +7,7 @@
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
 #include "CompletionCandidate.hpp"
+#include "CompletionCommitKey.hpp"
 #include "CompletionEntries.hpp"
 #include "CompletionEntry.hpp"
 #include "CompletionFace.hpp"
@@ -698,14 +699,16 @@ void verify_commits()
     static_cast<void>(typed(editing, "ab ab"));
     const auto same = opened(editing);
     expect(rows(same) == std::vector<std::string>{"ab"} &&
-               !editing.controller().completion_commits(),
+               !editing.controller().completion_commits(app::CompletionCommitKey::enter),
            "a face with only the word already typed commits nothing");
     Editing other;
     static_cast<void>(typed(other, "abc ab"));
     static_cast<void>(opened(other));
-    expect(other.controller().completion_commits(), "a longer candidate commits");
+    expect(other.controller().completion_commits(app::CompletionCommitKey::enter),
+           "a longer candidate commits");
     static_cast<void>(other.controller().apply_frame(app::CloseCompletion{}));
-    expect(!other.controller().completion_commits(), "a closed face commits nothing");
+    expect(!other.controller().completion_commits(app::CompletionCommitKey::enter),
+           "a closed face commits nothing");
 }
 } // namespace
 
@@ -731,6 +734,7 @@ void verify_completion_face_contracts()
     verify_click_and_wheel();
     verify_commits();
     verify_vim_insert_completion();
+    verify_completion_confirm();
 }
 
 void verify_completion_face_scope()

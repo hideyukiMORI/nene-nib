@@ -14,6 +14,7 @@
 #include "CloseCompletion.hpp"
 #include "CompletionCandidates.hpp"
 #include "CompletionChoice.hpp"
+#include "CompletionCommitKey.hpp"
 #include "CompletionDirection.hpp"
 #include "CompletionEntries.hpp"
 #include "CompletionEntry.hpp"
@@ -125,6 +126,43 @@ constexpr std::size_t typed_limit = 1024;
 [[nodiscard]] bool alive(const CompletionSession &session) noexcept
 {
     return has_rows(session) || session.awaiting;
+}
+
+// 自動で開いた面（engine の外）で、使う人がまだ選ぶ行を動かしていないか（#1971）。面はどの行も
+// 選ばずに出し、Tab はいちばん上の候補で確定し、Enter は確定しない。選んでいる位置 selected は
+// 先頭のまま（Tab と行の名指しの無い確定が読む）。
+[[nodiscard]] bool awaits_choice(const CompletionSession &session) noexcept
+{
+    return !session.by_hand && !session.stepped;
+}
+
+// まだ選んでいない面の最初の 1 歩（先頭の前から動く）。下と PageDown は先頭の側から、上は最後の行、
+// PageUp は先頭で止まる。count は 1 以上。
+[[nodiscard]] std::size_t first_choice(std::size_t count, CompletionStep step) noexcept
+{
+    switch (step)
+    {
+    case CompletionStep::previous:
+        return count - 1;
+    case CompletionStep::next:
+    case CompletionStep::page_previous:
+        return 0;
+    case CompletionStep::page_next:
+        return std::min(core::completion_face_rows, count) - 1;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] bool is_tab(const core::VimKey &key) noexcept
+{
+    const auto *character = std::get_if<core::VimCharacter>(&key);
+    return character != nullptr && character->code == U'\t';
+}
+
+[[nodiscard]] bool is_special(const core::VimKey &key, core::VimSpecialKey wanted) noexcept
+{
+    const auto *special = std::get_if<core::VimSpecialKey>(&key);
+    return special != nullptr && *special == wanted;
 }
 
 // 選んでいる行が見えるように送った窓の先頭。
@@ -255,6 +293,12 @@ void EditorController::close_completion()
     for (const LanguageServerSlot slot : language_server_slots)
     {
         cancel_lsp_requests(slot, LspRequestKind::completion);
+    }
+    // 打鍵で自動に開いた面から移った engine の補完は、補完の鍵をマクロに積んでいないので、確定する
+    // 語を打った本文としてここで積む（#1971・D109）。
+    if (triggered_in_engine())
+    {
+        record_triggered_typed(std::nullopt);
     }
     completion_.reset();
     forget_completion_answer();
@@ -393,6 +437,7 @@ void EditorController::start_completion(std::optional<std::string_view> trigger)
                               .by_hand = by_hand,
                               .caret = caret,
                               .revision = state_.history().revision()};
+    session.triggered = !by_hand;
     if (by_hand)
     {
         core::CompletionList list = insert_completion(core::CompletionDirection::forward);
@@ -530,7 +575,9 @@ void EditorController::accept(const StepCompletion &intent)
         return;
     }
     auto &session = completion_.value();
-    session.selected = stepped_row(session.selected, session.shown.size(), intent.step);
+    session.selected = awaits_choice(session)
+                           ? first_choice(session.shown.size(), intent.step)
+                           : stepped_row(session.selected, session.shown.size(), intent.step);
     session.first = window_first(session.first, session.selected);
     session.stepped = true;
 }
@@ -544,8 +591,9 @@ void EditorController::accept(const ScrollCompletion &intent)
     }
     auto &session = completion_.value();
     session.first = scrolled_first(session.first, session.shown.size(), intent.lines);
-    // Vim の面の選んでいる行は engine が正（本文に入っている語）なので、窓だけを送る（#1845）。
-    if (state_.mode() == core::EditMode::vim)
+    // Vim の面の選んでいる行は engine が正（本文に入っている語）なので、窓だけを送る（#1845）。まだ
+    // 選んでいない自動の面も窓だけを送り、選ばないまま（#1971）。
+    if (state_.mode() == core::EditMode::vim || awaits_choice(session))
     {
         return;
     }
@@ -563,14 +611,26 @@ EditorController::completion_edit(const CompletionSession &session, std::size_t 
             inserted_text(entry.insert, core::newline_of(state_.line_ending()))};
 }
 
-// 選んでいる候補の確定が本文を変えるか（面が見えていなければ偽）。窓が Enter と Tab を面へ送るか
-// を決める安い読みで、変えないなら窓は面を閉じて鍵を本文へ通す（打った語と同じ綴りだけが残って
-// いるときに Enter が空振りしない・#1844 の L1）。
-bool EditorController::completion_commits() const
+// key で確定する候補の確定が本文を変えるか（面が見えていなければ偽）。窓が Enter と Tab を面へ
+// 送るかを決める安い読みで、変えないなら窓は面を閉じて鍵を本文へ通す（打った語と同じ綴りだけが
+// 残っているときに Enter が空振りしない・#1844 の L1）。自動で開いてまだ選んでいない面の Enter は
+// 確定しない（改行を通す）、Tab は先頭の候補で確定する（#1971）。
+bool EditorController::completion_commits(CompletionCommitKey key) const
 {
     if (!completion_.has_value() || !has_rows(completion_.value()))
     {
         return false;
+    }
+    switch (key)
+    {
+    case CompletionCommitKey::enter:
+        if (awaits_choice(completion_.value()))
+        {
+            return false;
+        }
+        break;
+    case CompletionCommitKey::tab:
+        break;
     }
     const auto [range, text] = completion_edit(completion_.value(), completion_.value().selected);
     return state_.text().text_range(range.begin, range.end) != text;
@@ -756,14 +816,144 @@ void EditorController::follow_vim_completion()
 
 // Vim の面の行のクリック（ADR 0190 の決定 5）。クリックした候補を入れて確定する 1 歩を engine に
 // 流す（鍵と同じ写しの道・INSERT の undo の 1 単位の中）。行の名指しが無い確定（Vim のモードでは
-// 窓が送らない）は選んでいる語のまま閉じる。
+// 窓が送らない）は選んでいる語のまま閉じる。打鍵で自動に開いた面（engine の外）の行は、Ctrl-n で
+// engine の補完へ移してから同じ 1 歩で確定する（#1971）。
 void EditorController::choose_vim_completion(std::optional<std::size_t> row)
 {
     if (row.has_value() && state_.vim().insert_completion != nullptr)
     {
-        static_cast<void>(stepped_vim(VimStepSource{CompletionChoice{row.value()}}));
+        chosen_vim_row(row.value());
+    }
+    else if (row.has_value() && completion_.has_value() && !completion_.value().by_hand)
+    {
+        choose_auto_vim_row(row.value());
+        return;
     }
     close_completion();
+}
+
+// engine の補完の index 番目の候補で確定する 1 歩（面の行のクリック・#1845）。打鍵で自動に開いた面
+// から移った補完なら、確定で入る語を先にマクロの録画へ打った本文として積む（#1971）。
+void EditorController::chosen_vim_row(std::size_t index)
+{
+    if (triggered_in_engine())
+    {
+        record_triggered_typed(index);
+    }
+    static_cast<void>(stepped_vim(VimStepSource{CompletionChoice{index}}));
+}
+
+// 自動で開いた面の index 番目の行で確定する（#1971）。面の候補を Ctrl-n で engine の補完へ移し
+// （offer_auto_vim_completion と同じ道・鍵はマクロに積まない）、engine の列の中の同じ候補を確定の
+// 1 歩で入れる。engine の語に直せない行（textEdit の範囲が直せない候補）なら面を閉じるだけ。
+void EditorController::choose_auto_vim_row(std::size_t index)
+{
+    const auto rows = auto_vim_rows();
+    if (index >= rows.size() || !rows.at(index).has_value())
+    {
+        close_completion();
+        return;
+    }
+    const auto position = static_cast<std::size_t>(std::count_if(
+        rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(index),
+        [](const std::optional<core::CompletionEntry> &row) { return row.has_value(); }));
+    static_cast<void>(deliver_vim_key(core::VimKey{core::VimSpecialKey::control_n}));
+    if (triggered_in_engine())
+    {
+        chosen_vim_row(position);
+    }
+    close_completion();
+}
+
+bool EditorController::triggered_in_engine() const noexcept
+{
+    return completion_.has_value() && completion_.value().triggered &&
+           completion_.value().by_hand && state_.vim().insert_completion != nullptr;
+}
+
+bool EditorController::triggered_completion_key(const core::VimKey &key) const noexcept
+{
+    if (!completion_.has_value() || !completion_.value().triggered || !completion_.value().by_hand)
+    {
+        return false;
+    }
+    const core::VimState &vim = state_.vim();
+    return vim.insert_completion != nullptr ? !core::vim_completion_ends(vim, key)
+                                            : core::vim_starts_completion(vim, key).has_value();
+}
+
+void EditorController::record_triggered_typed(std::optional<std::size_t> index)
+{
+    if (replay_depth_.has_value() || !state_.vim().macro_recording.has_value())
+    {
+        return;
+    }
+    const std::vector<core::VimKey> typed = core::vim_completion_typed(state_.vim(), index);
+    if (typed.empty())
+    {
+        return;
+    }
+    core::VimState vim = state_.vim();
+    core::vim_macro_typed(vim, typed);
+    state_ = state_.with_vim(std::move(vim));
+}
+
+// 自動で開いた面の Enter と Tab（#1971・施主の決め 2026-11-23）。`map` の左辺を待っている間は確定
+// せず、今までどおり表を引く。engine の補完へ移った面は、選んでいる候補があれば Enter も Tab も
+// その候補で確定し（Ctrl-y と同じ・Vim に渡さない）、元の接頭辞を選んでいれば Tab だけが先頭の候補
+// で確定する。engine の外の面（まだ選んでいない）は Tab だけが先頭の候補で確定する。
+bool EditorController::triggered_confirm_took(const core::VimKey &key)
+{
+    const bool tab = is_tab(key);
+    if ((!tab && !is_special(key, core::VimSpecialKey::enter)) ||
+        !state_.key_map_pending().empty() || !completion_.has_value() ||
+        !completion_.value().triggered)
+    {
+        return false;
+    }
+    if (triggered_in_engine())
+    {
+        return engine_confirm_took(tab);
+    }
+    return tab && !completion_.value().by_hand && has_rows(completion_.value()) && auto_tab_took();
+}
+
+// engine の補完へ移った面の Enter と Tab。選んでいる候補があればそれで確定し、元の接頭辞を選んで
+// いれば Tab だけが先頭の候補で確定する。選んでいる候補が元の接頭辞と同じ綴りなら確定は本文を変え
+// ないので、鍵を Vim に渡す（改行・Tab が空振りしない・通常モードの #1844 の L1 と同じ考え）。
+bool EditorController::engine_confirm_took(bool tab)
+{
+    const auto &engine = *state_.vim().insert_completion;
+    if (engine.selected < engine.words->size())
+    {
+        if (engine.words->at(engine.selected) == engine.original)
+        {
+            return false;
+        }
+        close_completion();
+        return true;
+    }
+    if (!tab || engine.words->empty())
+    {
+        return false;
+    }
+    chosen_vim_row(0);
+    close_completion();
+    return true;
+}
+
+// engine の外の面の Tab。engine の語に直せる候補のいちばん上で確定する（無ければ偽・Vim のまま）。
+bool EditorController::auto_tab_took()
+{
+    const auto rows = auto_vim_rows();
+    const auto top = std::ranges::find_if(rows, [](const std::optional<core::CompletionEntry> &row)
+                                          { return row.has_value(); });
+    if (top == rows.end())
+    {
+        return false;
+    }
+    choose_auto_vim_row(static_cast<std::size_t>(top - rows.begin()));
+    return true;
 }
 
 // 意図の出口の Vim の側（settle_completion から）。engine の補完が閉じたか別の文書になっていれば
@@ -887,7 +1077,9 @@ void EditorController::typed_vim_key_with_language(const core::VimKey &key)
 {
     // 粒だけがオンで言語サーバーが起きていない窓は自動の面の鍵を読まない（粒がオフのときと同じ道・
     // #1988 のレビュー L2）。
-    if (language_servers_.awake != 0 && auto_vim_completion_took(key))
+    // 自動で開いた面の Enter と Tab の確定は `map` の表より先（#1971）。
+    if (language_servers_.awake != 0 &&
+        (triggered_confirm_took(key) || auto_vim_completion_took(key)))
     {
         return;
     }
@@ -923,6 +1115,7 @@ void EditorController::watched_vim_key(const core::VimKey &key)
 
 bool EditorController::auto_vim_completion_took(const core::VimKey &key)
 {
+    // engine の補完へ移った面の鍵は engine の道（triggered_step_vim・#1971）。
     if (!completion_.has_value() || completion_.value().by_hand)
     {
         return false;
@@ -996,21 +1189,12 @@ bool EditorController::offer_auto_vim_completion()
         return false;
     }
     CompletionSession &session = completion_.value();
-    const auto typed = vim_completion_span(session.origin, session.requested);
-    if (!typed.has_value())
-    {
-        return false;
-    }
     std::vector<core::CompletionEntry> server;
-    for (const std::size_t position : session.shown)
+    for (std::optional<core::CompletionEntry> &row : auto_vim_rows())
     {
-        core::CompletionEntry entry = session.entries.at(position);
-        auto text = vim_completion_text(typed.value(), session.origin, entry);
-        if (text.has_value())
+        if (row.has_value())
         {
-            entry.insert = std::move(text).value();
-            entry.range.reset();
-            server.push_back(std::move(entry));
+            server.push_back(std::move(row).value());
         }
     }
     if (server.empty())
@@ -1032,6 +1216,35 @@ bool EditorController::offer_auto_vim_completion()
     return true;
 }
 
+// 自動で開いた面の行（shown の順）ごとに、engine の語に直した候補。直すのは手で開いた面と同じ
+// vim_completion_text の 1 本で、比べる範囲は最後の要求を出したときの接頭辞（requested）。
+std::vector<std::optional<core::CompletionEntry>> EditorController::auto_vim_rows() const
+{
+    std::vector<std::optional<core::CompletionEntry>> rows;
+    if (!completion_.has_value())
+    {
+        return rows;
+    }
+    const CompletionSession &session = completion_.value();
+    const auto typed = vim_completion_span(session.origin, session.requested);
+    rows.reserve(session.shown.size());
+    for (const std::size_t position : session.shown)
+    {
+        core::CompletionEntry entry = session.entries.at(position);
+        auto text = typed.has_value() ? vim_completion_text(typed.value(), session.origin, entry)
+                                      : std::nullopt;
+        if (!text.has_value())
+        {
+            rows.emplace_back(std::nullopt);
+            continue;
+        }
+        entry.insert = std::move(text).value();
+        entry.range.reset();
+        rows.emplace_back(std::move(entry));
+    }
+    return rows;
+}
+
 std::optional<CompletionView> EditorController::completion_view() const
 {
     if (!completion_.has_value() || !has_rows(completion_.value()))
@@ -1041,9 +1254,9 @@ std::optional<CompletionView> EditorController::completion_view() const
     const auto &session = completion_.value();
     const std::size_t count =
         std::min(core::completion_face_rows, session.shown.size() - session.first);
-    // 選んでいる行が無い（Vim の補完が元の接頭辞へ戻った 1 歩・#1845、Vim の INSERT で打鍵が自動に
-    // 開いた面・#1962）ときは rows の外の値。
-    const bool unchosen = state_.mode() == core::EditMode::vim && !session.by_hand;
+    // 選んでいる行が無い（Vim の補完が元の接頭辞へ戻った 1 歩・#1845、打鍵で自動に開いてまだ選んで
+    // いない面・#1962・#1971）ときは rows の外の値。
+    const bool unchosen = awaits_choice(session);
     CompletionView view{.session = session.id,
                         .rows = {},
                         .selected = !unchosen && session.selected < session.shown.size()
