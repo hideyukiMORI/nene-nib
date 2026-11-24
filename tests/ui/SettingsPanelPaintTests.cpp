@@ -1,8 +1,8 @@
 // #1836（施主決定 D102・ADR 0170 の決定 5）: 設定の面（右の引き出し）の画素と鍵の振り分け。WIC の
 // bitmap（SoftwareTarget）に SettingsPanelPainter で描き、面の地が panel・左の境が panel_border の
-// 1 DIP・面の外には何も描かない（暗幕なし）・焦点の行に current_line の面・スイッチのオンは accent
-// で つまみが右・オフは toggle でつまみが左・段の印は high だけが heavy の色・細い窓（700 DIP
-// 未満）は 全幅で `:set`
+// 1 DIP・面の外には何も描かない（暗幕なし）・焦点の行に current_line の面と text
+// の枠（#1929）・スイッチのオンは accent で つまみが右・オフは toggle でつまみが左・段の印は high
+// だけが heavy の色・細い窓（700 DIP 未満）は 全幅で `:set`
 // の名前を描かない・文字組みの保持が描き直しで増えないことを、ダークとライトで
 // 確かめる。配置は製品と同じ core::settings_layout。bitmap は 80 画素の高さなので、帯を平行移動して
 // 見たい行を bitmap に入れる。窓・device は作らない。字の画素は字体に依るので、Segoe UI と Consolas
@@ -254,6 +254,10 @@ void verify_rows(const PanelStrip &strip, const core::Palette &palette)
                pixel_is(focused, probe_x, on_row.box.top - 4, palette.panel) &&
                off_row.box.top == on_row.box.bottom,
            "the focused row lays the current line face and the others stay on the panel");
+    // #1929: 設定の行の焦点も text の 1 DIP の枠（言語サーバーの行と同じ形）。
+    expect(pixel_is(focused, on_row.box.left + 20, on_row.box.top, palette.text) &&
+               !pixel_is(unfocused, on_row.box.left + 20, on_row.box.top, palette.text),
+           "the focused settings row has a text frame and an unfocused row has none");
     const auto on_box = core::settings_control_box(layout, on_row);
     const auto on_middle = (on_box.top + on_box.bottom) / 2;
     expect(pixel_is(unfocused, on_box.left + 8, on_middle, palette.accent) &&
