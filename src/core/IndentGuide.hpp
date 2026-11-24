@@ -61,11 +61,13 @@ inline constexpr std::size_t indent_guess_bytes = std::size_t{64} * 1024;
 [[nodiscard]] std::size_t indent_guide_step(std::optional<IndentUnit> guessed,
                                             std::uint8_t width) noexcept;
 
-// 虹の色の数（settings.v6 の `indent_guide_colors`・3〜6）。
-inline constexpr std::uint8_t indent_guide_colors_minimum = 3;
-inline constexpr std::uint8_t indent_guide_colors_maximum = 6;
-[[nodiscard]] std::optional<std::uint8_t> indent_guide_colors_of(std::string_view text) noexcept;
-[[nodiscard]] std::uint8_t indent_guide_colors_stepped(std::uint8_t count, bool forward) noexcept;
+// 虹の色の数（settings.v6 の `indent_guide_color_count`・3〜6）。
+inline constexpr std::uint8_t indent_guide_color_count_minimum = 3;
+inline constexpr std::uint8_t indent_guide_color_count_maximum = 6;
+[[nodiscard]] std::optional<std::uint8_t>
+indent_guide_color_count_of(std::string_view text) noexcept;
+[[nodiscard]] std::uint8_t indent_guide_color_count_stepped(std::uint8_t count,
+                                                            bool forward) noexcept;
 
 // 単色 / 虹の名前（`rainbow` `plain`）とその逆。
 [[nodiscard]] std::string_view indent_guide_style_name(IndentGuideStyle style) noexcept;
@@ -104,7 +106,7 @@ inline constexpr std::array<RgbColor SyntaxPalette::*, 9> rainbow_roles{
 // ときはこの 1 か所）。
 inline constexpr std::uint8_t indent_guide_faded_percent = 55;
 
-// 1 frame の線の色の材料（決定 5）。wanted は虹の色の数（設定の indent_guide_colors）。
+// 1 frame の線の色の材料（決定 5）。wanted は虹の色の数（設定の indent_guide_color_count）。
 [[nodiscard]] IndentGuidePaint indent_guide_paint(IndentGuideStyle style, std::size_t wanted,
                                                   const SyntaxPalette &syntax,
                                                   const Palette &palette) noexcept;

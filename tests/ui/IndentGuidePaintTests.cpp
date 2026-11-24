@@ -235,8 +235,9 @@ void check_paint_memo()
         nenenib::core::feature_set(settings, nenenib::core::EditorFeature::indent_guides, true);
     memo.begin(settings, aubergine.body, aubergine.ui);
     memo.begin(settings, aubergine.body, aubergine.ui);
-    const auto expected = nenenib::core::indent_guide_paint(
-        settings.indent_guide_style, settings.indent_guide_colors, aubergine.body, aubergine.ui);
+    const auto expected = nenenib::core::indent_guide_paint(settings.indent_guide_style,
+                                                            settings.indent_guide_color_count,
+                                                            aubergine.body, aubergine.ui);
     expect(memo.shown() != nullptr && memo.made() == 1 &&
                memo.shown()->rainbow.count == expected.rainbow.count &&
                memo.shown()->plain == expected.plain,
@@ -245,7 +246,7 @@ void check_paint_memo()
     expect(memo.made() == 2 && memo.shown()->rainbow.count == 1, "a new theme makes it again");
     settings.indent_guide_style = nenenib::core::IndentGuideStyle::plain;
     memo.begin(settings, quiet.body, quiet.ui);
-    settings.indent_guide_colors = 6;
+    settings.indent_guide_color_count = 6;
     memo.begin(settings, quiet.body, quiet.ui);
     expect(memo.made() == 4 && memo.shown()->style == nenenib::core::IndentGuideStyle::plain,
            "the style and the color count make it again");
