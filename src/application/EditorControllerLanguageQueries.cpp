@@ -33,9 +33,9 @@ namespace nenenib::application
 
 namespace
 {
-// 頼む前に断る問いか。整形（文書・選択範囲）を Vim の INSERT で頼んだときだけ（決定 7 の追補）。
-[[nodiscard]] bool refuses_in_insert(core::LanguageQueryKind kind, core::EditMode mode,
-                                     const core::VimState &vim) noexcept
+// Vim の INSERT で頼むと断る問いの 1 行（断らない問いは値なし）。整形（文書・選択範囲・決定 7 の
+// 追補）と名前の変更（#2004・ADR 0194 の決定 11・答えは入力の途中で当たらない）。
+[[nodiscard]] std::optional<core::UiMessage> insert_refusal(core::LanguageQueryKind kind) noexcept
 {
     switch (kind)
     {
@@ -44,19 +44,28 @@ namespace
     case core::LanguageQueryKind::references:
     case core::LanguageQueryKind::symbols:
     case core::LanguageQueryKind::signature_help:
-        return false;
+        return std::nullopt;
     case core::LanguageQueryKind::format_document:
     case core::LanguageQueryKind::format_selection:
-        break;
+        return core::UiMessage::notice_formatting_in_insert;
+    case core::LanguageQueryKind::rename:
+        return core::UiMessage::notice_rename_in_insert;
     }
+    std::unreachable();
+}
+
+// 頼む前に断る問いの 1 行。Vim の INSERT で insert_refusal の問いを頼んだときだけ。
+[[nodiscard]] std::optional<core::UiMessage>
+refuses_in_insert(core::LanguageQueryKind kind, core::EditMode mode, const core::VimState &vim)
+{
     switch (mode)
     {
     case core::EditMode::ordinary:
-        return false;
+        return std::nullopt;
     case core::EditMode::vim:
         break;
     }
-    return vim.mode == core::VimMode::insert;
+    return vim.mode == core::VimMode::insert ? insert_refusal(kind) : std::nullopt;
 }
 } // namespace
 
@@ -69,12 +78,11 @@ void EditorController::accept(const QueryLanguage &intent)
     {
         return;
     }
-    // Vim の INSERT で頼んだ整形は、答えが届いても入力の途中で当たらないので、頼まずに 1 行で断る
-    // （#1997 の 2 回目のレビュー F1・設計席の決め 2026-11-24）。
-    if (refuses_in_insert(intent.kind, state_.mode(), state_.vim()))
+    // Vim の INSERT で頼んだ整形と名前の変更は、答えが届いても入力の途中で当たらないので、頼まずに
+    // 1 行で断る（#1997 の 2 回目のレビュー F1・設計席の決め 2026-11-24・#2004）。
+    if (const auto refusal = refuses_in_insert(intent.kind, state_.mode(), state_.vim()))
     {
-        state_ =
-            state_.with_command_message(ui_notice(core::UiMessage::notice_formatting_in_insert));
+        state_ = state_.with_command_message(ui_notice(refusal.value()));
         return;
     }
     if (query_language(intent.kind))
@@ -113,6 +121,9 @@ using UnansweredAbility = std::pair<bool ServerAbilities::*, core::UiMessage>;
     case core::LanguageQueryKind::format_selection:
         return UnansweredAbility{&ServerAbilities::range_formatting,
                                  core::UiMessage::notice_range_formatting_not_supported};
+    case core::LanguageQueryKind::rename:
+        return UnansweredAbility{&ServerAbilities::rename,
+                                 core::UiMessage::notice_rename_not_supported};
     }
     std::unreachable();
 }
@@ -146,6 +157,8 @@ void EditorController::perform(const core::VimLanguageQuery &effect)
         return;
     case core::LanguageQueryKind::references:
     case core::LanguageQueryKind::symbols:
+    // `grn`（#2004・ADR 0194 の決定 7）も `grr` と同じく頼めたら成功の歩。
+    case core::LanguageQueryKind::rename:
         vim_effect_landed_ = asked;
         return;
     }
@@ -174,6 +187,8 @@ bool EditorController::query_language(core::LanguageQueryKind kind)
         return request_formatting(false);
     case core::LanguageQueryKind::format_selection:
         return request_formatting(true);
+    case core::LanguageQueryKind::rename:
+        return request_rename_target();
     }
     std::unreachable();
 }
@@ -252,6 +267,12 @@ void EditorController::settle_language_answers(LspRequestKind kind)
     case LspRequestKind::formatting:
     case LspRequestKind::range_formatting:
         settle_formatting_answer();
+        return;
+    case LspRequestKind::prepare_rename:
+        settle_rename_target_answer();
+        return;
+    case LspRequestKind::rename:
+        settle_rename_answer();
         return;
     }
 }

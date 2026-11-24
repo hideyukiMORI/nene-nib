@@ -80,7 +80,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/LspFrames.cpp src/core/LspMessages.cpp src/core/LspPosition.cpp src/core/LspLanguageId.cpp
     src/core/KnownLanguageServers.cpp
     src/core/LspDiagnostics.cpp src/core/DiagnosticEdits.cpp src/core/DiagnosticCounts.cpp
-    src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSymbols.cpp src/core/LspSignatureHelp.cpp src/core/LspFormatting.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
+    src/core/LspJsonRead.cpp src/core/LspPositionJson.cpp src/core/LspAnswers.cpp src/core/LspSymbols.cpp src/core/LspSignatureHelp.cpp src/core/LspFormatting.cpp src/core/LspWorkspaceEdits.cpp src/core/LspRename.cpp src/core/LspSnippet.cpp src/core/FileUri.cpp src/core/FileUrl.cpp src/core/PercentDecoding.cpp
     src/core/NoticeLine.cpp src/core/DiagnosticNotice.cpp src/core/DiagnosticJump.cpp src/core/LspShowMessage.cpp src/core/DiagnosticColor.cpp
     src/core/LspProgress.cpp src/core/ServerLogLine.cpp)
 # 版を core へ渡すのはこの 1 行だけ（AppIdentity.cpp の翻訳単位だけ・D90・#1677・CNF-007 が照合する）。
@@ -111,6 +111,7 @@ nenenib_target(nenenib_application application STATIC
     src/application/EditorControllerLanguageServerRows.cpp
     src/application/EditorControllerReferences.cpp src/application/EditorControllerSignature.cpp
     src/application/EditorControllerFormatting.cpp
+    src/application/EditorControllerRename.cpp src/application/EditorControllerWorkspaceEdit.cpp
     src/application/DiagnosticLines.cpp src/application/LastResortPlan.cpp)
 nenenib_link(nenenib_application nenenib_core)
 
@@ -253,7 +254,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/LspSyncPropertyTests.cpp
     tests/unit/LspFramesPropertyTests.cpp
     tests/unit/SubstitutePropertyTests.cpp
-    tests/unit/LspDiagnosticsTests.cpp tests/unit/DiagnosticJumpTests.cpp tests/unit/LspReferencesTests.cpp tests/unit/LspSymbolsTests.cpp tests/unit/LspSignatureTests.cpp tests/unit/LspFormattingTests.cpp
+    tests/unit/LspDiagnosticsTests.cpp tests/unit/DiagnosticJumpTests.cpp tests/unit/LspReferencesTests.cpp tests/unit/LspSymbolsTests.cpp tests/unit/LspSignatureTests.cpp tests/unit/LspFormattingTests.cpp tests/unit/LspRenameTests.cpp
     tests/unit/LspAnswersTests.cpp
     tests/unit/LanguageServerTests.cpp
     tests/unit/LanguageServerSlotTests.cpp

@@ -171,9 +171,11 @@ namespace
                                        const core::InputHistory &search,
                                        core::CommandEdit direction)
 {
-    // 「行: 」と「置換後: 」は検索ではないので検索の履歴を歩かない（ADR 0174 の決定 3・8）。
+    // 「行: 」と「置換後: 」と「新しい名前: 」は検索ではないので検索の履歴を歩かない（ADR 0174 の
+    // 決定 3・8・#2004）。
     if (line.prompt() == core::InputLinePrompt::go_to_line ||
-        line.prompt() == core::InputLinePrompt::replace_with)
+        line.prompt() == core::InputLinePrompt::replace_with ||
+        line.prompt() == core::InputLinePrompt::rename)
     {
         return line;
     }
@@ -213,7 +215,8 @@ namespace
                               const core::InputHistory &search, core::CommandEdit direction)
 {
     return line.prompt() == core::InputLinePrompt::go_to_line ||
-           line.prompt() == core::InputLinePrompt::replace_with || line.recalls(search, direction);
+           line.prompt() == core::InputLinePrompt::replace_with ||
+           line.prompt() == core::InputLinePrompt::rename || line.recalls(search, direction);
 }
 
 [[nodiscard]] bool recalls_of(const core::CommandPalette & /*palette*/,

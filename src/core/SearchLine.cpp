@@ -38,6 +38,11 @@ SearchLine SearchLine::opened_replace_with(std::string_view preset)
     return SearchLine(preset_input(preset), InputLinePrompt::replace_with);
 }
 
+SearchLine SearchLine::opened_rename(std::string_view preset)
+{
+    return SearchLine(preset_input(preset), InputLinePrompt::rename);
+}
+
 SearchLine SearchLine::opened_go_to_line()
 {
     return SearchLine(InputText{std::string{}, Offset{0}}, InputLinePrompt::go_to_line);

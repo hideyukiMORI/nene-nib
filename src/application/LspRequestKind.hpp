@@ -22,6 +22,9 @@ enum class LspRequestKind : std::uint8_t
     signature_help,
     // 整形（#1993・ADR 0191 の決定 1・7）。文書の全体と選択範囲。
     formatting,
-    range_formatting
+    range_formatting,
+    // 名前の変更（#2004・ADR 0194 の決定 2・7）。変えられる所の問いと、名前の変更。
+    prepare_rename,
+    rename
 };
 } // namespace nenenib::application

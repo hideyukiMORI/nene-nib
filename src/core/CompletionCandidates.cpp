@@ -236,6 +236,26 @@ std::size_t completion_prefix_start(std::string_view content, std::size_t caret)
     return start;
 }
 
+std::pair<std::size_t, std::size_t> completion_word_around(std::string_view content,
+                                                           std::size_t caret) noexcept
+{
+    if (caret >= content.size() || !keyword_at(content, caret))
+    {
+        return {completion_prefix_start(content, caret), caret};
+    }
+    const std::uint32_t group = vim_keyword_class_at(content, caret);
+    const std::size_t start = completion_prefix_start(content, caret);
+    // 手前の連なりが別の種類なら caret から始める（completion_prefix_start は直前の種類で歩く）。
+    const std::size_t begin =
+        start < caret && vim_keyword_class_at(content, start) == group ? start : caret;
+    std::size_t end = caret;
+    while (end < content.size() && vim_keyword_class_at(content, end) == group)
+    {
+        end = vim_character_end(content, Offset{end}).value;
+    }
+    return {begin, end};
+}
+
 CompletionList completion_list(const TextBuffer &text, Offset caret, CompletionDirection direction,
                                const CompletionTables &tables)
 {

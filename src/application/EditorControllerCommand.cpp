@@ -200,6 +200,7 @@ fitted_rows(const core::CommandLine &line, CommandWindow window, core::FinderPre
     case core::InputLinePrompt::palette:
     case core::InputLinePrompt::substitute_confirm:
     case core::InputLinePrompt::jump_character:
+    case core::InputLinePrompt::rename:
         return false;
     }
     std::unreachable();
@@ -814,6 +815,10 @@ std::optional<core::VimRepeatFailure> EditorController::submit(const core::Searc
     case core::InputLinePrompt::go_to_line:
         go_to_line(line);
         return std::nullopt;
+    // 名前の変更の「新しい名前: 」（#2004・ADR 0194 の決定 7）。
+    case core::InputLinePrompt::rename:
+        submit_rename(line);
+        return std::nullopt;
     case core::InputLinePrompt::search_forward:
     case core::InputLinePrompt::search_backward:
     case core::InputLinePrompt::ex:
@@ -906,7 +911,8 @@ void EditorController::remember(const core::CommandLine &line)
 void EditorController::remember(const core::SearchLine &line)
 {
     if (line.prompt() == core::InputLinePrompt::go_to_line ||
-        line.prompt() == core::InputLinePrompt::replace_with)
+        line.prompt() == core::InputLinePrompt::replace_with ||
+        line.prompt() == core::InputLinePrompt::rename)
     {
         return;
     }
