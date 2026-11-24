@@ -374,7 +374,9 @@ records in `docs/quality/`.
   "Show diagnostic" shows the whole message, and `^` in Ctrl+P lists the diagnostics of the open tabs. `grr`,
   Shift+F12 or the F1 operation "List references" asks for the references of the name at the caret and lists up
   to 1,000 of them under `&` in Ctrl+P ([ADR 0191](docs/adr/0191-language-server-references-symbols-signature-help-and-formatting.md)).
-  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). The settings
+  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). In a list
+  opened by a trigger character (ordinary and Vim modes), clicking a row accepts it, Tab accepts the chosen row
+  or the top one, and Enter accepts only a row chosen with the arrow keys or Ctrl-n / Ctrl-p. The settings
   drawer's language-server section lists the servers found on the PC and writes the command line when one is
   chosen. `:LspLog` or the F1 operation "Open Language Server Log" opens the servers' error output and messages
   in an untitled tab, and the status bar shows a server's progress next to the diagnostics count. The editor

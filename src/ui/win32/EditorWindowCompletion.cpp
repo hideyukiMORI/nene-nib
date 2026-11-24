@@ -8,6 +8,7 @@
 
 #include "ChooseCompletion.hpp"
 #include "CloseCompletion.hpp"
+#include "CompletionCommitKey.hpp"
 #include "CompletionFace.hpp"
 #include "CompletionPointer.hpp"
 #include "CompletionStep.hpp"
@@ -61,8 +62,9 @@ bool EditorWindow::take_completion_key(UINT message, WPARAM word)
         send(application::StepCompletion{application::CompletionStep::page_next});
         return true;
     case VK_RETURN:
+        return commit_completion(application::CompletionCommitKey::enter);
     case VK_TAB:
-        return commit_completion();
+        return commit_completion(application::CompletionCommitKey::tab);
     case VK_ESCAPE:
         send(application::CloseCompletion{});
         return true;
@@ -72,10 +74,11 @@ bool EditorWindow::take_completion_key(UINT message, WPARAM word)
 }
 
 // Enter と Tab。確定が本文を変えるなら確定して鍵を面が受ける。変えない（打った語と同じ綴りだけが
-// 残っている）なら面を閉じ、鍵は本文へ通す（改行・Tab が 1 回目で入る・#1844 の L1）。
-bool EditorWindow::commit_completion()
+// 残っている・自動で開いてまだ選んでいない面の Enter・#1971）なら面を閉じ、鍵は本文へ通す（改行・
+// Tab が 1 回目で入る・#1844 の L1）。
+bool EditorWindow::commit_completion(application::CompletionCommitKey key)
 {
-    if (!controller_.completion_commits())
+    if (!controller_.completion_commits(key))
     {
         send(application::CloseCompletion{});
         return false;

@@ -967,9 +967,40 @@ void EditorController::send_vim_clipboard(const std::optional<core::VimRegister>
 std::optional<core::VimRepeatFailure> EditorController::step_vim(const core::VimKey &key)
 {
     load_vim_clipboard(key);
+    // 打鍵で自動に開いた面が出ている間は録画の形が違う（#1971）。面が無ければ欄を 1 つ読むだけ。
+    if (completion_.has_value() && completion_.value().triggered)
+    {
+        return triggered_step_vim(key);
+    }
     // 補完を始める鍵の直前に候補の写しを置き、鍵の後に engine の補完を面へ写す（#1845・ADR 0169 の
     // 決定 3）。補完の鍵でなく面も開いていなければ、どちらも欄を 1 つ読むだけで抜ける。
     offer_vim_completion(key);
+    const auto failure = stepped_vim(VimStepSource{key});
+    follow_vim_completion();
+    return failure;
+}
+
+// 打鍵で自動に開いた面から移った engine の補完は、補完の鍵をマクロに積まず、確定した語を打った本文
+// として積む（D109・#1971）。補完の鍵でない鍵の前に確定して語を積み（engine が鍵の前に確定するのと
+// 同じ判定 vim_completion_ends）、Ctrl-y は確定して閉じるだけ（engine の Ctrl-y と同じ状態）。
+std::optional<core::VimRepeatFailure> EditorController::triggered_step_vim(const core::VimKey &key)
+{
+    if (triggered_in_engine())
+    {
+        const auto *special = std::get_if<core::VimSpecialKey>(&key);
+        if (special != nullptr && *special == core::VimSpecialKey::control_y)
+        {
+            close_completion();
+            return std::nullopt;
+        }
+        if (core::vim_completion_ends(state_.vim(), key))
+        {
+            close_completion();
+        }
+    }
+    offer_vim_completion(key);
+    const ScopedValue<core::VimKeySource> source{
+        unit_source_, triggered_completion_key(key) ? core::VimKeySource::mapped : unit_source_};
     const auto failure = stepped_vim(VimStepSource{key});
     follow_vim_completion();
     return failure;

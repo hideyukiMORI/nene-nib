@@ -34,14 +34,16 @@ inline constexpr std::size_t language_server_kept_revisions = 16;
 inline constexpr std::size_t language_server_progress_limit = 8;
 
 // controller が持つ言語サーバー 1 席とのつながりの控え（ADR 0160 の決定 5・6・2026-11-20 の追補）。
-// 席ごとに 1 つで、language はその子の言語（idle なら空）。pending は答えを待っている要求（id
-// の表は 席ごと・id は席をまたいで一意）、encoding はサーバーが選んだ位置の単位、generation は stop
-// の たびに進む数（止めた後の同じ集めの残りを読まない）。root
-// はその子を実際に起こした作業フォルダ（自動の再起動は同じ root で起こす・文書の root
-// （document_root・段 S3）と同じ root の席だけが文書を受ける・段 S2 の root の鍵）、root_uri は
-// root の URI（`initialize` の rootUri・ADR 0161 の決定 1）。documents は `didOpen` した文書
-// （running の間だけ・止めると空）、abilities は `initialize` の答えから読んだサーバーの能力 （ADR
-// 0190 の決定 3・止めると空）、used はアクティブな文書で最後に使った順の印（大きいほど新しい・
+// 席ごとに 1 つで、language はその子を起こした文書の言語（記録の行の頭と知らせの名前・idle なら
+// 空）、command はその子を起こした命令の行（server_command_key で正規化・席の鍵の片方で、同じ命令
+// の行の言語の文書は同じ席が受ける・2026-11-24 の追補・#1952・idle なら空）。pending は答えを
+// 待っている要求（id の表は席ごと・id は席をまたいで一意）、encoding はサーバーが選んだ位置の
+// 単位、generation は stop のたびに進む数（止めた後の同じ集めの残りを読まない）。root はその子を
+// 実際に起こした作業フォルダ（自動の再起動は同じ root で起こす・文書の root（document_root・
+// 段 S3）と同じ root の席だけが文書を受ける・席の鍵のもう片方）、root_uri は root の URI
+// （`initialize` の rootUri・ADR 0161 の決定 1）。documents は `didOpen` した文書（running の
+// 間だけ・止めると空）、abilities は `initialize` の答えから読んだサーバーの能力（ADR 0190 の
+// 決定 3・止めると空）、used はアクティブな文書で最後に使った順の印（大きいほど新しい・
 // 席が満ちたら最も小さい席を譲る）、progress は `$/progress` の token ごとの今の値（最後に動いた
 // token が後ろ・end で外す・止めると空・ADR 0160 の 2026-11-22 の追補）。公開 aggregate
 // （CPP-003）。
@@ -49,6 +51,7 @@ struct LanguageServerLink
 {
     LanguageServerPhase phase = LanguageServerPhase::idle;
     std::optional<core::Language> language = std::nullopt;
+    std::string command = {};
     std::vector<PendingLspRequest> pending = {};
     core::LspPositionEncoding encoding = core::LspPositionEncoding::utf16;
     std::uint64_t generation = 0;

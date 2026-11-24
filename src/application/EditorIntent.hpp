@@ -14,6 +14,7 @@
 #include "ChangeSetting.hpp"
 #include "ChooseCompletion.hpp"
 #include "ChooseContextMenu.hpp"
+#include "ChooseSettingsChoice.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "ChooseStartEntry.hpp"
 #include "ClickPreviewLink.hpp"
@@ -22,6 +23,7 @@
 #include "CloseContextMenu.hpp"
 #include "ClosePane.hpp"
 #include "CloseSettings.hpp"
+#include "CloseSettingsChoice.hpp"
 #include "CloseTab.hpp"
 #include "CommandText.hpp"
 #include "CommitText.hpp"
@@ -58,6 +60,7 @@
 #include "OpenOperationList.hpp"
 #include "OpenProjectSearch.hpp"
 #include "OpenSettings.hpp"
+#include "OpenSettingsChoice.hpp"
 #include "OpenTabList.hpp"
 #include "OpenTabMenu.hpp"
 #include "PasteCommand.hpp"
@@ -67,6 +70,7 @@
 #include "PointExplorer.hpp"
 #include "PointMinimap.hpp"
 #include "PointPreview.hpp"
+#include "PointSettingsChoice.hpp"
 #include "PointText.hpp"
 #include "PointTitleBar.hpp"
 #include "PreviewScrollSettled.hpp"
@@ -90,6 +94,7 @@
 #include "ScrollPane.hpp"
 #include "ScrollPreviewTable.hpp"
 #include "ScrollSettings.hpp"
+#include "ScrollSettingsChoice.hpp"
 #include "ScrollTabs.hpp"
 #include "SearchHop.hpp"
 #include "SelectAll.hpp"
@@ -99,6 +104,7 @@
 #include "SelectLanguage.hpp"
 #include "SelectSyntax.hpp"
 #include "SetPreviewPlacement.hpp"
+#include "SettingsChoiceTimeout.hpp"
 #include "SettleRecentTab.hpp"
 #include "ShowVersion.hpp"
 #include "SplitPane.hpp"
@@ -115,6 +121,7 @@
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
 #include "TogglePreviewTask.hpp"
+#include "TypeSettingsChoice.hpp"
 #include "UnregisterShell.hpp"
 #include "VimKeyPress.hpp"
 #include "VisibleLines.hpp"
@@ -151,5 +158,6 @@ using EditorIntent = std::variant<
     FilterSettings, JumpSettingsSection, FocusSettingsRow, ScrollSettings, OpenTabMenu, CopyTabName,
     RevealTab, ClickPreviewLink, ActOnLinkCard, ScrollPreviewTable, HoverPreviewTable,
     PreviewScrollSettled, RunDiagnosticCommand, ResizeSplit, ResizePane, OpenLanguageServerLog,
-    CaretMotionTick>;
+    CaretMotionTick, OpenSettingsChoice, PointSettingsChoice, ScrollSettingsChoice,
+    ChooseSettingsChoice, CloseSettingsChoice, TypeSettingsChoice, SettingsChoiceTimeout>;
 } // namespace nenenib::application

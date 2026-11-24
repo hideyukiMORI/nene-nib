@@ -9,6 +9,7 @@
 #include "FileUri.hpp"
 #include "JsonNumber.hpp"
 #include "JsonValue.hpp"
+#include "Language.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
 #include "LanguageServerSlot.hpp"
@@ -185,7 +186,8 @@ void EditorController::sync_language_server_documents(LanguageServerSlot slot, b
     const auto opened = [active](const LanguageServerDocument &document)
     { return document.tab == active; };
     const auto found = std::ranges::find_if(documents, opened);
-    if (found != documents.end() && (!uri.has_value() || found->uri != uri.value()))
+    if (found != documents.end() &&
+        (!uri.has_value() || found->uri != uri.value() || found->language != state_.language()))
     {
         close_language_server_document(slot, *found, true);
         documents.erase(found);
@@ -200,14 +202,18 @@ void EditorController::sync_language_server_documents(LanguageServerSlot slot, b
     }
 }
 
-// アクティブな文書をこの席へ送れるなら、その URI（決定 1）。パスのある文書で、言語がこの席の子の
-// 言語（命令がある）で、本文が上限以下のとき。無題は送らない。
+// アクティブな文書をこの席へ送れるなら、その URI（決定 1）。パスのある文書で、文書の言語の命令の行
+// がこの席の子を起こした命令の行と同じ（2026-11-24 の追補・#1952）で、本文が上限以下のとき。無題は
+// 送らない。
 std::optional<std::string> EditorController::language_server_uri(LanguageServerSlot slot) const
 {
     const auto &path = state_.document().path;
-    if (!path.has_value() || !language_server_sendable() ||
-        language_servers_.links.at(slot_index(slot)).language !=
-            std::optional<core::Language>{state_.language()})
+    if (!path.has_value() || !language_server_sendable())
+    {
+        return std::nullopt;
+    }
+    const std::string_view command = language_servers_.links.at(slot_index(slot)).command;
+    if (language_server_command(state_.language()) != std::optional{command})
     {
         return std::nullopt;
     }
@@ -228,15 +234,18 @@ void EditorController::open_language_server_document(LanguageServerSlot slot, Au
     auto &link = link_of(slot);
     const auto version = static_cast<std::uint64_t>(state_.history().revision());
     const auto &path = state_.document().path;
-    const std::string_view language_id =
-        core::lsp_language_id(link.language.value_or(state_.language()),
-                              path.has_value() ? path.value().text() : std::string_view{});
+    // languageId は文書の言語（席を共有する c と cpp でも文書ごと・2026-11-24 の追補）。
+    const std::string_view language_id = core::lsp_language_id(
+        state_.language(), path.has_value() ? path.value().text() : std::string_view{});
     ports_.language_server.send(
         slot,
         core::lsp_notification_body("textDocument/didOpen",
                                     did_open_params(uri, language_id, version, state_.text())));
-    link.documents.push_back(
-        LanguageServerDocument{tab, std::move(uri), {SentRevision{version, state_.text()}}});
+    link.documents.push_back(LanguageServerDocument{.tab = tab,
+                                                    .uri = std::move(uri),
+                                                    .sent = {SentRevision{version, state_.text()}},
+                                                    .changes = {},
+                                                    .language = state_.language()});
 }
 
 // この意図の変更を 1 通の `didChange` に束ねる（決定 1）。version は意図の後の revision()。

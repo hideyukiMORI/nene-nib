@@ -1541,6 +1541,19 @@ std::array<RgbColor, 11> ui_filled_tokens(const Palette &ui)
             ui.search.color, ui.ime,    ui.giant_mark};
 }
 
+// 透ける色 top を不透明な base に重ねた色（Direct2D の source-over・各成分を四捨五入）。
+RgbColor laid_over(RgbaColor top, RgbColor base)
+{
+    const auto mixed = [&top](std::uint8_t over, std::uint8_t under)
+    {
+        const double alpha = static_cast<double>(top.alpha) / 255.0;
+        return static_cast<std::uint8_t>(std::lround((static_cast<double>(over) * alpha) +
+                                                     (static_cast<double>(under) * (1.0 - alpha))));
+    };
+    return RgbColor{mixed(top.color.red, base.red), mixed(top.color.green, base.green),
+                    mixed(top.color.blue, base.blue)};
+}
+
 // ADR 0017 / 0117: 全テーマで本文・UI・行番号の前景／背景が 4.5:1 以上。
 void verify_theme_contrast()
 {
@@ -1559,6 +1572,20 @@ void verify_theme_contrast()
                (name + ": the gutter has its own background").c_str());
         expect(!(theme.ui.on_accent == theme.ui.accent),
                (name + ": text on an accent differs from that accent").c_str());
+        // #1929: 焦点の行（設定の行・補完の選んだ行）は current_line の面に text の 1 DIP の枠。
+        // 枠は panel と current_line の境に乗るので、両方に非テキストの UI の目安 3:1（WCAG
+        // 1.4.11）を縛る（current_line と panel の差は色では見分けられないので枠で伝える）。
+        expect(contrast_ratio(theme.ui.text, theme.ui.panel) >= 3.0 &&
+                   contrast_ratio(theme.ui.text, theme.ui.current_line) >= 3.0,
+               (name + ": the focus frame clears 3:1 over the panel and the current line").c_str());
+        // #1926: 選ぶ欄の一覧の選ぼうとしている行は selection を一覧の地（background）に重ねた面に
+        // text の字と 1 DIP の枠。面の上に重ねた場合（panel）も同じ目安 3:1 を縛る（レビュー R4
+        // b）。
+        expect(contrast_ratio(theme.ui.text, laid_over(theme.ui.selection, theme.ui.background)) >=
+                       3.0 &&
+                   contrast_ratio(theme.ui.text, laid_over(theme.ui.selection, theme.ui.panel)) >=
+                       3.0,
+               (name + ": text clears 3:1 over the selection face of the choice list").c_str());
     }
 }
 
