@@ -315,12 +315,15 @@ void verify_switches()
                !core::feature_enabled(set_by("set invindentguides", on).value_or(on),
                                       core::EditorFeature::indent_guides),
            "the switch toggles with ! and inv");
-    const auto weak = set_by("set noindentguideactive", settings).value_or(settings);
-    expect(!weak.indent_guide_active &&
-               answer_of("set indentguideactive?", weak) == "indentguideactive=off",
-           ":set noindentguideactive turns the strong level off");
-    expect(set_by("set indentguideactive&", weak).value_or(weak).indent_guide_active,
-           "indentguideactive& resets to on");
+    const auto weak = set_by("set noindentguidehighlightcurrent", settings).value_or(settings);
+    expect(!weak.indent_guide_highlight_current &&
+               answer_of("set indentguidehighlightcurrent?", weak) ==
+                   "indentguidehighlightcurrent=off",
+           ":set noindentguidehighlightcurrent turns the strong level off");
+    expect(set_by("set indentguidehighlightcurrent&", weak)
+               .value_or(weak)
+               .indent_guide_highlight_current,
+           "indentguidehighlightcurrent& resets to on");
 }
 
 void verify_values()
@@ -335,18 +338,20 @@ void verify_values()
     expect(set_by("set indentguidestyle&", plain).value_or(plain).indent_guide_style ==
                core::IndentGuideStyle::rainbow,
            "indentguidestyle& resets to rainbow");
-    expect(set_by("set indentguidecolors=6", settings).value_or(settings).indent_guide_colors ==
-                   6 &&
-               set_by("set indentguidecolors=3", settings).value_or(settings).indent_guide_colors ==
-                   3 &&
-               refused("set indentguidecolors=2", settings) &&
-               refused("set indentguidecolors=7", settings),
+    expect(set_by("set indentguidecolorcount=6", settings)
+                       .value_or(settings)
+                       .indent_guide_color_count == 6 &&
+               set_by("set indentguidecolorcount=3", settings)
+                       .value_or(settings)
+                       .indent_guide_color_count == 3 &&
+               refused("set indentguidecolorcount=2", settings) &&
+               refused("set indentguidecolorcount=7", settings),
            "the color count takes 3 to 6");
-    expect(
-        answer_of("set indentguidecolors", settings) == "indentguidecolors=4" &&
-            set_by("set indentguidecolors+=1", settings).value_or(settings).indent_guide_colors ==
-                5,
-        "the color count answers and adds like a number option");
+    expect(answer_of("set indentguidecolorcount", settings) == "indentguidecolorcount=4" &&
+               set_by("set indentguidecolorcount+=1", settings)
+                       .value_or(settings)
+                       .indent_guide_color_count == 5,
+           "the color count answers and adds like a number option");
     expect(set_by("set indentguidewidth=2", settings).value_or(settings).indent_guide_width == 2 &&
                set_by("set indentguidewidth=8", settings).value_or(settings).indent_guide_width ==
                    8 &&
@@ -364,7 +369,7 @@ void verify_candidates()
     { return std::ranges::find(candidates, name) != candidates.end(); };
     expect(has("set indentguides") && has("set noindentguides") && has("set minimap") &&
                has("set nominimap") && has("set indentguidestyle=plain") &&
-               has("set indentguidecolors=") && has("set noindentguideactive") &&
+               has("set indentguidecolorcount=") && has("set noindentguidehighlightcurrent") &&
                has("set indentguidewidth="),
            "Ctrl+P lists the switch from the feature table and the shape options");
 }
@@ -374,26 +379,31 @@ void verify_settings_rows()
     const auto settings = core::default_editor_settings();
     const auto stepped = [&settings](core::SettingsValue value, bool forward)
     { return core::settings_value_stepped(settings, value, forward, {}); };
-    expect(stepped(core::SettingsValue::indent_guide_style, true).indent_guide_style ==
-                   core::IndentGuideStyle::plain &&
-               !stepped(core::SettingsValue::indent_guide_active, true).indent_guide_active &&
-               stepped(core::SettingsValue::indent_guide_colors, true).indent_guide_colors == 5 &&
-               stepped(core::SettingsValue::indent_guide_colors, false).indent_guide_colors == 3 &&
-               stepped(core::SettingsValue::indent_guide_width, true).indent_guide_width == 8 &&
-               stepped(core::SettingsValue::indent_guide_width, false).indent_guide_width == 2,
-           "the settings rows step the shape values");
+    expect(
+        stepped(core::SettingsValue::indent_guide_style, true).indent_guide_style ==
+                core::IndentGuideStyle::plain &&
+            !stepped(core::SettingsValue::indent_guide_highlight_current, true)
+                 .indent_guide_highlight_current &&
+            stepped(core::SettingsValue::indent_guide_color_count, true).indent_guide_color_count ==
+                5 &&
+            stepped(core::SettingsValue::indent_guide_color_count, false)
+                    .indent_guide_color_count == 3 &&
+            stepped(core::SettingsValue::indent_guide_width, true).indent_guide_width == 8 &&
+            stepped(core::SettingsValue::indent_guide_width, false).indent_guide_width == 2,
+        "the settings rows step the shape values");
     auto edge = settings;
     edge.indent_guide_width = 8;
-    edge.indent_guide_colors = 6;
-    expect(
-        core::settings_value_stepped(edge, core::SettingsValue::indent_guide_width, true, {})
-                    .indent_guide_width == 8 &&
-            core::settings_value_stepped(edge, core::SettingsValue::indent_guide_colors, true, {})
-                    .indent_guide_colors == 6,
-        "the steppers stop at their ends");
+    edge.indent_guide_color_count = 6;
+    expect(core::settings_value_stepped(edge, core::SettingsValue::indent_guide_width, true, {})
+                       .indent_guide_width == 8 &&
+               core::settings_value_stepped(edge, core::SettingsValue::indent_guide_color_count,
+                                            true, {})
+                       .indent_guide_color_count == 6,
+           "the steppers stop at their ends");
     expect(core::settings_value_text(settings, core::SettingsValue::indent_guide_style,
                                      core::DisplayLanguage::japanese) == "虹" &&
-               core::settings_value_text(settings, core::SettingsValue::indent_guide_active,
+               core::settings_value_text(settings,
+                                         core::SettingsValue::indent_guide_highlight_current,
                                          core::DisplayLanguage::english) == "On" &&
                core::settings_value_text(settings, core::SettingsValue::indent_guide_width,
                                          core::DisplayLanguage::english) == "4",
@@ -402,8 +412,9 @@ void verify_settings_rows()
         core::settings_rows, [](const core::SettingsRow &row)
         { return row.subject == core::SettingsSubject{core::EditorFeature::indent_guides}; });
     const std::array<core::SettingsValue, 4> shapes{
-        core::SettingsValue::indent_guide_style, core::SettingsValue::indent_guide_colors,
-        core::SettingsValue::indent_guide_active, core::SettingsValue::indent_guide_width};
+        core::SettingsValue::indent_guide_style, core::SettingsValue::indent_guide_color_count,
+        core::SettingsValue::indent_guide_highlight_current,
+        core::SettingsValue::indent_guide_width};
     bool below = found != core::settings_rows.end() &&
                  found->section == core::SettingsSection::display &&
                  static_cast<std::size_t>(core::settings_rows.end() - found) > shapes.size();
@@ -493,13 +504,13 @@ void verify_frame_off_and_on()
     expect(active_of(frame.lines) == std::vector<std::size_t>{99, 99, 99, 99, 1, 1, 99, 99},
            "the caret's level is strengthened over the deeper run around it");
     auto weak_settings = guides_on();
-    weak_settings.indent_guide_active = false;
+    weak_settings.indent_guide_highlight_current = false;
     Editing weak(std::optional<core::EditorSettings>{weak_settings});
     applied(weak.controller(), app::VisibleLines{10});
     open_text(weak, code_path, std::string(two_space));
     place(weak.controller(), 6);
     expect(active_of(weak.controller().frame().lines) == std::vector<std::size_t>(8, 99),
-           "indentguideactive off strengthens nothing");
+           "indentguidehighlightcurrent off strengthens nothing");
 }
 
 void verify_frame_screen_reach()

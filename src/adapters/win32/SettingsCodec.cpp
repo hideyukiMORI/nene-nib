@@ -58,8 +58,8 @@ constexpr std::array<std::string_view, 28> field_names{"version",
                                                        "pane_resize_step",
                                                        "pane_resize_step_vim",
                                                        "indent_guide_style",
-                                                       "indent_guide_colors",
-                                                       "indent_guide_active",
+                                                       "indent_guide_color_count",
+                                                       "indent_guide_highlight_current",
                                                        "indent_guide_width"};
 constexpr std::array<Field, 28> field_members{&SettingsFields::version,
                                               &SettingsFields::colorscheme,
@@ -86,8 +86,8 @@ constexpr std::array<Field, 28> field_members{&SettingsFields::version,
                                               &SettingsFields::pane_resize_step,
                                               &SettingsFields::pane_resize_step_vim,
                                               &SettingsFields::indent_guide_style,
-                                              &SettingsFields::indent_guide_colors,
-                                              &SettingsFields::indent_guide_active,
+                                              &SettingsFields::indent_guide_color_count,
+                                              &SettingsFields::indent_guide_highlight_current,
                                               &SettingsFields::indent_guide_width};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
@@ -538,7 +538,8 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     return fields.caret_motion.has_value() || fields.caret_motion_time.has_value() ||
            fields.caret_sparks.has_value() || fields.pane_resize_step.has_value() ||
            fields.pane_resize_step_vim.has_value() || fields.indent_guide_style.has_value() ||
-           fields.indent_guide_colors.has_value() || fields.indent_guide_active.has_value() ||
+           fields.indent_guide_color_count.has_value() ||
+           fields.indent_guide_highlight_current.has_value() ||
            fields.indent_guide_width.has_value();
 }
 
@@ -565,18 +566,19 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
 [[nodiscard]] std::expected<void, Failure> apply_indent_guide_fields(core::EditorSettings &settings,
                                                                      const SettingsFields &fields)
 {
-    const auto active = fields.indent_guide_active.has_value()
-                            ? switch_from(fields.indent_guide_active)
-                            : std::expected<bool, Failure>{settings.indent_guide_active};
+    const auto active = fields.indent_guide_highlight_current.has_value()
+                            ? switch_from(fields.indent_guide_highlight_current)
+                            : std::expected<bool, Failure>{settings.indent_guide_highlight_current};
     if (!active)
     {
         return std::unexpected(active.error());
     }
-    settings.indent_guide_active = active.value();
+    settings.indent_guide_highlight_current = active.value();
     const auto style = later_value_from(fields.indent_guide_style, settings.indent_guide_style,
                                         core::indent_guide_style_named);
-    const auto colors = later_value_from(fields.indent_guide_colors, settings.indent_guide_colors,
-                                         core::indent_guide_colors_of);
+    const auto colors =
+        later_value_from(fields.indent_guide_color_count, settings.indent_guide_color_count,
+                         core::indent_guide_color_count_of);
     const auto width = later_value_from(fields.indent_guide_width, settings.indent_guide_width,
                                         core::indent_guide_width_of);
     if (!style || !colors || !width)
@@ -847,7 +849,7 @@ std::string encode_settings(const core::EditorSettings &settings)
         "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
         "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
         "caret_motion_time={}\ncaret_sparks={}\npane_resize_step={}\npane_resize_step_vim={}\n"
-        "indent_guide_style={}\nindent_guide_colors={}\nindent_guide_active={}\n"
+        "indent_guide_style={}\nindent_guide_color_count={}\nindent_guide_highlight_current={}\n"
         "indent_guide_width={}\n{}{}",
         theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
         core::display_language_choice_name(settings.ui_language), switch_text(settings.lsp),
@@ -858,8 +860,8 @@ std::string encode_settings(const core::EditorSettings &settings)
         switch_text(settings.caret_motion), settings.caret_motion_time,
         switch_text(settings.caret_sparks), static_cast<unsigned>(settings.pane_resize_step),
         switch_text(settings.pane_resize_step_vim),
-        core::indent_guide_style_name(settings.indent_guide_style), settings.indent_guide_colors,
-        switch_text(settings.indent_guide_active), settings.indent_guide_width,
-        lsp_commands_text(settings.lsp_commands), maps_text(settings));
+        core::indent_guide_style_name(settings.indent_guide_style),
+        settings.indent_guide_color_count, switch_text(settings.indent_guide_highlight_current),
+        settings.indent_guide_width, lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

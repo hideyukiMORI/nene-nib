@@ -44,8 +44,8 @@ struct SettingsFields
     std::optional<std::string_view> pane_resize_step_vim;
     // v6 だけの鍵。インデントガイドの形（ADR 0193 の決定 4）。
     std::optional<std::string_view> indent_guide_style;
-    std::optional<std::string_view> indent_guide_colors;
-    std::optional<std::string_view> indent_guide_active;
+    std::optional<std::string_view> indent_guide_color_count;
+    std::optional<std::string_view> indent_guide_highlight_current;
     std::optional<std::string_view> indent_guide_width;
     // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
     std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
