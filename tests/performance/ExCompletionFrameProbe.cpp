@@ -103,6 +103,7 @@ constexpr std::string_view probe_title = "probe.txt";
     case core::InputLinePrompt::go_to_line:
     case core::InputLinePrompt::substitute_confirm:
     case core::InputLinePrompt::jump_character:
+    case core::InputLinePrompt::rename:
         return false;
     }
     if (!frame.command_palette.has_value())

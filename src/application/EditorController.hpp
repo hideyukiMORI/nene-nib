@@ -26,6 +26,7 @@
 #include "Diagnostic.hpp"
 #include "DiagnosticCommand.hpp"
 #include "DiagnosticsCount.hpp"
+#include "DisplayInquiry.hpp"
 #include "DisplayLanguage.hpp"
 #include "Distribution.hpp"
 #include "Document.hpp"
@@ -96,6 +97,8 @@
 #include "LanguageDefinition.hpp"
 #include "LanguageFormatting.hpp"
 #include "LanguageQueryKind.hpp"
+#include "LanguageRename.hpp"
+#include "LanguageRenameTarget.hpp"
 #include "LanguageRootGap.hpp"
 #include "LanguageServerDocument.hpp"
 #include "LanguageServerLink.hpp"
@@ -110,6 +113,8 @@
 #include "LineView.hpp"
 #include "LinkCardView.hpp"
 #include "LspCompletionList.hpp"
+#include "LspEditContext.hpp"
+#include "LspFileEdits.hpp"
 #include "LspLanding.hpp"
 #include "LspLocation.hpp"
 #include "LspNotification.hpp"
@@ -119,6 +124,8 @@
 #include "LspRequestContext.hpp"
 #include "LspRequestKind.hpp"
 #include "LspResponse.hpp"
+#include "LspWorkspaceEdit.hpp"
+#include "LspWorkspaceEditFailure.hpp"
 #include "MapTimer.hpp"
 #include "MinimapCache.hpp"
 #include "Offset.hpp"
@@ -128,6 +135,7 @@
 #include "OpenRequest.hpp"
 #include "OpenedAs.hpp"
 #include "OpenedDocument.hpp"
+#include "OpenedRevision.hpp"
 #include "PaletteDiagnostic.hpp"
 #include "PaletteFolder.hpp"
 #include "PaletteOrigin.hpp"
@@ -150,12 +158,14 @@
 #include "ProjectHitRow.hpp"
 #include "ProjectSearchBatch.hpp"
 #include "ProjectSearchView.hpp"
+#include "RenameAsked.hpp"
 #include "ReplayLevel.hpp"
 #include "ReplayRounds.hpp"
 #include "ResizePane.hpp"
 #include "ResizeSplit.hpp"
 #include "ScrollState.hpp"
 #include "SelectionAnchoring.hpp"
+#include "ServerEditFile.hpp"
 #include "ServerErrorOutput.hpp"
 #include "ServerEvent.hpp"
 #include "ServerExited.hpp"
@@ -1135,7 +1145,8 @@ class EditorController final
     void settle_formatting_answer();
     [[nodiscard]] core::OffsetRange formatting_range() const;
     void leave_visual_for_formatting();
-    [[nodiscard]] bool formatting_interrupts() const noexcept;
+    [[nodiscard]] bool server_edit_interrupts() const noexcept;
+    [[nodiscard]] bool server_edit_stale(const LspRequestContext &asked) const;
     [[nodiscard]] std::optional<core::UiMessage>
     formatting_refusal(const LanguageFormatting &answered) const;
     // 整形が積んだ単位を脇に残す（#1997 の 2 回目のレビュー P1）。積む前の履歴の位置を渡す。
@@ -1147,6 +1158,52 @@ class EditorController final
     [[nodiscard]] std::optional<std::vector<core::VimBlockEdit>>
     formatted_pieces_at(std::size_t index, const core::Edit &edit,
                         core::HistoryDirection direction);
+    // 名前の変更（#2004・ADR 0194 の決定 7・EditorControllerRename.cpp）。F2・`grn`・操作が
+    // request_rename_target へ入り、変えられる所の答え（無ければすぐ）で入力行を開き、Enter で
+    // 名前の変更を頼み、答えを apply_workspace_edit の 1 本で当てる。
+    [[nodiscard]] bool request_rename_target();
+    void settle_rename_target_answer();
+    void open_rename_line(std::string initial, const LspRequestContext &context);
+    [[nodiscard]] std::string rename_word() const;
+    void submit_rename(const core::SearchLine &line);
+    void request_rename(const std::string &name, const LspRequestContext &context);
+    [[nodiscard]] std::vector<OpenedRevision> opened_revisions(LanguageServerSlot slot) const;
+    void settle_rename_answer();
+    // 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5・
+    // EditorControllerWorkspaceEdit.cpp）。先に全部を検査し（1 つでも断れば 1 つも変えずに理由の
+    // 1 行）、ファイルごとにタブへ切り替えて replace を 1 回ずつ当て、頼んだタブへ戻る。
+    void apply_workspace_edit(const core::LspWorkspaceEdit &edit, const LspEditContext &context,
+                              core::LspPositionEncoding encoding);
+    [[nodiscard]] core::DisplayText
+    server_edit_refusal(core::LspWorkspaceEditFailure failure) const;
+    [[nodiscard]] std::expected<std::vector<ServerEditFile>, core::DisplayText>
+    server_edit_files(const core::LspWorkspaceEdit &edit, const LspEditContext &context);
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    resolve_server_edit(std::vector<ServerEditFile> &files, const core::LspFileEdits &file,
+                        const LspEditContext &context);
+    [[nodiscard]] std::expected<std::variant<AutosaveId, UnopenedFile>, core::DisplayText>
+    server_edit_place(const core::FilePath &path);
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    server_edit_check(AutosaveId tab, const core::LspFileEdits &file, const LspEditContext &context,
+                      const core::FilePath &path) const;
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    reach_server_edit_tabs(const std::vector<ServerEditFile> &files);
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    reach_server_edit_tab(const ServerEditFile &file);
+    using ServerEditSource = std::tuple<const core::TextBuffer *, core::Offset, DisplayInquiry>;
+    [[nodiscard]] std::optional<ServerEditSource>
+    server_edit_source(const ServerEditFile &file) const;
+    [[nodiscard]] std::expected<std::string, core::DisplayText>
+    rename_initial(const LanguageRenameTarget &answered) const;
+    [[nodiscard]] std::expected<void, core::DisplayText>
+    place_server_edit_spans(std::vector<ServerEditFile> &files,
+                            core::LspPositionEncoding encoding) const;
+    void run_server_edits(std::vector<ServerEditFile> files, LanguageServerSlot slot);
+    void enter_server_edit_file(ServerEditFile &file);
+    void switch_for_server_edit(AutosaveId tab);
+    void announce_server_edit_target(LanguageServerSlot slot);
+    void restore_recency(std::vector<AutosaveId> order, AutosaveId origin,
+                         const std::vector<AutosaveId> &opened);
     [[nodiscard]] std::optional<std::string> shown_hover() const;
     // 診断の跳び・札・一覧（#1939・EditorControllerDiagnostics.cpp）。操作（F8・Shift+F8・診断を
     // 表示・診断の一覧）と Vim の `]d` `[d` `gl` の効果が run_diagnostic_command の 1 本へ入る。
@@ -1257,7 +1314,7 @@ class EditorController final
     [[nodiscard]] bool awaits_nothing() const noexcept;
     // Vim が次の鍵を待っているか（回数・オペレータ・1 鍵の待ち・レジスタの名指し・イージー
     // モーション・INSERT の `Ctrl-o`・`map` の左辺の途中）。通常モードは偽。awaits_nothing と整形の
-    // 当てない条件（formatting_interrupts）が読む 1 本（#1997 の 2 回目のレビュー P2）。
+    // 当てない条件（server_edit_interrupts）が読む 1 本（#1997 の 2 回目のレビュー P2）。
     [[nodiscard]] bool vim_waits_for_key() const noexcept;
     // 自動退避の合図（ADR 0137 の決定 1・2）。WorkCompleted と同じく使う人の操作の途中の状態を
     // 動かさない。
@@ -2075,6 +2132,9 @@ class EditorController final
     // 足し、同じ文書の同じ位置かその後ろの古い物は足すときに外す。照合に外れた物は引いたときに
     // 外す。
     std::vector<FormattedUnit> formatted_units_;
+    // 名前の変更の入力行を開いた問い（#2004・ADR 0194 の決定 7）。入力行を開くときに置き、Enter で
+    // 使って消す（Esc の後に残っても、次に入力行を開くときに置き直す）。
+    std::optional<RenameAsked> rename_asked_;
     // 流している鍵の engine の印（ADR 0181）。stepped_vim が効果を写す間だけ置き、replace が
     // 本文を置き換える編集を積めば消す。残れば push_empty_unit が空の単位を積む。
     std::optional<core::VimChange> vim_change_;

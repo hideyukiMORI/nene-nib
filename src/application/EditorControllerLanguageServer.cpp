@@ -119,7 +119,24 @@ namespace
     // 文書と選択範囲の整形（#1993・ADR 0191 の決定 2・7）。
     text_document.emplace_back("formatting", core::JsonValue{core::JsonObject{}});
     text_document.emplace_back("rangeFormatting", core::JsonValue{core::JsonObject{}});
+    // 名前の変更は変えられる所の問い（prepareRename）を受ける（#2004・ADR 0194 の決定 3）。
+    core::JsonObject rename;
+    rename.emplace_back("prepareSupport", core::JsonValue{true});
+    text_document.emplace_back("rename", core::JsonValue{std::move(rename)});
     return core::JsonValue{std::move(text_document)};
+}
+
+// client の `workspace` の能力（#2004・ADR 0194 の決定 3・実装した段でだけ名乗る）。`WorkspaceEdit`
+// は `documentChanges` を受け、失敗の扱いは保証できる一番弱い `abort`（先に全部を検査するので実際は
+// 全部か 0 か）。resource operations・changeAnnotationSupport・normalizesLineEndings は名乗らない。
+[[nodiscard]] core::JsonValue workspace_capabilities()
+{
+    core::JsonObject edit;
+    edit.emplace_back("documentChanges", core::JsonValue{true});
+    edit.emplace_back("failureHandling", core::JsonValue{std::string{"abort"}});
+    core::JsonObject workspace;
+    workspace.emplace_back("workspaceEdit", core::JsonValue{std::move(edit)});
+    return core::JsonValue{std::move(workspace)};
 }
 
 // `initialize` の params（決定 5）。位置の単位は utf-8 と utf-16 を申し出る。rootUri は起こす
@@ -136,6 +153,7 @@ namespace
     capabilities.emplace_back("general", core::JsonValue{std::move(general)});
     capabilities.emplace_back("textDocument", text_document_capabilities());
     capabilities.emplace_back("window", core::JsonValue{std::move(window)});
+    capabilities.emplace_back("workspace", workspace_capabilities());
     core::JsonObject params;
     params.emplace_back("processId", core::JsonValue{core::JsonNull{}});
     params.emplace_back("rootUri", core::JsonValue{root_uri});
@@ -258,6 +276,22 @@ void read_signature_help(ServerAbilities &abilities, const core::JsonObject &cap
     abilities.signature_retriggers = texts_of(*options, "retriggerCharacters");
 }
 
+// `capabilities.renameProvider`（#2004・ADR 0194 の決定 3）。true か `RenameOptions` なら持ち、
+// `RenameOptions.prepareProvider` が true なら変えられる所の問い（prepareRename）に答える。
+void read_rename(ServerAbilities &abilities, const core::JsonObject &capabilities)
+{
+    abilities.rename = provided(capabilities, "renameProvider");
+    const auto *options = core::json_object_member(capabilities, "renameProvider");
+    if (options == nullptr)
+    {
+        return;
+    }
+    const auto prepare = core::json_member(*options, "prepareProvider");
+    const bool *flag =
+        prepare.has_value() ? std::get_if<bool>(&prepare.value().get().value) : nullptr;
+    abilities.prepare_rename = flag != nullptr && *flag;
+}
+
 // `capabilities` → サーバーの能力（ADR 0190 の決定 3）。補完は `completionProvider` の object が
 // あるときで、`triggerCharacters` の文字列だけを届いた順に持つ。
 [[nodiscard]] ServerAbilities server_abilities(const core::JsonObject *capabilities)
@@ -278,10 +312,13 @@ void read_signature_help(ServerAbilities &abilities, const core::JsonObject &cap
                               .formatting = provided(*capabilities, "documentFormattingProvider"),
                               .range_formatting =
                                   provided(*capabilities, "documentRangeFormattingProvider"),
+                              .rename = false,
+                              .prepare_rename = false,
                               .sync = DocumentSync::none,
                               .save = SaveNotice::none};
     read_document_sync(abilities, *capabilities);
     read_signature_help(abilities, *capabilities);
+    read_rename(abilities, *capabilities);
     const auto *completion = core::json_object_member(*capabilities, "completionProvider");
     if (completion == nullptr)
     {
@@ -367,6 +404,10 @@ void read_signature_help(ServerAbilities &abilities, const core::JsonObject &cap
         return "textDocument/formatting";
     case LspRequestKind::range_formatting:
         return "textDocument/rangeFormatting";
+    case LspRequestKind::prepare_rename:
+        return "textDocument/prepareRename";
+    case LspRequestKind::rename:
+        return "textDocument/rename";
     }
     return "initialize";
 }
@@ -745,7 +786,8 @@ void EditorController::drop_language_answers_of(LanguageServerSlot slot)
     const auto &answers = state_.language_answers();
     if (answers.completion.has_value() || answers.hover.has_value() ||
         answers.definition.has_value() || answers.references.has_value() ||
-        answers.symbols.has_value() || answers.formatting.has_value())
+        answers.symbols.has_value() || answers.formatting.has_value() ||
+        answers.rename_target.has_value() || answers.rename.has_value())
     {
         state_ = state_.with_language_answers({});
     }
@@ -1043,6 +1085,8 @@ void EditorController::receive_lsp(LanguageServerSlot slot, const core::LspRespo
     case LspRequestKind::signature_help:
     case LspRequestKind::formatting:
     case LspRequestKind::range_formatting:
+    case LspRequestKind::prepare_rename:
+    case LspRequestKind::rename:
         receive_answer(slot, request, response);
         settle_language_answers(request.kind);
         return;
@@ -1266,6 +1310,8 @@ void EditorController::expire_lsp_request(LanguageServerSlot slot, const Pending
     case LspRequestKind::signature_help:
     case LspRequestKind::formatting:
     case LspRequestKind::range_formatting:
+    case LspRequestKind::prepare_rename:
+    case LspRequestKind::rename:
         send_lsp_cancel(slot, request.id);
         return;
     }

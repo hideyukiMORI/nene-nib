@@ -162,10 +162,13 @@ bool EditorController::request_formatting(bool selection)
 // 届くので、入力行（Ctrl+P の一覧を含む）・右クリックのメニュー・IME の変換・補完の一覧・設定の
 // 画面が開いている間（faces_closed）と、Vim が次の鍵を待っている間（vim_waits_for_key）と、Vim の
 // INSERT の間（矩形の `I` `A` の写し・`3i` の回数・`.` の記録は、当てると replace
-// の割り込みがどれも 捨てる）は本文を変えない。
-bool EditorController::formatting_interrupts() const noexcept
+// の割り込みがどれも 捨てる）は本文を変えない。整形と WorkspaceEdit（名前の変更・#2004・ADR 0194
+// の決定 11）が共用する 1 本。
+bool EditorController::server_edit_interrupts() const noexcept
 {
-    if (!faces_closed() || vim_waits_for_key())
+    // Ctrl+Tab の歩きの途中も入力の途中（切り替えと使った順を動かさない・#2011 のレビュー
+    // R1・読みを 留める reads_held と同じ条件）。
+    if (!faces_closed() || vim_waits_for_key() || state_.tab_walking())
     {
         return true;
     }
@@ -181,18 +184,24 @@ bool EditorController::formatting_interrupts() const noexcept
     return state_.vim().mode == core::VimMode::insert;
 }
 
+// 頼んだ文書がアクティブでないか、改訂番号が頼んだときと違うか（キャレットは問わない）。サーバーの
+// 編集を当ててよいかの照合 (a) の 1 本（整形と WorkspaceEdit・#2004・ADR 0194 の決定 4・11）。
+bool EditorController::server_edit_stale(const LspRequestContext &asked) const
+{
+    const LspRequestContext current = request_context();
+    return asked.document != current.document || asked.revision != current.revision;
+}
+
 // 当てずに知らせる理由（無ければ値なし）。文書か revision が頼んだときと違う・入力の途中・読めない
 // 答え（誤りの答え・形の崩れ）。
 std::optional<core::UiMessage>
 EditorController::formatting_refusal(const LanguageFormatting &answered) const
 {
-    const LspRequestContext current = request_context();
-    if (answered.context.document != current.document ||
-        answered.context.revision != current.revision)
+    if (server_edit_stale(answered.context))
     {
         return core::UiMessage::notice_formatting_stale;
     }
-    if (formatting_interrupts())
+    if (server_edit_interrupts())
     {
         return core::UiMessage::notice_formatting_busy;
     }
@@ -223,19 +232,13 @@ void EditorController::settle_formatting_answer()
         return;
     }
     // 読めない答えは formatting_refusal が断った後なので、ここでは値がある。
-    std::vector<core::LspTextEdit> edits =
-        answered.edits.value_or(std::vector<core::LspTextEdit>{});
-    if (edits.empty())
+    if (!answered.edits.has_value() || answered.edits.value().empty())
     {
         return;
     }
     // newText の改行は貼り付けと同じく本文の改行の形へ揃えてから組む（D19・#1997 のレビュー R2）。
-    const std::string_view newline = core::newline_of(state_.line_ending());
-    for (core::LspTextEdit &edit : edits)
-    {
-        edit.new_text =
-            detail::with_document_newlines(core::clipboard_line_feeds(edit.new_text), newline);
-    }
+    const std::vector<core::LspTextEdit> edits =
+        detail::edits_with_document_newlines(answered.edits.value(), state_.line_ending());
     const auto span =
         core::formatted_span(state_.text(), edits, answered.encoding, state_.selection().caret);
     if (!span.has_value())

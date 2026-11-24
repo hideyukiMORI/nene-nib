@@ -16,16 +16,61 @@ namespace nenenib::ui::win32
 // VK_OEM_102 の ろ）を同じ値にする（ADR 0148 の決定 6）。Shift は押されているままを入れる（表に
 // Shift つきの行がある）。Alt のときは呼ばない。T W D Tab と Shift なしの F4 は写さない（タブと
 // ブックマークの鍵は TabShortcut と BookmarkKey の経路のまま）。
-// F1 と F5（日時の挿入・ADR 0175）は修飾なしだけ、F6 と F8（次・前の診断へ・#1939）と F12（定義へ
-// 移動・ADR 0190 の決定 8・Shift+F12 は参照の一覧・#1947）は Ctrl なし（Shift はそのまま入れる）。
-// Ctrl つきの M（プレビュー・ADR 0155）と Shift つきの V（文字だけの貼り付け・ADR 0157）も写す。
-// 検索・置換・行へ移動の Ctrl つきの F H G と、Ctrl なしの F3（Shift はそのまま入れる）も写す
-// （ADR 0174 の決定 1・Vim モードでは表に鍵の行が無いので今までどおり Vim の鍵へ流れる）。
-// 通常モードの新しいタブの Ctrl+N も写す（D82・#1395・Vim では表に行が無く今までどおり）。
-// ルートのフォルダを選ぶ Ctrl+Shift+R の R も写す（#1495・Shift なしは表に行が無く Vim の
-// Ctrl-r のまま）。Shift なしの Ctrl+V（貼り付け・#1051）は表に行があるが写さない（今の貼り付けの
-// 道のまま・Vim の矩形とエクスプローラーの焦点の振る舞いを変えない）。Ctrl+X / C / A と Delete も
-// 同じく写さない。設定の面の Ctrl+,（#1836）も写す（Shift つきは表に行が無い）。
+// F1 と F5（日時の挿入・ADR 0175）と F2（名前を変更・#2004）は修飾なし
+// だけ。F6・F8（次・前の診断へ・#1939）・F12（定義へ移動・ADR 0190 の
+// 決定 8・Shift+F12 は参照の一覧・#1947）は Ctrl なし（Shift はそのまま
+// 入れる）。Ctrl つきの M（プレビュー・ADR 0155）と Shift つきの V
+// （文字だけの貼り付け・ADR 0157）も写す。検索・置換・行へ移動の Ctrl
+// つきの F H G と、Ctrl なしの F3（Shift はそのまま入れる）も写す
+// （ADR 0174 の決定 1・Vim モードでは表に鍵の行が無いので今までどおり
+// Vim の鍵へ流れる）。通常モードの新しいタブの Ctrl+N も写す（D82・
+// #1395・Vim では表に行が無く今までどおり）。ルートのフォルダを選ぶ
+// Ctrl+Shift+R の R も写す（#1495・Shift なしは表に行が無く Vim の
+// Ctrl-r のまま）。Shift なしの Ctrl+V（貼り付け・#1051）は表に行がある
+// が写さない（今の貼り付けの道のまま・Vim の矩形とエクスプローラーの
+// 焦点の振る舞いを変えない）。Ctrl+X / C / A と Delete も同じく写さない。
+// 設定の面の Ctrl+,（#1836）も写す（Shift つきは表に行が無い）。
+//
+// Shift のつかない形だけを写す F 鍵（F1・F5・F2）の鍵。ほかは値なし
+// （function_chord の続き・CPP-012 の関数の複雑さで分ける）。OS の仮想キー
+// は開いた集合（CPP-017）。
+[[nodiscard]] inline std::optional<core::OperationKey> plain_function_key(WPARAM key) noexcept
+{
+    switch (key)
+    {
+    case VK_F1:
+        return core::OperationKey::f1;
+    case VK_F5:
+        return core::OperationKey::f5;
+    // 名前を変更（#2004・ADR 0194 の決定 7）。
+    case VK_F2:
+        return core::OperationKey::f2;
+    default:
+        return std::nullopt;
+    }
+}
+
+// Shift をそのまま入れる F 鍵（F6・F3・F12・F8）の鍵。ほかは値なし。OS の仮想キーは開いた集合
+// （CPP-017）。
+[[nodiscard]] inline std::optional<core::OperationKey> shifted_function_key(WPARAM key) noexcept
+{
+    switch (key)
+    {
+    case VK_F6:
+        return core::OperationKey::f6;
+    case VK_F3:
+        return core::OperationKey::f3;
+    // 定義へ移動と、Shift+F12 の参照の一覧（#1947）。
+    case VK_F12:
+        return core::OperationKey::f12;
+    // 次・前の診断へ（#1939・Shift+F8 は前へ）。
+    case VK_F8:
+        return core::OperationKey::f8;
+    default:
+        return std::nullopt;
+    }
+}
+
 [[nodiscard]] inline std::optional<core::KeyChord> function_chord(WPARAM key, bool control,
                                                                   bool shift)
 {
@@ -33,33 +78,16 @@ namespace nenenib::ui::win32
     {
         return std::nullopt;
     }
-    if (key == VK_F6)
+    if (const auto shifted = shifted_function_key(key))
     {
-        return core::KeyChord{false, shift, core::OperationKey::f6};
+        return core::KeyChord{false, shift, shifted.value()};
     }
-    if (key == VK_F3)
+    const auto plain = plain_function_key(key);
+    if (shift || !plain.has_value())
     {
-        return core::KeyChord{false, shift, core::OperationKey::f3};
+        return std::nullopt;
     }
-    if (key == VK_F1 && !shift)
-    {
-        return core::KeyChord{false, false, core::OperationKey::f1};
-    }
-    if (key == VK_F5 && !shift)
-    {
-        return core::KeyChord{false, false, core::OperationKey::f5};
-    }
-    // 定義へ移動と、Shift+F12 の参照の一覧（#1947）。
-    if (key == VK_F12)
-    {
-        return core::KeyChord{false, shift, core::OperationKey::f12};
-    }
-    // 次・前の診断へ（#1939）。Shift はそのまま入れる（Shift+F8 は前へ）。
-    if (key == VK_F8)
-    {
-        return core::KeyChord{false, shift, core::OperationKey::f8};
-    }
-    return std::nullopt;
+    return core::KeyChord{false, false, plain.value()};
 }
 
 // Ctrl つきの記号・数字・空白・F4 の鍵（operation_chord の続き・CPP-012 の関数の長さで分ける）。
@@ -96,8 +124,8 @@ namespace nenenib::ui::win32
 [[nodiscard]] inline std::optional<core::KeyChord> operation_chord(WPARAM key, bool control,
                                                                    bool shift)
 {
-    if (key == VK_F1 || key == VK_F3 || key == VK_F5 || key == VK_F6 || key == VK_F8 ||
-        key == VK_F12)
+    if (key == VK_F1 || key == VK_F2 || key == VK_F3 || key == VK_F5 || key == VK_F6 ||
+        key == VK_F8 || key == VK_F12)
     {
         return function_chord(key, control, shift);
     }

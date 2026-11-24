@@ -1,5 +1,8 @@
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "EditorOperation.hpp"
+#include "InputLinePrompt.hpp"
+#include "InputLinePromptText.hpp"
 #include "OperationBindings.hpp"
 #include "OperationShortcut.hpp"
 #include "WindowChecks.hpp"
@@ -54,5 +57,27 @@ void verify_reference_key()
     const auto control = operation_chord(VK_F12, true, false);
     expect(!control.has_value() || !operation_for(control.value(), EditMode::ordinary).has_value(),
            "Ctrl+F12 runs no operation");
+}
+
+// F2 の写し（#2004・ADR 0194 の決定 7）。修飾なしの F2 は両モードで名前を変更、Shift と Ctrl つきは
+// 操作にならない。入力行のプロンプトは「新しい名前: 」。
+void verify_rename_key()
+{
+    using nenenib::core::EditMode;
+    using nenenib::core::EditorOperation;
+    using nenenib::core::operation_for;
+    using nenenib::ui::win32::operation_chord;
+    const auto plain = operation_chord(VK_F2, false, false);
+    expect(plain.has_value() &&
+               operation_for(plain.value(), EditMode::ordinary) == EditorOperation::rename_symbol &&
+               operation_for(plain.value(), EditMode::vim) == EditorOperation::rename_symbol,
+           "F2 renames in both modes");
+    expect(!operation_chord(VK_F2, false, true).has_value() &&
+               !operation_chord(VK_F2, true, false).has_value(),
+           "Shift+F2 and Ctrl+F2 are not mapped");
+    expect(nenenib::ui::win32::prompt_text(nenenib::core::InputLinePrompt::rename, {},
+                                           nenenib::core::DisplayLanguage::japanese) ==
+               "新しい名前: ",
+           "the rename line shows its prompt");
 }
 } // namespace nenenib::tests::ui

@@ -17,7 +17,7 @@ namespace
 // 試験の組の表（関数の外に置く・表が伸びて関数の長さの上限を越えた・#1836）。
 namespace ui = nenenib::tests::ui;
 // 群の表（名前 → 検査）。関数の外に置く（行を足しても verify_selected の長さが変わらない）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 59> groups{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 60> groups{{
     {"", ui::verify_fallback_keys},
     {"", ui::verify_fallback_cache},
     {"--glyphs", ui::verify_glyph_collector},
@@ -77,6 +77,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 59> groups{{
     {"--reference-key", ui::verify_reference_key},
     {"--caret-motion", ui::verify_caret_sparks_paint},
     {"--indent-guides", ui::verify_indent_guide_paint},
+    {"--rename-key", ui::verify_rename_key},
 }};
 
 bool verify_selected(std::string_view selector)
