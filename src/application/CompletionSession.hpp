@@ -32,6 +32,9 @@ namespace nenenib::application
 // - requested は最後に LSP の要求を出したときの接頭辞（語の頭からキャレットまでの本文）。Vim の
 //   INSERT で自動に開いた面の候補を engine の語に直すとき（vim_completion_text）に、答えの
 //   `textEdit` の範囲と比べる要求の範囲を作る（#1962）。
+// - triggered は打鍵で自動に開いた面（triggerCharacters）であること。Vim の INSERT で Ctrl-n から
+//   engine の補完へ移った後（by_hand が立つ）も立ったままで、確定の鍵（Enter・Tab）と録画の形を
+//   決める（#1971・ADR 0190 の 2026-11-24 の追補）。
 // 公開 aggregate（CPP-003）。
 struct CompletionSession
 {
@@ -53,5 +56,6 @@ struct CompletionSession
     bool incomplete = false;
     bool stepped = false;
     std::string requested = {};
+    bool triggered = false;
 };
 } // namespace nenenib::application

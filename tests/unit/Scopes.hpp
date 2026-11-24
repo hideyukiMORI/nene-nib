@@ -70,6 +70,8 @@ void verify_completion_face_contracts();
 void verify_completion_face_scope();
 // 契約 --completion-face の Vim の INSERT の側（#1845・VimInsertCompletionTests.cpp）。
 void verify_vim_insert_completion();
+// 契約 --completion-face の自動で開いた面の確定（#1971・CompletionConfirmTests.cpp）。
+void verify_completion_confirm();
 
 // HistoryTests.cpp
 void verify_history_contracts();

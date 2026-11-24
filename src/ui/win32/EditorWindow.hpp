@@ -6,6 +6,7 @@
 #include "ClosingRoute.hpp"
 #include "ClosingStep.hpp"
 #include "CommandEdit.hpp"
+#include "CompletionCommitKey.hpp"
 #include "Composition.hpp"
 #include "CoverWindow.hpp"
 #include "DeliveryStep.hpp"
@@ -219,8 +220,9 @@ class EditorWindow final
     // 補完の面（ADR 0190 の決定 5・EditorWindowCompletion.cpp）。面が見えている間の上下・PageUp /
     // PageDown・Enter・Tab・Esc を面が受けたら真。窓が非アクティブになったら閉じる。
     [[nodiscard]] bool take_completion_key(UINT message, WPARAM word);
-    // Enter と Tab。確定が本文を変えなければ面を閉じて偽（鍵は本文へ通す）。
-    [[nodiscard]] bool commit_completion();
+    // Enter と Tab。確定が本文を変えない（自動で開いてまだ選んでいない面の Enter を含む・#1971）
+    // なら面を閉じて偽（鍵は本文へ通す）。
+    [[nodiscard]] bool commit_completion(application::CompletionCommitKey key);
     void close_completion_outside();
     // 窓が焦点を失ったときの片付け（選択のドラッグ・Ctrl+Tab の歩き・帯の hover・補完の面・hover の
     // 札・字の大きさのホイールの残り）。
