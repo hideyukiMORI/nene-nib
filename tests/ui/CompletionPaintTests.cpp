@@ -185,6 +185,11 @@ void verify_vim_completion_keys()
     expect(!vim_completion_key('N', false, true, true).has_value() &&
                !vim_completion_key('Q', true, true, true).has_value(),
            "a key without Ctrl alone, and a key that is not a completion key, are not sent");
+    using nenenib::ui::win32::tab_closes_completion;
+    expect(tab_closes_completion(true, true) && !tab_closes_completion(false, true) &&
+               !tab_closes_completion(true, false),
+           "Shift+Tab closes an open completion face before the tab character (#1971), a plain "
+           "Tab goes to the face, and with no face nothing is sent first");
 }
 
 // 補完の 2 つ目の鍵（施主決定 D104）: 通常モードの Ctrl+I は操作「補完」で、Vim のモードの

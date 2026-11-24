@@ -82,4 +82,12 @@ vim_completion_key(WPARAM key, bool control, bool inserting, bool face_shown) no
     }
     return std::nullopt;
 }
+
+// Vim のモードの Tab の前に補完の面を閉じるか（#1971）。打鍵で自動に開いた面の Tab は確定の鍵だが、
+// 確定するのは修飾の無い Tab だけで、Shift+Tab は前のまま（面を閉じて Tab の文字を入れる）。engine
+// へは同じ Tab の文字の鍵で渡るので、窓が先に面を閉じる。
+[[nodiscard]] constexpr bool tab_closes_completion(bool shifted, bool face_open) noexcept
+{
+    return shifted && face_open;
+}
 } // namespace nenenib::ui::win32
