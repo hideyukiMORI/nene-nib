@@ -194,9 +194,9 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 合成ルートが1個を所有し、applicationの`TextLayoutPort`とrendererが同じDirectWrite layoutを使う（ADR 0114）。書式は行高・DPI・字体・折り返し設定（幅は「0 より大きいか」だけ）を鍵にし、entry は通常行・IME差し込み済み行の完全な表示文字列と幅を鍵に現在/直前のframeと最後の入力行だけを保持する（2 枠の幅が違っても捨て合わない・古い幅の entry は使わず frame の終わりに消える・ADR 0148 の 2026-11-22 の追補の決定 6）。書式変更で破棄し、横位置が変われば同じlayoutから可視範囲の字形を再収集する。選択/検索で共有layoutの書式を変更せず、右寄せ・コマンド入力のlayoutをこの保持へ入れない。格子の画面行も字形は同じ`BodyTextPainter`で描く（ADR 0140 の決定 5・#569）。
 
-### ステータスの文字組みは `write_status`。保持するのは最大11枠
+### ステータスの文字組みは `write_status`。保持するのは最大12枠
 
-通常/Vim・モード・録画・通知・右側の4項目（位置・文字コード・改行・言語）と操作の案内は描画器の固定枠で、全文・書式・幅・高さが一致するとき再利用する（ADR 0070 / 0079 / 0154）。案内は鍵と説明の4枠を使い最大11、録画とは排他なので録画時は最大8。枠の位置は `draw_status_bar` の入口で戻し、UI書式の再作成前に全枠を消す。色と原点は毎回反映する。コマンド入力のキャレットや補完のlayoutをこの保持へ入れない。
+通常/Vim・モード・録画・通知・右側の4項目（位置・文字コード・改行・言語）・診断の件数と操作の案内は描画器の固定枠で、全文・書式・幅・高さが一致するとき再利用する（ADR 0070 / 0079 / 0154 / 0161 の決定 4）。枠の数の正本は `StatusLayoutDemand.hpp` の `status_layout_capacity`（12）。案内は鍵と説明の4枠を使い最大12（件数の枠を含む）、録画とは排他なので録画時は最大9。件数が 0 の frame は件数の枠を使わない。枠の位置は `draw_status_bar` の入口で戻し、UI書式の再作成前に全枠を消す。色と原点は毎回反映する。コマンド入力のキャレットや補完のlayoutをこの保持へ入れない。
 
 ### 設定の正本は `settings.v6`。旧版を読むのは新版が無いときだけ
 
@@ -275,6 +275,7 @@ ui は `EditorWindowOperations.cpp` の表（`runner_of`）に 1 行と小さな
 
 `eng/measure-speed.py` は基準値との比較なので、機械が混んでいると製品が同じでも起動のベンチが落ちる（#300 で実測: 測定の途中に別の席がビルドを始め、起動の 3 本が約 25% 遅くなった）。
 測る前に負荷を数回読み、背景の席を止め、施主にほかの Claude や Codex が動いていないかも聞く。落ちたら合格するまで測り直さず、原因を特定して、前提を満たしてから 1 回だけ測る。無効だった測定も記録に残す（gate-proofs 5-ct）。
+測っている間にビルドが始まった回は無効。有効かどうかは結果を見ずに、測定の間のビルドの process の数で決める（道具 `D:/NeNeNib/scripts/20261124/int51/gate2.sh`・2026-11-24 にほかのプロダクトのビルドで 1 回無効になった）。
 
 ### 背景の席には worktree の絶対パスで書かせる
 
@@ -319,6 +320,9 @@ root は印（`lsp_root_markers`）を文書のフォルダから上へ探し、
 道具は `D:/NeNeNib/scripts/20261112/` の `stack.sh`（起点からの差分を `git apply --3way`）・`finish-stack.sh`（生成物と `fixtures.json` の衝突を oracle で作り直す・`join-fixtures.py`）・`union-json-list.py`（折り返す窓の fixture を名前で併合）。
 2 本の PR が表に 1 つずつ足すと git が畳んで宣言の大きさと中身がずれる。積むたびに `tests/unit/NibTests.cpp` の `contracts` と `scopes`、`tests/ui/NibWindowTests.cpp` の `groups` を数え直す（数は現物を数える。ここに写さない）。
 oracle の測定コードを変えた PR は、枝の commit を `--reuse-ref` にして main 側にだけある fixture を測る。製品のコードが衝突したら、設計席が手で解かず、席にまとめ枝を自分の枝へ merge させてからその差分を積む（#1551・入力行の鎖）。
+まとめ枝の上に設計席が足す直しの commit も、本文に `Closes #<まとめ枝の Issue>` を書く（`Refs` だと `merge-pr.py --integration` が断る・#2015）。
+merge の前に main が動いていないか確かめる。動いていたら、まとめ枝を組む前に main へ入れる物を済ませるか、`origin/main` から組み直す（#2020）。
+PR 本文に `Closes #N` の字を 2 回書かない（説明の文の中でも GIT-001 で断られる・#2020）。
 ---
 
 ## 3. 検証コマンド
@@ -375,9 +379,9 @@ Waivers: none | WVR-NNNN
 
 **この節には、いまの状態と所在だけを書く。日ごとの経緯・入った PR・数字の積み重ねは書かない**（日報と引き継ぎと `current.md` に任せる。2026-11-15 までこの節に積もった経緯 44 KB は [docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md](docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md) に移した・#1716）。状態が変わったら下の箇条を書き換える（足さない）。
 
-- **版と公開**（2026-11-23）: **公開版は v1.1.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)・2026-11-23 12:43 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。前の版 v1.0.0 の公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。1.1.0 の区切りはまとめ枝 46 ＋ 47（施主の決め 2026-11-20 夜・Store に出す区切りは機能の区切り）。1.1.0 の公開元は main `4fcf258c`（まとめ枝 46 ＋ 47 ＋ #1925）。2026-11-21 に本番を梱包し、hide が実機で確かめ、WACK `PASS` の後に Store へ更新を申請した（Submission 2・18:30 ごろ）。認定の後、2026-11-23 に Store で公開され、GitHub の tag `v1.1.0` と Release も出した（再取得の照合 pass）。記録は [docs/quality/release-1.1.0-2026-11-17.md](docs/quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
-- **main の凍結は解いてある**（hide の決め 2026-11-15 夜）。機能の PR を入れてよい。1.1.0 の物は公開元 `4fcf258c` から作った物で、その後に main へ入った機能（LSP の段 S2 から後・split の境界線・キャレットのアニメーションなど）は次の版に入る。
-- **`settings.v4`（1.0.0）と `settings.v5`（1.1.0）に鍵を足さない**。main は `settings.v6` を書き、v6 を書く最初の公開版はまだ決めていない（D91・§2 の設定の節）。
+- **版と公開**（2026-11-24）: **公開版は v1.1.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)・2026-11-23 12:43 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。1.1.0 の公開元は main `4fcf258c`、記録は [docs/quality/release-1.1.0-2026-11-17.md](docs/quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。前の版 v1.0.0 の公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。**次の版は 1.2.0**（hide の決め 2026-11-24・SPECIFICATION の D115）で、公開の準備中。1.2.0 の中身と手順の所在は `docs/quality/release-1.2.0-*.md`（別の PR で入る）と `D:/NeNeNib/evidence/v1.2.0-release/`（手順書 `README.md`・決めの一覧 `open-questions.md`）。
+- **1.2.0 の公開まで main に機能を入れない**（公開が次の順なら公開の準備が先・2026-11-24）。1.2.0 に入れる残りは `current.md` の「1.2.0 に入れる残り」だけ。クイックフィックス（#2005）は次の版で、1.2.0 の公開元を切るまで main に入れない（D116）。
+- **`settings.v4`（1.0.0）と `settings.v5`（1.1.0）に鍵を足さない**。main は `settings.v6` を書き、v6 を書く最初の公開版は次の版 1.2.0（hide の決め 2026-11-24）。1.2.0 の公開までは v6 のまま・公開したら v6 にも鍵を足さない（D91・§2 の設定の節）。
 - **再開するとき**: 最新の[引き継ぎ](docs/handoffs/)の「次回の最初の手順」→ `git fetch` と `gh pr list` で照合 → [日報](docs/reports/)。施主決定は [SPECIFICATION.md](SPECIFICATION.md) の D 番号、できることの一覧は [README.md](README.md)。
 - **数字**（fixture の件数・基準値・ベンチの本数）はここに写さない。fixture は `tests/vim/fixtures.json`、速さは `eng/perf-reference.json` と `eng/measure-speed.py` の `BENCHES`、表の大きさは現物を数える。
 - 実機の目視は Claude デスクトップの別セッション（computer-use）か、hide の了承の後に設計席が回す道具（§2 の「窓を最前面に出す確認」）。
