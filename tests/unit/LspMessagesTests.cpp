@@ -23,6 +23,7 @@
 #include "TextBuffer.hpp"
 #include "Utf8.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -261,29 +262,71 @@ void verify_round_trips()
 
 // `languageId` は LSP 3.17 の表の名前（#1897・ADR 0161 の 2026-11-20 の追補）。表に無い言語は
 // Nib の名前のまま、`.tsx` `.jsx` は拡張子（大小を問わない）で react の名前。
+// 全部の言語の行（#2013: 表の名前と同じ言語も 1 行ずつ縛る）。表は関数の外に置く（CPP-012）。
+using core::Language;
+constexpr std::array<std::pair<Language, std::string_view>, 42> named_language_ids{{
+    {Language::markdown, "markdown"},
+    {Language::html, "html"},
+    {Language::c, "c"},
+    {Language::json, "json"},
+    {Language::yaml, "yaml"},
+    {Language::xml, "xml"},
+    {Language::css, "css"},
+    {Language::cmake, "cmake"},
+    {Language::gdscript, "gdscript"},
+    {Language::rust, "rust"},
+    {Language::go, "go"},
+    {Language::php, "php"},
+    {Language::sql, "sql"},
+    {Language::lua, "lua"},
+    {Language::kotlin, "kotlin"},
+    {Language::dart, "dart"},
+    {Language::zig, "zig"},
+    {Language::ruby, "ruby"},
+    {Language::swift, "swift"},
+    {Language::scala, "scala"},
+    {Language::haskell, "haskell"},
+    {Language::elixir, "elixir"},
+    {Language::r, "r"},
+    {Language::perl, "perl"},
+    {Language::vue, "vue"},
+    {Language::plain, "plaintext"},
+    {Language::cs, "csharp"},
+    {Language::powershell, "powershell"},
+    {Language::shell, "shellscript"},
+    {Language::dosini, "ini"},
+    {Language::cpp, "cpp"},
+    {Language::python, "python"},
+    {Language::toml, "toml"},
+    {Language::gdresource, "gdresource"},
+    {Language::dockerfile, "dockerfile"},
+    {Language::javascript, "javascript"},
+    {Language::typescript, "typescript"},
+    {Language::make, "makefile"},
+    {Language::batch, "bat"},
+    {Language::java, "java"},
+    {Language::terraform, "terraform"},
+    {Language::svelte, "svelte"},
+}};
+
+// 表は全部の言語を 1 行ずつ持つ（言語を足すとここが落ちる・#2016 のレビュー 推奨 2）。
+[[nodiscard]] consteval bool every_language_named_once() noexcept
+{
+    return std::ranges::all_of(named_language_ids,
+                               [](const auto &row)
+                               {
+                                   return std::ranges::count(
+                                              named_language_ids, row.first,
+                                              &std::pair<Language, std::string_view>::first) == 1;
+                               });
+}
+
+static_assert(named_language_ids.size() == core::language_count() && every_language_named_once(),
+              "the languageId table has one row for every Language");
+
 void verify_language_ids()
 {
-    using core::Language;
-    constexpr std::array<std::pair<Language, std::string_view>, 17> named{{
-        {Language::plain, "plaintext"},
-        {Language::cs, "csharp"},
-        {Language::powershell, "powershell"},
-        {Language::shell, "shellscript"},
-        {Language::dosini, "ini"},
-        {Language::cpp, "cpp"},
-        {Language::python, "python"},
-        {Language::toml, "toml"},
-        {Language::gdresource, "gdresource"},
-        {Language::dockerfile, "dockerfile"},
-        {Language::javascript, "javascript"},
-        {Language::typescript, "typescript"},
-        {Language::make, "makefile"},
-        {Language::batch, "bat"},
-        {Language::java, "java"},
-        {Language::terraform, "terraform"},
-        {Language::svelte, "svelte"},
-    }};
-    for (const auto &[language, id] : named)
+    for (const auto &[language, id] : named_language_ids)
     {
         expect(core::lsp_language_id(language, "C:/w/a.x") == id,
                "a language is sent with the specification's languageId");

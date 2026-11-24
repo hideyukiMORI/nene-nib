@@ -228,6 +228,48 @@ void verify_hit_limit()
            "a batch of the cancelled ticket adds nothing");
 }
 
+// 裏の仕事が打ち切り・失敗で終えた batch は、その状態で終わる（終わった券は取り消さない・決定 4）。
+void verify_worker_finishes()
+{
+    Editing truncated = rooted_editing();
+    open_search(truncated, "e");
+    auto &cut = truncated.project_search();
+    cut.serve(batch_of(cut.requests().back().ticket, {hit_at("C:\\proj\\a.txt", 1, 1, "e")},
+                       {app::ProjectSearchPhase::truncated, 3, 9}));
+    applied(truncated.controller(), app::WorkCompleted{});
+    const std::size_t cancelled = cut.cancels().size();
+    applied(truncated.controller(), app::CommandText{"f"});
+    expect(status_of(truncated.controller()) == app::ProjectSearchStatus::searching &&
+               cut.cancels().size() == cancelled,
+           "a search the worker cut short is finished, so the next query cancels nothing");
+    Editing failed = rooted_editing();
+    open_search(failed, "e");
+    auto &port = failed.project_search();
+    port.serve(
+        batch_of(port.requests().back().ticket, {}, {app::ProjectSearchPhase::failed, 0, 0}));
+    applied(failed.controller(), app::WorkCompleted{});
+    expect(status_of(failed.controller()) == app::ProjectSearchStatus::failed &&
+               message_of(failed.controller()) ==
+                   core::ui_text(core::UiMessage::palette_project_failed,
+                                 core::DisplayLanguage::japanese),
+           "a failed search says so on the face");
+}
+
+void verify_worker_truncated_status()
+{
+    Editing editing = rooted_editing();
+    open_search(editing, "e");
+    auto &port = editing.project_search();
+    port.serve(batch_of(port.requests().back().ticket, {hit_at("C:\\proj\\a.txt", 1, 1, "e")},
+                        {app::ProjectSearchPhase::truncated, 3, 9}));
+    applied(editing.controller(), app::WorkCompleted{});
+    expect(status_of(editing.controller()) == app::ProjectSearchStatus::truncated &&
+               message_of(editing.controller()) ==
+                   core::ui_text_filled(core::UiMessage::palette_project_truncated,
+                                        core::DisplayLanguage::japanese, {"1"}),
+           "a search the worker cut short shows the truncated line with the hits it has");
+}
+
 // 面を閉じると取り消し、閉じた後に届いた batch は捨てる（決定 6）。ほかの出どころへ移っても同じ。
 void verify_closing_cancels()
 {
@@ -413,6 +455,8 @@ void verify_project_search_controller_contracts()
     verify_quiet_start();
     verify_tickets_and_batches();
     verify_hit_limit();
+    verify_worker_finishes();
+    verify_worker_truncated_status();
     verify_closing_cancels();
     verify_unrequested_states();
     verify_document_folder();

@@ -2,6 +2,7 @@
 // `]d` `[d`・通常モードの F8 / Shift+F8）・札（`gl`・操作「診断を表示」）・Ctrl+P の一覧（`^`）。
 // core の純関数と表、engine の効果、controller の道を替え玉 ScriptedLanguageServer で確かめる。
 #include "ActivateCommandChoice.hpp"
+#include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
 #include "CommandChoice.hpp"
 #include "CommandChoiceKind.hpp"
@@ -363,6 +364,31 @@ void verify_show_and_absent()
                message_of(none) == core::ui_text(core::UiMessage::notice_no_diagnostics,
                                                  plain.controller().display_language()),
            "without diagnostics F8 stays and says there are none");
+    const auto shown = commanded(plain, core::DiagnosticCommand::show);
+    expect(tip_of(plain) == "<none>" &&
+               message_of(shown) == core::ui_text(core::UiMessage::notice_no_diagnostics,
+                                                  plain.controller().display_language()),
+           "showing without any diagnostics says there are none, not that none is here");
+}
+
+// 診断の一覧は、変換の間は開かず、開いている入力行は取消と同じ道で閉じてから開く（操作の一覧と同じ）。
+void verify_list_composition_and_line()
+{
+    Editing composing(lsp_on());
+    diagnosed(composing);
+    static_cast<void>(composing.controller().apply(app::ComposeText{composed_of("に", {}, 0)}));
+    const auto skipped = commanded(composing, core::DiagnosticCommand::list);
+    expect(!skipped.command_palette.has_value() && skipped.composition.has_value(),
+           "the diagnostic list does not open over the IME composition");
+    Editing typing(lsp_on());
+    diagnosed(typing);
+    applied(typing.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(typing.controller(), ":d");
+    const auto opened = commanded(typing, core::DiagnosticCommand::list);
+    const auto closed = typing.controller().apply_frame(app::CancelCommand{});
+    expect(opened.command_palette.has_value() && !closed.command_line.has_value() &&
+               typing.controller().text().size_bytes() == source_text.size(),
+           "the diagnostic list closes the open Ex line without running it");
 }
 
 // Vim の `]d` `[d` はジャンプの列に載り（`''` で戻る）、回数を持ち、本文を変えない。
@@ -542,6 +568,7 @@ void verify_diagnostic_jump_scope()
     verify_engine_effects();
     verify_ordinary_jumps();
     verify_show_and_absent();
+    verify_list_composition_and_line();
     verify_vim_jumps();
     verify_list();
     verify_tip_outlives_hover();

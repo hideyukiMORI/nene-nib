@@ -251,6 +251,26 @@ void verify_climb_floor()
         "a UNC document never looks above the share or at the current drive's root");
 }
 
+// 根の形ごとの下限（LspRootMarkers.cpp の climb_floor・#2013）: `/` の区切り、`\` から始まる経路は
+// `\`、`\\.\X:\` は 7、共有の無い `\\server` と区切りの無い `X:` と `\\?\UNC` は上らない。区切りの
+// 無い名前は親が無くて止まる。
+void verify_climb_floor_shapes()
+{
+    expect(climbed("C:/a/b") == "C:/a/b;C:/a;C:/", "a forward-slash drive path stops at C:/");
+    expect(climbed("\\a\\b") == "\\a\\b;\\a;\\" && climbed("\\") == "\\",
+           "a path rooted at \\ climbs to \\ and no further");
+    expect(climbed("\\\\.\\C:\\a") == "\\\\.\\C:\\a;\\\\.\\C:\\",
+           "a \\\\.\\ drive path stops at its drive root");
+    expect(climbed("\\\\srv") == "\\\\srv" && climbed("C:") == "C:" &&
+               climbed("\\\\?\\C:") == "\\\\?\\C:" && climbed("\\\\?\\UNC") == "\\\\?\\UNC" &&
+               climbed("\\\\?x\\a") == "\\\\?x\\a",
+           "a server alone, a bare drive and an unfinished device path do not climb");
+    expect(climbed("a\\b") == "a\\b;a", "a relative name without a separator has no parent");
+    expect(core::lsp_root_marker_path(path_of("C:/"), ".git").text() == "C:/.git" &&
+               core::lsp_root_marker_path(path_of("C:/a"), ".git").text() == "C:/a\\.git",
+           "a marker joins after an existing / and adds \\ otherwise");
+}
+
 // 上り方: 最初に印のあるフォルダ・根で止まる・32 段まで。
 void verify_walk()
 {
@@ -618,6 +638,7 @@ void verify_language_root_scope()
     verify_marker_table();
     verify_priority();
     verify_climb_floor();
+    verify_climb_floor_shapes();
     verify_given_up_keeps_live_slot();
     verify_case_folded_roots();
     verify_walk();

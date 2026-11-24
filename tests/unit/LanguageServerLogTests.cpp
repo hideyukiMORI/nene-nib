@@ -52,6 +52,7 @@
 #include "VisibleLines.hpp"
 #include "WorkCompleted.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -141,6 +142,29 @@ void running(Editing &editing)
            R"(,"value":)" + std::string(value) + "}}";
 }
 
+// 1 行の直し の端（#2013）: 列を始めないバイト・継続の欠けた列・4 バイトの字・終わりの無い CSI と
+// OSC・ESC \ で閉じる OSC・C1 でない 2 バイトと双方向の制御でない 3 バイト。
+void verify_server_log_line_edges()
+{
+    const std::array<std::pair<std::string_view, std::string_view>, 11> lines{{
+        {"\xF5x", "\xEF\xBF\xBDx"},
+        {"\xF0\x9F\x98\x80", "\xF0\x9F\x98\x80"},
+        {"\xE3\x41\x41", "\xEF\xBF\xBD\x41\x41"},
+        {"a\x1b[", "a"},
+        {"a\x1b[12", "a"},
+        {"a\x1b[1\x01", "a\xE2\x90\x81"},
+        {"\x1b]0;t\x1b\\ok", "ok"},
+        {"\x1b]0;title", ""},
+        {"\x1b]0;t\x1b", ""},
+        {"\xC2\xA0\xC3\xA9", "\xC2\xA0\xC3\xA9"},
+        {"\xE2\x81\xA5", "\xE2\x81\xA5"},
+    }};
+    for (const auto &[raw, shown] : lines)
+    {
+        expect(core::server_log_line(raw) == shown, "each raw log line has its repaired form");
+    }
+}
+
 // 1 行の直し: 不正な列・制御文字・長い行（追補）。
 void verify_server_log_line()
 {
@@ -177,6 +201,7 @@ void verify_server_log_line()
     const std::string cut = core::server_log_line(wide);
     expect(cut.size() <= core::server_log_line_bytes && core::validate_utf8(cut).has_value(),
            "a long line of three byte characters is cut on a code point boundary");
+    verify_server_log_line_edges();
 }
 
 // 席ごとの輪（追補）。標準エラーの残り・CR LF・閉じ・上限・行の頭の印。

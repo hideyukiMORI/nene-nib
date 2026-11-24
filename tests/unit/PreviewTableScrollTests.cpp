@@ -230,6 +230,9 @@ void verify_bar()
     applied(controller, app::HoverPreviewTable{1});
     expect(lit_of(controller.frame()) == std::optional<std::size_t>{1},
            "the bar under the pointer is lit");
+    expect(!controller.apply(app::HoverPreviewTable{1}).repaint &&
+               lit_of(controller.frame()) == std::optional<std::size_t>{1},
+           "moving over the same bar again keeps it lit without a repaint");
     applied(controller, app::HoverPreviewTable{std::nullopt});
     expect(!lit_of(controller.frame()).has_value(), "leaving the bar unlights it");
 }

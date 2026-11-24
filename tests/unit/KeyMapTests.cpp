@@ -12,7 +12,10 @@
 #include "EditorDelivery.hpp"
 #include "EditorSettings.hpp"
 #include "EndSession.hpp"
+#include "ExEvaluationFailure.hpp"
+#include "ExFailure.hpp"
 #include "ExMapCommand.hpp"
+#include "ExMapFailure.hpp"
 #include "ExMapRequest.hpp"
 #include "ExMapVerb.hpp"
 #include "ExResult.hpp"
@@ -31,6 +34,7 @@
 #include "SelectEditMode.hpp"
 #include "SessionEnd.hpp"
 #include "SettingsChoiceTimeout.hpp"
+#include "SettingsFailure.hpp"
 #include "StoreVimRegister.hpp"
 #include "TabStep.hpp"
 #include "TestSupport.hpp"
@@ -1191,6 +1195,14 @@ void verify_ex_commands()
     static_cast<void>(run_ex(controller, "nmap"));
     expect(message_is(controller, "Not supported: listing mappings"),
            "the list is not offered yet");
+    // 保存できなければ断って鳴らし、表に足さない（Q はまだ x にならない）。
+    editing.settings().fail(application::SettingsFailure::unwritable);
+    const auto rings = editing.bell().rings();
+    static_cast<void>(run_ex(controller, "nnoremap Q x"));
+    expect(message_is(controller, "Settings could not be saved") && editing.bell().rings() > rings,
+           "a map that cannot be saved is refused with a ring");
+    vim_replay(controller, "Q");
+    expect(whole_vim_body(controller) == "bcdef\n", "the refused map does not apply");
 }
 
 [[nodiscard]] std::optional<core::ExMapRequest> request_of(std::string_view text)
@@ -1532,10 +1544,176 @@ void verify_unmatched_table_property()
     // 再生の中で `x` を待った回数（固定 seed 1312 の 200 件の数え値・待ちと flush の道を通る）。
     expect(waits == 103U, "the replays wait on x and flush it the expected times");
 }
+
+// ---- 命令の名前の表・引数の拒否・map_edited の 4 つの動詞（ADR 0176 の決定 6・#2013）----
+
+// 名前の表の 18 行（完全な形）と省略の 2 つ、それぞれの動詞・モード・remap。
+using NamedMap = std::pair<std::string_view, core::ExMapRequest>;
+
+[[nodiscard]] std::array<NamedMap, 20> named_maps()
+{
+    return {{
+        {"map a b", {core::ExMapVerb::add, plain_set, "a", "b", true}},
+        {"noremap a b", {core::ExMapVerb::add, plain_set, "a", "b", false}},
+        {"nmap a b", {core::ExMapVerb::add, normal_only, "a", "b", true}},
+        {"nnoremap a b", {core::ExMapVerb::add, normal_only, "a", "b", false}},
+        {"imap a b", {core::ExMapVerb::add, insert_only, "a", "b", true}},
+        {"inoremap a b", {core::ExMapVerb::add, insert_only, "a", "b", false}},
+        {"vmap a b", {core::ExMapVerb::add, visual_set, "a", "b", true}},
+        {"vnoremap a b", {core::ExMapVerb::add, visual_set, "a", "b", false}},
+        {"xmap a b", {core::ExMapVerb::add, visual_only_set, "a", "b", true}},
+        {"xnoremap a b", {core::ExMapVerb::add, visual_only_set, "a", "b", false}},
+        {"omap a b", {core::ExMapVerb::add, pending_only, "a", "b", true}},
+        {"onoremap a b", {core::ExMapVerb::add, pending_only, "a", "b", false}},
+        {"unmap a", {core::ExMapVerb::remove, plain_set, "a", "", true}},
+        {"nunmap a", {core::ExMapVerb::remove, normal_only, "a", "", true}},
+        {"iunmap a", {core::ExMapVerb::remove, insert_only, "a", "", true}},
+        {"vunmap a", {core::ExMapVerb::remove, visual_set, "a", "", true}},
+        {"xunmap a", {core::ExMapVerb::remove, visual_only_set, "a", "", true}},
+        {"ounmap a", {core::ExMapVerb::remove, pending_only, "a", "", true}},
+        {"nn a b", {core::ExMapVerb::add, normal_only, "a", "b", false}},
+        {"unm a", {core::ExMapVerb::remove, plain_set, "a", "", true}},
+    }};
+}
+
+[[nodiscard]] bool fails_with(std::string_view text, core::ExFailure failure)
+{
+    const auto result =
+        core::evaluate_ex(text, core::default_editor_settings(), core::Appearance::dark);
+    return !result.has_value() && result.error() == core::ExEvaluationFailure{failure};
+}
+
+void verify_map_names()
+{
+    for (const auto &[text, request] : named_maps())
+    {
+        expect(requests(text, request), "each map command name has its verb, modes and remap");
+    }
+    expect(fails_with("nunmap a b", core::ExFailure::invalid_argument) &&
+               fails_with("unmap", core::ExFailure::invalid_argument),
+           "an unmap with no left side or two words is E474");
+    expect(fails_with("let! mapleader=','", core::ExFailure::unsupported_argument) &&
+               fails_with("let mapleader ','", core::ExFailure::invalid_argument) &&
+               fails_with("let mapleader=\"a'", core::ExFailure::invalid_argument),
+           ":let! is refused; a value without = or with mismatched quotes is E474");
+    const auto candidates = core::map_command_candidates();
+    expect(candidates.size() == 19 && candidates.front() == "map" &&
+               candidates.back() == "let mapleader=",
+           "the candidates are the full names and let mapleader=");
+}
+
+// 引用符の中の逃がし: '…' の中の '' は 1 つの '、"…" の中の \\ と \" は次の字をそのまま（Vim の
+// expr-quote と同じ形の分だけ。Vim のほかの逃がし（`\n` など）は #2018）。
+void verify_leader_strings()
+{
+    constexpr core::VimModeSet none{};
+    expect(requests("let mapleader='a''b'", {core::ExMapVerb::leader, none, "", "a'b", true}) &&
+               requests("let mapleader=\"a\\\"b\"",
+                        {core::ExMapVerb::leader, none, "", "a\"b", true}) &&
+               requests("let mapleader=\"\\\\\"", {core::ExMapVerb::leader, none, "", "\\", true}),
+           "the quoted value reads the doubled quote, \\\\ and \\\"");
+    const auto settings = core::default_editor_settings();
+    const auto comma = core::map_edited(settings, {core::ExMapVerb::leader, none, "", ",", true});
+    expect(comma.has_value() && comma.value().mapleader == ",", "a one-key leader is stored");
+    const auto two = core::map_edited(settings, {core::ExMapVerb::leader, none, "", "ab", true});
+    expect(!two.has_value() && two.error() == core::ExMapFailure::bad_leader,
+           "a leader of two keys is refused");
+    const auto listed =
+        core::map_edited(settings, {core::ExMapVerb::list, normal_only, "x", "", true});
+    expect(listed.has_value() && listed.value().maps == settings.maps &&
+               listed.value().mapleader == settings.mapleader,
+           "listing does not change the settings");
+}
+
+// remove はモードを外して空の行を消す。`v` と `x` は同じ VISUAL。`<Leader>` は `<leader>` と同じ。
+void verify_map_removal()
+{
+    auto settings = core::default_editor_settings();
+    settings.maps = {MapRow{{true, true, false, false, true}, "x", "a", true},
+                     MapRow{visual_set, "y", "b", true},
+                     MapRow{normal_only, "<leader>w", "c", true}};
+    const auto remove = [&settings](core::VimModeSet modes, std::string lhs)
+    {
+        return core::map_edited(
+            settings, core::ExMapRequest{core::ExMapVerb::remove, modes, std::move(lhs), "", true});
+    };
+    const auto insert = remove(insert_only, "x");
+    expect(insert.has_value() && insert.value().maps.front().modes ==
+                                     core::VimModeSet{true, false, false, false, true},
+           "removing INSERT keeps NORMAL and OPERATOR-PENDING");
+    const auto pending = remove(pending_only, "x");
+    expect(pending.has_value() && pending.value().maps.front().modes ==
+                                      core::VimModeSet{true, true, false, false, false},
+           "removing OPERATOR-PENDING keeps the other modes");
+    const auto visual = remove(visual_only_set, "y");
+    expect(visual.has_value() && visual.value().maps.size() == 2 &&
+               visual.value().maps.at(1).lhs == "<leader>w",
+           ":xunmap removes a :vmap row and an emptied row is dropped");
+    const auto leader = remove(normal_only, "<Leader>w");
+    expect(leader.has_value() && leader.value().maps.size() == 2,
+           "<Leader> names the same left side as <leader>");
+    const auto absent = remove(visual_set, "x");
+    expect(!absent.has_value() && absent.error() == core::ExMapFailure::no_such_mapping,
+           "removing a mode the row does not have is E31");
+}
+
+// add の拒否は map_row_of の失敗を ExMapFailure へ写す。保存で同じ鍵の行は後の行だけを残す。
+void verify_map_additions()
+{
+    auto settings = core::default_editor_settings();
+    settings.maps = {MapRow{normal_only, "y", "1", true}, MapRow{normal_only, "y", "2", true}};
+    const auto add = [&settings](core::VimModeSet modes, std::string lhs, std::string rhs)
+    {
+        return core::map_edited(settings, core::ExMapRequest{core::ExMapVerb::add, modes,
+                                                             std::move(lhs), std::move(rhs), true});
+    };
+    const auto added = add(normal_only, "z", "3");
+    expect(added.has_value() &&
+               added.value().maps == std::vector<MapRow>{MapRow{normal_only, "y", "2", true},
+                                                         MapRow{normal_only, "z", "3", true}},
+           "two rows with the same saved key keep only the later one");
+    using core::ExMapFailure;
+    const std::array<std::pair<core::ExMapRequest, ExMapFailure>, 5> refusals{{
+        {{core::ExMapVerb::add, normal_only, "<Nope>", "x", true}, ExMapFailure::unknown_key},
+        {{core::ExMapVerb::add, {}, "a", "x", true}, ExMapFailure::unknown_key},
+        {{core::ExMapVerb::add, normal_only, "a", "", true}, ExMapFailure::empty_keys},
+        {{core::ExMapVerb::add, normal_only, "abcd", "x", true}, ExMapFailure::long_lhs},
+        {{core::ExMapVerb::add, normal_only, "a=b", "x", true}, ExMapFailure::unwritable},
+    }};
+    for (const auto &[request, failure] : refusals)
+    {
+        const auto refused_row = core::map_edited(settings, request);
+        expect(!refused_row.has_value() && refused_row.error() == failure,
+               "a refused row reports its map failure");
+    }
+}
+
+void verify_map_failure_messages()
+{
+    using core::ExMapFailure;
+    const std::array<std::pair<ExMapFailure, std::string_view>, 6> messages{{
+        {ExMapFailure::unknown_key, "Unknown key name in mapping"},
+        {ExMapFailure::empty_keys, "E474: Invalid argument"},
+        {ExMapFailure::long_lhs, "Mapping keys are limited to 3"},
+        {ExMapFailure::bad_leader, "mapleader must be one key"},
+        {ExMapFailure::unwritable, "Mapping cannot be saved in settings"},
+        {ExMapFailure::no_such_mapping, "E31: No such mapping"},
+    }};
+    for (const auto &[failure, text] : messages)
+    {
+        expect(core::ex_map_failure_message(failure).text() == text,
+               "each map failure has its message");
+    }
+}
 } // namespace
 
 void verify_key_map_scope()
 {
+    verify_map_names();
+    verify_leader_strings();
+    verify_map_removal();
+    verify_map_additions();
+    verify_map_failure_messages();
     verify_key_names();
     verify_map_lines();
     verify_written_rows();
