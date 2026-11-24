@@ -1,4 +1,4 @@
-# Microsoft Store の申請の手順と申告の答え — NeNe Nib 1.0.0（初回）と 1.1.0（更新）
+# Microsoft Store の申請の手順と申告の答え — NeNe Nib 1.0.0（初回）と 1.1.0・1.2.0（更新）
 
 > Issue #1582・施主決定 D88。Partner Center への入力・自己署名での確かめ・WACK・申請は hide の手（管理者権限が要る）。
 > ここは欄ごとの答えと順番の正本。掲載文は [listing.md](listing.md)、画像は [screenshots.md](screenshots.md)、
@@ -18,7 +18,7 @@
 | Publisher | `CN=C37230AA-B52D-403B-9BFD-E7980F088422`（Loupe・Folio と同じ） |
 | PublisherDisplayName | `Hideyuki Mori` |
 | Package Family Name | `HideyukiMori.NeNeNib_3sft4ch5kzywy` |
-| 版 | 1.1.0 は `1.1.0.0`（`project()` の `1.1.0` に `.0`・GitHub の ZIP は素の `1.1.0`・tag `v1.1.0`）。1.0.0 は `1.0.0.0`（D88・`project()` の `1.0.0` に `.0`）。GitHub の ZIP も同じ素の版 `1.0.0`（tag `v1.0.0`）で、1.0.0 は試験版であることを Release の題の「Beta」と pre-release の印で示した（#1596）。1.1.0 から GitHub の Release は Beta の題と pre-release の印を付けない（#1815）。同じ版の作り直しはせず、配り直すときは版を上げる |
+| 版 | 1.2.0 は `1.2.0.0`（`project()` の `1.2.0` に `.0`・GitHub の ZIP は素の `1.2.0`・tag `v1.2.0`・#2034）。1.1.0 は `1.1.0.0`（`project()` の `1.1.0` に `.0`・GitHub の ZIP は素の `1.1.0`・tag `v1.1.0`）。1.0.0 は `1.0.0.0`（D88・`project()` の `1.0.0` に `.0`）。GitHub の ZIP も同じ素の版 `1.0.0`（tag `v1.0.0`）で、1.0.0 は試験版であることを Release の題の「Beta」と pre-release の印で示した（#1596）。1.1.0 から GitHub の Release は Beta の題と pre-release の印を付けない（#1815）。同じ版の作り直しはせず、配り直すときは版を上げる |
 
 予約は申請しないまま 3 か月で外れる（SPECIFICATION の D88）。
 
