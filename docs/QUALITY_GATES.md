@@ -84,7 +84,8 @@ fixture は窓の道（窓が送るのと同じ意図を `apply`）でも再生�
 中核の分岐カバレッジ下限を 90% とする。閾値は上げてよいが下げてはならない。下げるには ADR が要る。
 **置いていない層は「置いていない」と書く。**
 
-- 機械強制: **active**（`eng/coverage.py` / `eng/coverage-policy.json`。選択して実行した際は core / application の全 `.cpp` を計装し、LLVM の分岐 90% 下限、対象欠落・空の集計・反例を検査する。測定の必要性と再利用は QLT-001 / QLT-012 に従う。2026-09-15・Issue #3。CPP-002 により到達不能な網羅性の辺も集計に残る）
+- 機械強制: **active**（`eng/coverage.py` / `eng/coverage-policy.json`。選択して実行した際は core / application の全 `.cpp` を計装し、LLVM の分岐 90% 下限、対象欠落・空の集計・反例を検査する。測定の必要性と再利用は QLT-001 / QLT-012 に従う。2026-09-15・Issue #3。CPP-002 により到達不能な網羅性の辺も集計に残る）。測定ビルドの翻訳単位は `nib_tests` とそれが結ぶ module のもので、各翻訳単位の旗（定義・include・言語の版・警告）は `build/compile_commands.json` の正典の命令から引き、道具は旗を持たない（#1921）。命令の組み立ては `tests/conformance/test_coverage.py` がビルドなしで確かめる（`eng/test-conformance.py`・CI の check job）。
+- 守れていない部分: 道具が旗を自分で組み立てていたため、遅くとも 2026-11-14（#1677 の `NENENIB_APP_VERSION`）から 2026-11-24 の #1921 まで測定ビルドがコンパイルで落ち、**この間は判定していない**（コードの読みでは、古い道具は md4c を結ばず（#765 から）、`tests/unit` の `VimReplayMain.cpp` の `main` も混ぜた（#954・2026-10-28 から）ので、リンクもそれ以前から通らなかった見込み・未実測）。#1921 の後の最初の判定（main `84c490ba`）は **88.55 %（33,912 分岐中 30,029・下限 90 % に 492 分岐足りない）で落ちる**（反例は 0.51 % で拒否）。閾値は動かさず、足りない試験は別 Issue で足す
 
 ### QLT-010 — ゲートの弱体化はアーキテクチャ変更
 
@@ -362,7 +363,7 @@ CNF-006 が「本文に定義があるのにここに行が無い」を拒否す
 | QLT-006 | planned | |
 | QLT-007 | planned | eng/prove-gates.py が 33 本の実ツールの反例を回す（#516・#571）。merge 直前の CI の `check` job が `eng/test-conformance.py` を回す（#568）。新しいゲートに証明を要求する機械は無い（レビュー事項） |
 | QLT-008 | planned | レビュー事項 |
-| QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例） |
+| QLT-009 | active | LLVM 計装・llvm-cov・eng/coverage.py（分岐 90%・反例・旗は compile_commands.json から・#1921）。2026-11-14〜11-24 は判定していない。#1921 の後の main は 88.55 % で落ちる |
 | QLT-010 | 不能 | PR の手続き |
 | QLT-011 | active | eng/toolchain.ps1 ＋ eng/tool-versions.json（eng/prove-gates.py の反例・#571）。照合は cmake・ninja・LLVM・python・PowerShell の下限。msvcToolset は `-vcvars_ver` に渡すだけで実際の版と照合する反例は無い・vim は `tool-versions.json` にあるが照合しない（oracle は版を生成物に書くだけ）・Windows SDK は固定しない・取り込み依存（md4c）は SHA-256 を CNF-013 が照合し、上流の tag との照合は無い |
 | QLT-012 | active | validate-git.ps1 / git-conventions.py の検証記録確認 ＋ merge-pr.py → check.yml の build-and-test（PR の最終 HEAD の Release ビルドと ctest・ADR 0136・run 38816724375 を gate-proofs 1-f に引用）。結果の真偽・再利用条件・GitHub UI の直接 merge はレビュー |
