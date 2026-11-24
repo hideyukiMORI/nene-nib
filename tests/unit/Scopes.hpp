@@ -127,6 +127,8 @@ void verify_indent_guides_scope();
 void verify_indent_guide_paths();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
+// SettingsChoiceTests.cpp（#1926・選ぶ欄の一覧・`--settings-panel` から呼ぶ）
+void verify_settings_choice_scope();
 void verify_language_server_candidates_scope();
 // MinimapPropertyTests.cpp（#1449・ミニマップを出したままの意図の列の性質の試験）
 void verify_minimap_property_scope();

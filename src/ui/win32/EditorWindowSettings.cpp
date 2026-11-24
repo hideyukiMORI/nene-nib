@@ -6,18 +6,24 @@
 #include "EditorWindow.hpp"
 #include "EditorWindowDetail.hpp"
 
+#include "CloseSettingsChoice.hpp"
 #include "DevicePixels.hpp"
 #include "EditorIntent.hpp"
 #include "JumpSettingsSection.hpp"
 #include "LayoutRect.hpp"
 #include "OpenSettings.hpp"
+#include "PointSettingsChoice.hpp"
 #include "ScrollSettings.hpp"
+#include "ScrollSettingsChoice.hpp"
+#include "SettingsChoices.hpp"
 #include "SettingsInput.hpp"
 #include "SettingsKeyPress.hpp"
 #include "SettingsLayout.hpp"
 #include "SettingsPart.hpp"
 #include "SettingsTarget.hpp"
+#include "TypeSettingsChoice.hpp"
 #include "WheelTurn.hpp"
+#include "WindowTimer.hpp"
 
 #include <imm.h>
 #include <windows.h>
@@ -57,10 +63,18 @@ void EditorWindow::run_open_settings()
     send(application::OpenSettings{});
 }
 
-// 面の意図を送り、焦点の行が行の領域の外なら見える所へ送りを寄せる。
+// 面の意図を送り、焦点の行が行の領域の外なら見える所へ送りを寄せる。選ぶ欄の一覧が開いていれば、
+// 選ぼうとしている行が見える所へ一覧の送りも寄せる（#1926）。一覧へ字を送ったら、打った字を忘れる
+// 1 秒のタイマーを張り直す（時刻は読まず OS のタイマーに数えさせる・MapTimeout と同じ形）。
 void EditorWindow::send_settings(const application::EditorIntent &intent)
 {
+    settings_choice_hovered_ = std::nullopt;
     send(intent);
+    if (std::holds_alternative<application::TypeSettingsChoice>(intent) && window_ != nullptr)
+    {
+        static_cast<void>(SetTimer(window_, std::to_underlying(WindowTimer::settings_choice),
+                                   settings_choice_typing_milliseconds, nullptr));
+    }
     if (renderer_ == nullptr)
     {
         return;
@@ -68,6 +82,16 @@ void EditorWindow::send_settings(const application::EditorIntent &intent)
     const auto view = controller_.settings_view();
     if (!view.has_value())
     {
+        return;
+    }
+    if (view.value().choice.has_value())
+    {
+        const auto shown =
+            renderer_->settings_choice_revealed(view.value(), controller_.display_language());
+        if (shown.has_value())
+        {
+            send(application::ScrollSettingsChoice{shown.value()});
+        }
         return;
     }
     // 行を持たない節（言語サーバー）の札と Ctrl+6 は、焦点が動かないので節の見出しへ送る。
@@ -103,9 +127,24 @@ bool EditorWindow::take_settings_key(UINT message, WPARAM word, LPARAM data)
         send_settings_all(settings_character_intents(static_cast<wchar_t>(word), control,
                                                      settings_high_surrogate_, view.value()));
         return true;
+    case WM_SYSKEYDOWN:
+        return take_settings_system_key(word, view.value());
     default:
         return false;
     }
+}
+
+// Alt+↓ / Alt+↑ は選ぶ欄の一覧を開く・閉じる（Windows のコンボボックスの標準・#1926）。ほかの Alt
+// の 鍵（Alt+F4 など）は受けず、OS の既定処理へ渡す。
+bool EditorWindow::take_settings_system_key(WPARAM word, const application::SettingsView &view)
+{
+    const auto intents = settings_system_key_intents(word, view);
+    if (!intents.has_value())
+    {
+        return false;
+    }
+    send_settings_all(intents.value());
+    return true;
 }
 
 void EditorWindow::send_settings_all(const std::vector<application::EditorIntent> &intents)
@@ -129,6 +168,8 @@ const std::optional<core::SettingsLayout> &EditorWindow::settings_layout_drawn()
 void EditorWindow::follow_settings_closing()
 {
     settings_pressed_ = std::nullopt;
+    settings_choice_pressed_ = std::nullopt;
+    settings_choice_hovered_ = std::nullopt;
     settings_high_surrogate_ = 0;
     cancel_ime_composition();
 }
@@ -142,6 +183,18 @@ bool EditorWindow::press_settings(LPARAM data)
     {
         return false;
     }
+    // 選ぶ欄の一覧が開いている間: 行の押しは覚えて載せる、一覧の外の押しは決めずに閉じる
+    // だけ（ほかの物を動かさない・#1926）。
+    if (view.value().choice.has_value())
+    {
+        const auto [held, closing] =
+            settings_choice_press_step(settings_choice_inside(data), settings_choice_under(data));
+        settings_pressed_ = std::nullopt;
+        settings_choice_pressed_ = held;
+        settings_dismissed_ = !closing.empty() && !held.has_value();
+        send_settings_all(closing);
+        return true;
+    }
     const auto [pressed, intents] = settings_press_step(
         settings_target_under(low_word_of(data), high_word_of(data)), view.value());
     settings_pressed_ = pressed;
@@ -153,6 +206,12 @@ bool EditorWindow::press_settings(LPARAM data)
 
 bool EditorWindow::release_settings(LPARAM data)
 {
+    const auto chose = std::exchange(settings_choice_pressed_, std::nullopt);
+    if (chose.has_value())
+    {
+        send_settings_all(settings_choice_release_intents(chose, settings_choice_under(data)));
+        return true;
+    }
     const auto pressed = std::exchange(settings_pressed_, std::nullopt);
     const auto view = controller_.settings_view();
     if (!pressed.has_value() || !view.has_value())
@@ -172,9 +231,73 @@ bool EditorWindow::press_settings_right(LPARAM data)
     {
         return false;
     }
+    // 一覧が開いていれば、どこの右クリックも一覧を決めずに閉じるだけ（#1926）。
+    if (settings_choice_shown())
+    {
+        send_settings(application::CloseSettingsChoice{});
+        return true;
+    }
     send_settings_all(
         settings_right_press_intents(settings_target_under(low_word_of(data), high_word_of(data))));
     return true;
+}
+
+// 選ぶ欄の一覧を描いているか（描いた配置があるか）。
+bool EditorWindow::settings_choice_shown() const noexcept
+{
+    return renderer_ != nullptr && renderer_->settings_choice_layout().has_value();
+}
+
+// 点の下の一覧の選択肢（一覧の外と上下の空きは値なし）。
+std::optional<std::size_t> EditorWindow::settings_choice_under(LPARAM data) const
+{
+    if (renderer_ == nullptr)
+    {
+        return std::nullopt;
+    }
+    const auto &layout = renderer_->settings_choice_layout();
+    if (!layout.has_value())
+    {
+        return std::nullopt;
+    }
+    return core::settings_choice_hit(layout.value(), low_word_of(data), high_word_of(data));
+}
+
+bool EditorWindow::settings_choice_inside(LPARAM data) const
+{
+    if (renderer_ == nullptr)
+    {
+        return false;
+    }
+    const auto &layout = renderer_->settings_choice_layout();
+    return layout.has_value() &&
+           core::contains(layout.value().panel, low_word_of(data), high_word_of(data));
+}
+
+// 一覧の上のマウスの動き: 載せた行を選ぼうとしている行にする（同じ行の動きでは送らない）。一覧の上
+// なら真（下の面・本文へ渡さない）。
+bool EditorWindow::point_settings_choice(LPARAM data)
+{
+    if (!settings_choice_inside(data))
+    {
+        return false;
+    }
+    const auto under = settings_choice_under(data);
+    if (under.has_value() && under != settings_choice_hovered_)
+    {
+        send_settings(application::PointSettingsChoice{under.value()});
+        settings_choice_hovered_ = under;
+    }
+    return true;
+}
+
+// 窓の大きさが変わったら一覧を決めずに閉じる（#1926・設計席の決め）。
+void EditorWindow::close_settings_choice_on_resize()
+{
+    if (settings_choice_shown())
+    {
+        send(application::CloseSettingsChoice{});
+    }
 }
 
 // 面の外を押して閉じた直後の 2 回目の押しか（読んだら消す）。
@@ -206,6 +329,10 @@ bool EditorWindow::wheel_settings(std::int32_t delta, LPARAM data)
     // WM_MOUSEWHEEL の位置は画面の座標なので、クライアントの座標に直してから見る。
     POINT point{low_word_of(data), high_word_of(data)};
     ScreenToClient(window_, &point);
+    if (settings_choice_shown())
+    {
+        return wheel_settings_choice(delta, point);
+    }
     if (!settings_takes_wheel(renderer_->settings_target_at(point.x, point.y)))
     {
         return false;
@@ -221,6 +348,31 @@ bool EditorWindow::wheel_settings(std::int32_t delta, LPARAM data)
     if (top.has_value())
     {
         send(application::ScrollSettings{top.value()});
+    }
+    return true;
+}
+
+// 一覧が開いている間のホイール: 一覧の上は一覧を送る（選ぼうとしている位置は動かさない）、面の上の
+// ほかの所は何もしない、面の外は今の道（本文の送り・本文の操作なので一覧は閉じる）へ（#1926）。
+bool EditorWindow::wheel_settings_choice(std::int32_t delta, POINT point)
+{
+    const auto &layout = renderer_->settings_choice_layout();
+    if (!layout.has_value() || !core::contains(layout.value().panel, point.x, point.y))
+    {
+        return settings_takes_wheel(renderer_->settings_target_at(point.x, point.y));
+    }
+    const auto turn =
+        wheel_turned(settings_wheel_remainder_, delta,
+                     wheel_lines_per_notch(wheel_setting_, core::settings_choice_rows));
+    settings_wheel_remainder_ = turn.remainder;
+    const auto view = controller_.settings_view();
+    const auto top = turn.lines == 0 || !view.has_value()
+                         ? std::nullopt
+                         : renderer_->settings_choice_scrolled(
+                               view.value(), controller_.display_language(), turn.lines);
+    if (top.has_value())
+    {
+        send(application::ScrollSettingsChoice{top.value()});
     }
     return true;
 }

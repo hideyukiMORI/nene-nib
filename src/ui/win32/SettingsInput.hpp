@@ -8,6 +8,9 @@
 #include "SettingsTarget.hpp"
 #include "SettingsView.hpp"
 
+#include <windows.h>
+
+#include <cstddef>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -20,6 +23,8 @@ namespace nenenib::ui::win32
 // （application の is_settings_intent の集合）だけで、本文を変える意図は 1 つも返さない。
 using SettingsIntents = std::vector<application::EditorIntent>;
 
+// 選ぶ欄の一覧が開いている間（view.choice）の鍵と文字は一覧へ（settings_choice_key_action・↑ ↓ は
+// 端で止まる・Space は決める・字は頭文字の跳び・#1926）。
 // WM_KEYDOWN。鍵の表（settings_key_action / settings_section_key）の行き先を、今の view と最後に
 // 描いた配置 layout（PageUp / PageDown の行き先・描く前は 1 行だけ動く）から意図にする。Esc と
 // Ctrl+, は CloseSettings の 1 つ（長押しの反復では閉じない＝開閉を繰り返さない）。
@@ -45,6 +50,20 @@ settings_press_step(core::SettingsTarget target, const application::SettingsView
                                                        const application::SettingsView &view);
 // 右の押し。面の外は CloseSettings の 1 つ、中は何もしない（どちらも本文のメニューを開かない）。
 [[nodiscard]] SettingsIntents settings_right_press_intents(core::SettingsTarget target);
+
+// WM_SYSKEYDOWN（Alt つきの鍵・#1926）。Alt+↓ は焦点の行の選ぶ欄の一覧を開き、Alt+↑ は開いている
+// 一覧を決めずに閉じる（Windows のコンボボックスの標準）。ほかの鍵は値なし（OS の既定処理へ渡す・
+// Alt+F4 を止めない）。
+[[nodiscard]] std::optional<SettingsIntents>
+settings_system_key_intents(WPARAM key, const application::SettingsView &view);
+// 一覧が開いている間の左の押し。inside は一覧の矩形の中か、choice はその下の選択肢。一覧の外は
+// CloseSettingsChoice の 1 つ（その押しはほかの物を動かさない）、行の上はその行を選ぼうとしている
+// 行にして押した行を覚える、一覧の上下の空きは何もしない。
+[[nodiscard]] std::pair<std::optional<std::size_t>, SettingsIntents>
+settings_choice_press_step(bool inside, std::optional<std::size_t> choice);
+// 一覧の上の左の離し。押した行と同じ行で離したときだけ、その行に決める。
+[[nodiscard]] SettingsIntents settings_choice_release_intents(std::optional<std::size_t> pressed,
+                                                              std::optional<std::size_t> released);
 
 // ホイールを面が取るか。面の上だけ（行の領域を送る）で、面の外（本文・帯・エクスプローラー）の
 // ホイールは今の道へ渡す（application は送るだけの意図で面を閉じない）。

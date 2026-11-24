@@ -1,6 +1,7 @@
 #include "ContextMenuPainter.hpp"
 
 #include "ContextMenu.hpp"
+#include "ContextMenuShape.hpp"
 #include "DevicePixels.hpp"
 #include "PaletteRowKey.hpp"
 #include "RgbaColor.hpp"
@@ -16,10 +17,11 @@ namespace nenenib::ui::win32
 namespace
 {
 constexpr float full_channel = 255.0F;
-// 面と同じ角丸（Ctrl+P の面 10 DIP・選んだ行 6 DIP）と、選んだ行の地の左右の内側。
-constexpr float panel_radius_dips = 10.0F;
-constexpr float row_radius_dips = 6.0F;
-constexpr std::int32_t row_inset_dips = 4;
+// 面と同じ角丸（Ctrl+P の面 10 DIP・選んだ行 6 DIP）と、選んだ行の地の左右の内側（設定の選ぶ欄の
+// 一覧も同じ値を引く・#1926）。
+constexpr float panel_radius_dips = core::context_menu_radius_dips;
+constexpr float row_radius_dips = core::context_menu_row_radius_dips;
+constexpr std::int32_t row_inset_dips = core::context_menu_row_inset_dips;
 // 幅を測る文字組みの箱（折り返さないので幅は箱に依らない）。
 constexpr std::int32_t measured_extent = 4096;
 

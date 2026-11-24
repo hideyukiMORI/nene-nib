@@ -6,8 +6,10 @@
 // 面が閉じた所で変換の取り消しを 1 回だけ呼ぶ。IME の実機は試験にできないので、取り消しを呼ぶ
 // 1 か所（settings_just_closed）を通る回数を数える。
 #include "ChangeSetting.hpp"
+#include "ChooseSettingsChoice.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "CloseSettings.hpp"
+#include "CloseSettingsChoice.hpp"
 #include "EditorFeature.hpp"
 #include "EditorIntent.hpp"
 #include "FilterSettings.hpp"
@@ -16,8 +18,11 @@
 #include "LanguageServerRowAction.hpp"
 #include "LanguageServerRowState.hpp"
 #include "LanguageServerRowView.hpp"
+#include "OpenSettingsChoice.hpp"
+#include "PointSettingsChoice.hpp"
 #include "RevertSettings.hpp"
 #include "ScrollSettings.hpp"
+#include "SettingsChoiceView.hpp"
 #include "SettingsInput.hpp"
 #include "SettingsKeyPress.hpp"
 #include "SettingsLayout.hpp"
@@ -33,6 +38,7 @@
 #include "SettingsValue.hpp"
 #include "SettingsView.hpp"
 #include "StepSettings.hpp"
+#include "TypeSettingsChoice.hpp"
 #include "WindowChecks.hpp"
 
 #include <windows.h>
@@ -42,7 +48,9 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace nenenib::tests::ui
 {
@@ -109,7 +117,32 @@ constexpr WPARAM key_count = 256;
            std::holds_alternative<app::FilterSettings>(intent) ||
            std::holds_alternative<app::JumpSettingsSection>(intent) ||
            std::holds_alternative<app::FocusSettingsRow>(intent) ||
-           std::holds_alternative<app::ScrollSettings>(intent);
+           std::holds_alternative<app::ScrollSettings>(intent) ||
+           std::holds_alternative<app::OpenSettingsChoice>(intent) ||
+           std::holds_alternative<app::PointSettingsChoice>(intent) ||
+           std::holds_alternative<app::ChooseSettingsChoice>(intent) ||
+           std::holds_alternative<app::CloseSettingsChoice>(intent) ||
+           std::holds_alternative<app::TypeSettingsChoice>(intent);
+}
+
+// 配色の行（焦点）に一覧を開いた見本（12 個の選択肢・今の値 2・選ぼうとしている位置 at）。
+[[nodiscard]] app::SettingsView listed(std::size_t at, std::string typed)
+{
+    auto view = sample(0, {});
+    std::vector<std::string> choices;
+    for (std::size_t index = 0; index < 12; ++index)
+    {
+        choices.push_back("choice-" + std::to_string(index));
+    }
+    view.choice = app::SettingsChoiceView{std::move(choices), 2, at, 0, std::move(typed)};
+    return view;
+}
+
+[[nodiscard]] bool points_at(const SettingsIntents &intents, std::size_t at)
+{
+    return intents.size() == 1 &&
+           std::holds_alternative<app::PointSettingsChoice>(intents.front()) &&
+           std::get<app::PointSettingsChoice>(intents.front()).choice == at;
 }
 
 // 言語サーバーの行の無い所の押しの覚え（身元は空）。
@@ -332,6 +365,115 @@ void verify_composition_is_cancelled_on_close()
                !settings_just_closed(true, true),
            "opening, staying open and staying closed do not touch the IME");
 }
+
+// #1926: 一覧を開く 4 つの道（値の箱のクリック・Enter / Space・Alt+↓・F4）と、開かずに送る ← →。
+// スイッチの行の Enter / Space は今までどおり切り替える。
+void verify_choice_opening()
+{
+    const auto theme = sample(0, {});
+    const auto guide = sample(guide_row, {});
+    expect(only<app::OpenSettingsChoice>(pressed(VK_RETURN, false, false, theme)) &&
+               only<app::OpenSettingsChoice>(pressed(VK_F4, false, false, theme)) &&
+               only<app::OpenSettingsChoice>(typed(L' ', false, theme)),
+           "Enter, F4 and Space open the list of a choice row");
+    expect(only<app::ChangeSetting>(pressed(VK_RETURN, false, false, guide)) &&
+               only<app::ChangeSetting>(typed(L' ', false, guide)) &&
+               pressed(VK_F4, false, false, guide).empty() &&
+               only<app::ChangeSetting>(pressed(VK_RIGHT, false, false, theme)) &&
+               only<app::ChangeSetting>(pressed(VK_LEFT, false, false, theme)),
+           "a switch row still toggles and the arrows step a choice without opening it");
+    using nenenib::ui::win32::settings_system_key_intents;
+    const auto down = settings_system_key_intents(VK_DOWN, theme);
+    const auto off = settings_system_key_intents(VK_DOWN, guide);
+    const auto up = settings_system_key_intents(VK_UP, listed(2, {}));
+    expect(down.has_value() && only<app::OpenSettingsChoice>(down.value()) && off.has_value() &&
+               off.value().empty() && up.has_value() &&
+               only<app::CloseSettingsChoice>(up.value()) &&
+               !settings_system_key_intents(VK_F4, theme).has_value() &&
+               !settings_system_key_intents('X', theme).has_value(),
+           "Alt+Down opens, Alt+Up closes and other Alt keys are left to the system (Alt+F4)");
+    using core::SettingsPart;
+    using core::SettingsTarget;
+    const SettingsTarget box{SettingsPart::row_value, 0};
+    const auto clicked = settings_release_intents(pressing(box), box, theme);
+    expect(clicked.size() == 2 && std::holds_alternative<app::FocusSettingsRow>(clicked.front()) &&
+               std::holds_alternative<app::OpenSettingsChoice>(clicked.back()),
+           "clicking the value box focuses the row and opens its list");
+}
+
+// #1926: 一覧が開いている間の鍵と字。↑ ↓ は端で止まる・Home / End・PgUp / PgDn・Enter / Space / Tab
+// で決める・Esc と F4 は決めずに閉じる・Ctrl+, は面ごと閉じる・字は頭文字の跳び・Backspace は打った
+// 字の 1 つ。ほかの鍵（← → と Ctrl+Z と節の鍵）は捨てる。
+void verify_choice_keys()
+{
+    expect(points_at(pressed(VK_UP, false, false, listed(2, {})), 1) &&
+               points_at(pressed(VK_DOWN, false, false, listed(2, {})), 3) &&
+               pressed(VK_UP, false, false, listed(0, {})).empty() &&
+               pressed(VK_DOWN, false, false, listed(11, {})).empty(),
+           "the arrows move the chosen row one step and stop at the ends");
+    expect(points_at(pressed(VK_HOME, false, false, listed(5, {})), 0) &&
+               points_at(pressed(VK_END, false, false, listed(5, {})), 11) &&
+               points_at(pressed(VK_NEXT, false, false, listed(1, {})), 10) &&
+               points_at(pressed(VK_PRIOR, false, false, listed(5, {})), 0) &&
+               pressed(VK_HOME, false, false, listed(0, {})).empty(),
+           "Home, End and the page keys move to the ends and by a page");
+    const auto list = listed(4, {});
+    expect(only<app::ChooseSettingsChoice>(pressed(VK_RETURN, false, false, list)) &&
+               only<app::ChooseSettingsChoice>(pressed(VK_TAB, false, false, list)) &&
+               only<app::ChooseSettingsChoice>(typed(L' ', false, list)),
+           "Enter, Tab and Space choose the row");
+    expect(only<app::CloseSettingsChoice>(pressed(VK_ESCAPE, false, false, list)) &&
+               only<app::CloseSettingsChoice>(pressed(VK_F4, false, false, list)) &&
+               pressed(VK_ESCAPE, false, true, list).empty() &&
+               only<app::CloseSettings>(pressed(VK_OEM_COMMA, true, false, list)),
+           "Esc and F4 close the list first and Ctrl+, closes the whole panel");
+    expect(pressed(VK_LEFT, false, false, list).empty() &&
+               pressed(VK_RIGHT, false, false, list).empty() &&
+               pressed('Z', true, false, list).empty() && pressed('1', true, false, list).empty(),
+           "other keys are swallowed while the list is open");
+    const auto letter = typed(L'S', false, listed(4, "o"));
+    const auto erased = pressed(VK_BACK, false, false, listed(4, "ab"));
+    expect(only<app::TypeSettingsChoice>(letter) &&
+               std::get<app::TypeSettingsChoice>(letter.front()).typed == "oS" &&
+               only<app::TypeSettingsChoice>(erased) &&
+               std::get<app::TypeSettingsChoice>(erased.front()).typed == "a" &&
+               pressed(VK_BACK, false, false, list).empty() && typed(L'a', true, list).empty(),
+           "letters go to the jump, not to the search, and Backspace removes one of them");
+    bool panel_only = true;
+    for (WPARAM key = 0; key < key_count; ++key)
+    {
+        for (const bool control : {false, true})
+        {
+            panel_only = panel_only &&
+                         std::ranges::all_of(pressed(key, control, false, list), is_panel_intent) &&
+                         std::ranges::all_of(typed(static_cast<wchar_t>(key), control, list),
+                                             is_panel_intent);
+        }
+    }
+    expect(panel_only, "every key and character of the open list maps to panel intents only");
+}
+
+// #1926: 一覧の上のマウス。外の押しは閉じるだけ・行の押しはその行を選ぼうとしている行にする・同じ行
+// で離すと決める・ほかの行や外で離すと何もしない・上下の空きは何もしない。
+void verify_choice_mouse()
+{
+    using nenenib::ui::win32::settings_choice_press_step;
+    using nenenib::ui::win32::settings_choice_release_intents;
+    const auto [nothing, closing] = settings_choice_press_step(false, std::nullopt);
+    const auto [held, pointing] = settings_choice_press_step(true, 3);
+    const auto [gap, silent] = settings_choice_press_step(true, std::nullopt);
+    expect(!nothing.has_value() && only<app::CloseSettingsChoice>(closing) &&
+               held == std::optional<std::size_t>{3} && points_at(pointing, 3) &&
+               !gap.has_value() && silent.empty(),
+           "a press outside closes the list and a press on a row points at it");
+    const auto chosen = settings_choice_release_intents(held, 3);
+    expect(chosen.size() == 2 && std::holds_alternative<app::PointSettingsChoice>(chosen.front()) &&
+               std::holds_alternative<app::ChooseSettingsChoice>(chosen.back()) &&
+               settings_choice_release_intents(held, 4).empty() &&
+               settings_choice_release_intents(held, std::nullopt).empty() &&
+               settings_choice_release_intents(std::nullopt, 3).empty(),
+           "releasing on the pressed row chooses it and anywhere else does nothing");
+}
 } // namespace
 
 void verify_settings_input()
@@ -343,5 +485,8 @@ void verify_settings_input()
     verify_mouse();
     verify_press_survives_shifted_rows();
     verify_composition_is_cancelled_on_close();
+    verify_choice_opening();
+    verify_choice_keys();
+    verify_choice_mouse();
 }
 } // namespace nenenib::tests::ui

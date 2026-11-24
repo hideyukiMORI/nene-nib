@@ -5,12 +5,15 @@
 #include "DevicePixels.hpp"
 #include "EditorFrame.hpp"
 #include "LayoutRect.hpp"
+#include "SettingsChoices.hpp"
 #include "SettingsPanel.hpp"
 #include "SettingsPanelPainter.hpp"
 #include "SettingsPart.hpp"
 #include "SettingsSection.hpp"
 #include "UiLocale.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -86,6 +89,7 @@ void Direct2DRenderer::draw_settings(const application::EditorFrame &frame,
             settings_layouts_.clear();
             settings_layout_.reset();
         }
+        settings_choice_layout_.reset();
         return;
     }
     if (!settings_formats_made())
@@ -98,6 +102,57 @@ void Direct2DRenderer::draw_settings(const application::EditorFrame &frame,
                                  settings_layouts_);
     settings_area_ = area;
     settings_layout_ = painter.arranged(view, area);
+    settings_choice_layout_ = painter.arranged_choice(view, settings_layout_.value());
     painter.paint(view, settings_layout_.value(), frame.palette, frame.body.error);
+}
+
+const std::optional<core::SettingsChoiceLayout> &
+Direct2DRenderer::settings_choice_layout() const noexcept
+{
+    return settings_choice_layout_;
+}
+
+// 一覧の配置は view から作り直す（描く前に 2 通来ても今の値で寄せる・settings_revealed と同じ）。
+std::optional<core::SettingsChoiceLayout>
+Direct2DRenderer::settings_choice_arranged(const application::SettingsView &view,
+                                           core::DisplayLanguage language)
+{
+    if (!settings_layout_.has_value() || !view.choice.has_value() || !settings_formats_made())
+    {
+        return std::nullopt;
+    }
+    const SettingsPanelPainter painter(*context_.Get(), *brush_.Get(),
+                                       settings_formats_.text(dwrite_.Get(), dpi_, language),
+                                       settings_layouts_);
+    return painter.arranged_choice(view, painter.arranged(view, settings_area_));
+}
+
+std::optional<std::size_t>
+Direct2DRenderer::settings_choice_revealed(const application::SettingsView &view,
+                                           core::DisplayLanguage language)
+{
+    const auto layout = settings_choice_arranged(view, language);
+    if (!layout.has_value() || !view.choice.has_value())
+    {
+        return std::nullopt;
+    }
+    const auto &choice = view.choice.value();
+    const auto top = core::settings_choice_revealing(layout.value(), choice.candidate);
+    return top == choice.top ? std::nullopt : std::optional{top};
+}
+
+std::optional<std::size_t>
+Direct2DRenderer::settings_choice_scrolled(const application::SettingsView &view,
+                                           core::DisplayLanguage language, std::int32_t lines)
+{
+    const auto layout = settings_choice_arranged(view, language);
+    if (!layout.has_value() || lines == 0)
+    {
+        return std::nullopt;
+    }
+    const auto first = static_cast<std::int64_t>(layout.value().first);
+    const auto last = static_cast<std::int64_t>(layout.value().count - layout.value().rows);
+    const auto moved = std::clamp(first + lines, std::int64_t{0}, last);
+    return moved == first ? std::nullopt : std::optional{static_cast<std::size_t>(moved)};
 }
 } // namespace nenenib::ui::win32

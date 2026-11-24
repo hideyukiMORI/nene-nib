@@ -239,6 +239,7 @@ class EditorWindow final
     // マウス・ホイール・IME を面の意図にする。開いていなければどれも false / 値なし（今の道へ）。
     // 鍵・文字・マウスを意図の列に写すのは SettingsInput の純関数（窓を作らずに試す）。
     [[nodiscard]] bool take_settings_key(UINT message, WPARAM word, LPARAM data);
+    [[nodiscard]] bool take_settings_system_key(WPARAM word, const application::SettingsView &view);
     // 面の外の Ctrl+, の長押しの反復か（捨てる＝開閉を繰り返さない）。
     [[nodiscard]] bool swallow_repeated_settings_key(WPARAM word, LPARAM data) const;
     // 面の意図を送ってから、焦点の行が見える所へ行の領域の送りを寄せる。
@@ -256,6 +257,14 @@ class EditorWindow final
     // 点（クライアントの座標）が開いている面の上か。配置を読むだけで frame を作らない。
     [[nodiscard]] bool over_settings(LPARAM data) const;
     [[nodiscard]] bool wheel_settings(std::int32_t delta, LPARAM data);
+    // 選ぶ欄の一覧（#1926）。描いた一覧があるか・点の下の選択肢・点が一覧の中か・マウスの動き・一覧の
+    // 上のホイール・窓の大きさが変わったときに閉じる。
+    [[nodiscard]] bool settings_choice_shown() const noexcept;
+    [[nodiscard]] std::optional<std::size_t> settings_choice_under(LPARAM data) const;
+    [[nodiscard]] bool settings_choice_inside(LPARAM data) const;
+    [[nodiscard]] bool point_settings_choice(LPARAM data);
+    [[nodiscard]] bool wheel_settings_choice(std::int32_t delta, POINT point);
+    void close_settings_choice_on_resize();
     [[nodiscard]] core::SettingsTarget settings_target_under(std::int32_t x, std::int32_t y) const;
     [[nodiscard]] std::optional<LRESULT> compose_settings(UINT message, WPARAM word, LPARAM data);
     void place_settings_composition(const core::LayoutRect &search);
@@ -705,6 +714,10 @@ class EditorWindow final
     // 設定の面の上で押した部品と行の身元（離したときに同じなら動かす・#1945 の
     // R2）・ホイールの余り・探す欄へ打つ 文字の上位サロゲート（#1836）。
     std::optional<SettingsPress> settings_pressed_;
+    // 選ぶ欄の一覧の上で押した行（離したときに同じ行なら決める）と、マウスを載せて送った行（同じ行の
+    // 動きでは送らない・#1926）。
+    std::optional<std::size_t> settings_choice_pressed_;
+    std::optional<std::size_t> settings_choice_hovered_;
     std::int32_t settings_wheel_remainder_ = 0;
     wchar_t settings_high_surrogate_ = 0;
     // 直前の delivery で面が開いていたか（閉じた所を見つける）と、面の外の押しで閉じた直後か。

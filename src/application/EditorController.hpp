@@ -1561,6 +1561,17 @@ class EditorController final
     void accept(const JumpSettingsSection &intent);
     void accept(const FocusSettingsRow &intent);
     void accept(const ScrollSettings &intent);
+    // 選ぶ欄の一覧（#1926・同じ群）。
+    void accept(const OpenSettingsChoice &);
+    void accept(const PointSettingsChoice &intent);
+    void accept(const ScrollSettingsChoice &intent);
+    void accept(const ChooseSettingsChoice &);
+    void accept(const CloseSettingsChoice &);
+    void accept(const TypeSettingsChoice &intent);
+    void accept(const SettingsChoiceTimeout &);
+    // 開いている一覧の選択肢の数（一覧が無ければ 0）と表示値。
+    [[nodiscard]] std::size_t settings_choice_count() const noexcept;
+    [[nodiscard]] std::optional<SettingsChoiceView> settings_choice_view() const;
     // 入口の 1
     // か所（apply）。面が開いていて、意図が面の意図でも使う人の操作でない意図でもなければ、
     // 写す前に閉じて保存する。

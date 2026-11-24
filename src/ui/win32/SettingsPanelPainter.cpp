@@ -1,5 +1,6 @@
 #include "SettingsPanelPainter.hpp"
 
+#include "ContextMenuShape.hpp"
 #include "CostTier.hpp"
 #include "DevicePixels.hpp"
 #include "EditMode.hpp"
@@ -14,6 +15,10 @@
 #include "OperationBindings.hpp"
 #include "PaletteRowKey.hpp"
 #include "PaletteTextRole.hpp"
+#include "RgbaColor.hpp"
+#include "SettingsChoiceRequest.hpp"
+#include "SettingsChoiceView.hpp"
+#include "SettingsChoices.hpp"
 #include "SettingsControl.hpp"
 #include "SettingsItemKind.hpp"
 #include "SettingsLayoutRow.hpp"
@@ -183,6 +188,90 @@ void SettingsPanelPainter::paint(const application::SettingsView &view,
     paint_items(view, layout);
     target_.PopAxisAlignedClip();
     paint_footer(view, layout);
+    // 選ぶ欄の一覧は面のほかの全部の上に描く（行の領域の切り抜きの外・#1926）。
+    const auto choice = arranged_choice(view, layout);
+    if (choice.has_value() && view.choice.has_value())
+    {
+        paint_choice(view.choice.value(), choice.value());
+    }
+}
+
+std::optional<core::SettingsChoiceLayout>
+SettingsPanelPainter::arranged_choice(const application::SettingsView &view,
+                                      const core::SettingsLayout &layout) const
+{
+    if (!view.choice.has_value() || !view.focused.has_value())
+    {
+        return std::nullopt;
+    }
+    const std::size_t focused = view.focused.value();
+    const auto row = std::ranges::find_if(
+        layout.items, [focused](const core::SettingsLayoutItem &item)
+        { return item.kind == core::SettingsItemKind::row && item.index == focused; });
+    if (row == layout.items.end())
+    {
+        return std::nullopt;
+    }
+    std::int32_t widest = 0;
+    for (const auto &choice : view.choice.value().choices)
+    {
+        widest = std::max(widest, width(choice, text_.value));
+    }
+    const auto &choice = view.choice.value();
+    return core::settings_choice_layout(
+        core::SettingsChoiceRequest{core::settings_control_box(layout, *row),
+                                    core::LayoutRect{layout.list.left, layout.panel.top,
+                                                     layout.list.right, layout.panel.bottom},
+                                    text_.dpi, choice.choices.size(), choice.top, widest});
+}
+
+// 選ぶ欄の一覧（採用案 2026-11-24）。地は background・枠は panel_border の 1 DIP・角と行の高さは
+// 右クリックのメニューと同じ。今の値の行に ✓（text・色ではなく形）。選ぼうとしている行は selection
+// の 面 ＋ text の 1 DIP の枠。送れるときは右端に panel_border の細い棒。
+void SettingsPanelPainter::paint_choice(const application::SettingsChoiceView &choice,
+                                        const core::SettingsChoiceLayout &layout)
+{
+    fill_rounded(layout.panel, core::context_menu_radius_dips, palette_.background);
+    outline(layout.panel, core::context_menu_radius_dips, palette_.panel_border);
+    const auto inset = pixels(core::context_menu_row_inset_dips);
+    for (std::size_t index = 0; index < layout.rows; ++index)
+    {
+        const std::size_t shown = layout.first + index;
+        if (shown >= choice.choices.size())
+        {
+            break;
+        }
+        if (shown == choice.candidate)
+        {
+            const auto row = core::settings_choice_row(layout, index);
+            const core::LayoutRect chosen{row.left + inset, row.top, row.right - inset, row.bottom};
+            fill_translucent(chosen, core::context_menu_row_radius_dips, palette_.selection);
+            outline(chosen, core::context_menu_row_radius_dips, palette_.text);
+        }
+        if (choice.current == std::optional{shown})
+        {
+            paint_check(core::settings_choice_mark(layout, index));
+        }
+        write(choice.choices.at(shown), text_.value, core::settings_choice_label(layout, index),
+              palette_.text);
+    }
+    const auto thumb = core::settings_choice_thumb(layout);
+    if (core::width_of(thumb) > 0)
+    {
+        fill_rounded(thumb, static_cast<float>(core::settings_choice_bar_dips) / 2.0F,
+                     palette_.panel_border);
+    }
+}
+
+// ✓（印の欄の中ほどに 2 本の線）。
+void SettingsPanelPainter::paint_check(const core::LayoutRect &mark)
+{
+    const auto centre = centre_of(mark);
+    const float half = scaled(glyph_half_dips);
+    stroke(D2D1::Point2F(centre.x - half, centre.y),
+           D2D1::Point2F(centre.x - scaled(1.0F), centre.y + scaled(3.0F)), palette_.text);
+    stroke(D2D1::Point2F(centre.x - scaled(1.0F), centre.y + scaled(3.0F)),
+           D2D1::Point2F(centre.x + half, centre.y - half), palette_.text);
 }
 
 void SettingsPanelPainter::paint_header(const core::SettingsLayout &layout)
@@ -527,6 +616,11 @@ void SettingsPanelPainter::paint_any_row(const application::SettingsView &view,
     if (item.index < view.rows.size())
     {
         paint_row(view.rows.at(item.index), layout, item);
+        // 一覧が開いている間、値の箱の枠は text（#1926）。
+        if (view.choice.has_value() && view.focused == std::optional{item.index})
+        {
+            outline(core::settings_control_box(layout, item), box_radius_dips, palette_.text);
+        }
         return;
     }
     const std::size_t server = item.index - view.rows.size();
@@ -851,6 +945,17 @@ void SettingsPanelPainter::fill_rounded(const core::LayoutRect &area, float radi
                                         core::RgbColor color)
 {
     brush_.SetColor(to_color(color));
+    target_.FillRoundedRectangle(
+        D2D1::RoundedRect(to_rect(area), scaled(radius_dips), scaled(radius_dips)), &brush_);
+}
+
+// 透ける色の角丸の面（選択の面・Ctrl+P の面と右クリックのメニューの選んだ行と同じ）。
+void SettingsPanelPainter::fill_translucent(const core::LayoutRect &area, float radius_dips,
+                                            core::RgbaColor color)
+{
+    auto translucent = to_color(color.color);
+    translucent.a = static_cast<float>(color.alpha) / full_channel;
+    brush_.SetColor(translucent);
     target_.FillRoundedRectangle(
         D2D1::RoundedRect(to_rect(area), scaled(radius_dips), scaled(radius_dips)), &brush_);
 }
