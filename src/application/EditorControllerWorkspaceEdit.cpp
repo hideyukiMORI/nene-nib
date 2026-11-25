@@ -12,6 +12,7 @@
 #include "EditHistory.hpp"
 #include "EditorControllerDetail.hpp"
 #include "FilePath.hpp"
+#include "FilePort.hpp"
 #include "FileUri.hpp"
 #include "FormattedSpan.hpp"
 #include "FormattingPieces.hpp"
@@ -61,6 +62,8 @@
 // - 開いているタブは、頼んだときの写しの改訂番号と同じ（照合 (b)）。頼んだ席が `didOpen` していた
 //   文書は答えの版も今の改訂番号と同じ（照合 (c)）。`didOpen` していなかった文書は、未保存の変更が
 //   無いときだけ（サーバーはディスクの本文で数えている）。
+// - 頼んだときにタブに在ったファイルは今も同じタブに在り、当て先のタブは頼んだときも同じファイル
+//   （写しのパス・displaced_since・#2042）。
 // - タブの無いファイルは開く道と同じ読みの port で 4 MiB まで、同期に揃った UTF-8 の本文だけ。
 // - まだ読んでいないタブは reach_tab で読む（揃わなければ断る）。
 // - まだ文字組みの問いを判定していない本文に巨大な行が無い。各ファイルの編集を formatted_span で
@@ -181,27 +184,30 @@ revision_and_saved(const core::EditHistory &history, const Document &document)
                                 : std::optional{core::UiMessage::notice_server_edit_not_utf8};
 }
 
-// 当て先 place が、頼んだときの写し opened に在ったタブか。
-[[nodiscard]] bool copied_place(const std::variant<AutosaveId, UnopenedFile> &place,
-                                const std::vector<OpenedRevision> &opened)
+// 当て先のファイル path（今の置き場は place）が、頼んだときの写し opened と食い違うか（#2042・
+// #2039 の形を含む）。サーバーは頼んだときにタブに在ったファイルをそのタブのバッファの本文で、
+// 無かったファイルをディスクの本文で数えた。次のどちらかなら、今の当て先はサーバーが数えた本文
+// ではない:
+// - 頼んだときにタブに在ったファイルが、今は同じタブに無い（閉じた・閉じて開き直した・名前を
+//   付けて保存で別のパスにした）。
+// - 当て先のタブが、頼んだときは別のファイル（か無題）だった（名前を付けて保存でこのパスにした・
+//   何も書いていない無題に開いた）。
+// 写しに無いタブ（頼んだ後に開いた・まだ読んでいない）とタブの無いファイルは、頼んだときにタブに
+// 無かったファイルなら食い違わない（そこから先は server_edit_check とディスクの読みの規則）。
+[[nodiscard]] bool displaced_since(const std::variant<AutosaveId, UnopenedFile> &place,
+                                   const core::FilePath &path,
+                                   const std::vector<OpenedRevision> &opened, const FilePort &files)
 {
     const auto *tab = std::get_if<AutosaveId>(&place);
-    return tab != nullptr && std::ranges::find(opened, *tab, &OpenedRevision::tab) != opened.end();
-}
-
-// 写しに在ったタブが 1 つでも帯から消えた後に、写しに無い当て先（タブの無いファイル・頼んだ後に
-// 開いたタブ・まだ読んでいないタブ）があるか（#2039）。写しはパスを持たないので、消えたタブが
-// どのファイルだったかを言えない。サーバーは消えたタブのバッファの本文で数えたかもしれないので、
-// ディスクから読んだ本文や開き直したタブに当てない。
-[[nodiscard]] bool lost_copied_tab(const std::vector<ServerEditFile> &files,
-                                   const std::vector<OpenedRevision> &opened,
-                                   const std::vector<AutosaveId> &ids)
-{
-    const bool lost =
-        std::ranges::any_of(opened, [&ids](const OpenedRevision &copied)
-                            { return std::ranges::find(ids, copied.tab) == ids.end(); });
-    return lost && !std::ranges::all_of(files, [&opened](const ServerEditFile &file)
-                                        { return copied_place(file.place, opened); });
+    return std::ranges::any_of(opened,
+                               [tab, &path, &files](const OpenedRevision &copied)
+                               {
+                                   const bool same_tab = tab != nullptr && copied.tab == *tab;
+                                   const bool same_path =
+                                       copied.path.has_value() &&
+                                       files.same_file(copied.path.value(), path);
+                                   return same_tab != same_path;
+                               });
 }
 } // namespace
 
@@ -283,10 +289,6 @@ EditorController::server_edit_files(const core::LspWorkspaceEdit &edit,
             return std::unexpected{resolved.error()};
         }
     }
-    if (lost_copied_tab(files, context.opened, state_.autosave_ids()))
-    {
-        return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
-    }
     return files;
 }
 
@@ -310,6 +312,10 @@ EditorController::resolve_server_edit(std::vector<ServerEditFile> &files,
     if (!place.has_value())
     {
         return std::unexpected{place.error()};
+    }
+    if (displaced_since(place.value(), path.value(), context.opened, ports_.files))
+    {
+        return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }
     if (const auto *tab = std::get_if<AutosaveId>(&place.value()))
     {

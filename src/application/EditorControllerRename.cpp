@@ -220,10 +220,9 @@ void EditorController::request_rename(const std::string &name, const LspRequestC
                                          .slot = slot.value()});
 }
 
-// 帯の読み込み済みのタブごとの今の改訂番号と、頼んだ席 slot が `didOpen` しているか（決定 4・#2011
-// のレビュー
-// M1）。アクティブは状態の欄、脇は読み込み済みの束から引く。まだ読んでいないタブはディスクの
-// 本文なので写さない。
+// 帯の読み込み済みのタブごとの今のパス・改訂番号と、頼んだ席 slot が `didOpen` しているか
+// （決定 4・#2011 のレビュー M1・パスは #2042）。アクティブは状態の欄、脇は読み込み済みの束から
+// 引く。まだ読んでいないタブはディスクの本文なので写さない。
 std::vector<OpenedRevision> EditorController::opened_revisions(LanguageServerSlot slot) const
 {
     const auto &ids = state_.autosave_ids();
@@ -256,6 +255,7 @@ std::optional<OpenedRevision> EditorController::opened_revision_at(LanguageServe
     const AutosaveId tab = state_.autosave_ids().at(position);
     return OpenedRevision{
         .tab = tab,
+        .path = document.path,
         .revision = static_cast<std::uint64_t>(history.revision()),
         .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &sent)
                                     { return sent.tab == tab; }),
