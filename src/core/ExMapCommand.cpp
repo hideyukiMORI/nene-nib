@@ -180,7 +180,7 @@ constexpr std::array<std::pair<char, char32_t>, 6> letter_escapes{{
     {'b', U'\b'},
     {'f', U'\f'},
 }};
-// 数の逃がし（`\x41` `\X41` は 16 進 2 桁まで・`é` は 4 桁まで・`\U0001F600` は 8 桁まで）。
+// 数の逃がし（`\x41` `\X41` は 16 進 2 桁まで・`\u00e9` は 4 桁まで・`\U0001F600` は 8 桁まで）。
 constexpr std::array<std::pair<char, std::size_t>, 4> hex_escapes{{
     {'x', 2},
     {'X', 2},
@@ -224,6 +224,16 @@ digits_read(std::string_view text, std::uint32_t base, std::size_t limit) noexce
     return {static_cast<char32_t>(value), read};
 }
 
+// 数の逃がしの値の記法。`\x` `\X` と 8 進はバイトを置くので、0x80 以上は 1 字にならない（Vim 9.1
+// の実測: `"\xe9"` `"\351"` は 1 バイトの e9・`"\400"` は空）。Nib は字でない値を断る
+// （unnamed_control）。`\u` `\U` は code point。
+[[nodiscard]] std::string byte_notation(char32_t value, bool byte)
+{
+    constexpr char32_t first_high_byte = 0x80;
+    return byte && value >= first_high_byte ? std::string(unnamed_control)
+                                            : character_notation(value);
+}
+
 // 1 字の記法と、逃がしの印 `\` の後ろから読んだバイトの数。
 using EscapedUnit = std::pair<std::string, std::size_t>;
 
@@ -258,13 +268,14 @@ using EscapedUnit = std::pair<std::string, std::size_t>;
     if (hex != hex_escapes.end())
     {
         const auto [value, read] = digits_read(rest.substr(1), hex_base, hex->second);
+        const bool byte = letter == 'x' || letter == 'X';
         return read == 0 ? EscapedUnit{std::string(1, letter), 1}
-                         : EscapedUnit{character_notation(value), read + 1};
+                         : EscapedUnit{byte_notation(value, byte), read + 1};
     }
     if (letter >= '0' && letter <= '7')
     {
         const auto [value, read] = digits_read(rest, octal_base, octal_digits);
-        return {character_notation(value), read};
+        return {byte_notation(value, true), read};
     }
     if (letter == '<')
     {
@@ -274,12 +285,60 @@ using EscapedUnit = std::pair<std::string, std::size_t>;
     return {character_notation(code_point_at(rest, Offset{0})), length};
 }
 
-// 1 字ずつの記法を 1 つの値へ。1 字なら `<lt>` は `<` に戻す（`<` の 1 鍵）。
+[[nodiscard]] bool key_name_letter(char letter) noexcept
+{
+    return (letter >= 'a' && letter <= 'z') || (letter >= 'A' && letter <= 'Z') ||
+           (letter >= '0' && letter <= '9') || letter == '-';
+}
+
+// text が `<名前>` の形（英数字と `-`・`<leader>` `<Leader>` を除く）か。
+[[nodiscard]] bool key_name_shape(std::string_view text) noexcept
+{
+    if (text.size() <= 2 || text.front() != '<' || text.back() != '>' || text == leader_canonical ||
+        text == leader_spelling)
+    {
+        return false;
+    }
+    return std::ranges::all_of(text.substr(1, text.size() - 2), key_name_letter);
+}
+
+// 読んだ値の全体が `<名前>` の字の列（`'<Space>'` `"<Tab>"`）ならその字の列。名前は英数字と `-`
+// で、`<leader>` は除く。字でない単位（`\<Space>` の鍵・空白・制御文字）を含めば値なし。
+[[nodiscard]] std::optional<std::string> key_name_text(const std::vector<std::string> &units)
+{
+    std::string text;
+    for (const auto &unit : units)
+    {
+        if (unit == character_notation(U'<'))
+        {
+            text += '<';
+            continue;
+        }
+        if (unit.size() > 1 && unit.front() == '<')
+        {
+            return std::nullopt;
+        }
+        text += unit;
+    }
+    if (!key_name_shape(text))
+    {
+        return std::nullopt;
+    }
+    return text;
+}
+
+// 1 字ずつの記法を 1 つの値へ。1 字なら `<lt>` は `<` に戻す（`<` の 1 鍵）。値の全体が鍵の
+// 名前の字の列なら、今までの版と同じくその名前の鍵として読む（Vim は書いたままの字の列の leader
+// だが、Nib は 1 鍵の leader しか持てない・ADR 0176 の 2026-11-25 の追補）。
 [[nodiscard]] std::string joined_notation(const std::vector<std::string> &units)
 {
     if (units.size() == 1 && units.front() == character_notation(U'<'))
     {
         return std::string(lone_less_than);
+    }
+    if (auto named = key_name_text(units))
+    {
+        return std::move(named).value();
     }
     std::string value;
     for (const auto &unit : units)
