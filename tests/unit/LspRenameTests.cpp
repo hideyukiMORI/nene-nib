@@ -1408,6 +1408,70 @@ void verify_unrelated_tab_closed()
                refused.tabs.size() == 2 && whole_vim_body(unopened.controller()) == main_text,
            "after a copied tab is closed, a file without a tab refuses the whole answer");
 }
+
+// 写しのタブを閉じた後に開いた別のファイルのタブ（写しに無い・改訂番号 0・保存済み）を当て先に
+// 含む答えは断る（#2041 のレビュー P2）。
+void verify_opened_after_closing()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::CloseTab{2});
+    applied(editing.controller(), app::OpenDocument{path_of(lib_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    const auto frame = answered(editing, rename_method,
+                                R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                                    uri_edits(lib_uri, add_to_sum()) + "}}");
+    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+               frame.tabs.size() == 3 && whole_vim_body(editing.controller()) == main_text &&
+               tab_is(frame, 2, lib_path, core::SaveState::saved) &&
+               body_of_tab(editing, 2) == lib_text,
+           "after a copied tab is closed, a tab opened later refuses the whole answer");
+}
+
+// 写しのタブを閉じた後に、まだ読んでいないタブ（前回のタブ・写しに無い）を当て先に含む答えは
+// 断り、そのタブを読まない（#2041 のレビュー P2）。
+void verify_unread_after_closing()
+{
+    const auto listed = [](std::string_view path, std::size_t rank)
+    {
+        return app::SessionTab{path_of(path),
+                               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                               core::LineNumber{1}, rank};
+    };
+    Editing editing(lsp_on(),
+                    SessionReading{std::optional<app::Session>{
+                        app::Session{{listed(main_path, 0), listed(header_path, 1)}, 0}}},
+                    [](ScriptedFiles &files)
+                    {
+                        files.hold_at(std::string(main_path), Bytes{std::string(main_text)});
+                        files.hold_at(std::string(header_path), Bytes{std::string(header_text)});
+                        files.hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+                    });
+    static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
+    initialized(editing, prepared);
+    // 新しいタブはアクティブな main.cpp のすぐ後ろ（帯の 1）に入る。
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(editing.controller(), app::SwitchTab{0});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    expect(tab_is(editing.controller().frame(), 1, notes_path, core::SaveState::saved),
+           "the notes tab sits right after main.cpp before it is closed");
+    applied(editing.controller(), app::CloseTab{1});
+    const auto frame = answered(editing, rename_method,
+                                R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                                    uri_edits(header_uri, add_to_sum()) + "}}");
+    const auto &requests = editing.reads().requests();
+    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+               frame.tabs.size() == 2 && whole_vim_body(editing.controller()) == main_text &&
+               std::ranges::none_of(requests, [](const app::DocumentReadRequest &request)
+                                    { return request.path.text() == header_path; }),
+           "after a copied tab is closed, a tab not read yet refuses the answer and stays unread");
+}
 } // namespace
 
 void verify_lsp_rename_scope()
@@ -1445,5 +1509,7 @@ void verify_lsp_rename_scope()
     verify_c_header(true);
     verify_closed_copied_tab();
     verify_unrelated_tab_closed();
+    verify_opened_after_closing();
+    verify_unread_after_closing();
 }
 } // namespace nenenib::tests
