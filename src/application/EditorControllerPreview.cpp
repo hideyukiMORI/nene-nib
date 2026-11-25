@@ -99,7 +99,9 @@ images_of(const core::MarkdownDocument &document, const std::optional<core::File
 }
 
 // 全面プレビューの間も写す意図のうち、タブ・窓・枠・面の側（passes_full_preview の続き・
-// CPP-012 の関数の長さで分ける）。
+// CPP-012 の関数の長さで分ける）。起動の問いの答え（RestoreAutosave は新しいタブを足して切り替える
+// だけ・DiscardAutosave は残骸を forget するだけ）と ToggleBookmark（bookmarks のファイルだけを
+// 書く）は本文を書かないので通す（ADR 0155 の 2026-11-25 の追補・#2031）。
 [[nodiscard]] bool passes_full_preview_window(const EditorIntent &intent) noexcept
 {
     return std::holds_alternative<NewTab>(intent) || std::holds_alternative<SwitchTab>(intent) ||
