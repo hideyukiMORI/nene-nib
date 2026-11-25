@@ -593,6 +593,12 @@ void verify_apply_edit_lowered()
     {
         static_cast<void>(aged.controller().apply(app::LanguageServerTick{}));
     }
+    const auto quiet = aged.controller().frame();
+    expect(aged.language_server().requests(execute_method).size() == 1 &&
+               aged.language_server().cancelled() ==
+                   aged.language_server().requests(execute_method) &&
+               message_of(quiet).empty() && aged.language_server().stops() == 0,
+           "a stale command is cancelled without a notice and without stopping the seat");
     static_cast<void>(apply_edit_sent(aged, "t1", semi_edit));
     expect(contains(reply_to(aged, "t1"), R"("applied":false)") &&
                whole_vim_body(aged.controller()) == main_text,
@@ -1150,6 +1156,29 @@ void verify_resolve_answer_and_visual()
            "a chosen fix refused by the checks has already left VISUAL");
 }
 
+// R13 の P2: 何も起きない項目（provider に名前の無い命令・resolve に答えない席の data
+// だけの項目）は、 選んでも VISUAL を抜けず、何も送らない。
+void verify_idle_items_keep_visual()
+{
+    for (const std::size_t index : {std::size_t{0}, std::size_t{1}})
+    {
+        Editing editing(lsp_on());
+        started(editing, R"({"textDocumentSync":2,"codeActionProvider":true})");
+        applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
+        vim_replay(editing.controller(), "0vll");
+        static_cast<void>(asked(editing));
+        static_cast<void>(answered(editing, action_method,
+                                   R"([{"title":"Client","command":"client.only"},)"
+                                   R"({"title":"Nothing","kind":"quickfix","data":{"id":1}}])"));
+        const std::size_t before = editing.language_server().sent().size();
+        const auto frame = editing.controller().apply_frame(app::ActivateCommandChoice{index});
+        expect(frame.vim_mode == core::VimMode::visual && !frame.command_palette.has_value() &&
+                   editing.language_server().sent().size() == before &&
+                   whole_vim_body(editing.controller()) == main_text,
+               "an item that does nothing keeps VISUAL and sends nothing");
+    }
+}
+
 // other.cpp の thing を again にする編集（other_edit を当てた後の本文の位置）。
 constexpr std::string_view other_again_edit =
     R"({"changes":{"file:///C:/work/other.cpp":[{"range":{"start":{"line":0,"character":4},)"
@@ -1293,6 +1322,7 @@ void verify_lsp_code_action_scope()
     verify_saved_after_command();
     verify_one_fix_while_resolving();
     verify_resolve_answer_and_visual();
+    verify_idle_items_keep_visual();
     verify_copied_path_on_commands();
     verify_held_forgotten_by_seat();
     verify_more_shapes();

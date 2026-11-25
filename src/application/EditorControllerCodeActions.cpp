@@ -348,11 +348,20 @@ bool EditorController::awaits_chosen_fix(LanguageServerSlot slot) const
 // command を送らない。edit が無く data があり、答えた席が resolve に答えるなら `codeAction/resolve`
 // で引く（続きは届いた答えで）。Vim の VISUAL は入口の検査を通った項目を走らせる前に抜ける
 // （Command だけの項目・resolve を待つ間に入り直した VISUAL でも結果のモードが同じ・R3。当て先の
-// 照合が断っても NORMAL のまま・R10 の P4）。
+// 照合が断っても NORMAL のまま・R10 の P4）。何も起きない項目（edit が無く resolve もできず、
+// 送れる命令も無い）は VISUAL を抜けずに何もしない（R13 の P2）。
 void EditorController::run_code_action(const core::LspCodeAction &action,
                                        const LspEditContext &context,
                                        core::LspPositionEncoding encoding)
 {
+    const bool resolves = !action.edit.has_value() && action.resolvable &&
+                          link_of(context.slot).phase == LanguageServerPhase::running &&
+                          link_of(context.slot).abilities.code_action_resolve;
+    const core::LspCommand *command = sendable_command(context.slot, action.command);
+    if (!action.edit.has_value() && !resolves && command == nullptr)
+    {
+        return;
+    }
     leave_visual_for_formatting();
     LspEditContext advanced = context;
     if (action.edit.has_value())
@@ -371,17 +380,32 @@ void EditorController::run_code_action(const core::LspCodeAction &action,
         }
         advanced = advanced_context(context, applied.value());
     }
-    else if (action.resolvable && link_of(context.slot).phase == LanguageServerPhase::running &&
-             link_of(context.slot).abilities.code_action_resolve)
+    else if (resolves)
     {
         send_language_request(context.slot, LspRequestKind::code_action_resolve, action.source,
                               context);
         return;
     }
-    if (action.command.has_value())
+    if (command != nullptr)
     {
-        send_execute_command(context.slot, action.command.value(), advanced);
+        send_execute_command(context.slot, *command, advanced);
     }
+}
+
+// 席 slot へ送れる命令（無ければ nullptr）。席が running で、`executeCommandProvider.commands` に
+// 名前があるときだけ（無い名前は client の側の命令で Nib には実行できない・何も知らせない）。
+const core::LspCommand *
+EditorController::sendable_command(LanguageServerSlot slot,
+                                   const std::optional<core::LspCommand> &command) const
+{
+    const auto &link = language_servers_.links.at(slot_index(slot));
+    if (!command.has_value() || link.phase != LanguageServerPhase::running ||
+        std::ranges::find(link.abilities.execute_commands, command.value().command) ==
+            link.abilities.execute_commands.end())
+    {
+        return nullptr;
+    }
+    return &command.value();
 }
 
 // 写し context を、Nib がサーバーの編集で当てたタブ tabs だけ今の値へ進める（当てた後の改訂番号・
@@ -448,22 +472,14 @@ void EditorController::settle_code_action_resolve_answer()
     run_code_action(resolved, answered.context, answered.encoding);
 }
 
-// `workspace/executeCommand` を送る（決定 10）。席が running で、`executeCommandProvider.commands`
-// に 名前があるときだけ（無い名前は client の側の命令で Nib
-// には実行できない・何も知らせない）。当てた edit の `didChange`
+// `workspace/executeCommand` を送る（決定 10）。送れる命令かは呼び手が sendable_command で確かめて
+// ある。当てた edit の `didChange`
 // が命令より先に届くように席の文書の変更を先に流し、その後の写しを文脈に置く
 // （`workspace/applyEdit` の照合 (b)(c)）。同じ種類の古い要求は取り消す（待ちは 1 つだけ）。
 void EditorController::send_execute_command(LanguageServerSlot slot,
                                             const core::LspCommand &command,
                                             const LspEditContext &context)
 {
-    const auto &link = link_of(slot);
-    if (link.phase != LanguageServerPhase::running ||
-        std::ranges::find(link.abilities.execute_commands, command.command) ==
-            link.abilities.execute_commands.end())
-    {
-        return;
-    }
     flush_language_server_documents(slot);
     send_language_request(slot, LspRequestKind::execute_command,
                           core::lsp_execute_command_params(command), context);

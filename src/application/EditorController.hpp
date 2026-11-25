@@ -1229,6 +1229,8 @@ class EditorController final
     void run_code_action(const core::LspCodeAction &action, const LspEditContext &context,
                          core::LspPositionEncoding encoding);
     void settle_code_action_resolve_answer();
+    [[nodiscard]] const core::LspCommand *
+    sendable_command(LanguageServerSlot slot, const std::optional<core::LspCommand> &command) const;
     void send_execute_command(LanguageServerSlot slot, const core::LspCommand &command,
                               const LspEditContext &context);
     [[nodiscard]] LspEditContext advanced_context(LspEditContext context,
