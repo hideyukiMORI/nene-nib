@@ -196,7 +196,7 @@ application の失敗の enum は `FileHistoryFailure`（core の `HistoryFailur
 
 ### ステータスの文字組みは `write_status`。保持するのは最大12枠
 
-通常/Vim・モード・録画・通知・右側の4項目（位置・文字コード・改行・言語）・診断の件数と操作の案内は描画器の固定枠で、全文・書式・幅・高さが一致するとき再利用する（ADR 0070 / 0079 / 0154 / 0161 の決定 4）。枠の数の正本は `StatusLayoutDemand.hpp` の `status_layout_capacity`（12）。案内は鍵と説明の4枠を使い最大12（件数の枠を含む）、録画とは排他なので録画時は最大9。件数が 0 の frame は件数の枠を使わない。枠の位置は `draw_status_bar` の入口で戻し、UI書式の再作成前に全枠を消す。色と原点は毎回反映する。コマンド入力のキャレットや補完のlayoutをこの保持へ入れない。
+通常/Vim・モード・録画・通知・右側の4項目（位置・文字コード・改行・言語）・診断の件数と操作の案内は描画器の固定枠で、全文・書式・幅・高さが一致するとき再利用する（ADR 0070 / 0079 / 0154 / 0161 の決定 4）。枠の数の正本は `StatusLayoutDemand.hpp` の `status_layout_capacity`（12）。案内は鍵と説明の4枠を使い最大12（件数の枠を含む）、録画とは排他なので録画時は最大9。診断の文の frame も案内を消し、左側はトグル2・モード1・文1の4枠で最大9（文はモードの後ろに書き、トグルとモードを隠さない・ADR 0161 の 2026-11-24 の追補・#2025）。件数が 0 の frame は件数の枠を使わない。枠の位置は `draw_status_bar` の入口で戻し、UI書式の再作成前に全枠を消す。色と原点は毎回反映する。コマンド入力のキャレットや補完のlayoutをこの保持へ入れない。
 
 ### 設定の正本は `settings.v6`。旧版を読むのは新版が無いときだけ
 
@@ -379,9 +379,9 @@ Waivers: none | WVR-NNNN
 
 **この節には、いまの状態と所在だけを書く。日ごとの経緯・入った PR・数字の積み重ねは書かない**（日報と引き継ぎと `current.md` に任せる。2026-11-15 までこの節に積もった経緯 44 KB は [docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md](docs/reports/claude-md-status-log-2026-09-15-to-2026-11-15.md) に移した・#1716）。状態が変わったら下の箇条を書き換える（足さない）。
 
-- **版と公開**（2026-11-24）: **公開版は v1.1.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)・2026-11-23 12:43 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。1.1.0 の公開元は main `4fcf258c`、記録は [docs/quality/release-1.1.0-2026-11-17.md](docs/quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。前の版 v1.0.0 の公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。**次の版は 1.2.0**（hide の決め 2026-11-24・SPECIFICATION の D115）で、公開の準備中。1.2.0 の中身と手順の所在は `docs/quality/release-1.2.0-*.md`（別の PR で入る）と `D:/NeNeNib/evidence/v1.2.0-release/`（手順書 `README.md`・決めの一覧 `open-questions.md`）。
-- **1.2.0 の公開まで main に機能を入れない**（公開が次の順なら公開の準備が先・2026-11-24）。1.2.0 に入れる残りは `current.md` の「1.2.0 に入れる残り」だけ。クイックフィックス（#2005）は次の版で、1.2.0 の公開元を切るまで main に入れない（D116）。
-- **`settings.v4`（1.0.0）と `settings.v5`（1.1.0）に鍵を足さない**。main は `settings.v6` を書き、v6 を書く最初の公開版は次の版 1.2.0（hide の決め 2026-11-24）。1.2.0 の公開までは v6 のまま・公開したら v6 にも鍵を足さない（D91・§2 の設定の節）。
+- **版と公開**（2026-11-25）: **公開版は v1.1.0**（[GitHub の Release](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)・2026-11-23 12:43 JST と [Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)）。1.1.0 の公開元は main `4fcf258c`、記録は [docs/quality/release-1.1.0-2026-11-17.md](docs/quality/release-1.1.0-2026-11-17.md)。前の版 v1.0.0 の公開元は main `80fd7a53`、記録は [docs/quality/release-1.0.0-2026-11-14.md](docs/quality/release-1.0.0-2026-11-14.md)。**次の版は 1.2.0**（SPECIFICATION の D115）で、**公開元は main `b8f0a919`（2026-11-25 に切った）・梱包と照合まで済み、hide の実機の確かめ → WACK → Store の申請を待っている**。記録は [docs/quality/release-1.2.0-2026-11-25.md](docs/quality/release-1.2.0-2026-11-25.md)（前半まで）、配布物は `D:/NeNeNib/releases/v1.2.0/`、手順と道具は `D:/NeNeNib/evidence/v1.2.0-release/`（手順書 `README.md`・hide の手 `hide-checklist.md`・照合 `final-verification.md`）。
+- **1.2.0 の公開まで main に機能を入れない**（公開が次の順なら公開の準備が先）。main は公開元のまま凍結で、入れてよいのは文書だけ。次の版の PR（クイックフィックス #2005・不可視文字 #1977 ほか）は draft のまま待たせ、公開の後にまとめ枝で入れる（D116）。hide の確かめで NG が出たときだけ、同じ版 1.2.0 で公開元を切り直す。
+- **`settings.v4`（1.0.0）・`settings.v5`（1.1.0）・`settings.v6`（1.2.0）に鍵を足さない**。v6 の鍵の集合は 1.2.0 の公開元で閉じた（見本 `released_v6_settings`）。値の鍵を足すなら `settings.v7`（最初に足すのは不可視文字・#1977）。版を上げずに足せるのは `features=` の名前・`lsp.<name>.command`・`map.` の族（D91・§2 の設定の節）。
 - **再開するとき**: 最新の[引き継ぎ](docs/handoffs/)の「次回の最初の手順」→ `git fetch` と `gh pr list` で照合 → [日報](docs/reports/)。施主決定は [SPECIFICATION.md](SPECIFICATION.md) の D 番号、できることの一覧は [README.md](README.md)。
 - **数字**（fixture の件数・基準値・ベンチの本数）はここに写さない。fixture は `tests/vim/fixtures.json`、速さは `eng/perf-reference.json` と `eng/measure-speed.py` の `BENCHES`、表の大きさは現物を数える。
 - 実機の目視は Claude デスクトップの別セッション（computer-use）か、hide の了承の後に設計席が回す道具（§2 の「窓を最前面に出す確認」）。
