@@ -93,6 +93,47 @@ void verify_refused_keys(Expect expect)
     }
 }
 
+// key の行の値を value に替えた bytes。
+std::string with_value(std::string_view bytes, std::string_view key, std::string_view value)
+{
+    std::string changed(bytes);
+    const auto start = changed.find("\n" + std::string(key) + "=") + 1 + key.size() + 1;
+    changed.replace(start, changed.find('\n', start) - start, value);
+    return changed;
+}
+
+// 凍った v6 の値の形の厳しさ（#2047 のレビュー R5）。v6 で足した 9 つの鍵の形の違う値と、同じ鍵の
+// 2 行目は、v6 として読んでも 1.2.0
+// と同じく全体を拒む（後の版が共用の読みを緩めたらここで落ちる）。
+void verify_refused_values(Expect expect)
+{
+    for (const auto &[key, value] :
+         {std::pair{"caret_motion", "yes"}, std::pair{"caret_motion_time", "20"},
+          std::pair{"caret_motion_time", "0120"}, std::pair{"caret_sparks", "1"},
+          std::pair{"pane_resize_step", "0"}, std::pair{"pane_resize_step", "05"},
+          std::pair{"pane_resize_step_vim", ""}, std::pair{"indent_guide_style", "stripes"},
+          std::pair{"indent_guide_color_count", "7"}, std::pair{"indent_guide_color_count", "04"},
+          std::pair{"indent_guide_highlight_current", "yes"}, std::pair{"indent_guide_width", "3"},
+          std::pair{"indent_guide_width", ""}})
+    {
+        const auto broken =
+            decode_settings(with_value(released_v6_settings, key, value), SettingsVersion::v6);
+        expect(!broken && broken.error() == SettingsFailure::malformed,
+               "the frozen v6 refuses a malformed value of a v6 key");
+    }
+    for (const auto &[key, _] : v6_keys)
+    {
+        // 見本の同じ行（正しい値）をもう 1 行足す。
+        const std::string_view sample = released_v6_settings;
+        const auto start = sample.find("\n" + std::string(key) + "=") + 1;
+        const auto line = sample.substr(start, sample.find('\n', start) + 1 - start);
+        const auto twice =
+            decode_settings(std::string(sample) + std::string(line), SettingsVersion::v6);
+        expect(!twice && twice.error() == SettingsFailure::malformed,
+               "the frozen v6 refuses a second line of a v6 key");
+    }
+}
+
 // 版の取り違え: 1.2.0 の v6 を v5 として読まず、1.1.0 の v5 を v6 として読まない。
 void verify_versions_kept_apart(Expect expect)
 {
@@ -142,6 +183,7 @@ void verify_released_v6_codec(Expect expect)
     expect(read && encode_settings(read.value()) == v6_as_v7(released_v6_settings),
            "the 1.2.0 settings.v6 is written back as its bytes in the v7 form");
     verify_refused_keys(expect);
+    verify_refused_values(expect);
     verify_versions_kept_apart(expect);
     verify_missing_keys(expect, read.value_or(core::default_editor_settings()));
     // 1.2.0 の v6 を後の版の v7 が読む試験（#1977・SettingsVersionSevenTests.cpp）。

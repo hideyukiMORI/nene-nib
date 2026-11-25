@@ -12,12 +12,13 @@
 #include "InvisibleMark.hpp"
 #include "InvisibleMarkBoxes.hpp"
 #include "InvisibleMarkPainter.hpp"
+#include "InvisibleMarkUnits.hpp"
 #include "Invisibles.hpp"
 #include "LineBreakPlace.hpp"
 #include "TextLayoutPoint.hpp"
-#include "Utf8.hpp"
 
 #include <cstddef>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -25,9 +26,6 @@ namespace nenenib::ui::win32
 {
 namespace
 {
-// Tab の止まりの空白の数（BodyTextLayouts::set_spacing の SetIncrementalTabStop と同じ 8）。
-constexpr float tab_stop_spaces = 8.0F;
-
 // layout の座標の升を描く先の座標へ（行の原点を足す）。
 void moved(std::vector<InvisibleBox> &boxes, const core::LayoutRect &area) noexcept
 {
@@ -44,6 +42,7 @@ void moved(std::vector<InvisibleBox> &boxes, const core::LayoutRect &area) noexc
 void Direct2DRenderer::begin_decorations(const application::EditorFrame &frame)
 {
     guide_paint_.begin(frame.settings, frame.body, frame.palette);
+    decoration_palette_ = frame.palette;
 }
 
 void Direct2DRenderer::draw_decorations_under(const BodyPane &pane, const core::LayoutRect &area,
@@ -52,11 +51,11 @@ void Direct2DRenderer::draw_decorations_under(const BodyPane &pane, const core::
     draw_indent_guides(pane, area, line);
 }
 
-void Direct2DRenderer::draw_decorations_over(const application::EditorFrame &frame,
-                                             IDWriteTextLayout *text, const core::LayoutRect &area,
+void Direct2DRenderer::draw_decorations_over(const BodyPane &pane, IDWriteTextLayout *text,
+                                             const core::LayoutRect &area,
                                              const application::LineView &line)
 {
-    draw_invisibles(frame, text, area, line);
+    draw_invisibles(pane, text, area, line);
 }
 
 void Direct2DRenderer::draw_indent_guides(const BodyPane &pane, const core::LayoutRect &area,
@@ -84,85 +83,94 @@ Direct2DRenderer::invisible_boxes_of(IDWriteTextLayout *text, const core::Layout
 {
     auto painter = body_painter();
     const auto *entry = painter.glyph_entry(text, area);
-    const auto space = body_text_.space_width(core::DisplayForm::text);
+    const auto stop = body_text_.tab_stop_width(core::DisplayForm::text);
     DWRITE_LINE_SPACING_METHOD method{};
     float spacing = 0;
     float baseline = 0;
-    if (entry != nullptr && entry->glyphs_ready && space.has_value() &&
+    std::vector<InvisibleMark> unresolved;
+    std::optional<std::vector<InvisibleBox>> boxes;
+    if (entry != nullptr && entry->glyphs_ready && stop.has_value() &&
         SUCCEEDED(text->GetLineSpacing(&method, &spacing, &baseline)) &&
         method == DWRITE_LINE_SPACING_METHOD_UNIFORM)
     {
-        auto boxes =
-            invisible_boxes(entry->glyphs, marks, spacing, space.value() * tab_stop_spaces);
-        if (boxes.has_value())
-        {
-            moved(boxes.value(), area);
-            return std::move(boxes).value();
-        }
+        boxes = invisible_boxes(entry->glyphs, marks, InvisibleScale{spacing, stop.value()},
+                                unresolved);
     }
-    // 保持できない行（glyphs_ready でない・位置を引けない）だけ字ごとの HitTestTextRange（決定
-    // 10）。
-    std::vector<InvisibleBox> boxes;
-    for (const InvisibleMark &mark : marks)
+    if (boxes.has_value())
+    {
+        moved(boxes.value(), area);
+    }
+    // 保持できない行（glyphs_ready
+    // でない・位置を引けない）は字ごと、保持できる行は左の字が保持に無い Tab だけを
+    // HitTestTextRange で引く（決定 10・#2047 のレビュー R2）。
+    const bool kept = boxes.has_value();
+    std::vector<InvisibleBox> placed = std::move(boxes).value_or(std::vector<InvisibleBox>{});
+    for (const InvisibleMark &mark : kept ? unresolved : marks)
     {
         for (const auto &hit : painter.runs_of(text, area, DWRITE_TEXT_RANGE{mark.unit, 1}))
         {
-            boxes.push_back(InvisibleBox{
+            placed.push_back(InvisibleBox{
                 D2D1::RectF(hit.left, hit.top, hit.left + hit.width, hit.top + hit.height),
                 mark.kind});
         }
     }
-    return boxes;
+    return placed;
 }
 
-void Direct2DRenderer::draw_invisibles(const application::EditorFrame &frame,
-                                       IDWriteTextLayout *text, const core::LayoutRect &area,
+void Direct2DRenderer::draw_invisibles(const BodyPane &pane, IDWriteTextLayout *text,
+                                       const core::LayoutRect &area,
                                        const application::LineView &line)
 {
     if (!line.invisibles.has_value())
     {
         return;
     }
-    const application::LineInvisibles &shown = line.invisibles.value();
-    LineUtf16Evaluation positions(line.display.text);
-    std::vector<InvisibleMark> marks;
-    for (const core::InvisibleSpan &span : shown.spans)
-    {
-        const DWRITE_TEXT_RANGE range = range_of(
-            line, core::SelectionSpan{core::SelectionPresence::present, span.begin, span.end},
-            positions);
-        for (UINT32 unit = range.startPosition; unit < range.startPosition + range.length; ++unit)
-        {
-            marks.push_back(InvisibleMark{unit, span.kind});
-        }
-    }
     const auto height = static_cast<float>(body_line_height_);
-    for (const InvisibleBox &placed : invisible_boxes_of(text, area, marks))
+    const auto left = static_cast<float>(pane.body.content.left);
+    const auto right = static_cast<float>(pane.body.content.right);
+    for (const InvisibleBox &placed : invisible_boxes_of(text, area, invisible_marks_of(line)))
     {
-        brush_->SetColor(detail::to_color(core::invisible_mark_color(frame.palette, placed.kind)));
+        // 本文の欄の左右の外の印は描かない（#2047 のレビュー R1）。
+        if (placed.box.right < left || placed.box.left > right)
+        {
+            continue;
+        }
+        brush_->SetColor(
+            detail::to_color(core::invisible_mark_color(decoration_palette_, placed.kind)));
         InvisibleMarkPainter::paint(*context_.Get(), brush_.Get(), placed, height);
     }
+    draw_line_break(pane, text, area, line);
+}
+
+void Direct2DRenderer::draw_line_break(const BodyPane &pane, IDWriteTextLayout *text,
+                                       const core::LayoutRect &area,
+                                       const application::LineView &line)
+{
+    const auto mark =
+        line.invisibles.has_value() ? line.invisibles.value().line_break : std::nullopt;
     const auto space = body_text_.space_width(core::DisplayForm::text);
-    if (!shown.line_break.has_value() || !space.has_value())
+    if (!mark.has_value() || !space.has_value())
     {
         return;
     }
     // 行の終わりの x（折り返した行は最後の画面行）を 1 回求める（決定 10）。
-    const core::Column end{core::code_point_count(line.text) + 1};
-    const auto stop =
-        range_of(line, core::SelectionSpan{core::SelectionPresence::present, end, end}, positions)
-            .startPosition;
-    const auto point = text_layout_point(text, stop, core::CaretAffinity::trailing);
+    const auto point = text_layout_point(text, line_end_unit(line), core::CaretAffinity::trailing);
     if (!point)
     {
         text_failure_ = RenderFailure::directwrite;
         return;
     }
-    brush_->SetColor(detail::to_color(core::line_break_mark_color(frame.palette)));
-    InvisibleMarkPainter::paint_line_break(
-        *context_.Get(), brush_.Get(),
-        LineBreakPlace{D2D1::Point2F(static_cast<float>(area.left) + point.value().x,
-                                     static_cast<float>(area.top) + point.value().y),
-                       shown.line_break.value(), height, space.value()});
+    LineBreakPlace place{D2D1::Point2F(static_cast<float>(area.left) + point.value().x,
+                                       static_cast<float>(area.top) + point.value().y),
+                         mark.value(), static_cast<float>(body_line_height_), space.value()};
+    const auto shown = line_break_left(place.at.x, InvisibleMarkPainter::line_break_width(place),
+                                       static_cast<float>(pane.body.content.right));
+    if (!shown.has_value())
+    {
+        return;
+    }
+    place.at.x = shown.value();
+    brush_->SetColor(detail::to_color(core::line_break_mark_color(decoration_palette_)));
+    InvisibleMarkPainter::paint_line_break(*context_.Get(), brush_.Get(), place);
 }
 } // namespace nenenib::ui::win32

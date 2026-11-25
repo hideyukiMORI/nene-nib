@@ -49,6 +49,9 @@ class BodyTextLayouts final : public application::TextLayoutPort
     // 回測った値で、まだ書式を 作っていなければ値なし（get の後に読む）。Tab の止まりはこの幅の 8
     // 倍。
     [[nodiscard]] std::optional<float> space_width(core::DisplayForm form) const noexcept;
+    // 書式 form の Tab の止まりの間隔（物理画素・SetIncrementalTabStop に渡した値・空白の幅の
+    // tab_stop_spaces 倍）。不可視文字の印の升が書式と同じ止まりを引く（ADR 0193 の決定 10）。
+    [[nodiscard]] std::optional<float> tab_stop_width(core::DisplayForm form) const noexcept;
 
   private:
     using TextFormat = Microsoft::WRL::ComPtr<IDWriteTextFormat>;

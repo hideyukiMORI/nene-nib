@@ -87,6 +87,25 @@ using RunSums = std::vector<std::vector<float>>;
                        top + line_height);
 }
 
+// unit の字の字形が描く窓 [first, last) の中か（collector が横に画面外を外した窓・見えている字だけ
+// に印を描く・#2047 のレビュー R1）。
+[[nodiscard]] bool shown_at(Runs runs, UINT32 unit)
+{
+    const auto found = std::ranges::upper_bound(runs, unit, {}, &BodyGlyphRun::text_position);
+    if (found == runs.begin())
+    {
+        return false;
+    }
+    const BodyGlyphRun &run = *(found - 1);
+    const std::size_t local = unit - run.text_position;
+    if (local >= run.clusters.size())
+    {
+        return false;
+    }
+    const std::size_t glyph = run.clusters[local];
+    return glyph >= run.first && glyph < run.last;
+}
+
 // x の次の Tab の止まり（止まりの上にあればその次・DirectWrite の増分の Tab と同じ）。
 [[nodiscard]] float next_stop(float x, float tab_stop) noexcept
 {
@@ -136,16 +155,19 @@ void pushed(std::vector<InvisibleBox> &boxes, const std::optional<D2D1_RECT_F> &
 }
 } // namespace
 
-std::optional<std::vector<InvisibleBox>>
-invisible_boxes(Runs runs, std::span<const InvisibleMark> marks, float line_height, float tab_stop)
+std::optional<std::vector<InvisibleBox>> invisible_boxes(Runs runs,
+                                                         std::span<const InvisibleMark> marks,
+                                                         InvisibleScale scale,
+                                                         std::vector<InvisibleMark> &unresolved)
 {
+    const auto [line_height, tab_stop] = scale;
     if (line_height <= 0 || tab_stop <= 0 || !positioned(runs))
     {
         return std::nullopt;
     }
     RunSums sums(runs.size());
-    const auto edges = [runs, &sums, line_height](UINT32 unit)
-    { return edges_at(runs, sums, unit, line_height); };
+    const auto edges = [runs, &sums, height = line_height](UINT32 unit)
+    { return edges_at(runs, sums, unit, height); };
     std::vector<InvisibleBox> boxes;
     boxes.reserve(marks.size());
     std::optional<PlacedTab> last;
@@ -153,13 +175,16 @@ invisible_boxes(Runs runs, std::span<const InvisibleMark> marks, float line_heig
     {
         if (mark.kind != core::InvisibleKind::tab)
         {
-            pushed(boxes, edges(mark.unit), mark.kind);
+            pushed(boxes, shown_at(runs, mark.unit) ? edges(mark.unit) : std::nullopt, mark.kind);
             continue;
         }
         const auto before = before_tab(edges, mark.unit, last, line_height);
         if (!before.has_value())
         {
-            return std::nullopt;
+            // 左の字が保持に無い Tab だけを呼び手の HitTestTextRange へ回す（R2）。
+            unresolved.push_back(mark);
+            last.reset();
+            continue;
         }
         last = PlacedTab{mark.unit, tab_box(edges, mark.unit, before.value(), tab_stop)};
         boxes.push_back(InvisibleBox{last.value().second, mark.kind});

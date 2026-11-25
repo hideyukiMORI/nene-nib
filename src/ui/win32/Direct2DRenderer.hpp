@@ -414,10 +414,13 @@ class Direct2DRenderer final
                             const application::LineView &line);
     // 本文の「上の飾り」（ADR 0193 の決定
     // 2）。置き換えの後・診断の波線の前に、不可視文字の印を描く。 順を知るのはこの 1 本。
-    void draw_decorations_over(const application::EditorFrame &frame, IDWriteTextLayout *text,
+    void draw_decorations_over(const BodyPane &pane, IDWriteTextLayout *text,
                                const core::LayoutRect &area, const application::LineView &line);
     // 不可視文字の印（決定 10）。行の欄が無ければ何もしない（オフの道は欄の有無の読み 1 つ）。
-    void draw_invisibles(const application::EditorFrame &frame, IDWriteTextLayout *text,
+    void draw_invisibles(const BodyPane &pane, IDWriteTextLayout *text,
+                         const core::LayoutRect &area, const application::LineView &line);
+    // 行の終わりの改行の印（決定 10・行の終わりの x を 1 回求める）。
+    void draw_line_break(const BodyPane &pane, IDWriteTextLayout *text,
                          const core::LayoutRect &area, const application::LineView &line);
     // 印を描く升（描く先の座標）。保持した字形から引き、引けない行だけ字ごとの HitTestTextRange。
     [[nodiscard]] std::vector<InvisibleBox>
@@ -708,6 +711,8 @@ class Direct2DRenderer final
     // インデントガイドの色の材料の覚え（ADR 0193 の決定 5・6）。`features=indentguides` が
     // オフの frame では描かない印だけ。テーマ・単色 / 虹・色の数が変わった frame で作り直す。
     IndentGuidePaintMemo guide_paint_{};
+    // 不可視文字の印の色の材料（frame の初めに begin_decorations が置く・ADR 0193 の決定 5）。
+    core::Palette decoration_palette_{};
     std::int32_t caret_width_ = 2;
     std::int32_t body_line_height_ = 1;
     // 格子の 1 升の幅（物理画素）。draw_grid_rows がその frame の書式で測る。

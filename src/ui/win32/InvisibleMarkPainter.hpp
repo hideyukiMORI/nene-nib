@@ -66,6 +66,10 @@ class InvisibleMarkPainter final
     template <typename Target>
     static void paint_line_break(Target &target, ID2D1Brush *brush, const LineBreakPlace &place)
     {
+        if (place.space <= 0 || place.height <= 0)
+        {
+            return;
+        }
         const float unit = std::min(place.space / cell_units, place.height / sample_height);
         const float stroke = std::max(1.0F, stroke_units * unit);
         const float top = place.at.y + ((place.height - (sample_height * unit)) / 2.0F);
@@ -89,6 +93,20 @@ class InvisibleMarkPainter final
         target.DrawLine(point(shift + 8, 13), point(shift + 2, 13), brush, stroke);
         target.DrawLine(point(shift + 4.5F, 10.5F), point(shift + 2, 13), brush, stroke);
         target.DrawLine(point(shift + 4.5F, 15.5F), point(shift + 2, 13), brush, stroke);
+    }
+
+    // 改行の印の幅（LF は見本の 1 升・CRLF は 2 升・paint_line_break と同じ縮め方）。
+    [[nodiscard]] static float line_break_width(const LineBreakPlace &place) noexcept
+    {
+        const float unit = std::min(place.space / cell_units, place.height / sample_height);
+        switch (place.mark)
+        {
+        case core::LineBreakMark::crlf:
+            return 2.0F * cell_units * unit;
+        case core::LineBreakMark::lf:
+            return cell_units * unit;
+        }
+        std::unreachable();
     }
 
   private:

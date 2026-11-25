@@ -1034,16 +1034,6 @@ constexpr std::array<SwitchOption, 23> switch_options{{
     {indent_guide_highlight_current_option_name, "",
      [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.indent_guide_highlight_current; }, true},
-    {feature_cost(EditorFeature::list).name, "",
-     [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return feature_enabled(settings, EditorFeature::list); }, true},
-    {list_eol_option_name, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.list_eol; }, true},
-    {list_tab_option_name, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.list_tab; }, true},
-    {list_wide_space_option_name, "",
-     [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.list_wide_space; }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.explorer; }, true},
     {"lsp", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -1059,6 +1049,17 @@ constexpr std::array<SwitchOption, 23> switch_options{{
      false},
     {"expandtab", "et",
      [](const EditorSettings &, const ExWindowState &) noexcept { return false; }, false},
+    // 不可視文字の全体と種類（ADR 0193 の決定 3・4・#1977）。
+    {feature_cost(EditorFeature::list).name, "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return feature_enabled(settings, EditorFeature::list); }, true},
+    {list_eol_option_name, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.list_eol; }, true},
+    {list_tab_option_name, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.list_tab; }, true},
+    {list_wide_space_option_name, "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.list_wide_space; }, true},
 }};
 
 // 表の真偽の option の行。表に無ければ空。
@@ -2705,15 +2706,6 @@ constexpr std::array<std::string_view, 80> fixed_candidates{"colorscheme",
                                                             "set indentguidehighlightcurrent",
                                                             "set noindentguidehighlightcurrent",
                                                             "set indentguidewidth=",
-                                                            "set listeol",
-                                                            "set nolisteol",
-                                                            "set listtab",
-                                                            "set nolisttab",
-                                                            "set listwidespace",
-                                                            "set nolistwidespace",
-                                                            "set listspace=none",
-                                                            "set listspace=trail",
-                                                            "set listspace=all",
                                                             "set scrolloff=",
                                                             "set language=ja",
                                                             "set language=en",
@@ -2728,7 +2720,16 @@ constexpr std::array<std::string_view, 80> fixed_candidates{"colorscheme",
                                                             "preview off",
                                                             hardcopy_name,
                                                             version_name,
-                                                            lsp_log_name};
+                                                            lsp_log_name,
+                                                            "set listeol",
+                                                            "set nolisteol",
+                                                            "set listtab",
+                                                            "set nolisttab",
+                                                            "set listwidespace",
+                                                            "set nolistwidespace",
+                                                            "set listspace=none",
+                                                            "set listspace=trail",
+                                                            "set listspace=all"};
 
 [[nodiscard]] bool prefix_matches(std::optional<std::string_view> prefix, std::string_view stem,
                                   std::string_view suffix = {})

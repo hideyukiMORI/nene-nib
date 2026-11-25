@@ -1426,7 +1426,7 @@ void Direct2DRenderer::draw_plain_line(const application::EditorFrame &frame, co
     draw_decorations_under(pane, area, line);
     draw_line_text(frame, text.Get(), area, line);
     draw_replaced(frame, text.Get(), area, replaced_ranges(line.display, DWRITE_TEXT_RANGE{0, 0}));
-    draw_decorations_over(frame, text.Get(), area, line);
+    draw_decorations_over(pane, text.Get(), area, line);
     draw_line_diagnostics(frame, text.Get(), area, line);
     draw_current_match(frame, text.Get(), area, line);
     if (line.number != pane.caret.position.line)

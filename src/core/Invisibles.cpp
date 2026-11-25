@@ -69,7 +69,7 @@ constexpr std::string_view ideographic_space = "\xE3\x80\x80";
     {
     case ' ':
         return space_kind(trailing, settings.list_space);
-    case '	':
+    case '\t':
         return settings.list_tab ? std::optional{InvisibleKind::tab} : std::nullopt;
     default:
         return settings.list_wide_space && line.substr(at).starts_with(ideographic_space)

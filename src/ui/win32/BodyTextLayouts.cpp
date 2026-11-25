@@ -651,6 +651,11 @@ std::optional<float> BodyTextLayouts::space_width(core::DisplayForm form) const 
     return spaces_.at(static_cast<std::size_t>(form));
 }
 
+std::optional<float> BodyTextLayouts::tab_stop_width(core::DisplayForm form) const noexcept
+{
+    return space_width(form).transform([](float space) { return space * tab_stop_spaces; });
+}
+
 void BodyTextLayouts::begin_frame()
 {
     previous_.swap(current_);

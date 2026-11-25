@@ -6,6 +6,7 @@
 
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace nenenib::ui::win32
@@ -18,11 +19,14 @@ namespace nenenib::ui::win32
 // - Tab は DirectWrite が 0 字形の run にするので保持に無い。左端は前の字の右端（行頭は 0）、右端は
 //   後ろの字が同じ画面行にあればその左端、無ければ左端の次の Tab の止まり（tab_stop の倍数・続く
 //   Tab と行末の Tab）。
-// - 保持に無い字（縦・横に画面外で集めなかった run
-// の中）の空白と全角空白は返さない（見えていない）。
-// 位置を引けない保持（右から左・横倒し・文字の対応が無い・文字の位置が前へ戻る）と、前の字の位置が
-// 判らない Tab は nullopt で、呼び手は区間ごとの HitTestTextRange に戻る。
+// - 空白と全角空白は、字形が描く窓 [first, last)
+// の中のものだけ返す（縦・横に画面外の字には描かない・
+//   #2047 のレビュー R1）。
+// - 前の字が保持に無い Tab は unresolved に足し、その Tab だけ呼び手が HitTestTextRange
+// で引く（R2）。 位置を引けない保持（右から左・横倒し・文字の対応が無い・文字の位置が前へ戻る）は
+// nullopt で、 呼び手は字ごとの HitTestTextRange に戻る。scale は（行の高さ, Tab の止まりの間隔）。
+using InvisibleScale = std::pair<float, float>;
 [[nodiscard]] std::optional<std::vector<InvisibleBox>>
 invisible_boxes(std::span<const BodyGlyphRun> runs, std::span<const InvisibleMark> marks,
-                float line_height, float tab_stop);
+                InvisibleScale scale, std::vector<InvisibleMark> &unresolved);
 } // namespace nenenib::ui::win32
