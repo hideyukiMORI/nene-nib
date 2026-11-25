@@ -26,10 +26,11 @@ constexpr std::string_view delete_picture = "\xE2\x90\xA1";
 // C1（U+0080〜U+009F）は C2 80〜C2 9F。
 constexpr unsigned char c1_lead = 0xC2;
 constexpr unsigned char c1_last = 0x9F;
-// 双方向の制御（U+202A〜U+202E は E2 80 AA〜AE・U+2066〜U+2069 は E2 81 A6〜A9）。
+// 行と段落の区切り（U+2028・U+2029 は E2 80 A8・A9）と双方向の制御（U+202A〜U+202E は
+// E2 80 AA〜AE・U+2066〜U+2069 は E2 81 A6〜A9）。区切りと埋め込みは続いた 1 つの範囲で引く。
 constexpr unsigned char bidi_lead = 0xE2;
 constexpr unsigned char bidi_embed_middle = 0x80;
-constexpr unsigned char bidi_embed_first = 0xAA;
+constexpr unsigned char bidi_embed_first = 0xA8;
 constexpr unsigned char bidi_embed_last = 0xAE;
 constexpr unsigned char bidi_isolate_middle = 0x81;
 constexpr unsigned char bidi_isolate_first = 0xA6;
@@ -50,7 +51,10 @@ constexpr unsigned char csi_parameter_first = 0x20;
 constexpr unsigned char csi_parameter_last = 0x3F;
 constexpr unsigned char csi_final_first = 0x40;
 constexpr unsigned char csi_final_last = 0x7E;
-// ESC と 1 文字（Fp・Fe・Fs の 0x30〜0x7E・ESC 7 や ESC c）。
+// ESC と中間の字（0x20〜0x2F）の列と終わりの字（Fp・Fe・Fs の 0x30〜0x7E・ESC 7 や ESC c や
+// ESC ( B）。
+constexpr unsigned char escape_intermediate_first = 0x20;
+constexpr unsigned char escape_intermediate_last = 0x2F;
 constexpr unsigned char escape_final_first = 0x30;
 
 [[nodiscard]] bool within(unsigned char byte, unsigned char first, unsigned char last) noexcept
@@ -134,8 +138,25 @@ constexpr unsigned char escape_final_first = 0x30;
     return raw.size() - at;
 }
 
-// at の ESC が始める ANSI のエスケープ列の長さ（CSI・OSC・ESC と 1 文字）。列でなければ 0（ESC
-// は制御文字として見える形にする）。
+// ESC と中間の字の列と終わりの字（ECMA-48 の nF・Fp・Fe・Fs）の長さ。中間の字の後ろに終わりの字が
+// 無ければ中間の字の終わりまで（終わりの無い CSI と同じ）。中間の字も終わりの字も無ければ 0。
+[[nodiscard]] std::size_t plain_escape_length(std::string_view raw, std::size_t at) noexcept
+{
+    std::size_t end = at + 1;
+    while (end < raw.size() &&
+           within(byte_at(raw, end), escape_intermediate_first, escape_intermediate_last))
+    {
+        ++end;
+    }
+    if (end < raw.size() && within(byte_at(raw, end), escape_final_first, csi_final_last))
+    {
+        ++end;
+    }
+    return end - at - 1 == 0 ? 0 : end - at;
+}
+
+// at の ESC が始める ANSI のエスケープ列の長さ（CSI・OSC・ESC
+// と中間の字と終わりの字）。列でなければ 0（ESC は制御文字として見える形にする）。
 [[nodiscard]] std::size_t escape_length(std::string_view raw, std::size_t at) noexcept
 {
     if (at + 1 >= raw.size())
@@ -151,7 +172,7 @@ constexpr unsigned char escape_final_first = 0x30;
     {
         return osc_length(raw, at);
     }
-    return within(kind, escape_final_first, csi_final_last) ? 2 : 0;
+    return plain_escape_length(raw, at);
 }
 
 [[nodiscard]] bool control(unsigned char byte) noexcept
@@ -159,7 +180,8 @@ constexpr unsigned char escape_final_first = 0x30;
     return (byte < first_printable && byte != tab_character) || byte == delete_character;
 }
 
-// 正しい列 sequence が見えない code point（C1・双方向の制御）ならその値、ほかは 0。
+// 正しい列 sequence が見えない code point（C1・行と段落の区切り・双方向の制御）ならその値、ほかは
+// 0。
 [[nodiscard]] std::uint32_t hidden_code_point(std::string_view sequence) noexcept
 {
     if (sequence.size() == 2 && byte_at(sequence, 0) == c1_lead && byte_at(sequence, 1) <= c1_last)
@@ -199,7 +221,8 @@ void append_code_point_mark(std::string &line, std::uint32_t code_point)
     line.append(">");
 }
 
-// 正しい列 1 つを見える形で足す。C0 と DEL は制御文字の図形、C1 と双方向の制御は「<U+XXXX>」。
+// 正しい列 1 つを見える形で足す。C0 と DEL は制御文字の図形、C1 と行と段落の区切りと双方向の制御は
+// 「<U+XXXX>」。
 void append_visible(std::string &line, std::string_view sequence)
 {
     if (sequence.size() == 1 && control(byte_at(sequence, 0)))

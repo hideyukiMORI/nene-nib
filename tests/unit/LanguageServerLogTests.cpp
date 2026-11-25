@@ -142,11 +142,22 @@ void running(Editing &editing)
            R"(,"value":)" + std::string(value) + "}}";
 }
 
-// 1 行の直し の端（#2013）: 列を始めないバイト・継続の欠けた列・4 バイトの字・終わりの無い CSI と
-// OSC・ESC \ で閉じる OSC・C1 でない 2 バイトと双方向の制御でない 3 バイト。
+// 1 行の直し の端（#2013・#2017）: 列を始めないバイト・継続の欠けた列・4 バイトの字・終わりの無い
+// CSI と OSC・ESC \ で閉じる OSC・C1 でない 2 バイトと双方向の制御でない 3 バイト。
 void verify_server_log_line_edges()
 {
-    const std::array<std::pair<std::string_view, std::string_view>, 11> lines{{
+    const std::array<std::pair<std::string_view, std::string_view>, 17> lines{{
+        // 中間の字（0x20〜0x2F）の列を持つ ESC の列は 1 つとして落とす（#2017）。
+        {"a\x1b(Bb", "ab"},
+        {"x\x1b#8y\x1b $@z", "xyz"},
+        {"a\x1b(", "a"},
+        {"\x1b\x01", "\xE2\x90\x9B\xE2\x90\x81"},
+        // 行と段落の区切りは C1 の NEL と同じく「<U+XXXX>」、その手前の U+2027 は残す（#2017）。
+        {"a\xE2\x80\xA8"
+         "b\xE2\x80\xA9"
+         "c",
+         "a<U+2028>b<U+2029>c"},
+        {"\xE2\x80\xA7", "\xE2\x80\xA7"},
         {"\xF5x", "\xEF\xBF\xBDx"},
         {"\xF0\x9F\x98\x80", "\xF0\x9F\x98\x80"},
         {"\xE3\x41\x41", "\xEF\xBF\xBD\x41\x41"},
