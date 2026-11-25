@@ -229,6 +229,6 @@ V-1484 の L1・F1・F2 と、施主の実機で 1 段落に行内の要素が�
 
 改訂 17 の「編集はできない」は本文の編集のことで、通る一覧の「保存と開く・Ctrl+P・F1」と同じ側の、本文を書かない意図は全面の間も通す。表 `passes_full_preview_window` に #1145 から入っていた次の 3 つの根拠をここに置く（#2013 のレビューで根拠が無いと指摘された・Issue の「`RestoreAutosave` が本文を置き換える」は正しくなかった）。
 
-82. **`RestoreAutosave` と `DiscardAutosave` は起動の問いの答え。** 送るのは ui の `offer_autosave` の 1 か所（起動の最後に投げた message の modal の問い・ADR 0137 の決定 6）だけで、全面に入る道は使う人の操作（`SetPreviewPlacement`・`TogglePreview`）だけなので、実際には全面の間に届かない。届いても本文を書かない。「はい」は戻した分を帯の末尾の新しいタブに足して最初へ切り替え（今の本文は置き換えない・`OpenDocument` と同じ形の変化）、見せ方は窓の値なので全面のまま戻したタブの本文で頼み直す（決定 45 の「タブを切り替えても巡回は続く」と同じ）。「いいえ」は残骸を forget するだけ。断ると答えが失われ、残骸は次の起動でもう 1 回問われるので、断らない。
+82. **`RestoreAutosave` と `DiscardAutosave` は起動の問いの答え。** 送るのは ui の `offer_autosave` の 1 か所（起動の最後に投げた message の modal の問い・ADR 0137 の決定 6）だけで、全面に入る道は使う人の操作（`SetPreviewPlacement`・`TogglePreview`・`:preview full` の `answer_preview`・どれも `place_preview` を通る）だけなので、実際には全面の間に届かない。届いても本文を書かない。「はい」は戻した分を帯の末尾の新しいタブに足して最初へ切り替え（今の本文は置き換えない・`OpenDocument` と同じ形の変化）、見せ方は窓の値なので全面のまま戻したタブの本文で頼み直す（決定 45 の「タブを切り替えても巡回は続く」と同じ）。「いいえ」は残骸を forget するだけ。断ると答えが失われ、残骸は次の起動でもう 1 回問われるので、断らない。
 83. **`ToggleBookmark` はファイルの操作。** Ctrl+D / Ctrl+Shift+D と F1 の「ブックマーク」は全面の間にも届き、今の文書（Ctrl+P の一覧が開いていればその行）のパスを bookmarks のファイルへ足すか外して 1 行知らせる。本文・キャレット・全面は変えない（`SaveDocument` と同じ側）。
 84. **契約。** `--preview-full` の `verify_full_preview_autosave_answers`（全面の間の「はい」で新しいタブに切り替わり全面が残って戻したタブの本文を頼む・前の本文は変わらない・「いいえ」は forget だけ）と `verify_full_preview_bookmark`（bookmarks を 1 回読んで 1 回書き、本文と全面を変えない）。

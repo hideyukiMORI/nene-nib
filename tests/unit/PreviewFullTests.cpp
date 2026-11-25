@@ -1188,6 +1188,34 @@ void verify_full_preview_autosave_answers()
            "discarding in full only forgets the remnant and keeps the full preview");
 }
 
+// 全面を送って選んだ後の「はい」（#2031 のレビュー S2）。戻したタブの frame は前の本文の解析結果を
+// 持たず、送りの量・ずらし・錨の要素は戻る（ADR 0155 の決定 77 の「頼み直すときは 0 に戻す」）。
+void verify_full_preview_restore_after_scroll()
+{
+    Editing editing;
+    open_text(editing, numbered_lines(40));
+    auto &controller = editing.controller();
+    editing.autosave().remain(full_remnant("2031/2"), "# restored\n\nbody");
+    static_cast<void>(controller.autosave_remnants());
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    const auto scrolled = controller.apply_frame(app::ScrollLines{3});
+    const auto selected = controller.apply_frame(app::SelectAll{});
+    const auto before = selected.full_preview.value_or(app::PreviewFrame{});
+    expect(scrolled.full_preview.value_or(app::PreviewFrame{}).pending == 3 &&
+               before.document != nullptr && before.selection.has_value(),
+           "the full preview was sent, has its result and a selection before the answer");
+    const auto restored = controller.apply_frame(app::RestoreAutosave{});
+    const auto after = restored.full_preview.value_or(app::PreviewFrame{});
+    expect(restored.full_preview.has_value() && after.document == nullptr && after.pending == 0 &&
+               after.nudge == 0.0F && !after.anchor_block.has_value(),
+           "the restored tab shows no old result and its sending starts again");
+    serve_parsed(editing);
+    const auto parsed = controller.frame().full_preview.value_or(app::PreviewFrame{});
+    expect(parsed.document != nullptr && parsed.document != before.document,
+           "the restored tab gets its own result");
+}
+
 // 全面の間の Ctrl+D と F1 の「ブックマーク」（#2031）。本文を変えず bookmarks
 // のファイルだけを書く。
 void verify_full_preview_bookmark()
@@ -1239,6 +1267,7 @@ void verify_preview_full_scope()
     verify_full_preview_menu();
     verify_full_preview_passes_effects();
     verify_full_preview_autosave_answers();
+    verify_full_preview_restore_after_scroll();
     verify_full_preview_bookmark();
 }
 } // namespace nenenib::tests
