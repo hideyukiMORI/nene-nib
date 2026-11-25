@@ -66,6 +66,12 @@ Screenshots use the default font and size in a development build of 2026-10-12; 
 > in the text and on tabs, easymotion jumps with small labels, the full path of a tab shown on hover,
 > `:set autoindent`, more Vim commands (`:s` with the `c` flag, `:d` `:y` `:g` `:v`, `\zs` `\ze`, NORMAL `s` `S`),
 > preview wheel scrolling by pixels, lighter scrolling of long unwrapped lines, and fixes.
+> Version 1.2.0 is built from the main commit named in its
+> [release record](docs/quality/release-1.2.0-2026-11-25.md); what it adds to 1.1.0 is marked *new in 1.2.0*
+> below: language-server references, symbols, parameter info, formatting and renaming (F2, Vim `grn`), one
+> server per language that stays across tab switches (C and C++ share one), jumps between diagnostics,
+> resizable split panes, choice lists and a clearer focus frame in the settings drawer, optional caret motion,
+> typing sparks and indent guides, 16 more recognized languages, font sizes in steps of 0.5 pt, and fixes.
 
 </details>
 
@@ -107,8 +113,8 @@ All 125 themes are included in the published v1.0.0.
 
 Each line is one requirement of [SPECIFICATION.md](SPECIFICATION.md) (FR-NNN); the decisions behind it are in
 [`docs/adr/`](docs/adr/README.md). Everything below is in the published v1.0.0 unless it says
-*new in 1.1.0* (in version 1.1.0 and not in 1.0.0), *new after 1.1.0* (on main, in neither published
-version yet) or *in review* (an open pull request, not on main). The current
+*new in 1.1.0* (in version 1.1.0 and not in 1.0.0), *new in 1.2.0* (in version 1.2.0 and not in 1.1.0)
+or *in review* (an open pull request, not on main). The current
 tasks are in `docs/todo/current.md`; the measurements are in `docs/quality/gate-proofs.md` and the dated
 records in `docs/quality/`.
 
@@ -213,7 +219,7 @@ records in `docs/quality/`.
   Split panes (decision D64, [ADR 0148](docs/adr/0148-split-keeps-the-active-pane-path-and-parks-the-other.md)):
   Ctrl+\ splits side by side and Ctrl+Shift+\ one above the other, F6 moves to the other pane and Ctrl+Shift+F4
   closes it; Vim uses `Ctrl-w {s v w W p h j k l c q o}` and `:only`. Two panes at most; the layout is not
-  restored on the next start. *New after 1.1.0*: dragging the border resizes the panes (double-click makes them
+  restored on the next start. *New in 1.2.0*: dragging the border resizes the panes (double-click makes them
   equal again and Esc cancels a drag), as do Vim `Ctrl-w > < + - = _ |`, `:resize` and `:vertical resize` and
   the F1 operations Enlarge Pane, Shrink Pane and Equalize Panes (no key); the sizes last until the window
   closes. Enlarge / Shrink Pane move by `pane_resize_step` (`:set paneresizestep=`, 5 by default, 1–40, also
@@ -222,8 +228,8 @@ records in `docs/quality/`.
 - **FR-006 Ctrl+P** — opens with an empty input and lists the open tabs, bookmarks, recently closed files and
   files in the current folder, fuzzy-matched by name and then by folder. A leading mark narrows the list:
   `#` tabs, `*` bookmarks, `@` history, `/` the current folder, `:` the settings commands (see below),
-  `?` the operation list and (*new in 1.1.0*) `!` project-wide search (FR-026, below), and (*new after 1.1.0*)
-  `^` language-server diagnostics and `&` references (FR-021, below). Closed files are kept in a history of up to 100 files; a file that no longer exists
+  `?` the operation list and (*new in 1.1.0*) `!` project-wide search (FR-026, below), and (*new in 1.2.0*)
+  `^` language-server diagnostics, `&` references and `%` symbols (FR-021, below). Closed files are kept in a history of up to 100 files; a file that no longer exists
   is reported in one line and dropped from the history. The palette takes Japanese input: it opens with the IME
   off and leaves it to the user after that, and matching walks code points, so a character never matches
   inside the bytes of another. Files in the current folder arrive in the background. Open tabs, bookmarks and
@@ -284,15 +290,16 @@ records in `docs/quality/`.
   the list. Read/write failures leave the previous list intact and show a one-line notice. The taskbar jump
   list is planned.
 - **FR-011 look** — frameless window with an opaque tab band as its title bar, follows the OS light / dark theme (aubergine dark, orange
-  accent), one paint per frame. The window corners are square and no Mica backdrop is applied (decision D86); a
+  accent), one paint per frame. The window asks for square corners and no Mica backdrop is applied (decision D86; a rounding of about 4 px
+  remains, #1496); a
   window that is not maximized resizes from all edges and corners, including the top-right corner and a 4 DIP
   strip along the top of × □ ＿, while a maximized window and edges touching the monitor's edge leave those
   pixels to the buttons, so a pointer thrown into the screen corner still hits ×. Done.
-  *New after 1.1.0*: `:set caretmotion` (off by default, also in the settings drawer) lets the caret trail
+  *New in 1.2.0*: `:set caretmotion` (off by default, also in the settings drawer) lets the caret trail
   behind as it moves, with a soft edge; `:set caretmotiontime=` sets the time (120 ms by default, 40–300). It
   does not move while Windows animation effects are off or the IME is composing (decision D108,
   [ADR 0192](docs/adr/0192-caret-motion-trails-behind-the-caret.md)).
-  *New after 1.1.0*: `:set caretsparks` (off by default, also in the settings drawer, independent of the
+  *New in 1.2.0*: `:set caretsparks` (off by default, also in the settings drawer, independent of the
   motion) scatters a few small sparks from where each character is typed; they fade within about 420 ms and
   do not appear for pastes, replays, `.`, undo or caret moves, nor while Windows animation effects are off or
   the IME is composing (#1979).
@@ -325,13 +332,14 @@ records in `docs/quality/`.
   [Interactive color study](docs/design/colorschemes.html) (open the downloaded HTML locally).
   Syntax colors cover 25 languages chosen by file extension: C, C++, C#, Rust, Go, Python, JavaScript,
   TypeScript, JSON, YAML, TOML, INI, XML, HTML, CSS, Markdown, PHP, SQL, Lua, PowerShell, shell, CMake,
-  Dockerfile, GDScript and Godot resources. Java, Kotlin, Dart, Zig, Terraform, Makefile,
+  Dockerfile, GDScript and Godot resources. *New in 1.2.0*: Java, Kotlin, Dart, Zig, Terraform, Makefile,
   Batch, Ruby, Swift, Scala, Haskell, Elixir, R, Perl, Vue and Svelte are recognized as languages
   (status bar, `:set ft=`, `lsp.<language>.command`) and stay uncolored for now. The language shows at the right of the status bar;
   `:set filetype=` / `:set ft=` changes it and `:syntax on|off` switches coloring for the document
   ([ADR 0156](docs/adr/0156-syntax-colors-are-column-spans-lexed-from-200-lines-above-and-drawn-by-cutting-glyph-runs.md)).
-- **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt), `:set fontsize=` and `:set guifont=`,
-  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new after 1.1.0*, v6 keeps every v5 key and adds `caret_motion`, `caret_motion_time`, `caret_sparks`, `pane_resize_step`, `pane_resize_step_vim` and the indent guide keys `indent_guide_style`, `indent_guide_colors`, `indent_guide_active` and `indent_guide_width`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
+- **FR-017 font size** — `Ctrl` + `+` / `-` / `0`, Ctrl + wheel (8–40 pt; *new in 1.2.0*, in steps of 0.5 pt
+  from the keys, the wheel, F1 and the settings drawer), `:set fontsize=` and `:set guifont=`,
+  persisted in `%LOCALAPPDATA%/NeNeNib/settings.v6` (v4 added `ui_language`, `lsp`, `explorer`, `root`, `features` and optional `lsp.<language>.command` lines; *new in 1.1.0*, v5 keeps every v4 key and adds `autoindent` and `finder_preview`; *new in 1.2.0*, v6 keeps every v5 key and adds `caret_motion`, `caret_motion_time`, `caret_sparks`, `pane_resize_step`, `pane_resize_step_vim` and the indent guide keys `indent_guide_style`, `indent_guide_color_count`, `indent_guide_highlight_current` and `indent_guide_width`; limit 16 KiB). The previous v5/v4/v3/v2/v1 files are read only when newer versions are absent and are preserved; `settings.v5` is the file 1.1.0 reads and writes, `settings.v4` the file 1.0.0 reads and writes. Done.
 - **FR-018 operation list and hints** — F1 (or `?` in Ctrl+P) lists available operations with their names,
   descriptions and shortcuts; type to filter, then press Enter to run one. Operations without a key in a mode,
   such as find and replace in Vim mode or printing, run from here. An untouched untitled document
@@ -367,21 +375,39 @@ records in `docs/quality/`.
   executable is missing or not written as an absolute path, or a `.cmd` / `.bat` (write `node.exe` and the script
   instead), is reported in one line and not started. In `settings.v6`, a `lsp.<name>.command` line for a language
   this version does not know is kept when the settings are written back.
-  *New after 1.1.0* (also tried with rust-analyzer, gopls and pyright): each language
-  keeps its own server, and switching tabs does not stop it; the project root is found by looking up from the
+  *New in 1.2.0* (also tried with rust-analyzer, gopls and pyright): each language
+  keeps its own server, and switching tabs does not stop it; languages written with the same command line
+  (C and C++, TypeScript and JavaScript) share one server for the same project root; the project root is found by looking up from the
   document's folder for the server's marker files (such as `.git` or `Cargo.toml`), never above `:set root=`
   when the document is under it. `]d` `[d` and F8 / Shift+F8 jump between diagnostics, `gl` or the F1 operation
   "Show diagnostic" shows the whole message, and `^` in Ctrl+P lists the diagnostics of the open tabs. `grr`,
   Shift+F12 or the F1 operation "List references" asks for the references of the name at the caret and lists up
   to 1,000 of them under `&` in Ctrl+P ([ADR 0191](docs/adr/0191-language-server-references-symbols-signature-help-and-formatting.md)).
-  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). In a list
+  `gO` or the F1 operation "List symbols" lists up to 1,000 functions, types and other symbols of the current
+  document under `%` in Ctrl+P. Typing one of the server's signature trigger characters (such as `(` or `,`)
+  shows the signature of the call in a tip above the caret line with the current parameter emphasized; the F1
+  operation "Show parameter info" asks for it without a key. The F1 operations "Format document" and "Format
+  selection" (no key; the caret line when nothing is selected) apply the server's answer as one edit that one
+  undo brings back; they are refused in Vim INSERT, and an answer that arrives in the middle of an input is not
+  applied. F2, Vim `grn` or the F1 operation "Rename symbol" asks for the new name on the input line and renames
+  the name at the caret through the server ([ADR 0194](docs/adr/0194-language-server-rename-and-code-actions-apply-workspace-edits-tab-by-tab.md)):
+  the whole answer is checked first and nothing changes if any part of it is refused; each file is changed in
+  its tab, a file that was not open is opened in a tab with unsaved changes (●) and is not written to disk, and
+  an answer that spans more than 32 files, creates, renames or deletes files, or reaches a file the server has not
+  opened that is not UTF-8 without a BOM (or is over 4 MiB) is refused in one line. Known limits: a server that has not read the other files
+  of the project yet may rename the name only in the open files; and if a tab that the server has not opened
+  has unsaved changes, the whole rename is refused (save it and try again). If a tab is closed while the answer
+  is on its way, an answer that also reaches a file without a tab is refused as out of date (ask again).
+  In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). *New in 1.2.0*: while that
+  list is open in Vim INSERT mode, ↑ ↓ PageUp PageDown choose a row instead of moving the caret (decision D111). In a list
   opened by a trigger character (ordinary and Vim modes), clicking a row accepts it, Tab accepts the chosen row
   or the top one, and Enter accepts only a row chosen with the arrow keys or Ctrl-n / Ctrl-p. The settings
   drawer's language-server section lists the servers found on the PC and writes the command line when one is
   chosen. `:LspLog` or the F1 operation "Open Language Server Log" opens the servers' error output and messages
   in an untitled tab, and the status bar shows a server's progress next to the diagnostics count. The editor
   now tells servers that it takes diagnostics and save notices, which typescript-language-server needs before it
-  sends diagnostics.
+  sends diagnostics. A diagnostic message under the caret is now written after the Basic | Vim switch and the
+  mode label instead of replacing them, so the switch stays visible and clickable (decision D119).
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
@@ -401,7 +427,16 @@ records in `docs/quality/`.
   16 MiB and files with a NUL in their first 8 KiB are skipped, and lines that are not valid UTF-8 (such as
   Shift_JIS files) are not matched
   ([ADR 0167](docs/adr/0167-project-search-runs-on-the-worker-and-streams-hits-into-the-palette.md)).
-  Planned: commentary, surround and autopairs (FR-024), changed-line markers, indent guides
+  *New in 1.2.0*: indent guides (FR-025, off by default,
+  [ADR 0193](docs/adr/0193-body-decorations-are-column-spans-drawn-over-the-retained-layout.md)):
+  `:set indentguides` or the settings drawer draws a vertical line at each indent level. The level width is
+  guessed from the opened document, or else taken from `:set indentguidewidth=` (2, 4 or 8; 4 by default).
+  The lines are rainbow colored by level (`:set indentguidestyle=rainbow|plain`, `indentguidecolorcount=` 3–6
+  and 4 by default, fewer when the theme has fewer distinct colors), and the level around the caret is drawn
+  stronger (`:set indentguidehighlightcurrent`, on by default). A wrapped line shows them on its first screen
+  row only; both split panes show them (the stronger level only in the active pane), and the preview, a line
+  being composed with the IME, giant lines and the grid display do not.
+  Planned: commentary, surround and autopairs (FR-024), changed-line markers
   and a yank flash (FR-025), replacing in search results and `.gitignore` (FR-026) and the rest of the `:s`
   family (FR-027: the typing preview, the other `:g` `:v` commands and `:sort`; `:s` itself is under FR-003,
   and the `c` flag, `:d` `:y` and `:g` `:v` with `d` and `s` are *new in 1.1.0*).
@@ -417,7 +452,14 @@ records in `docs/quality/`.
 - **FR-028 / FR-030** — *New in 1.1.0*: Ctrl+, opens the settings drawer at the right (D102): a search box, six sections, switches
   and choices that apply at once, the estimated cost of one keystroke for the features that are on, and three
   presets; closing it saves ([look](docs/design/2026-11-18-settings-modal-look.md),
-  [ADR 0170](docs/adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)). A first
+  [ADR 0170](docs/adr/0170-settings-modal-lists-features-with-measured-speed-cost-tiers.md)). *New in 1.2.0*:
+  a choice row (such as the theme or the display language) opens a list on a click on its value, Enter,
+  Space (with the search box empty), Alt+↓ or F4, while ← → still step through the values without opening
+  it; the list shows up to 10 rows with ✓ on the current value, moves with ↑ ↓ Home End PgUp PgDn and by
+  first letters, and closes with Esc, Alt+↑ or F4 (Tab chooses and closes); the value applies when chosen.
+  The focused row of the drawer and the chosen row of the completion list are outlined with a 1 DIP frame in
+  the text color, checked to stand out in all 125 themes
+  ([look](docs/design/2026-11-24-settings-select-and-focus.md)). A first
   minimap (a retained bitmap at the right edge, `:set minimap`, off by default) shows the document with its
   visible range shaded and edged in the accent color; a click on it scrolls that line to the middle of the
   screen and a drag follows the pointer, without moving the caret

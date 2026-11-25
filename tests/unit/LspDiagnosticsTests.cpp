@@ -2,7 +2,9 @@
 // 3 本（publishDiagnostics → 文書の値・編集でのずらし・見えている 1 行の下線の区間）と Range の
 // 写しを当てる。位置は ASCII・日本語・絵文字（UTF-16 の代理対）・CRLF・行と桁の外、上限は
 // 1,000 件、ずらしは編集の前・中・後ろ・境目。最後に固定 seed の性質の試験を 1 本流す。
+#include "BuiltinThemes.hpp"
 #include "Diagnostic.hpp"
+#include "DiagnosticColor.hpp"
 #include "DiagnosticCounts.hpp"
 #include "DiagnosticEdits.hpp"
 #include "DiagnosticNotice.hpp"
@@ -26,6 +28,7 @@
 #include "Scopes.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
+#include "Theme.hpp"
 
 #include <algorithm>
 #include <array>
@@ -549,10 +552,27 @@ void verify_counts()
                                                   core::DiagnosticsCount::complete)),
            "only information and hint do not show the count");
 }
+
+// 下線の色は error が本文の error、warning が本文の warning、information と hint が UI の muted
+// （DiagnosticColor.hpp・ADR 0161 の決定 4・#2013）。組み込みの全テーマで同じ規則。
+void verify_diagnostic_colors()
+{
+    for (const core::Theme &theme : core::builtin_themes)
+    {
+        const auto color = [&theme](DiagnosticSeverity severity)
+        { return core::diagnostic_color(theme.body, theme.ui, severity); };
+        expect(color(DiagnosticSeverity::error) == theme.body.error &&
+                   color(DiagnosticSeverity::warning) == theme.body.warning &&
+                   color(DiagnosticSeverity::information) == theme.ui.muted &&
+                   color(DiagnosticSeverity::hint) == theme.ui.muted,
+               "each severity takes its theme token");
+    }
+}
 } // namespace
 
 void verify_lsp_diagnostics_scope()
 {
+    verify_diagnostic_colors();
     verify_ranges();
     verify_published();
     verify_dropped_entries();

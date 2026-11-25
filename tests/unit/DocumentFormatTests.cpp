@@ -2,10 +2,15 @@
 // 変えるのは文書の保存の形だけで、本文のバイト列と undo には触れない。保存は encoded_parts の 1
 // 本が 本文の形と違うときだけ写す。
 #include "ActivateCommandChoice.hpp"
+#include "CancelCommand.hpp"
 #include "CodePageFailure.hpp"
+#include "ComposeText.hpp"
+#include "DocumentDecoding.hpp"
 #include "DocumentFormat.hpp"
 #include "DocumentFormatKind.hpp"
+#include "EditMode.hpp"
 #include "Editing.hpp"
+#include "EditorIntent.hpp"
 #include "ExResult.hpp"
 #include "FileFailure.hpp"
 #include "HistoryAction.hpp"
@@ -13,8 +18,11 @@
 #include "InsertText.hpp"
 #include "LineEndingConversion.hpp"
 #include "NewTab.hpp"
+#include "OpenDisplayLanguageList.hpp"
 #include "OpenDocument.hpp"
 #include "OpenDocumentFormatList.hpp"
+#include "OpenOperationList.hpp"
+#include "OpenProjectSearch.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -246,6 +254,11 @@ void verify_format_unencodable()
                refused.document.save_state == core::SaveState::modified &&
                editing.files().written().empty(),
            "an unencodable body stops the save and keeps the chosen encoding");
+    expect(app::file_failure_of(app::CodePageFailure::undecodable) ==
+                   app::FileFailure::undecodable &&
+               app::file_failure_of(app::CodePageFailure::unencodable) ==
+                   app::FileFailure::unencodable,
+           "the code page failures keep their names as file failures");
 }
 
 // 決定 3: 保存の形と本文の形が同じなら写さない（本文の断片をそのまま渡す）。
@@ -327,6 +340,39 @@ void verify_format_palette()
            "the face opens on the chosen line ending");
 }
 
+// F1・ステータスバー・メニューから開く一覧（操作・表示言語・保存の形・全文検索）は、変換の間は
+// 開かず（変換を残す）、開いている入力行は取消と同じ道で閉じてから開く（ADR 0078 の決定 9・
+// ADR 0123 の追補の決定 8・ADR 0010 の追補 #1049）。
+void verify_lists_skip_composition_and_close_lines()
+{
+    const app::EditorIntent lists[] = {
+        app::OpenOperationList{},
+        app::OpenDisplayLanguageList{},
+        app::OpenDocumentFormatList{core::DocumentFormatKind::encoding},
+        app::OpenProjectSearch{},
+    };
+    for (const auto &list : lists)
+    {
+        Editing composing;
+        open_held(composing, "a\nb");
+        auto &held = composing.controller();
+        static_cast<void>(held.apply(app::ComposeText{composed_of("に", {}, 0)}));
+        const auto skipped = held.apply_frame(list);
+        expect(!skipped.command_palette.has_value() && skipped.composition.has_value(),
+               "a list does not open over the IME composition");
+        Editing typing;
+        open_held(typing, "a\nb");
+        auto &controller = typing.controller();
+        applied(controller, app::SelectEditMode{core::EditMode::vim});
+        vim_replay(controller, ":d");
+        const auto opened = controller.apply_frame(list);
+        const auto closed = controller.apply_frame(app::CancelCommand{});
+        expect(opened.command_palette.has_value() && !closed.command_line.has_value() &&
+                   vim_body(closed) == "a\nb",
+               "a list closes the open Ex line without running it and opens");
+    }
+}
+
 // 保存の形は文書の値で、タブを切り替えても付いていく。
 void verify_format_tabs_carry_the_form()
 {
@@ -379,6 +425,7 @@ void verify_document_format_contracts()
     verify_format_same_form_is_free();
     verify_format_ex_answers();
     verify_format_palette();
+    verify_lists_skip_composition_and_close_lines();
     verify_format_tabs_carry_the_form();
     verify_format_status_bar_hits();
 }

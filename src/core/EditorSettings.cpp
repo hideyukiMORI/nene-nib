@@ -22,8 +22,8 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.pane_resize_step == right.pane_resize_step &&
            left.pane_resize_step_vim == right.pane_resize_step_vim &&
            left.indent_guide_style == right.indent_guide_style &&
-           left.indent_guide_colors == right.indent_guide_colors &&
-           left.indent_guide_active == right.indent_guide_active &&
+           left.indent_guide_color_count == right.indent_guide_color_count &&
+           left.indent_guide_highlight_current == right.indent_guide_highlight_current &&
            left.indent_guide_width == right.indent_guide_width;
 }
 

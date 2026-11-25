@@ -27,6 +27,7 @@
 #include "RevealShelf.hpp"
 #include "SettingsCodec.hpp"
 #include "SettingsLspCommandTests.hpp"
+#include "SettingsReleasedSixTests.hpp"
 #include "SettingsVersionSixTests.hpp"
 #include "ShellRegistration.hpp"
 #include "ShellRegistrationStatus.hpp"
@@ -755,8 +756,8 @@ void verify_settings_versions()
                                "autoindent=off\nfinder_preview=auto\ncaret_motion=off\n"
                                "caret_motion_time=120\ncaret_sparks=off\n"
                                "pane_resize_step=5\npane_resize_step_vim=off\n"
-                               "indent_guide_style=rainbow\nindent_guide_colors=4\n"
-                               "indent_guide_active=on\nindent_guide_width=4\n"),
+                               "indent_guide_style=rainbow\nindent_guide_color_count=4\n"
+                               "indent_guide_highlight_current=on\nindent_guide_width=4\n"),
            "the v6 writer emits the v5 keys and the caret motion, sparks, pane resize and indent "
            "guide keys after finder_preview");
     const auto v3 = decode_settings(v3_settings, SettingsVersion::v3);
@@ -900,6 +901,7 @@ void verify_older_settings_versions()
            "a v1 document is not read as v5");
     verify_released_v4_settings();
     nenenib::tests::adapters::verify_settings_v6_codec(expect);
+    nenenib::tests::adapters::verify_released_v6_codec(expect);
 }
 
 // Vim の `map.<modes>.<lhs>=<rhs>` の行と `mapleader=`（ADR 0176 の決定 1・#1081）。0 行以上・
@@ -918,8 +920,8 @@ void verify_settings_maps()
                            "scrolloff=0\nexplorer_width=\nautoindent=off\n"
                            "finder_preview=auto\ncaret_motion=off\ncaret_motion_time=120\n"
                            "caret_sparks=off\npane_resize_step=5\npane_resize_step_vim=off\n"
-                           "indent_guide_style=rainbow\nindent_guide_colors=4\n"
-                           "indent_guide_active=on\nindent_guide_width=4\n"
+                           "indent_guide_style=rainbow\nindent_guide_color_count=4\n"
+                           "indent_guide_highlight_current=on\nindent_guide_width=4\n"
                            "mapleader=<Space>\n"
                            "map.i.jj=!<Esc>\nmap.nv.<leader>w=:w<CR>\n"),
            "the leader and the map rows follow the other lines in order");
@@ -1754,6 +1756,13 @@ void verify_v5_migration(Win32FileAdapter &files)
            "a v5 holding caret_motion is refused, blocks writes and makes no v6");
 }
 
+// 公開前の古い 2 つの名前の v6 は読めず、v5 へ戻らず、保存を断る（ADR 0193 の 2026-11-24 の追補）。
+void verify_old_v6_names(Win32FileAdapter &files)
+{
+    reset_settings(files, std::nullopt);
+    nenenib::tests::adapters::verify_old_v6_names_file(expect, files, settings_paths());
+}
+
 // 長いルートの経路で 16 KiB を超える設定は書かない（次の読込が too_large で止まるため）。
 void verify_oversized_settings(Win32FileAdapter &files)
 {
@@ -1778,6 +1787,7 @@ void verify_settings_migration(Win32FileAdapter &files)
     verify_language_server_use_migration(files);
     verify_v4_conflicts(files);
     verify_v5_migration(files);
+    verify_old_v6_names(files);
     verify_v3_migration(files);
     verify_v3_conflicts(files);
     verify_oversized_settings(files);

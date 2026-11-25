@@ -195,8 +195,9 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
         text, [](char unit) { return (static_cast<unsigned char>(unit) & 0xC0U) != 0x80U; }));
 }
 // 埋める候補は、空の値を Ex が受けない「=」で終わる 10 個（CommandChoice.cpp の choice_of・#1527・
-// `set caretmotiontime=` は ADR 0192・`set paneresizestep=` は #1972・`set indentguidecolors=` `set
-// indentguidewidth=` は ADR 0193）。 空の値に意味がある `set clipboard=` `set root=` は実行する。
+// `set caretmotiontime=` は ADR 0192・`set paneresizestep=` は #1972・`set indentguidecolorcount=`
+// `set indentguidewidth=` は ADR 0193）。 空の値に意味がある `set clipboard=` `set root=`
+// は実行する。
 [[nodiscard]] core::CommandChoiceKind kind_of(std::string_view command)
 {
     constexpr std::array<std::string_view, 10> fills{"set fontsize=",
@@ -207,7 +208,7 @@ constexpr std::array<PaletteChoiceSample, 9> samples{{
                                                      "let mapleader=",
                                                      "set caretmotiontime=",
                                                      "set paneresizestep=",
-                                                     "set indentguidecolors=",
+                                                     "set indentguidecolorcount=",
                                                      "set indentguidewidth="};
     return std::ranges::find(fills, command) != fills.end() ? core::CommandChoiceKind::fill
                                                             : core::CommandChoiceKind::execute;

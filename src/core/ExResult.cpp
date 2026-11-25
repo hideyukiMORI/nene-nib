@@ -54,8 +54,8 @@ namespace nenenib::core
 {
 namespace
 {
-using detail::indent_guide_active_option_name;
-using detail::indent_guide_colors_option_name;
+using detail::indent_guide_color_count_option_name;
+using detail::indent_guide_highlight_current_option_name;
 using detail::indent_guide_option;
 using detail::indent_guide_style_option_name;
 using detail::indent_guide_width_option_name;
@@ -1045,9 +1045,9 @@ constexpr std::array<SwitchOption, 19> switch_options{{
     {feature_cost(EditorFeature::indent_guides).name, "",
      [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return feature_enabled(settings, EditorFeature::indent_guides); }, true},
-    {indent_guide_active_option_name, "",
+    {indent_guide_highlight_current_option_name, "",
      [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.indent_guide_active; }, true},
+     { return settings.indent_guide_highlight_current; }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.explorer; }, true},
     {"lsp", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -1133,8 +1133,8 @@ constexpr std::array<NumberOption, 5> number_options{{
      true},
     {"shiftwidth", "sw", [](const EditorSettings &) noexcept { return vim_shift_width; }, false},
     {"tabstop", "ts", [](const EditorSettings &) noexcept { return vim_tab_stop; }, false},
-    {indent_guide_colors_option_name, "", [](const EditorSettings &settings) noexcept
-     { return std::size_t{settings.indent_guide_colors}; }, true},
+    {indent_guide_color_count_option_name, "", [](const EditorSettings &settings) noexcept
+     { return std::size_t{settings.indent_guide_color_count}; }, true},
     {indent_guide_width_option_name, "", [](const EditorSettings &settings) noexcept
      { return std::size_t{settings.indent_guide_width}; }, true},
 }};
@@ -2700,9 +2700,9 @@ constexpr std::array<std::string_view, 71> fixed_candidates{"colorscheme",
                                                             "set nopaneresizestepvim",
                                                             "set indentguidestyle=rainbow",
                                                             "set indentguidestyle=plain",
-                                                            "set indentguidecolors=",
-                                                            "set indentguideactive",
-                                                            "set noindentguideactive",
+                                                            "set indentguidecolorcount=",
+                                                            "set indentguidehighlightcurrent",
+                                                            "set noindentguidehighlightcurrent",
                                                             "set indentguidewidth=",
                                                             "set scrolloff=",
                                                             "set language=ja",

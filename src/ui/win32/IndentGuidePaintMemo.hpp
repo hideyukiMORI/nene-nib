@@ -31,10 +31,10 @@ class IndentGuidePaintMemo final
         {
             return;
         }
-        paint_ = core::indent_guide_paint(settings.indent_guide_style, settings.indent_guide_colors,
-                                          syntax, palette);
+        paint_ = core::indent_guide_paint(settings.indent_guide_style,
+                                          settings.indent_guide_color_count, syntax, palette);
         syntax_ = syntax;
-        wanted_ = settings.indent_guide_colors;
+        wanted_ = settings.indent_guide_color_count;
         ++made_;
     }
 
@@ -61,9 +61,9 @@ class IndentGuidePaintMemo final
         }
         const core::IndentGuidePaint &paint = paint_.value();
         return paint.style == settings.indent_guide_style &&
-               wanted_ == settings.indent_guide_colors && paint.plain == palette.panel_border &&
-               paint.plain_strong == palette.muted && paint.background == palette.background &&
-               syntax_.foreground == syntax.foreground &&
+               wanted_ == settings.indent_guide_color_count &&
+               paint.plain == palette.panel_border && paint.plain_strong == palette.muted &&
+               paint.background == palette.background && syntax_.foreground == syntax.foreground &&
                std::ranges::all_of(core::rainbow_roles, [this, &syntax](const auto role)
                                    { return syntax_.*role == syntax.*role; });
     }

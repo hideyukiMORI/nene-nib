@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.31)
 # 版はここが唯一の出どころ（Phase 4 で manifest / VERSIONINFO がこれを受け取る）。
 # C は third_party の外部コード（md4c・ADR 0151）のためだけに有効にする。
-project(NeNeNib VERSION 1.1.0 LANGUAGES C CXX)
+project(NeNeNib VERSION 1.2.0 LANGUAGES C CXX)
 
 # manifest（PMv2 DPI・版）と VERSIONINFO は project(... VERSION) からだけ導く。
 # 固定の manifest と版リテラルは CNF-007（eng/conformance.py の version_metadata_checks）が拒否する。
@@ -333,7 +333,7 @@ nenenib_system_link(nenenib_adapters ole32)
 
 # QLT-013: adapters/win32 のファイル読み書きは、GetTempPathW の下の試験ごとの一時フォルダ
 # （tests/adapters/TemporaryTestDirectory・#1103）で往復させる（ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
-nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp tests/adapters/SettingsVersionSixTests.cpp tests/adapters/SettingsLspCommandTests.cpp
+nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp tests/adapters/SettingsVersionSixTests.cpp tests/adapters/SettingsReleasedSixTests.cpp tests/adapters/SettingsLspCommandTests.cpp
     tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)

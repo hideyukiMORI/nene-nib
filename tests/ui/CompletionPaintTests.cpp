@@ -12,6 +12,7 @@
 #include "CompletionPointer.hpp"
 #include "CompletionRowView.hpp"
 #include "CompletionSource.hpp"
+#include "CompletionStep.hpp"
 #include "CompletionView.hpp"
 #include "ContextMenuText.hpp"
 #include "DirectWriteFactory.hpp"
@@ -189,6 +190,17 @@ void verify_vim_completion_keys()
     expect(!vim_completion_key('N', false, true, true).has_value() &&
                !vim_completion_key('Q', true, true, true).has_value(),
            "a key without Ctrl alone, and a key that is not a completion key, are not sent");
+    using nenenib::application::CompletionStep;
+    using nenenib::ui::win32::vim_completion_step_for;
+    expect(vim_completion_step_for(VK_DOWN, false) == CompletionStep::next &&
+               vim_completion_step_for(VK_UP, false) == CompletionStep::previous &&
+               vim_completion_step_for(VK_NEXT, false) == CompletionStep::page_next &&
+               vim_completion_step_for(VK_PRIOR, false) == CompletionStep::page_previous,
+           "Down, Up, PageDown and PageUp choose the rows of a Vim completion face (#2024)");
+    expect(!vim_completion_step_for(VK_DOWN, true).has_value() &&
+               !vim_completion_step_for(VK_LEFT, false).has_value() &&
+               !vim_completion_step_for(VK_HOME, false).has_value(),
+           "Shift with an arrow, and the other keys, stay Vim keys");
     using nenenib::ui::win32::tab_closes_completion;
     expect(tab_closes_completion(true, true) && !tab_closes_completion(false, true) &&
                !tab_closes_completion(true, false),

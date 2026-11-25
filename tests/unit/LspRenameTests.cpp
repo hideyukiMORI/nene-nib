@@ -4,6 +4,7 @@
 // ファイルは固定のタブで未保存・文書ごとに 1 回の undo・頼んだタブへ戻る・使った順は動かさない）、
 // 鍵（F2・`grn`・入力行）と能力を替え玉 ScriptedLanguageServer で確かめる。
 #include "CancelCommand.hpp"
+#include "CloseTab.hpp"
 #include "CommandEdit.hpp"
 #include "CommandText.hpp"
 #include "CompletionCandidates.hpp"
@@ -535,6 +536,15 @@ void verify_input_line()
                editing.language_server().requests(rename_method).empty() &&
                whole_vim_body(editing.controller()) == main_text,
            "Esc closes the line without asking");
+    // 頼んだ後にキャレットが動いたら、変えられる所の答えは使わない（文脈の照合・決定 1）。
+    static_cast<void>(asked(editing));
+    applied(editing.controller(),
+            app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                            core::SelectionAnchoring::collapse});
+    const auto moved = answered(editing, prepare_method, add_target);
+    expect(!moved.command_line.has_value() &&
+               editing.language_server().requests(rename_method).empty(),
+           "an answer after the caret moved opens no line");
 }
 
 void verify_rename_request_and_refusals()
@@ -862,6 +872,46 @@ void verify_not_utf8()
                    filled(editing, core::UiMessage::notice_server_edit_not_utf8, {"old.cpp"}) &&
                whole_vim_body(editing.controller()) == main_text && frame.tabs.size() == 2,
            "an unopened file that is not UTF-8 refuses the whole answer");
+    // BOM つきの UTF-16 も UTF-8 でないので同じく断る（plain_utf8 は BOM なしの UTF-8 だけ）。
+    for (const std::string_view bytes : {std::string_view{"\xFF\xFE"
+                                                          "a\0\n\0",
+                                                          6},
+                                         std::string_view{"\xFE\xFF"
+                                                          "\0a\0\n",
+                                                          6}})
+    {
+        Editing wide(lsp_on());
+        wide.files().hold_at("C:\\work\\wide.cpp", Bytes{std::string(bytes)});
+        started(wide, prepared);
+        renamed_to_sum(wide);
+        const auto refused =
+            answered(wide, rename_method,
+                     R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                         uri_edits("file:///C:/work/wide.cpp", edit_json(0, 0, 1, "x")) + "}}");
+        expect(message_of(refused) ==
+                       filled(wide, core::UiMessage::notice_server_edit_not_utf8, {"wide.cpp"}) &&
+                   whole_vim_body(wide.controller()) == main_text,
+               "an unopened UTF-16 file refuses the whole answer too");
+    }
+    // 読めない答え（changes が表でない）は 1 行で断り、本文を変えない（決定 4）。
+    Editing broken(lsp_on());
+    started(broken, prepared);
+    renamed_to_sum(broken);
+    const auto unread = answered(broken, rename_method, R"({"changes":5})");
+    expect(message_of(unread) == notice(broken, core::UiMessage::notice_server_edit_unreadable) &&
+               whole_vim_body(broken.controller()) == main_text,
+           "an unreadable rename answer says so and changes nothing");
+    // 今の本文と同じになる答えは何も変えず、何も知らせない（ADR 0194
+    // の「何も変わらなければ何も出さない」）。
+    Editing same(lsp_on());
+    started(same, prepared);
+    renamed_to_sum(same);
+    const auto kept =
+        answered(same, rename_method,
+                 R"({"changes":{)" + uri_edits(main_uri, edit_json(0, 4, 7, "add")) + "}}");
+    expect(message_of(kept).empty() && whole_vim_body(same.controller()) == main_text &&
+               kept.document.save_state == core::SaveState::saved,
+           "an answer that leaves the text as it is changes and says nothing");
 }
 
 // Ctrl+Tab の歩きの途中に届いた答えは当てない（#2011 のレビュー R1）。
@@ -1249,6 +1299,177 @@ void verify_vim_grn()
                    core::TextPosition{core::LineNumber{2}, core::Column{22}},
            "u brings the document and the caret before the rename back");
 }
+
+// 答えを待つ間に lib.hpp（頼んだ席が開いていたタブ・帯の 0）をどうするか（#2039）。
+enum class HeaderFate : std::uint8_t
+{
+    discarded,
+    saved,
+    reopened,
+    renamed_language,
+};
+
+// main.cpp と lib.hpp を当てる答え（clangd は lib.hpp をバッファの本文で数えている）。
+[[nodiscard]] std::string main_and_header()
+{
+    return R"({"changes":{)" +
+           uri_edits(main_uri, add_to_sum() + "," + edit_json(1, 20, 23, "sum")) + "," +
+           uri_edits(header_uri, add_to_sum()) + "}}";
+}
+
+// lib.hpp に未保存の変更を置いて main.cpp で頼み、答えの前に lib.hpp を fate のとおりにして、
+// main.cpp へ戻ってから答える。
+[[nodiscard]] app::EditorFrame header_changed_while_waiting(Editing &editing, HeaderFate fate)
+{
+    started_with_header_opened(editing);
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::InsertText{"x"});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::SwitchTab{0});
+    switch (fate)
+    {
+    case HeaderFate::discarded:
+        applied(editing.controller(), app::CloseTab{0});
+        break;
+    case HeaderFate::saved:
+        applied(editing.controller(), app::InsertText{"y"});
+        applied(editing.controller(),
+                app::SaveDocument{path_of(header_path), core::TextEncoding::utf8});
+        applied(editing.controller(), app::CloseTab{0});
+        break;
+    case HeaderFate::reopened:
+        applied(editing.controller(), app::CloseTab{0});
+        applied(editing.controller(), app::OpenDocument{path_of(header_path)});
+        break;
+    case HeaderFate::renamed_language:
+        static_cast<void>(run_ex(editing.controller(), "set ft=text"));
+        applied(editing.controller(), app::SwitchTab{1});
+        return answered(editing, rename_method, main_and_header());
+    }
+    applied(editing.controller(), app::SwitchTab{0});
+    return answered(editing, rename_method, main_and_header());
+}
+
+// 写しに在ったタブが消えた後は、ディスクから読んだ本文・開き直したタブに当てず全体を断る。席が
+// 頼んだ後にその文書だけを閉じたタブも照らせないので断る（レビュー R10 の N2・C1）。
+void verify_closed_copied_tab()
+{
+    for (const auto &[fate, said] :
+         {std::pair{HeaderFate::discarded, "a tab closed unsaved while waiting refuses the answer"},
+          std::pair{HeaderFate::saved, "a tab typed into, saved and closed refuses the answer"},
+          std::pair{HeaderFate::reopened, "a tab closed and opened again refuses the answer"},
+          std::pair{HeaderFate::renamed_language,
+                    "a tab the seat closed after asking refuses the answer"}})
+    {
+        Editing editing(lsp_on());
+        const auto frame = header_changed_while_waiting(editing, fate);
+        const std::size_t main_tab = fate == HeaderFate::renamed_language ? 1 : 0;
+        const std::size_t tabs = fate == HeaderFate::discarded || fate == HeaderFate::saved ? 1 : 2;
+        expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+                   frame.active_tab == main_tab && frame.tabs.size() == tabs &&
+                   whole_vim_body(editing.controller()) == main_text &&
+                   tab_is(frame, main_tab, main_path, core::SaveState::saved),
+               said);
+    }
+}
+
+// 関係の無いタブ（写しに在った notes.txt）を閉じただけで、当て先が全部写しに在って今も在るタブ
+// なら当てる（#2039 の断りすぎない側）。
+void verify_unrelated_tab_closed()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::CloseTab{2});
+    const auto frame = answered(editing, rename_method, main_and_header());
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "3"}) &&
+               frame.tabs.size() == 2 && whole_vim_body(editing.controller()) == renamed_main &&
+               body_of_tab(editing, 0) == renamed_header,
+           "closing an unrelated tab keeps an answer on tabs that are all still open");
+    Editing unopened(lsp_on());
+    started_with_header_opened(unopened);
+    unopened.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(unopened.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(unopened.controller(), app::SwitchTab{1});
+    caret_on_add(unopened);
+    renamed_to_sum(unopened);
+    applied(unopened.controller(), app::CloseTab{2});
+    const auto refused = answered(unopened, rename_method, clangd_changes());
+    expect(message_of(refused) == notice(unopened, core::UiMessage::notice_server_edit_stale) &&
+               refused.tabs.size() == 2 && whole_vim_body(unopened.controller()) == main_text,
+           "after a copied tab is closed, a file without a tab refuses the whole answer");
+}
+
+// 写しのタブを閉じた後に開いた別のファイルのタブ（写しに無い・改訂番号 0・保存済み）を当て先に
+// 含む答えは断る（#2041 のレビュー P2）。
+void verify_opened_after_closing()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::CloseTab{2});
+    applied(editing.controller(), app::OpenDocument{path_of(lib_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    const auto frame = answered(editing, rename_method,
+                                R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                                    uri_edits(lib_uri, add_to_sum()) + "}}");
+    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+               frame.tabs.size() == 3 && whole_vim_body(editing.controller()) == main_text &&
+               tab_is(frame, 2, lib_path, core::SaveState::saved) &&
+               body_of_tab(editing, 2) == lib_text,
+           "after a copied tab is closed, a tab opened later refuses the whole answer");
+}
+
+// 写しのタブを閉じた後に、まだ読んでいないタブ（前回のタブ・写しに無い）を当て先に含む答えは
+// 断り、そのタブを読まない（#2041 のレビュー P2）。
+void verify_unread_after_closing()
+{
+    const auto listed = [](std::string_view path, std::size_t rank)
+    {
+        return app::SessionTab{path_of(path),
+                               core::TextPosition{core::LineNumber{1}, core::Column{1}},
+                               core::LineNumber{1}, rank};
+    };
+    Editing editing(lsp_on(),
+                    SessionReading{std::optional<app::Session>{
+                        app::Session{{listed(main_path, 0), listed(header_path, 1)}, 0}}},
+                    [](ScriptedFiles &files)
+                    {
+                        files.hold_at(std::string(main_path), Bytes{std::string(main_text)});
+                        files.hold_at(std::string(header_path), Bytes{std::string(header_text)});
+                        files.hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+                    });
+    static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
+    initialized(editing, prepared);
+    // 新しいタブはアクティブな main.cpp のすぐ後ろ（帯の 1）に入る。
+    applied(editing.controller(), app::OpenDocument{path_of(notes_path)});
+    applied(editing.controller(), app::SwitchTab{0});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    expect(tab_is(editing.controller().frame(), 1, notes_path, core::SaveState::saved),
+           "the notes tab sits right after main.cpp before it is closed");
+    applied(editing.controller(), app::CloseTab{1});
+    const auto frame = answered(editing, rename_method,
+                                R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+                                    uri_edits(header_uri, add_to_sum()) + "}}");
+    const auto &requests = editing.reads().requests();
+    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+               frame.tabs.size() == 2 && whole_vim_body(editing.controller()) == main_text &&
+               std::ranges::none_of(requests, [](const app::DocumentReadRequest &request)
+                                    { return request.path.text() == header_path; }),
+           "after a copied tab is closed, a tab not read yet refuses the answer and stays unread");
+}
 } // namespace
 
 void verify_lsp_rename_scope()
@@ -1284,5 +1505,9 @@ void verify_lsp_rename_scope()
     verify_unread_tab_kept();
     verify_c_header(false);
     verify_c_header(true);
+    verify_closed_copied_tab();
+    verify_unrelated_tab_closed();
+    verify_opened_after_closing();
+    verify_unread_after_closing();
 }
 } // namespace nenenib::tests

@@ -3,6 +3,7 @@
 #include "EditorFrame.hpp"
 #include "OperationGuideLayout.hpp"
 #include "StatusBarLayout.hpp"
+#include "StatusLeftInputs.hpp"
 #include "StatusLeftState.hpp"
 
 #include <cstddef>
@@ -11,12 +12,17 @@ namespace nenenib::ui::win32
 {
 // ステータスの文字組みを保持する枠の数（ADR 0079 の決定 11 と追補・ADR 0154 の決定 6・ADR 0161 の
 // 決定 4）。通常 8 枠（トグル 2・モード 1・右の 4 項目・診断の件数 1）と案内 4 枠で
-// 12。録画中は案内 の代わりに 1 枠で 9。件数が 0 の frame は件数の枠を使わない。 Direct2DRenderer
+// 12。録画中は案内 の代わりに 1 枠で 9。キャレットの上の診断の文も案内を消して 1 枠で 9（録画と
+// 排他・ADR 0161 の 2026-11-24 の追補）。件数が 0 の frame は件数の枠を使わない。 Direct2DRenderer
 // の保持の配列はこの長さで、status_layout_demand が超えないことを nib_window_tests が確かめる。
 inline constexpr std::size_t status_layout_capacity = 12;
 
-// 左側に何を描くか。面が開いているときは `:` の入力も知らせもトグルの側へ落ちる。
+// 左側に何を描くか。面が開いているときは `:` の入力も知らせも診断の文もトグルの側へ落ちる。
+// 優先は入力行 → 知らせ → 診断の文（トグルとモードの後ろ）→ 録画 → モード。
 // draw_status_left はこの値で分かれる（分かれ目はこの 1 か所）。
+[[nodiscard]] StatusLeftState status_left_of(const StatusLeftInputs &inputs) noexcept;
+
+// frame の値で status_left_of を引く。
 [[nodiscard]] StatusLeftState status_left_state(const application::EditorFrame &frame) noexcept;
 
 // 1 つの frame の draw_status_bar と draw_status_guide が write_status / status_text_layout で

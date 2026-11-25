@@ -19,8 +19,11 @@ namespace
 // してここへも 1 行足す。fixture の再生は verify_vim_fixtures が全件行うので、ここには載せない。
 // 契約を持たない scope（--vim-visual-yank）と、既に載っている契約を別の切り口で束ねただけの scope
 // （--vim-open-line-external / --vim-open-line-recovery / --vim-line-jump-recovery）は出てこない。
-// 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 148> contracts{{
+// 既定実行を 10 秒を超えて延ばす重い scope は載せず、CTest の
+// nib_unit_scopes（--every-scope）で回す。 載せていない物: --minimap-property（Debug で約 28
+// 秒・#2013 の実測）と --vim-window-path-all （全件版・見本版の --vim-fixture-window-path
+// が載っている）。 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
+constexpr std::array<std::pair<std::string_view, void (*)()>, 150> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -166,7 +169,9 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 148> contracts{{
     {"--lsp-references", verify_lsp_references_scope},
     {"--lsp-symbols", verify_lsp_symbols_scope},
     {"--lsp-signature", verify_lsp_signature_scope},
+    {"--indent-guides", verify_indent_guides_scope},
     {"--lsp-formatting", verify_lsp_formatting_scope},
+    {"--input-line-property", verify_input_line_property_scope},
     {"--lsp-rename", verify_lsp_rename_scope},
     {"--lsp-code-action", verify_lsp_code_action_scope},
 }};

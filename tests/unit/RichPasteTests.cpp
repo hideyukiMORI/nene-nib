@@ -21,6 +21,7 @@
 #include "VisibleLines.hpp"
 
 #include <array>
+#include <cstddef>
 #include <expected>
 #include <optional>
 #include <string>
@@ -103,6 +104,32 @@ void verify_kind_table()
     {
         expect(app::paste_kind_of(language, has_html) == kind,
                "the paste kind follows the language and the HTML on the clipboard");
+    }
+}
+
+// 全部の言語で表の「ほか」を確かめる（ADR 0157 の決定 1 と #840 の追補: html・javascript・
+// typescript → html_as_is、markdown → markdown_from_html、ほか → text。HTML が無ければどれも
+// text）。言語は language_count() の全部を回すので、足した言語も「ほか」の行で縛られる。
+[[nodiscard]] PasteKind kind_by_rule(Language language) noexcept
+{
+    if (language == Language::markdown)
+    {
+        return PasteKind::markdown_from_html;
+    }
+    const bool as_is = language == Language::html || language == Language::javascript ||
+                       language == Language::typescript;
+    return as_is ? PasteKind::html_as_is : PasteKind::text;
+}
+
+void verify_kind_for_every_language()
+{
+    for (std::size_t index = 0; index < core::language_count(); ++index)
+    {
+        const auto language = static_cast<Language>(index);
+        expect(app::paste_kind_of(language, true) == kind_by_rule(language),
+               "with HTML on the clipboard every language pastes by the table of decision 1");
+        expect(app::paste_kind_of(language, false) == PasteKind::text,
+               "without HTML every language pastes the text");
     }
 }
 
@@ -243,6 +270,7 @@ void verify_vim_paste()
 void verify_rich_paste_contracts()
 {
     verify_kind_table();
+    verify_kind_for_every_language();
     verify_markdown_paste();
     verify_language_paste();
     verify_script_paste();
