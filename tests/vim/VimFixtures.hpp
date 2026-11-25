@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 2c4414c12dc1cfbdf75b30ee1aee7b1830841fae573319919dc9b15d026e4702 / 6892 fixtures
+// fixtures.json: sha256 a2b5cb265427208e0d92523893630c66e2fa2795dfab4b76afee4efba4d9fe72 / 6903 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6892> vim_fixtures{{
+constexpr std::array<VimFixture, 6903> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6904,6 +6904,17 @@ constexpr std::array<VimFixture, 6892> vim_fixtures{{
     {"insert-complete-macro-twice", "a1 a2 a1 x a3 a2", "fx@a0@@", "a2 a2 a1 a3 a3 a2", 1, 2, "a1", "v", std::nullopt, VimMacroFixture{'a', "cwa<C-n><Esc>"}},
     {"insert-complete-ctrl-r-ctrl-n-char", "ab cd", "yiwA<C-r><C-n>x<Esc>", "ab cdx", 1, 6, "ab", "v", std::nullopt},
     {"insert-complete-ctrl-r-ctrl-n-again", "cd1 cd", "A<C-r><C-n><C-n><Esc>", "cd1 cd1", 1, 7, "", "", std::nullopt},
+    {"ex-range-blank-number-adds", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 2d<CR>", "l1 a\n  l2 b\n\tl4 b\nl5 a\n  l6 b\nl7 a", 3, 2, "l3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-plus-adds", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 +2d<CR>", "l1 a\n  l2 b\n\tl4 b\nl5 a\n  l6 b\nl7 a", 3, 2, "l3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-two-numbers", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":2 3d<CR>", "l1 a\n  l2 b\nl3 a\n\tl4 b\n  l6 b\nl7 a", 5, 3, "l5 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-before-comma", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 ,3d<CR>", "\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 2, "l1 a\n  l2 b\nl3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-after-comma", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1, 3d<CR>", "\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 2, "l1 a\n  l2 b\nl3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-both-sides-of-comma", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 , 3d<CR>", "\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 2, "l1 a\n  l2 b\nl3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-last-minus", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":$ -1d<CR>", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\nl7 a", 6, 1, "  l6 b\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-current-number", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":. 1d<CR>", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\nl7 a", 6, 1, "  l6 b\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-two-blanks", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1  2d<CR>", "l1 a\n  l2 b\n\tl4 b\nl5 a\n  l6 b\nl7 a", 3, 2, "l3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-then-second-address", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 2,5d<CR>", "l1 a\n  l2 b\n  l6 b\nl7 a", 3, 3, "l3 a\n\tl4 b\nl5 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-mark-number", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "kkmaG:'a 1d<CR>", "l1 a\n  l2 b\nl3 a\nl5 a\n  l6 b\nl7 a", 4, 1, "\tl4 b\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
 }};
 } // namespace nenenib::tests
 // clang-format on

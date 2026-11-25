@@ -43,18 +43,38 @@ constexpr std::int64_t offset_limit = std::int64_t{1} << 62;
     return next > offset_limit ? offset_limit : (next < -offset_limit ? -offset_limit : next);
 }
 
+// at から続く空白と Tab の数（Vim の skipwhite）。
+[[nodiscard]] std::size_t blanks_from(std::string_view text, std::size_t at) noexcept
+{
+    std::size_t end = at;
+    while (end < text.size() && (text[end] == ' ' || text[end] == '\t'))
+    {
+        ++end;
+    }
+    return end - at;
+}
+
+// at が足し（`+` `-` か数字）の始まりか。
+[[nodiscard]] bool offset_start(std::string_view text, std::size_t at) noexcept
+{
+    return at < text.size() && (text[at] == '+' || text[at] == '-' || digit_at(text, at));
+}
+
 // マークの名前の 1 文字（`'a` `'<`）。ASCII の印字できる文字だけを読む。
 [[nodiscard]] bool is_mark_name(char letter) noexcept
 {
     return letter > ' ' && letter <= '~';
 }
 
-// 基点の後ろの `+N` `-N` と数字の足し（Vim の get_address の後半）。読んだ長さを返す。
+// 基点の後ろの `+N` `-N` と数字の足し（Vim の get_address の後半）。読んだ長さを返す。足しの前の
+// 空白と Tab は Vim と同じく読み飛ばす（`:1 2` は 3 行目・`:1 +2d`・#2019）。足しの続かない空白は
+// 読まない（命令の前の空白として残す）。
 [[nodiscard]] std::size_t offsets_read(std::string_view text, std::size_t at, ExAddress &address)
 {
     const std::size_t start = at;
-    while (at < text.size())
+    while (offset_start(text, at + blanks_from(text, at)))
     {
+        at += blanks_from(text, at);
         const char next = text[at];
         if (next == '+' || next == '-')
         {
@@ -65,18 +85,15 @@ constexpr std::int64_t offset_limit = std::int64_t{1} << 62;
             continue;
         }
         const std::size_t digits = digits_from(text, at);
-        if (digits == 0)
-        {
-            break;
-        }
         address.offset = saturated(address.offset, number_of(text.substr(at, digits)), false);
         at += digits;
     }
     return at - start;
 }
 
-// 番地 1 つ（`%` は 2 つ）を range へ足し、長さを返す。基点も足しも無ければ current の 0 バイト。
-[[nodiscard]] std::size_t address_read(std::string_view text, ExRange &range, bool semicolon)
+// 空白で始まらない番地 1 つ（`%` は 2 つ）を range へ足し、長さを返す。基点も足しも無ければ current
+// の 0 バイト。
+[[nodiscard]] std::size_t based_address_read(std::string_view text, ExRange &range, bool semicolon)
 {
     ExAddress address{ExAddressBase::current, 0, '\0', 0, semicolon};
     std::size_t at = 0;
@@ -105,6 +122,23 @@ constexpr std::int64_t offset_limit = std::int64_t{1} << 62;
     range.addresses.push_back(address);
     return at;
 }
+
+// 番地 1 つを range へ足し、長さを返す。基点の前の空白と Tab は Vim の get_address と同じく
+// 読み飛ばす（`:1, 3d`・#2019）。基点も足しも無ければ前の空白も読まない（0 バイト）。
+[[nodiscard]] std::size_t address_read(std::string_view whole, ExRange &range, bool semicolon)
+{
+    const std::size_t lead = blanks_from(whole, 0);
+    const std::size_t read = based_address_read(whole.substr(lead), range, semicolon);
+    return read == 0 ? 0 : lead + read;
+}
+
+// at の後ろの区切り（`,` `;`）の位置。区切りの前の空白と Tab も Vim と同じく読み飛ばす
+// （`:1 ,3d`・#2019）。区切りが無ければ text の長さ。
+[[nodiscard]] std::size_t separator_at(std::string_view text, std::size_t at) noexcept
+{
+    const std::size_t ahead = at + blanks_from(text, at);
+    return ahead < text.size() && (text[ahead] == ',' || text[ahead] == ';') ? ahead : text.size();
+}
 } // namespace
 
 std::pair<ExRange, std::size_t> parsed_ex_range(std::string_view text)
@@ -117,7 +151,9 @@ std::pair<ExRange, std::size_t> parsed_ex_range(std::string_view text)
         ExRange read;
         const std::size_t length = address_read(text.substr(at), read, semicolon);
         at += length;
-        const bool separated = at < text.size() && (text[at] == ',' || text[at] == ';');
+        const std::size_t ahead = separator_at(text, at);
+        const bool separated = ahead < text.size();
+        at = separated ? ahead : at;
         if (length > 0 || separated || !range.addresses.empty())
         {
             range.addresses.insert(range.addresses.end(), read.addresses.begin(),

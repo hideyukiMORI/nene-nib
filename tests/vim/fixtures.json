@@ -6890,5 +6890,16 @@
   {"name":"insert-complete-macro-ctrl-p","text":"a2 a1 x a2 a3","keys":"fx@a","register":{"name":"a","keys":"cwa<C-p><C-p><Esc>"}},
   {"name":"insert-complete-macro-twice","text":"a1 a2 a1 x a3 a2","keys":"fx@a0@@","register":{"name":"a","keys":"cwa<C-n><Esc>"}},
   {"name":"insert-complete-ctrl-r-ctrl-n-char","text":"ab cd","keys":"yiwA<C-r><C-n>x<Esc>"},
-  {"name":"insert-complete-ctrl-r-ctrl-n-again","text":"cd1 cd","keys":"A<C-r><C-n><C-n><Esc>"}
+  {"name":"insert-complete-ctrl-r-ctrl-n-again","text":"cd1 cd","keys":"A<C-r><C-n><C-n><Esc>"},
+  {"name":"ex-range-blank-number-adds","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-plus-adds","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 +2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-two-numbers","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":2 3d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-before-comma","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 ,3d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-after-comma","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1, 3d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-both-sides-of-comma","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 , 3d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-last-minus","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":$ -1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-current-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":. 1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-two-blanks","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1  2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-then-second-address","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 2,5d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-mark-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":"kkmaG:'a 1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}}
 ]
