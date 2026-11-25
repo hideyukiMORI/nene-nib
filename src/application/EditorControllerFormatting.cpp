@@ -167,8 +167,10 @@ bool EditorController::request_formatting(bool selection)
 bool EditorController::server_edit_interrupts() const noexcept
 {
     // Ctrl+Tab の歩きの途中も入力の途中（切り替えと使った順を動かさない・#2011 のレビュー
-    // R1・読みを 留める reads_held と同じ条件）。
-    if (!faces_closed() || vim_waits_for_key() || state_.tab_walking())
+    // R1・読みを 留める reads_held と同じ条件）。全面のプレビューの間も（頼んでから全面に入った
+    // 答えは当てない・「編集はできない」ADR 0155 の改訂 17・#2057）。
+    if (!faces_closed() || vim_waits_for_key() || state_.tab_walking() ||
+        state_.full_preview() != nullptr)
     {
         return true;
     }

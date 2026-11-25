@@ -110,7 +110,8 @@ std::string EditorController::rename_word() const
 }
 
 // 変えられる所の答え（決定 7）。文書・改訂番号・キャレットが頼んだときと同じで、入力行・面・変換が
-// 開いておらず何も待っていないときだけ使う（ほかは知らせずに捨てる・ADR 0190 の追補 3）。null は
+// 開いておらず何も待っていないときだけ使う（ほかは知らせずに捨てる・ADR 0190 の追補 3）。全面の
+// プレビューの間など server_edit_interrupts が真なら 1 行知らせて断る（#2057）。null は
 // 「ここは名前を変えられません」、誤りの答えはサーバーの message を訳さずに 1 行で出す。
 void EditorController::settle_rename_target_answer()
 {
@@ -124,6 +125,13 @@ void EditorController::settle_rename_target_answer()
     state_ = state_.with_language_answers(std::move(answers));
     if (!(answered.context == request_context()) || !faces_closed() || !awaits_nothing())
     {
+        return;
+    }
+    // 頼んでから全面のプレビューに入った（ほかの入力の途中も同じ）答えは、「新しい名前:」の入力行を
+    // 開かずに断る（WorkspaceEdit の当てと同じ server_edit_interrupts の 1 本・#2057）。
+    if (server_edit_interrupts())
+    {
+        state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_server_edit_busy));
         return;
     }
     auto initial = rename_initial(answered);
