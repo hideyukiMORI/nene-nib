@@ -178,7 +178,7 @@ Store から 1.0.0 を入れた PC に、自己署名の 1.1.0 を `Add-AppxPack
   Web の内容の表示を足していない）。
 - `runFullTrust` の理由と認定の注意書きの英語の文は 1.1.0 のまま置いてある。1.2.0 では、設定の画面の「言語サーバー」の節の
   「使う」でも命令の行を設定に書けるようになった（#1945）。2 つの文の「enters a command in the settings」「unless a command is
-  entered in the settings file」をこのまま使うか、「使う」で選べることを足すかは `<<設計席: runFullTrust の理由と認定の注意書きの文を 1.2.0 で直すか>>`。
+  entered in the settings file」をこのまま使うか、「使う」で選べることを足すかは 設計席の決め（2026-11-25）: このまま使う。「使う」も設定に命令の行を書く操作で、「設定に命令が無ければ何も起動しない」という文の意味は変わらない。
 - 1.2.0 の Store 版は `settings.v6` を書く。Store から 1.1.0 を入れた PC では、`settings.v5` を読んで、設定を変えたときに
   `settings.v6` を作る（`settings.v5` は残す・公開の記録の「この版が書く設定の版と鍵の集合」）。
 
