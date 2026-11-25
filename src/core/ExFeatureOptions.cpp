@@ -12,6 +12,7 @@
 #include "FeatureStorage.hpp"
 #include "IndentGuide.hpp"
 #include "IndentGuideStyle.hpp"
+#include "Invisibles.hpp"
 
 #include <array>
 #include <expected>
@@ -55,39 +56,45 @@ indent_guide_highlight_current_option(std::string_view option, const EditorSetti
     return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
 }
 
-[[nodiscard]] DisplayText indent_guide_style_message(IndentGuideStyle style)
-{
-    return DisplayText::parse(std::string(indent_guide_style_option_name) + "=" +
-                              std::string(indent_guide_style_name(style)))
-        .value();
-}
-
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_style_option(std::string_view option, const EditorSettings &settings)
 {
-    if (!option.starts_with(indent_guide_style_option_name))
+    return chosen_option<&EditorSettings::indent_guide_style, indent_guide_style_named,
+                         indent_guide_style_name>(option, indent_guide_style_option_name, settings);
+}
+
+// 不可視文字の種類の真偽（ADR 0193 の決定 4・#1977）。`set listeol` `nolisteol` `listeol?`
+// と同じ形の 3 つ。表の行は名前と設定の欄の対。
+using ListMark = std::pair<std::string_view, bool EditorSettings::*>;
+constexpr std::array<ListMark, 3> list_marks{{
+    {list_eol_option_name, &EditorSettings::list_eol},
+    {list_tab_option_name, &EditorSettings::list_tab},
+    {list_wide_space_option_name, &EditorSettings::list_wide_space},
+}};
+
+[[nodiscard]] std::optional<ExResult> list_mark_option(std::string_view option,
+                                                       const EditorSettings &settings)
+{
+    for (const auto &[name, field] : list_marks)
     {
-        return std::nullopt;
+        const std::array<std::string_view, 1> names{name};
+        const auto request = switch_request(option, names);
+        if (!request.has_value())
+        {
+            continue;
+        }
+        if (!request.value().has_value())
+        {
+            return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                            switch_message(name, settings.*field)};
+        }
+        EditorSettings changed = settings;
+        changed.*field = request.value().value();
+        const bool wanted = changed.*field;
+        return ExResult{std::move(changed), std::nullopt, std::nullopt,
+                        switch_message(name, wanted)};
     }
-    const std::string_view rest = option.substr(indent_guide_style_option_name.size());
-    if (rest.empty() || rest == "?")
-    {
-        return ExResult{std::nullopt, std::nullopt, std::nullopt,
-                        indent_guide_style_message(settings.indent_guide_style)};
-    }
-    if (!rest.starts_with('='))
-    {
-        return std::nullopt;
-    }
-    const auto wanted = indent_guide_style_named(rest.substr(1));
-    if (!wanted.has_value())
-    {
-        return std::unexpected(ExFailure::invalid_argument);
-    }
-    EditorSettings changed = settings;
-    changed.indent_guide_style = wanted.value();
-    return ExResult{std::move(changed), std::nullopt, std::nullopt,
-                    indent_guide_style_message(wanted.value())};
+    return std::nullopt;
 }
 
 // `name=` で始まるか。
@@ -196,6 +203,18 @@ indent_guide_option(std::string_view option, const EditorSettings &settings)
         return style;
     }
     return indent_guide_number_option(option, settings);
+}
+
+std::optional<std::expected<ExResult, ExEvaluationFailure>>
+list_option(std::string_view option, const EditorSettings &settings)
+{
+    auto mark = list_mark_option(option, settings);
+    if (mark.has_value())
+    {
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(mark).value()};
+    }
+    return chosen_option<&EditorSettings::list_space, list_space_named, list_space_name>(
+        option, list_space_option_name, settings);
 }
 
 } // namespace nenenib::core::detail

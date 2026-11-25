@@ -154,7 +154,7 @@ def verify_font(executable: Path, environment: dict, output: Path) -> dict:
         stop(process)
     result["imeAtEnlargedSize"] = VIEW.verify_ime(executable, environment, appearance, output, 21.5)
     # A manually selected theme and family take the same startup settings path.
-    settings.write_text("version=6\ncolorscheme=neutral-light\nfont_family=Consolas\nfont_size=18\nguide=on\nwrap=on\n"
+    settings.write_text("version=7\ncolorscheme=neutral-light\nfont_family=Consolas\nfont_size=18\nguide=on\nwrap=on\n"
                         "ui_language=system\nlsp=off\nexplorer=off\nroot=\nfeatures=\n"
                         "ignorecase=off\nsmartcase=off\nrelativenumber=off\nscrolloff=0\n",
                         encoding="utf-8", newline="\n")

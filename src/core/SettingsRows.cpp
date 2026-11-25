@@ -15,6 +15,7 @@
 #include "FontSizeAdjustment.hpp"
 #include "IndentGuide.hpp"
 #include "IndentGuideStyle.hpp"
+#include "ListSpace.hpp"
 #include "PaneResizeStep.hpp"
 #include "SettingsChoices.hpp"
 #include "SettingsControl.hpp"
@@ -71,6 +72,66 @@ constexpr std::array<IndentGuideStyle, 2> indent_guide_style_order{IndentGuideSt
 // この順に依らない。今の線を強めるは「強める → 強めない」、Vim の鍵は「1 回分 → 回数に従う」。
 constexpr std::array<bool, 2> indent_guide_highlight_current_order{true, false};
 constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
+// 不可視文字の種類のスイッチは「出す → 出さない」、空白は宣言の順（ADR 0193 の決定 4）。
+constexpr std::array<bool, 2> list_mark_order{true, false};
+constexpr std::array<ListSpace, 3> list_space_order{ListSpace::none, ListSpace::trail,
+                                                    ListSpace::all};
+
+[[nodiscard]] UiMessage list_mark_title(bool shown) noexcept
+{
+    return shown ? UiMessage::settings_list_mark_shown : UiMessage::settings_list_mark_hidden;
+}
+
+[[nodiscard]] UiMessage list_space_title(ListSpace space) noexcept
+{
+    switch (space)
+    {
+    case ListSpace::none:
+        return UiMessage::settings_list_space_none;
+    case ListSpace::trail:
+        return UiMessage::settings_list_space_trail;
+    case ListSpace::all:
+        return UiMessage::settings_list_space_all;
+    }
+    std::unreachable();
+}
+
+// 不可視文字の種類のスイッチ（改行・Tab・全角空白）の欄。ほかの値は値なし（nullptr）。
+template <typename Settings>
+[[nodiscard]] auto list_mark_of(Settings &settings, SettingsValue value) noexcept
+    -> decltype(&settings.list_eol)
+{
+    switch (value)
+    {
+    case SettingsValue::list_eol:
+        return &settings.list_eol;
+    case SettingsValue::list_tab:
+        return &settings.list_tab;
+    case SettingsValue::list_wide_space:
+        return &settings.list_wide_space;
+    case SettingsValue::theme:
+    case SettingsValue::ui_language:
+    case SettingsValue::font_family:
+    case SettingsValue::font_size:
+    case SettingsValue::finder_preview:
+    case SettingsValue::caret_motion_time:
+    case SettingsValue::indent_guide_style:
+    case SettingsValue::indent_guide_color_count:
+    case SettingsValue::indent_guide_highlight_current:
+    case SettingsValue::indent_guide_width:
+    case SettingsValue::pane_resize_step:
+    case SettingsValue::pane_resize_step_vim:
+    case SettingsValue::list_space:
+        return nullptr;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] bool list_mark_value(const EditorSettings &settings, SettingsValue value) noexcept
+{
+    const bool *field = list_mark_of(settings, value);
+    return field != nullptr && *field;
+}
 
 [[nodiscard]] UiMessage indent_guide_style_title(IndentGuideStyle style) noexcept
 {
@@ -112,6 +173,14 @@ constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
         return UiMessage::settings_pane_resize_step_name;
     case SettingsValue::pane_resize_step_vim:
         return UiMessage::settings_pane_resize_step_vim_name;
+    case SettingsValue::list_eol:
+        return UiMessage::settings_list_eol_name;
+    case SettingsValue::list_tab:
+        return UiMessage::settings_list_tab_name;
+    case SettingsValue::list_wide_space:
+        return UiMessage::settings_list_wide_space_name;
+    case SettingsValue::list_space:
+        return UiMessage::settings_list_space_name;
     }
     std::unreachable();
 }
@@ -144,6 +213,14 @@ constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
         return UiMessage::settings_pane_resize_step_description;
     case SettingsValue::pane_resize_step_vim:
         return UiMessage::settings_pane_resize_step_vim_description;
+    case SettingsValue::list_eol:
+        return UiMessage::settings_list_eol_description;
+    case SettingsValue::list_tab:
+        return UiMessage::settings_list_tab_description;
+    case SettingsValue::list_wide_space:
+        return UiMessage::settings_list_wide_space_description;
+    case SettingsValue::list_space:
+        return UiMessage::settings_list_space_description;
     }
     std::unreachable();
 }
@@ -176,6 +253,14 @@ constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
         return "paneresizestep";
     case SettingsValue::pane_resize_step_vim:
         return "paneresizestepvim";
+    case SettingsValue::list_eol:
+        return "listeol";
+    case SettingsValue::list_tab:
+        return "listtab";
+    case SettingsValue::list_wide_space:
+        return "listwidespace";
+    case SettingsValue::list_space:
+        return "listspace";
     }
     std::unreachable();
 }
@@ -466,6 +551,12 @@ std::string settings_value_text(const EditorSettings &settings, SettingsValue va
     case SettingsValue::pane_resize_step_vim:
         return std::string(
             ui_text(pane_resize_step_vim_title(settings.pane_resize_step_vim), language));
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return std::string(ui_text(list_mark_title(list_mark_value(settings, value)), language));
+    case SettingsValue::list_space:
+        return std::string(ui_text(list_space_title(settings.list_space), language));
     }
     std::unreachable();
 }
@@ -519,6 +610,17 @@ EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue val
         settings.pane_resize_step_vim =
             cycled(pane_resize_step_vim_order, settings.pane_resize_step_vim, forward);
         return settings;
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+    {
+        bool *field = list_mark_of(settings, value);
+        *field = cycled(list_mark_order, *field, forward);
+        return settings;
+    }
+    case SettingsValue::list_space:
+        settings.list_space = cycled(list_space_order, settings.list_space, forward);
+        return settings;
     }
     std::unreachable();
 }
@@ -546,6 +648,12 @@ std::size_t settings_choice_count(const EditorSettings &settings, SettingsValue 
         return indent_guide_highlight_current_order.size();
     case SettingsValue::pane_resize_step_vim:
         return pane_resize_step_vim_order.size();
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return list_mark_order.size();
+    case SettingsValue::list_space:
+        return list_space_order.size();
     // 段の上下と読むだけの欄は一覧を持たない。
     case SettingsValue::font_family:
     case SettingsValue::font_size:
@@ -581,6 +689,12 @@ std::optional<std::size_t> settings_choice_position(const EditorSettings &settin
                            settings.indent_guide_highlight_current);
     case SettingsValue::pane_resize_step_vim:
         return position_in(pane_resize_step_vim_order, settings.pane_resize_step_vim);
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return position_in(list_mark_order, list_mark_value(settings, value));
+    case SettingsValue::list_space:
+        return position_in(list_space_order, settings.list_space);
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
@@ -624,6 +738,17 @@ EditorSettings settings_choice_applied(EditorSettings settings, SettingsValue va
         settings.pane_resize_step_vim =
             value_at(pane_resize_step_vim_order, position, settings.pane_resize_step_vim);
         return settings;
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+    {
+        bool *field = list_mark_of(settings, value);
+        *field = value_at(list_mark_order, position, *field);
+        return settings;
+    }
+    case SettingsValue::list_space:
+        settings.list_space = value_at(list_space_order, position, settings.list_space);
+        return settings;
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
@@ -663,6 +788,14 @@ std::vector<std::string> settings_choice_texts(const EditorSettings &settings, S
     case SettingsValue::pane_resize_step_vim:
         return texts_of(pane_resize_step_vim_order, [&said](bool follows)
                         { return said(pane_resize_step_vim_title(follows)); });
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return texts_of(list_mark_order,
+                        [&said](bool shown) { return said(list_mark_title(shown)); });
+    case SettingsValue::list_space:
+        return texts_of(list_space_order,
+                        [&said](ListSpace space) { return said(list_space_title(space)); });
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:

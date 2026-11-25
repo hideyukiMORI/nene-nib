@@ -64,7 +64,7 @@ runs only when --bench names it and is never compared with the reference or adop
 Three more optional benches measure the editor with a language server on (#995 L1d, ADR 0161
 decision 7, D60): they run only when --bench names them, are recorded with --record only, are
 never compared with the eight and have no reference until hide adopts one after the L1 trial. Each
-writes settings.v6 with lsp=on and lsp.cpp.command naming nib_fake_language_server.exe of the
+writes settings.v7 with lsp=on and lsp.cpp.command naming nib_fake_language_server.exe of the
 same build folder as --executable into its own profile (out/speed/profile-lsp), opens
 single-cpp-1000.cpp, and waits until that server runs as the editor's child and the window thread
 went quiet (initialize is answered at once by the fake, and didOpen follows it), before the warmup:
@@ -96,7 +96,7 @@ Two more optional benches record the minimap (#1017, ADR 0171 decision 6) the sa
 only when --bench names them and are never compared with the reference or adopted into it:
 
   minimap-single-key        the key-to-frame-single-cpp trial over single-cpp-1000.cpp with
-                            settings.v6 features=minimap written into its own profile
+                            settings.v7 features=minimap written into its own profile
                             (out/speed/profile-minimap), so every frame copies the held minimap
                             bitmap once and redraws the band of the typed row
   minimap-burst-200         the key-to-frame-burst-200 trial over the same document and profile:
@@ -106,9 +106,16 @@ only when --bench names them and are never compared with the reference or adopte
 One more optional bench records the indent guides (#1975, ADR 0193 decision 6) the same way:
 
   indentguides-single-key   the key-to-frame-single-cpp trial over single-cpp-1000.cpp with
-                            settings.v6 features=indentguides written into its own profile
+                            settings.v7 features=indentguides written into its own profile
                             (out/speed/profile-indentguides), so every frame counts the indent of
                             the visible lines and draws the guides under the text
+
+One more optional bench records the invisible characters (#1977, ADR 0193 decision 6) the same way:
+
+  list-single-key           the key-to-frame-single-cpp trial over single-cpp-1000.cpp with
+                            settings.v7 features=list written into its own profile
+                            (out/speed/profile-list), so every frame walks the visible lines for
+                            spaces, Tabs and line breaks and draws their marks over the text
 
 Five more optional benches measure split (ADR 0120 decisions 2-7, ADR 0148 decision 14) and are
 never compared with the reference: split-single-key-100 (S, one pane) and
@@ -319,16 +326,21 @@ MATCHPAREN_BENCH = "matchparen-single-key"
 MINIMAP_BENCH = "minimap-single-key"
 # 同じ文書と profile の 200 打鍵（#1017・ADR 0171 の決定 6）。同じく --bench で名指ししたときだけ。
 MINIMAP_BURST_BENCH = "minimap-burst-200"
-# 道具の profile を分ける。features=minimap の settings.v6 がほかのベンチの profile に残らないように。
+# 道具の profile を分ける。features=minimap の settings.v7 がほかのベンチの profile に残らないように。
 MINIMAP_PROFILE = "profile-minimap"
 # インデントガイドをオンにした C++ の文書の 1 打鍵（#1975・ADR 0193 の決定 6）。--bench で名指ししたとき
 # だけ測り、基準値に載せない（オンの費用は別の基準・D60 と同じ考え）。
 INDENT_GUIDES_BENCH = "indentguides-single-key"
-# 道具の profile を分ける。features=indentguides の settings.v6 がほかのベンチの profile に残らないように。
+# 道具の profile を分ける。features=indentguides の settings.v7 がほかのベンチの profile に残らないように。
 INDENT_GUIDES_PROFILE = "profile-indentguides"
+# 不可視文字をオンにした C++ の文書の 1 打鍵（#1977・ADR 0193 の決定 6）。--bench で名指ししたときだけ
+# 測り、基準値に載せない（オンの費用は別の基準・D60 と同じ考え）。
+LIST_BENCH = "list-single-key"
+# 道具の profile を分ける。features=list の settings.v7 がほかのベンチの profile に残らないように。
+LIST_PROFILE = "profile-list"
 OPTIONAL_BENCHES = (*GIANT_BENCHES, *SPLIT_BENCHES, PREVIEW_BENCH, CPP_BENCH,
                     *LARGE_FILE_BENCHES, *LSP_BENCHES, MATCHPAREN_BENCH, MINIMAP_BENCH,
-                    MINIMAP_BURST_BENCH, INDENT_GUIDES_BENCH)
+                    MINIMAP_BURST_BENCH, INDENT_GUIDES_BENCH, LIST_BENCH)
 # 替え玉のサーバーは測る exe と同じ build の中のもの（tests/adapters/FakeLanguageServerMain.cpp）。
 LSP_SERVER = "nib_fake_language_server.exe"
 LSP_DIAGNOSTICS = 100
@@ -338,7 +350,7 @@ LSP_DIAGNOSTICS = 100
 LSP_READY_GAP_MS = 100.0
 # lsp-diagnostics-ready の試行ごとの [1 枚目, 2 枚目]（打鍵の input_received からの ms）。記録に残す。
 LSP_READY_FRAMES: list = []
-# 道具の profile を分ける。lsp=on の settings.v6 がオフのベンチの profile に残らないように。
+# 道具の profile を分ける。lsp=on の settings.v7 がオフのベンチの profile に残らないように。
 LSP_PROFILE = "profile-lsp"
 PACED_KEYS = 100
 PACED_CHARACTER = "a"
@@ -384,7 +396,7 @@ STARTUP_BENCHES = ("startup-first-frame", "open-large-file-16mib", GIANT_OPEN_BE
 KEY_MILESTONES = ("frame_built", "frame_drawn", "frame_presented")
 SINGLE_BENCHES = ("key-to-frame-single", LONG_LINE_BENCH, CPP_BENCH, PREVIEW_BENCH,
                   GIANT_SINGLE_BENCH, LSP_SINGLE_BENCH, MATCHPAREN_BENCH, MINIMAP_BENCH,
-                  INDENT_GUIDES_BENCH)
+                  INDENT_GUIDES_BENCH, LIST_BENCH)
 # 記録の breakdown には 16 MiB の打鍵の到着の幅（ARRIVAL_SEGMENT）も同じ形で載せる（#179）。
 BREAKDOWN_BENCHES = (*STARTUP_BENCHES, LARGE_BURST_BENCH, *SINGLE_BENCHES, *LARGE_FILE_BENCHES)
 
@@ -915,7 +927,7 @@ def bench_minimap(executable: Path, environment: dict, folder: Path,
                   document: Path) -> tuple[dict, dict]:
     """key-to-frame-single over the C++ document with the minimap on (#1017, ADR 0171 decision 6).
 
-    The trial is bench_cpp's over its own profile, whose settings.v6 turns the minimap on; every
+    The trial is bench_cpp's over its own profile, whose settings.v7 turns the minimap on; every
     frame copies the held bitmap once and redraws the band of the typed row.
     """
     return bench_long_line(executable, minimap_environment(environment), folder, document,
@@ -923,7 +935,7 @@ def bench_minimap(executable: Path, environment: dict, folder: Path,
 
 
 def minimap_environment(environment: dict) -> dict:
-    """The minimap profile's environment, its settings.v6 written for this trial (features=minimap)."""
+    """The minimap profile's environment, its settings.v7 written for this trial (features=minimap)."""
     profile = OUTPUT / MINIMAP_PROFILE
     profile.mkdir(parents=True, exist_ok=True)
     minimap = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
@@ -935,7 +947,7 @@ def bench_indent_guides(executable: Path, environment: dict, folder: Path,
                         document: Path) -> tuple[dict, dict]:
     """key-to-frame-single over the C++ document with the indent guides on (#1975, ADR 0193).
 
-    The trial is bench_cpp's over its own profile, whose settings.v6 turns the guides on; every
+    The trial is bench_cpp's over its own profile, whose settings.v7 turns the guides on; every
     frame counts the indent of the visible lines and draws the guides under the text.
     """
     profile = OUTPUT / INDENT_GUIDES_PROFILE
@@ -943,6 +955,20 @@ def bench_indent_guides(executable: Path, environment: dict, folder: Path,
     guides = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
     write_settings(guides, {"features": "indentguides"})
     return bench_long_line(executable, guides, folder, document, INDENT_GUIDES_BENCH)
+
+
+def bench_list(executable: Path, environment: dict, folder: Path,
+               document: Path) -> tuple[dict, dict]:
+    """key-to-frame-single over the C++ document with the invisible characters on (#1977, ADR 0193).
+
+    The trial is bench_cpp's over its own profile, whose settings.v7 turns the marks on; every
+    frame walks the visible lines for spaces, Tabs and line breaks and draws their marks.
+    """
+    profile = OUTPUT / LIST_PROFILE
+    profile.mkdir(parents=True, exist_ok=True)
+    marks = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
+    write_settings(marks, {"features": "list"})
+    return bench_long_line(executable, marks, folder, document, LIST_BENCH)
 
 
 def bench_minimap_burst(executable: Path, environment: dict, folder: Path,
@@ -1167,7 +1193,7 @@ def language_server_of(executable: Path) -> Path:
 
 
 def lsp_environment(environment: dict, server: Path, argument: str) -> dict:
-    """The lsp profile's environment, its settings.v6 written for this trial (lsp=on, cpp)."""
+    """The lsp profile's environment, its settings.v7 written for this trial (lsp=on, cpp)."""
     profile = OUTPUT / LSP_PROFILE
     profile.mkdir(parents=True, exist_ok=True)
     lsp = dict(environment, LOCALAPPDATA=str(profile), APPDATA=str(profile))
@@ -1880,6 +1906,8 @@ def run_benches(executable: Path, environment: dict, folder: Path, names: tuple,
         yield bench_minimap_burst(executable, environment, folder, cpp)
     if INDENT_GUIDES_BENCH in names:
         yield bench_indent_guides(executable, environment, folder, cpp)
+    if LIST_BENCH in names:
+        yield bench_list(executable, environment, folder, cpp)
     for bench, path in (large_files or {}).items():
         yield bench_large_file_async(executable, environment, folder, path, bench)
 
@@ -1901,7 +1929,7 @@ def measure(build: Path, repetitions: int, bench: str | None = None, grid: bool 
     lsp = any(name in names for name in LSP_BENCHES)
     # LSP の 3 本も構文の色分けと同じ C++ の文書（#995 L1d）。替え玉は測る exe と同じ build から。
     minimap = any(name in names for name in (MINIMAP_BENCH, MINIMAP_BURST_BENCH))
-    guides = INDENT_GUIDES_BENCH in names
+    guides = INDENT_GUIDES_BENCH in names or LIST_BENCH in names
     cpp = cpp_document(folder) if CPP_BENCH in names or minimap or lsp or guides else None
     server = language_server_of(build) if lsp else None
     matchparen = matchparen_document(folder) if MATCHPAREN_BENCH in names else None
@@ -2225,6 +2253,8 @@ def main() -> int:
                                                    or arguments.values):
         parser.error(f"{INDENT_GUIDES_BENCH} is recorded with --record only; it has no reference"
                      " (#1975)")
+    if arguments.bench == LIST_BENCH and (arguments.adopt or arguments.check or arguments.values):
+        parser.error(f"{LIST_BENCH} is recorded with --record only; it has no reference (#1977)")
     if arguments.bench == MATCHPAREN_BENCH and (arguments.adopt or arguments.check
                                                 or arguments.values):
         parser.error(f"{MATCHPAREN_BENCH} is recorded with --record only; it has no reference"

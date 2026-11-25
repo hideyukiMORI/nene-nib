@@ -433,6 +433,14 @@ records in `docs/quality/`.
   stronger (`:set indentguidehighlightcurrent`, on by default). A wrapped line shows them on its first screen
   row only; both split panes show them (the stronger level only in the active pane), and the preview, a line
   being composed with the IME, giant lines and the grid display do not.
+  *In review*: invisible characters (#1977, off by default, ADR 0193 stage 2): `:set list` or the settings
+  drawer shows line breaks (`↵`, with a small `←` before it on a CRLF line), Tabs (`→` across the Tab),
+  ideographic spaces (a square outline) and spaces (`·`) as marks drawn over the text, so columns, the
+  caret and wrapping do not move. Each kind has its own switch (`:set listeol`, `listtab`,
+  `listwidespace`, on by default) and spaces show at the line end only (`:set listspace=trail`, the
+  default, drawn stronger), everywhere (`all`) or not at all (`none`). `listchars` is not supported.
+  Both split panes show them; the preview, a line being composed with the IME, giant lines and the grid
+  display do not, and the Vim mode's hidden final line break has no mark.
   Planned: commentary, surround and autopairs (FR-024), changed-line markers
   and a yank flash (FR-025), replacing in search results and `.gitignore` (FR-026) and the rest of the `:s`
   family (FR-027: the typing preview, the other `:g` `:v` commands and `:sort`; `:s` itself is under FR-003,
@@ -509,7 +517,10 @@ forms, `set ignorecase` / `smartcase` / `relativenumber` / `scrolloff=` / `autoi
 `preview full|side|off`, `hardcopy`, `only` and the tab commands.
 Use `set noguide` to hide shortcut hints and `set guide` to show them again (the default).
 
-Settings are saved in `settings.v6`. If it is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off, `caret_motion_time` starts at 120 ms, `caret_sparks` starts off, `pane_resize_step` starts at 5 and `pane_resize_step_vim` starts off), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
+Settings are saved in `settings.v6`. *In review* (#1977): the next version saves them in `settings.v7`
+(the keys of `settings.v6` and the invisible character kinds `list_eol`, `list_tab`, `list_wide_space` and
+`list_space`); if it is absent it reads `settings.v6` (the file 1.2.0 reads and writes; the kinds start on,
+on, on and `trail`) and leaves it as it is. If `settings.v6` is absent, the editor reads `settings.v5` (the file 1.1.0 reads and writes; `caret_motion` starts off, `caret_motion_time` starts at 120 ms, `caret_sparks` starts off, `pane_resize_step` starts at 5 and `pane_resize_step_vim` starts off), then `settings.v4` (the file 1.0.0 reads and writes; `autoindent` starts off and `finder_preview` starts `auto`), then `settings.v3`, then `settings.v2`, then `settings.v1`
 only when v2 is also absent; older versions enable wrapping. The first actual settings change writes the new file; the older files are left intact for older
 versions. A settings change made in 1.0.0 after `settings.v5` exists goes to `settings.v4` and is not seen by later versions, and the other way round (ADR 0170); in the same way, a change made in 1.1.0 after `settings.v6` exists goes to `settings.v5` and is not seen by later versions, and the other way round (ADR 0192). A broken new file is reported and blocks settings writes until repaired and restarted.
 

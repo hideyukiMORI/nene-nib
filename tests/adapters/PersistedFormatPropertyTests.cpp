@@ -505,10 +505,10 @@ void verify_family(const char *description, std::uint64_t seed, Make make,
         return "decoded settings break their invariants";
     }
     const auto again =
-        adapters::decode_settings(adapters::encode_settings(decoded.value()), SettingsVersion::v6);
+        adapters::decode_settings(adapters::encode_settings(decoded.value()), SettingsVersion::v7);
     if (!again || !core::same_settings(again.value(), decoded.value()))
     {
-        return "decoded settings do not round trip through v6";
+        return "decoded settings do not round trip through v7";
     }
     return holds;
 }
@@ -517,7 +517,7 @@ std::string_view settings_break(std::string_view bytes)
 {
     for (const SettingsVersion version :
          {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4,
-          SettingsVersion::v5, SettingsVersion::v6})
+          SettingsVersion::v5, SettingsVersion::v6, SettingsVersion::v7})
     {
         const std::string_view reason = settings_version_break(bytes, version);
         if (!reason.empty())
@@ -1062,7 +1062,7 @@ bool settings_decodes(std::string_view bytes)
 {
     for (const SettingsVersion version :
          {SettingsVersion::v1, SettingsVersion::v2, SettingsVersion::v3, SettingsVersion::v4,
-          SettingsVersion::v5, SettingsVersion::v6})
+          SettingsVersion::v5, SettingsVersion::v6, SettingsVersion::v7})
     {
         if (adapters::decode_settings(bytes, version).has_value())
         {

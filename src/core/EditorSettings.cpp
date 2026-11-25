@@ -24,7 +24,9 @@ bool same_settings(const EditorSettings &left, const EditorSettings &right) noex
            left.indent_guide_style == right.indent_guide_style &&
            left.indent_guide_color_count == right.indent_guide_color_count &&
            left.indent_guide_highlight_current == right.indent_guide_highlight_current &&
-           left.indent_guide_width == right.indent_guide_width;
+           left.indent_guide_width == right.indent_guide_width && left.list_eol == right.list_eol &&
+           left.list_tab == right.list_tab && left.list_wide_space == right.list_wide_space &&
+           left.list_space == right.list_space;
 }
 
 VimPatternCase search_case(const EditorSettings &settings) noexcept

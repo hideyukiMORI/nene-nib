@@ -25,6 +25,12 @@ enum class SettingsValue : std::uint8_t
     // 升ずつ）。
     pane_resize_step,
     // Vim の回数なしの `Ctrl-w > < + -` が 1 回分に従うか（2 つの選択肢を巡る・#1972）。
-    pane_resize_step_vim
+    pane_resize_step_vim,
+    // 不可視文字の種類ごとの形（ADR 0193 の決定 4・#1977・settings.v7）。改行・Tab・全角空白は
+    // 「出す / 出さない」の選択、空白は「出さない / 行末だけ / 全部」の選択。
+    list_eol,
+    list_tab,
+    list_wide_space,
+    list_space
 };
 } // namespace nenenib::core

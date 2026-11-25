@@ -31,14 +31,14 @@ void verify_unknown_command_names(Expect expect, std::string_view released_v4_se
     const std::string later = plain + "lsp.nim.command=C:\\nim\\nimlangserver.exe\n"
                                       "lsp.c++_x-1.command=y\n"
                                       "lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n";
-    const auto kept = decode_settings(later, SettingsVersion::v6);
+    const auto kept = decode_settings(later, SettingsVersion::v7);
     expect(
         kept && kept.value().lsp_commands.size() == 3 &&
             encode_settings(kept.value())
                 .ends_with("lsp.abcdefghijklmnopqrstuvwxyz012345.command=z\n"
                            "lsp.c++_x-1.command=y\nlsp.nim.command=C:\\nim\\nimlangserver.exe\n"),
         "v6 keeps command rows for languages it does not know and writes them back");
-    expect(!decode_settings(plain + "lsp.nim.command=x\nlsp.nim.command=y\n", SettingsVersion::v6),
+    expect(!decode_settings(plain + "lsp.nim.command=x\nlsp.nim.command=y\n", SettingsVersion::v7),
            "a second row for an unknown name is refused too");
     // Java と Svelte は 1.0.0 の後に表へ足した言語（ADR 0154 の 2026-11-20 の追補）。v4 の読みは
     // 1.0.0 の 26 言語のまま緩めない。
@@ -52,7 +52,7 @@ void verify_unknown_command_names(Expect expect, std::string_view released_v4_se
     expect(decode_settings(std::format("{}lsp.java.command=x\n", released_v5_settings),
                            SettingsVersion::v5)
                    .has_value() &&
-               decode_settings(plain + "lsp.java.command=x\n", SettingsVersion::v6).has_value(),
+               decode_settings(plain + "lsp.java.command=x\n", SettingsVersion::v7).has_value(),
            "v5 and v6 read a command row for a language added after 1.0.0");
 }
 } // namespace
@@ -73,27 +73,28 @@ void verify_settings_lsp_commands(Expect expect, std::string_view released_v4_se
                            "caret_sparks=off\npane_resize_step=5\npane_resize_step_vim=off\n"
                            "indent_guide_style=rainbow\nindent_guide_color_count=4\n"
                            "indent_guide_highlight_current=on\nindent_guide_width=4\n"
+                           "list_eol=on\nlist_tab=on\nlist_wide_space=on\nlist_space=trail\n"
                            "lsp.cpp.command=C:\\llvm\\clangd.exe --log=error\n"
                            "lsp.python.command=C:\\py\\pylsp.exe\n"),
            "commands follow the fixed keys in language name order");
-    const auto decoded = decode_settings(bytes, SettingsVersion::v6);
+    const auto decoded = decode_settings(bytes, SettingsVersion::v7);
     expect(decoded && decoded.value().lsp_commands.size() == 2 &&
                decoded.value().lsp_commands.front().first == "cpp" &&
                encode_settings(decoded.value()) == bytes,
            "commands round trip in language name order");
     const auto plain = encode_settings(default_editor_settings());
-    const auto none = decode_settings(plain, SettingsVersion::v6);
+    const auto none = decode_settings(plain, SettingsVersion::v7);
     expect(none && none.value().lsp_commands.empty(), "zero command lines are accepted");
     for (const auto line :
          {"lsp.cpp.command=\n", "lsp..command=x\n", "lsp.CPP.command=x\n", "lsp.cpp.args=x\n",
           "lsp.a b.command=x\n", "lsp.j\xc3\xa1va.command=x\n",
           "lsp.abcdefghijklmnopqrstuvwxyz0123456.command=x\n"})
     {
-        const auto result = decode_settings(plain + line, SettingsVersion::v6);
+        const auto result = decode_settings(plain + line, SettingsVersion::v7);
         expect(!result && result.error() == SettingsFailure::malformed,
                "misshapen names, empty values and other lsp keys are refused");
     }
-    expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v6),
+    expect(!decode_settings(plain + "lsp.cpp.command=a\nlsp.cpp.command=b\n", SettingsVersion::v7),
            "a second line for the same language is refused");
     verify_unknown_command_names(expect, released_v4_settings);
     const auto old =

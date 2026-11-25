@@ -27,6 +27,8 @@
 #include "GutterTextLayouts.hpp"
 #include "HoverTipLayout.hpp"
 #include "IndentGuidePaintMemo.hpp"
+#include "InvisibleBox.hpp"
+#include "InvisibleMark.hpp"
 #include "KeycapStyle.hpp"
 #include "LayoutRect.hpp"
 #include "LineUtf16Evaluation.hpp"
@@ -410,6 +412,17 @@ class Direct2DRenderer final
                                 const application::LineView &line);
     void draw_indent_guides(const BodyPane &pane, const core::LayoutRect &area,
                             const application::LineView &line);
+    // 本文の「上の飾り」（ADR 0193 の決定
+    // 2）。置き換えの後・診断の波線の前に、不可視文字の印を描く。 順を知るのはこの 1 本。
+    void draw_decorations_over(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                               const core::LayoutRect &area, const application::LineView &line);
+    // 不可視文字の印（決定 10）。行の欄が無ければ何もしない（オフの道は欄の有無の読み 1 つ）。
+    void draw_invisibles(const application::EditorFrame &frame, IDWriteTextLayout *text,
+                         const core::LayoutRect &area, const application::LineView &line);
+    // 印を描く升（描く先の座標）。保持した字形から引き、引けない行だけ字ごとの HitTestTextRange。
+    [[nodiscard]] std::vector<InvisibleBox>
+    invisible_boxes_of(IDWriteTextLayout *text, const core::LayoutRect &area,
+                       const std::vector<InvisibleMark> &marks);
     // frame の初めに飾りの色の材料を覚えから引く（オフなら真偽 1 つ・ADR 0193 の決定 6）。
     void begin_decorations(const application::EditorFrame &frame);
     void draw_line(const application::EditorFrame &frame, const BodyPane &pane,

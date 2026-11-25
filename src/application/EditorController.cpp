@@ -21,6 +21,7 @@
 #include "ImeStance.hpp"
 #include "IndentGuideLines.hpp"
 #include "InsertCompletion.hpp"
+#include "InvisibleLines.hpp"
 #include "LastResortPlan.hpp"
 #include "LineSpanEvaluation.hpp"
 #include "MatchParen.hpp"
@@ -1131,6 +1132,7 @@ EditorController::visible_lines(const PaneSource &source, std::optional<SyntaxSt
         lines.push_back(std::move(shown));
     }
     mark_indent_guides(state, scroll.visible_lines, lines);
+    mark_invisibles(state, lines);
     return lines;
 }
 

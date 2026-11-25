@@ -1,6 +1,6 @@
 # ADR 0193 — 本文の飾り（インデントガイド・ブラケットペアガイドと括弧の色分け・不可視文字）は、application が行に置く桁の欄を renderer が保持した layout の外に重ねて描く
 
-- 状態: 提案（施主の決め 2026-11-23 を含む。ペアガイドとインデントガイドの重なりの形（決定 13）は施主の確かめ待ち。実装は段ごとの Issue で、段 1 は実装（PR #1992）・段 2 / 3 は未実装・受理は D41 の形）
+- 状態: 提案（施主の決め 2026-11-23 を含む。ペアガイドとインデントガイドの重なりの形（決定 13）は施主の確かめ待ち。実装は段ごとの Issue で、段 1 は実装（PR #1992）・段 2 は実装（#1977 の draft PR・in review）・段 3 は未実装・受理は D41 の形）
 - 日付: 2026-11-23
 - Issue: #1981（親 #1975 #1976 #1977・#1011 の行末の空白の強調を #1977 に取り込む）・下調べ `D:/NeNeNib/outputs/20261123/plan-body-decorations.md`（main `fc4187c4`）・見本 `D:/NeNeNib/evidence/design-20261123/body-decorations.html`
 - 規則: ARC-001 / ARC-003 / ARC-012、CPP-002 / CPP-011、CNF-015 / CNF-016、QLT-014、D60 / D67 / D91、ADR 0017（`mix`）/ 0073（保持の字形 run）/ 0114（`BodyTextLayouts`）/ 0139 / 0140（巨大な行）/ 0148（split）/ 0156（構文の色・決定 8〜12）/ 0164（matchparen）/ 0170（`features=` の 2026-11-18 の追補）/ 0188（Vim のモードの最後の改行）/ 0192（`settings.v6`）
@@ -128,3 +128,13 @@ hide は 2026-11-23 の朝に 3 つの飾りを頼み（#1975 インデントガ
 1. **鍵の名前を 2 つ変える。** `indent_guide_active` → `indent_guide_highlight_current`（キャレットのいる段を強く描く。表示のオン・オフの `features=indentguides` と読み違えない名前）、`indent_guide_colors` → `indent_guide_color_count`（値は色ではなく色の数 3〜6）。`:set` は鍵から下線を落とした形の決まりのまま `indentguidehighlightcurrent` `noindentguidehighlightcurrent` `indentguidehighlightcurrent?` と `indentguidecolorcount=N` `indentguidecolorcount?`。既定値・範囲・鍵の順は変えない。v6 は未公開なので古い名前の読みの互換は持たず、古い名前は未知の鍵として拒む（古い名前を持つ v6 は壊れた新版として読めず、v5 へ戻らず、既定の見た目で始めて保存を断る・ADR 0114）。古い 2 つの `:set` の名前も残さない。設定の画面の名前と説明は意味が合っているので変えない。
 2. **不可視文字の 4 つの鍵は `settings.v7` で足す。** 段 2（#1977）は 1.2.0 に間に合わないので、`list_eol` `list_tab` `list_wide_space` `list_space` は v6 に足さず、段 2 の PR が `settings.v7` を作って足す（`SettingsVersion` に 1 値・`reading_order` の先頭に v7・道具 `eng/window_driver.py` の `SETTINGS_FILE` も同じ PR で上げる）。名前・値・既定は決定 4 の表のまま。`features=list` は開いた族なので版を上げずに足せる。
 3. **1.2.0 が書く v6 の見本。** `nib_adapter_tests` の `released_v6_settings`（`tests/adapters/SettingsReleasedSixTests.hpp`）が、v6 で足した 9 つの鍵が全部既定でない値の見本を縛る（読む・バイト列のまま書き戻す・未知の鍵と古い 2 つの名前を拒む・v5 と取り違えない・欠けた鍵に既定を補う）。公開元の SHA は公開の記録に書く。
+
+## 追補（2026-11-25・段 2 の実装・#1977）
+
+段 2 の実装で、決定の範囲の中で決めた形を書き残す（決定は変えない）。
+
+1. **行の欄は 1 つ。** 決定 1 の `InvisibleSpan` の列と `LineBreakMark` は `LineView` の 1 つの欄 `std::optional<LineInvisibles>`（`spans` と `line_break`）にまとめた（「欄は 1 つの飾りに 1 つ」）。オフの frame・巨大な行の窓・IME の差し込み行では値なし。
+2. **Vim のモードで隠す最後の改行。** 改行の形は Vim のモードが見る本文（`EditorState::vim_text`）の行の終わりから読む。最後の改行を除いた本文なので、`hidden_line_break` が立つときの最後の行は印なしになる（旗と同じ条件を 2 本にしない）。
+3. **Tab の升。** DirectWrite は Tab を 0 字形の run にするので保持に無い（決定 10 の「持たなければ次の字の位置との差で引く」）。左端は前の字の右端（行頭は 0・続く Tab は前の Tab の右端）、右端は後ろの字が同じ画面行にあればその左端、無ければ左端の次の Tab の止まり（空白の幅 × 8）。前の字が保持に無い Tab は行ごと HitTestTextRange の道に戻る。
+4. **印の大きさと色（未決の値の置き場）。** 大きさは見本の 22 画素の行を 1 単位にした `InvisibleMarkPainter` の定数（線 1.2・点の半径 1.1）、色は core の `invisible_mark_color`（muted を背景へ 25%・行末の空白と全角空白は accent を背景へ 10%）。試用で変えるときはこの 2 か所。
+5. **設定の画面と `:set`。** 「表示」の節のインデントガイドの行の後ろに、スイッチ（`EditorFeature::list`）と種類の 4 行（改行・Tab・全角空白は「出す / 出さない」、空白は「出さない / 行末だけ / 全部」の選択）。`:set listspace=` は `finderpreview` `indentguidestyle` と同じ「名前の表から選ぶ文字列の option」の 1 本（`chosen_option`）で読む。

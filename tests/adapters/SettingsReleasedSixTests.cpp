@@ -1,7 +1,7 @@
 // 1.2.0 が書く settings.v6 の見本の試験（ADR 0170 と ADR 0193 の 2026-11-24 の追補）。見本を読むと
-// 全部の値が戻り、書き戻すとバイト列が一致し、未知の鍵と公開前の古い 2 つの名前は拒み、v5
-// と取り違え ず、鍵の行を 1 つ外すと既定を補う。古い名前の v6
-// のファイルの試験だけがファイルに触れる。
+// 全部の値が戻り、書き戻すと v7 の形（見本のバイト列に不可視文字の 4 つの既定を足しただけ・#1977）
+// になり、未知の鍵と公開前の古い 2 つの名前は拒み、v5 と取り違えず、鍵の行を 1 つ外すと既定を
+// 補う。古い名前の v6 のファイルの試験だけがファイルに触れる。
 #include "SettingsReleasedSixTests.hpp"
 
 #include "DisplayLanguageChoice.hpp"
@@ -11,6 +11,7 @@
 #include "SettingsCodec.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsVersion.hpp"
+#include "SettingsVersionSevenTests.hpp"
 #include "Win32SettingsAdapter.hpp"
 
 #include <array>
@@ -138,11 +139,13 @@ void verify_released_v6_codec(Expect expect)
     const auto read = decode_settings(released_v6_settings, SettingsVersion::v6);
     expect(read && released_v6_values(read.value()),
            "the 1.2.0 settings.v6 is read with every value");
-    expect(read && encode_settings(read.value()) == released_v6_settings,
-           "the 1.2.0 settings.v6 is written back byte for byte");
+    expect(read && encode_settings(read.value()) == v6_as_v7(released_v6_settings),
+           "the 1.2.0 settings.v6 is written back as its bytes in the v7 form");
     verify_refused_keys(expect);
     verify_versions_kept_apart(expect);
     verify_missing_keys(expect, read.value_or(core::default_editor_settings()));
+    // 1.2.0 の v6 を後の版の v7 が読む試験（#1977・SettingsVersionSevenTests.cpp）。
+    verify_settings_v7_codec(expect);
 }
 
 void verify_old_v6_names_file(Expect expect, Win32FileAdapter &files, const SettingsPaths &paths)
@@ -150,18 +153,19 @@ void verify_old_v6_names_file(Expect expect, Win32FileAdapter &files, const Sett
     const auto old =
         renamed(renamed(released_v6_settings, "indent_guide_color_count", "indent_guide_colors"),
                 "indent_guide_highlight_current", "indent_guide_active");
-    expect(files.write(paths.current, old).has_value() &&
+    expect(files.write(paths.delivered, old).has_value() &&
                files.write(paths.shipped, released_v5_settings).has_value(),
-           "prepare a v6 with the old indent guide names above the 1.1.0 v5");
+           "prepare a v6 with the old indent guide names above the 1.1.0 v5 without a v7");
     Win32SettingsAdapter store(files, paths);
     const auto reading = store.read();
     expect(!reading && reading.error() == SettingsFailure::malformed &&
                !store.write(core::default_editor_settings()),
            "a v6 with the old names is refused, does not fall back to v5 and blocks saving");
-    const auto current = files.read(paths.current, 4096);
+    const auto delivered = files.read(paths.delivered, 4096);
     const auto shipped = files.read(paths.shipped, 4096);
-    expect(current && current.value().view() == old && shipped &&
-               shipped.value().view() == released_v5_settings,
-           "the refused v6 and the v5 stay byte for byte");
+    expect(delivered && delivered.value().view() == old && shipped &&
+               shipped.value().view() == released_v5_settings &&
+               !files.read(paths.current, 4096).has_value(),
+           "the refused v6 and the v5 stay byte for byte and no v7 is written");
 }
 } // namespace nenenib::tests::adapters
