@@ -175,7 +175,7 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件、折り返しの窓
 - WACK（Windows App Certification Kit）は未実施（梱包の後・hide の手）。1.1.0 は `PASS`。1.2.0 は通信・購入・広告を足していない（設定の「言語サーバー」の節の「探す」は PC の中だけ）。`runFullTrust` の理由と認定の注意書きの英語の文は 1.1.0 のままで、設定の画面の「使う」で命令の行を書けるようになった点を文に足すかは [submission.md](../store/submission.md) の「1.2.0 の更新の申請」の印。
 - 名前の変更の残る穴（「名前を付けて保存」の形）と断りすぎは Issue #2042（上の「既知の限界」）。
 - 速さの文（掲載文の「約 40 ms」「1 ms 未満」）は 1.0.0 の基準値の測りの物。まとめ枝 48〜51 のゲートの起動は 43.1〜46.7 ms（単独の PR は 44.4・49.3 ms）で、文をそのまま使うかは設計席がまとめ枝 52 のゲートの値で決める（[listing.md](../store/listing.md) の脚注）。
-- Store の認定の結果はまだ（下の「Microsoft Store の提出」）。
+- Store の認定の結果はまだ（2026-11-25 夜に申請・下の「Microsoft Store の提出」）。
 
 ## 梱包
 
@@ -187,7 +187,16 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件、折り返しの窓
 
 ## Microsoft Store の提出
 
-未実施。
+提出した物は MSIX `NeNeNib-1.2.0.0-windows-x64-store.msix`（2,220,860 bytes・SHA-256 `4e7731eb5ab437481f32bd4b54d5a902a503cf290278fa7bb350d06347c845d3`・`D:/NeNeNib/releases/v1.2.0/msix/SHA256SUMS` と同じ・2026-11-25 22:0x に統合リナが読み直した）。
+
+| 順 | 誰 | 状態 | 日時・記録 |
+| --- | --- | --- | --- |
+| 手順書（`hide-checklist.md`） | hide | 申請まで進んだ | 紙（手順 10・11 の欄）はまだ受け取っていない |
+| WACK（手順 8） | hide | `OVERALL_RESULT="PASS"` | 報告の生成 2026-11-25 21:39:01・`APP_NAME="HideyukiMori.NeNeNib"`・`APP_VERSION="1.2.0.0"`・`APP_TYPE="Centennial"`・WACK `10.0.26100.7705`・OS `10.0.26300.0`・報告 `D:/NeNeNib/releases/v1.2.0/wack/report.xml`（ID `c46211a8de0acdf87414aa23ebd5bb93`） |
+| 更新の申請（Submission 3） | hide | 提出 | 2026-11-25 21:39〜22:09 の間（JST・hide「1.2.0 をストアに申請した」・分は未確認）・Partner Center |
+| 認定・Store で公開 | Microsoft | 待ち | 1.1.0 は提出から約 1 日半で公開された |
+
+GitHub の tag `v1.2.0` と Release は Store の認定の後に出す（H-10・D120）。
 
 ## 公開の結果
 
