@@ -193,7 +193,7 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件、折り返しの窓
 | --- | --- | --- | --- |
 | 手順書（`hide-checklist.md`） | hide | 申請まで進んだ | 紙（手順 10・11 の欄）はまだ受け取っていない |
 | WACK（手順 8） | hide | `OVERALL_RESULT="PASS"` | 報告の生成 2026-11-25 21:39:01・`APP_NAME="HideyukiMori.NeNeNib"`・`APP_VERSION="1.2.0.0"`・`APP_TYPE="Centennial"`・WACK `10.0.26100.7705`・OS `10.0.26300.0`・報告 `D:/NeNeNib/releases/v1.2.0/wack/report.xml`（ID `c46211a8de0acdf87414aa23ebd5bb93`） |
-| 更新の申請（Submission 3） | hide | 提出 | 2026-11-25 21:39〜22:09 の間（JST・hide「1.2.0 をストアに申請した」・分は未確認）・Partner Center |
+| 更新の申請（Submission 3） | hide | 提出 | 2026-11-25 22:00 ごろ（JST・hide「22:00くらいだと思うよ」）・Partner Center |
 | 認定・Store で公開 | Microsoft | 待ち | 1.1.0 は提出から約 1 日半で公開された |
 
 GitHub の tag `v1.2.0` と Release は Store の認定の後に出す（H-10・D120）。
