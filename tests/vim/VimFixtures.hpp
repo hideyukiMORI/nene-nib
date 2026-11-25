@@ -2,7 +2,7 @@
 // 生成物。手で編集しない。python eng/vim-oracle.py --regenerate（Vim 9.1）
 // oracle: C:\Program Files\Vim\vim91\vim.exe — VIM - Vi IMproved 9.1 (2024 Jan 02, compiled Jan  3 2024 23:53:58)
 // 既定の設定（ADR 0012 の決定 8）: set nocompatible / set backspace=indent,eol,start
-// fixtures.json: sha256 a2b5cb265427208e0d92523893630c66e2fa2795dfab4b76afee4efba4d9fe72 / 6903 fixtures
+// fixtures.json: sha256 83364255b4dd77cdb709983d4668610a6e181dbe5cf60a8798f328722e187c86 / 6910 fixtures
 #pragma once
 
 #include "VimFixture.hpp"
@@ -11,7 +11,7 @@
 
 namespace nenenib::tests
 {
-constexpr std::array<VimFixture, 6903> vim_fixtures{{
+constexpr std::array<VimFixture, 6910> vim_fixtures{{
     {"h-at-the-line-start-stays", "alpha", "h", "alpha", 1, 1, "", "", std::nullopt},
     {"h-with-a-count", "alpha", "$3h", "alpha", 1, 2, "", "", std::nullopt},
     {"l-does-not-pass-the-last-character", "abc", "lll", "abc", 1, 3, "", "", std::nullopt},
@@ -6915,6 +6915,13 @@ constexpr std::array<VimFixture, 6903> vim_fixtures{{
     {"ex-range-blank-two-blanks", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1  2d<CR>", "l1 a\n  l2 b\n\tl4 b\nl5 a\n  l6 b\nl7 a", 3, 2, "l3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"ex-range-blank-then-second-address", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 2,5d<CR>", "l1 a\n  l2 b\n  l6 b\nl7 a", 3, 3, "l3 a\n\tl4 b\nl5 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
     {"ex-range-blank-mark-number", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", "kkmaG:'a 1d<CR>", "l1 a\n  l2 b\nl3 a\nl5 a\n  l6 b\nl7 a", 4, 1, "\tl4 b\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-whole-then-number", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":% 2d<CR>", "", 1, 1, "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-whole-then-plus", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":%+1d<CR>", "", 1, 1, "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-whole-then-number", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":%2d<CR>", "", 1, 1, "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-whole-then-list", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":% 2,4y<CR>", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 5, 1, "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-last-beyond", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":$ 2d<CR>", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 5, 1, "", "", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-around-semicolon", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":2 ; +1d<CR>", "l1 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 2, 2, "  l2 b\nl3 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
+    {"ex-range-blank-before-command", "l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", ":1 d<CR>", "  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a", 1, 3, "l1 a\n", "V", VimViewportFixture{20, 1, 5, 1, 1, 10}, std::nullopt, std::nullopt, "set scrolloff=0"},
 }};
 } // namespace nenenib::tests
 // clang-format on

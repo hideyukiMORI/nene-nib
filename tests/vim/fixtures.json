@@ -6901,5 +6901,12 @@
   {"name":"ex-range-blank-current-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":. 1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
   {"name":"ex-range-blank-two-blanks","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1  2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
   {"name":"ex-range-blank-then-second-address","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 2,5d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
-  {"name":"ex-range-blank-mark-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":"kkmaG:'a 1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}}
+  {"name":"ex-range-blank-mark-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":"kkmaG:'a 1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-whole-then-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":% 2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-whole-then-plus","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":%+1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-whole-then-number","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":%2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-whole-then-list","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":% 2,4y<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-last-beyond","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":$ 2d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-around-semicolon","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":2 ; +1d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}},
+  {"name":"ex-range-blank-before-command","text":"l1 a\n  l2 b\nl3 a\n\tl4 b\nl5 a\n  l6 b\nl7 a","keys":":1 d<CR>","settings":["set scrolloff=0"],"viewport":{"visible_lines":20,"first_visible":1,"line":5,"column":1}}
 ]
