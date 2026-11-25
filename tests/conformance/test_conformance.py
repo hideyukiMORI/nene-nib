@@ -460,6 +460,26 @@ class RepositoryChecks(unittest.TestCase):
     def test_cnf010_missing_files(self):
         self.assertTrue(any("missing" in detail for detail in self.fixture_details()))
 
+    # CNF-010 — Vim の fixture の settings に 'list' を書かない（#2047 のレビュー R7・ADR 0193）。Vim は
+    # Tab を ^I の 2 桁で見せて桁を動かすが、Nib の :set list は印だけなので、再生が落ちずに違う桁を比べる。
+    def list_details(self):
+        return [f"{f.rule}: {f.detail}" for f in cnf.fixture_list_settings_checks(self.root, RULES)]
+
+    def test_cnf010_list_settings(self):
+        for source in ("tests/vim/fixtures.json", "tests/vim/wrap-fixtures.json"):
+            for setting in ("set list", "set nolist", "set invlist", "set list!", "se list",
+                            "set listchars=tab:>-", "set lcs=eol:$", "set ts=4 list",
+                            "set listspace=all"):
+                with self.subTest(source=source, setting=setting):
+                    self.write(source, json.dumps(
+                        [{"name": "a", "text": "b", "keys": "x", "settings": [setting]}]))
+                    self.assertTrue(any("CNF-010" in detail and "sets 'list'" in detail
+                                        for detail in self.list_details()))
+            self.write(source, json.dumps([{"name": "a", "text": "b", "keys": "x",
+                                             "settings": ["set scrolloff=2", "set nolinebreak",
+                                                          "set lisp"]}]))
+            self.assertEqual([], self.list_details())
+
     # CNF-010 — 折り返す窓の生成物 VimWrapFixtures.hpp は、測った入力 3 つ（wrap-fixtures.json・
     # 測定のコード・共有の oracle）の SHA-256 の行を持ち、木のファイルと一致する（Issue #1431）。
     # 正例は生成器の provenance() が書く行と保存されている生成物をそのまま読ませる。

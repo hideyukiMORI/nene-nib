@@ -230,6 +230,7 @@ Interlocked 系の組み込みや `volatile` は見ない。tests/ は対象外�
 実際の `tests/vim/fixtures.json` のバイト列の SHA-256 と配列の長さと突き合わせる。記述が無い・SHA が違う・本数が違う、のいずれも CNF-010（[ADR 0012](adr/0012-vim-engine-first-slice-and-oracle-fixtures.md) の決定 7・Issue #44）。
 SHA はファイルのバイト列そのままで、改行は正規化しない（`.gitattributes` の `eol=lf` が正本）。Vim が要らないので CI でも回る（merge 直前の CI の `check` job が木の conformance を回す・#648。ローカルは `check.ps1`）。
 **期待値そのものが本物の Vim の答えかは見ない**（それは Vim のある機械での `--regenerate` と QLT-013 の記録）。
+`tests/vim/fixtures.json` と `tests/vim/wrap-fixtures.json` の `settings` に Vim の `list`（`nolist` `invlist` `listchars` `lcs` と Nib の `listspace`）を書いた行も CNF-010（`eng/conformance.py` の `fixture_list_settings_checks`）。Vim は Tab を `^I` の 2 桁で見せて桁を動かすが、Nib の `:set list` は印だけで桁を動かさないので、再生が落ちずに違う桁を比べるため（#2047 のレビュー R7・ADR 0193）。oracle のコードは生成物の入力（digest）なので変えず、fixture の元を読んで断る。
 
 fixture の鍵の記法の表（`<Esc>` `<NL>` `<Space>` など）は `eng/vim-oracle.py` の `KEY_TABLE` の 1 つだけで、C++ の表 `src/core/VimKeyNames.hpp` はその生成物である（core に置き、fixture の再生と設定の `map` の行が同じ表を読む・ADR 0176）（[ADR 0054](adr/0054-fixture-key-notation-has-one-table.md)）。
 保存されている `src/core/VimKeyNames.hpp` のバイト列が oracle の `key_names_header()` の出力と一致することも CNF-010 で見る。無い・違う、のいずれも CNF-010（最初に違う行を示す）。

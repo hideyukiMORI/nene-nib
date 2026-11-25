@@ -455,6 +455,50 @@ def fixture_digest_checks(root: Path, rules: dict) -> list[Finding]:
     return findings
 
 
+# Vim の 'list' に触れる option の名前（`set list` `nolist` `invlist` `list!` `list&`・`listchars` と
+# 短い名前 `lcs`・Nib だけの `listspace`）。
+VIM_LIST_OPTIONS = ("list", "listchars", "lcs", "listspace")
+VIM_FIXTURE_SOURCES = ("tests/vim/fixtures.json", "tests/vim/wrap-fixtures.json")
+
+
+def fixture_list_setting(setting: str) -> bool:
+    """Whether one `settings` line of a Vim fixture names Vim's 'list' or Nib's list options."""
+    words = setting.split()
+    if len(words) < 2 or words[0] not in ("set", "se", "setlocal", "setl"):
+        return False
+    for word in words[1:]:
+        name = word.split("=", 1)[0].split(":", 1)[0].rstrip("!&?^+-")
+        for prefix in ("inv", "no"):
+            if name.startswith(prefix) and name[len(prefix):] in VIM_LIST_OPTIONS:
+                name = name[len(prefix):]
+        if name in VIM_LIST_OPTIONS:
+            return True
+    return False
+
+
+def fixture_list_settings_checks(root: Path, rules: dict) -> list[Finding]:
+    """CNF-010: no Vim fixture sets 'list' (#2047 review R7, ADR 0193).
+
+    Vim's 'list' without `tab:` in 'listchars' shows a Tab as `^I` in two cells, which moves the
+    virtual columns, `gj` and the viewport the oracle measures, while Nib's `:set list` only draws
+    marks and never moves a column: the replay would take the line and compare different columns
+    without failing. The oracle's code is not changed for this (its digest is an input of the
+    generated fixtures), so the fixture sources are read here instead.
+    """
+    findings = []
+    for relative in VIM_FIXTURE_SOURCES:
+        source = root / relative
+        if not source.is_file():
+            continue
+        for fixture in json.loads(source.read_text(encoding="utf-8")):
+            for setting in fixture.get("settings", []) if isinstance(fixture, dict) else []:
+                if isinstance(setting, str) and fixture_list_setting(setting):
+                    findings.append(Finding("CNF-010", relative,
+                                            f"{fixture.get('name', '?')}: `{setting}` sets 'list'; Vim "
+                                            "moves the Tab columns and Nib only draws marks (ADR 0193)"))
+    return findings
+
+
 def wrap_fixture_provenance_checks(root: Path, rules: dict) -> list[Finding]:
     """CNF-010: the wrapped-display fixtures name the inputs they were measured from (Issue #1431).
 
@@ -945,6 +989,7 @@ def check(root: Path, today: datetime.date, build_dir: Path | None = None) -> li
     findings.extend(version_metadata_checks(root))
     findings.extend(fixture_digest_checks(root, rules))
     findings.extend(wrap_fixture_provenance_checks(root, rules))
+    findings.extend(fixture_list_settings_checks(root, rules))
     findings.extend(key_names_checks(root))
     findings.extend(case_mapping_checks(root))
     findings.extend(markdown_entities_checks(root))
