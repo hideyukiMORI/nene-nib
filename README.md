@@ -290,7 +290,8 @@ records in `docs/quality/`.
   the list. Read/write failures leave the previous list intact and show a one-line notice. The taskbar jump
   list is planned.
 - **FR-011 look** — frameless window with an opaque tab band as its title bar, follows the OS light / dark theme (aubergine dark, orange
-  accent), one paint per frame. The window corners are square and no Mica backdrop is applied (decision D86); a
+  accent), one paint per frame. The window asks for square corners and no Mica backdrop is applied (decision D86; a rounding of about 4 px
+  remains, #1496); a
   window that is not maximized resizes from all edges and corners, including the top-right corner and a 4 DIP
   strip along the top of × □ ＿, while a maximized window and edges touching the monitor's edge leave those
   pixels to the buttons, so a pointer thrown into the screen corner still hits ×. Done.
@@ -392,10 +393,11 @@ records in `docs/quality/`.
   the name at the caret through the server ([ADR 0194](docs/adr/0194-language-server-rename-and-code-actions-apply-workspace-edits-tab-by-tab.md)):
   the whole answer is checked first and nothing changes if any part of it is refused; each file is changed in
   its tab, a file that was not open is opened in a tab with unsaved changes (●) and is not written to disk, and
-  an answer that spans more than 32 files, creates or deletes files, or reaches a file the server has not
+  an answer that spans more than 32 files, creates, renames or deletes files, or reaches a file the server has not
   opened that is not UTF-8 without a BOM (or is over 4 MiB) is refused in one line. Known limits: a server that has not read the other files
   of the project yet may rename the name only in the open files; and if a tab that the server has not opened
-  has unsaved changes, the whole rename is refused (save it and try again).
+  has unsaved changes, the whole rename is refused (save it and try again). If a tab is closed while the answer
+  is on its way, an answer that also reaches a file without a tab is refused as out of date (ask again).
   In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). *New in 1.2.0*: while that
   list is open in Vim INSERT mode, ↑ ↓ PageUp PageDown choose a row instead of moving the caret (decision D111). In a list
   opened by a trigger character (ordinary and Vim modes), clicking a row accepts it, Tab accepts the chosen row
@@ -404,7 +406,8 @@ records in `docs/quality/`.
   chosen. `:LspLog` or the F1 operation "Open Language Server Log" opens the servers' error output and messages
   in an untitled tab, and the status bar shows a server's progress next to the diagnostics count. The editor
   now tells servers that it takes diagnostics and save notices, which typescript-language-server needs before it
-  sends diagnostics.
+  sends diagnostics. A diagnostic message under the caret is now written after the Basic | Vim switch and the
+  mode label instead of replacing them, so the switch stays visible and clickable (decision D119).
 - **FR-022 file explorer** — Ctrl+Shift+E or `:set explorer` / `:set noexplorer` show a folder tree left of the
   body; `:set root=<path>`, `:set root=.`, Ctrl+Shift+R or F1 choose its root, and both are saved in the settings. Keys, mouse
   and a filter work; a single click opens a file or opens / closes a folder (D80), double-click or Enter also moves the focus to
