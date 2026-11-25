@@ -33,6 +33,7 @@
 #include "OperationBindings.hpp"
 #include "OperationKey.hpp"
 #include "PlaceCaret.hpp"
+#include "PreviewPlacement.hpp"
 #include "QueryLanguage.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -42,6 +43,7 @@
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
 #include "Session.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "SettleRecentTab.hpp"
 #include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
@@ -748,6 +750,52 @@ void verify_busy_and_deferred()
                !deferred.reads().cancels().empty() && frame.tabs.size() == 2 &&
                whole_vim_body(deferred.controller()) == main_text,
            "a file the reading port moves to the background is cancelled and refused");
+}
+
+// 頼んでから全面のプレビューに入った答え（#2057）。変えられる所の答えは「新しい名前:」の入力行を
+// 開かずに断り、名前の変更の答えは本文とタブを変えずに断る（どちらも「入力の途中」の 1 行）。
+// 全面の間は frame が本文を描かないので、本文は controller の text で比べる。
+void verify_full_preview_refusals()
+{
+    Editing target(lsp_on());
+    started(target, prepared);
+    static_cast<void>(asked(target));
+    applied(target.controller(), app::SetPreviewPlacement{app::PreviewPlacement::full});
+    const auto opened = answered(target, prepare_method, add_target);
+    expect(!opened.command_line.has_value() && opened.full_preview.has_value() &&
+               message_of(opened) == notice(target, core::UiMessage::notice_server_edit_busy),
+           "a rename target answer in the full preview opens no new name line");
+
+    Editing renamed(lsp_on());
+    started(renamed, prepared);
+    renamed_to_sum(renamed);
+    const std::size_t tabs = renamed.controller().frame().tabs.size();
+    applied(renamed.controller(), app::SetPreviewPlacement{app::PreviewPlacement::full});
+    const auto arrived = answered(renamed, rename_method, clangd_changes());
+    expect(message_of(arrived) == notice(renamed, core::UiMessage::notice_server_edit_busy) &&
+               renamed.controller().text().text() == main_text && arrived.tabs.size() == tabs &&
+               arrived.full_preview.has_value(),
+           "a rename answer in the full preview changes no text and no tab");
+}
+
+// 「新しい名前:」の入力行が開いている間にも全面へ入れる（入力行は残る・#2057 の確かめ）。Enter で
+// 頼んだ名前の変更の答えは全面の間に届くので、上と同じく断る。
+void verify_full_preview_over_rename_line()
+{
+    Editing editing(lsp_on());
+    started(editing, prepared);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, prepare_method, add_target));
+    const auto entered =
+        editing.controller().apply_frame(app::SetPreviewPlacement{app::PreviewPlacement::full});
+    expect(entered.full_preview.has_value() && entered.command_line.has_value(),
+           "the full preview opens over the new name line and the line stays");
+    static_cast<void>(typed_name(editing, "sum"));
+    const auto arrived = answered(editing, rename_method, clangd_changes());
+    expect(editing.language_server().requests(rename_method).size() == 1 &&
+               message_of(arrived) == notice(editing, core::UiMessage::notice_server_edit_busy) &&
+               editing.controller().text().text() == main_text,
+           "a rename asked from the line in the full preview is refused when it arrives");
 }
 
 // 1 回目の名前の変更で開いた lib.cpp と書き換えた lib.hpp は、当てる前に頼んだ席へ `didOpen` され、
@@ -1511,5 +1559,7 @@ void verify_lsp_rename_scope()
     verify_unrelated_tab_closed();
     verify_opened_after_closing();
     verify_unread_after_closing();
+    verify_full_preview_refusals();
+    verify_full_preview_over_rename_line();
 }
 } // namespace nenenib::tests

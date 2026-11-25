@@ -34,6 +34,7 @@
 #include "OperationTexts.hpp"
 #include "PaneFrame.hpp"
 #include "PlaceCaret.hpp"
+#include "PreviewPlacement.hpp"
 #include "QueryLanguage.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
@@ -42,6 +43,7 @@
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
 #include "ServerStarted.hpp"
+#include "SetPreviewPlacement.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "SubmitCommand.hpp"
@@ -962,6 +964,20 @@ void expect_busy_after_intent(const app::EditorIntent &intent, const char *what)
     expect(refused_as_busy(editing, late), what);
 }
 
+// 頼んでから全面のプレビューに入った答え（#2057・ADR 0155 の改訂 17 の「編集はできない」）。全面の
+// 間は frame が本文を描かないので、本文は controller の text で比べる。
+void verify_full_preview_busy()
+{
+    Editing editing(lsp_on());
+    started(editing, both_providers);
+    static_cast<void>(asked(editing, core::LanguageQueryKind::format_document));
+    applied(editing.controller(), app::SetPreviewPlacement{app::PreviewPlacement::full});
+    const auto late = answered(editing, formatting_method, clangd_edits);
+    expect(message_of(late) == notice(editing, core::UiMessage::notice_formatting_busy) &&
+               editing.controller().text().text() == source_text && late.full_preview.has_value(),
+           "an answer that arrives in the full preview is not applied");
+}
+
 // ADR 0191 の強制の行に書いた「入力の途中」の条件を 1 つずつ（#1997 の 2 回目のレビュー F1〜F3）。
 // Vim が次の鍵を待つ間（回数・レジスタ・1 鍵の待ち・INSERT の `Ctrl-o`・`map` の左辺の途中・
 // イージーモーションの印）・INSERT を組み立てている間（`3i`・矩形の `I`・打つ前の `i`）・IME・
@@ -1024,6 +1040,7 @@ void verify_busy_states()
     expect_busy_after_intent(
         app::OpenCompletion{},
         "an answer that arrives while the completion list is open is not applied");
+    verify_full_preview_busy();
 }
 
 // 録画中（`qa`）は待ちでないので当たり、整形は録画に入らない（`@a` で整形しない・2 回目のレビュー
