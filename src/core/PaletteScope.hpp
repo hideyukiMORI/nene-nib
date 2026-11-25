@@ -24,6 +24,8 @@ enum class PaletteScope : std::uint8_t
     // 言語サーバーの参照の答え（#1947・ADR 0191 の決定 4・files には混ぜない）。
     references,
     // 言語サーバーの記号の答え（#1955・ADR 0191 の決定 5・files には混ぜない）。
-    symbols
+    symbols,
+    // 言語サーバーのクイックフィックスの答え（#2005・ADR 0194 の決定 9・files には混ぜない）。
+    code_actions
 };
 } // namespace nenenib::core

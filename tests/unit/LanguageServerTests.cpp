@@ -1044,14 +1044,15 @@ void verify_abilities()
     expect(
         contains(
             server.sent().front(),
-            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}},"formatting":{},"rangeFormatting":{},"rename":{"prepareSupport":true}})"),
+            R"("textDocument":{"synchronization":{"didSave":true},"publishDiagnostics":{"versionSupport":true},"completion":{"completionItem":{"snippetSupport":false,"documentationFormat":["plaintext"]}},"hover":{"contentFormat":["plaintext","markdown"]},"definition":{"linkSupport":true},"references":{},"documentSymbol":{"hierarchicalDocumentSymbolSupport":true},"signatureHelp":{"signatureInformation":{"documentationFormat":["plaintext"],"parameterInformation":{"labelOffsetSupport":true}}},"formatting":{},"rangeFormatting":{},"rename":{"prepareSupport":true},"codeAction":{"codeActionLiteralSupport":{"codeActionKind":{"valueSet":["","quickfix","refactor","refactor.extract","refactor.inline","refactor.rewrite","source","source.organizeImports","source.fixAll"]}},"isPreferredSupport":true,"dataSupport":true,"resolveSupport":{"properties":["edit"]}}})"),
         "initialize offers didSave, versioned diagnostics, completion without snippets, hover "
         "text, definition links, references, document symbols and signature help");
     expect(
         contains(
             server.sent().front(),
-            R"("workspace":{"workspaceEdit":{"documentChanges":true,"failureHandling":"abort"}})"),
-        "initialize offers workspace edits with document changes and abort only (#2004)");
+            R"("workspace":{"applyEdit":true,"workspaceEdit":{"documentChanges":true,"failureHandling":"abort"},"executeCommand":{}})"),
+        "initialize offers applyEdit, workspace edits with document changes and abort only and "
+        "executeCommand (#2004・#2005)");
     const auto &abilities = editing.controller().language_server_abilities();
     expect(abilities.completion && abilities.hover && abilities.definition &&
                abilities.trigger_characters == std::vector<std::string>{".", "->"},
@@ -1364,6 +1365,9 @@ void verify_request_expiry()
     case app::LspRequestKind::range_formatting:
     case app::LspRequestKind::prepare_rename:
     case app::LspRequestKind::rename:
+    case app::LspRequestKind::code_action:
+    case app::LspRequestKind::code_action_resolve:
+    case app::LspRequestKind::execute_command:
         return true;
     }
     return false;
@@ -1380,8 +1384,10 @@ void verify_request_expiry()
 }
 
 using AskedKind = std::pair<app::LspRequestKind, std::string_view>;
-// 寿命の 2 つ（initialize・shutdown）は別の扱い（失敗に数える・止める）なので、ほかの全部。
-constexpr std::array<AskedKind, 10> asked_kinds{{
+// 寿命の 2 つ（initialize・shutdown）は別の扱い（失敗に数える・止める）。選んだ直しの続きの 2 つ
+// （code_action_resolve・execute_command）は一覧の答えから選ぶ道でだけ出るので、`--lsp-code-action`
+// の verify_apply_edit_lowered と verify_one_fix_while_resolving が縛る。ここはほかの全部。
+constexpr std::array<AskedKind, 11> asked_kinds{{
     {app::LspRequestKind::completion, "textDocument/completion"},
     {app::LspRequestKind::hover, "textDocument/hover"},
     {app::LspRequestKind::definition, "textDocument/definition"},
@@ -1392,9 +1398,10 @@ constexpr std::array<AskedKind, 10> asked_kinds{{
     {app::LspRequestKind::range_formatting, "textDocument/rangeFormatting"},
     {app::LspRequestKind::prepare_rename, "textDocument/prepareRename"},
     {app::LspRequestKind::rename, "textDocument/rename"},
+    {app::LspRequestKind::code_action, "textDocument/codeAction"},
 }};
-static_assert(asked_kinds.size() + 2 == request_kind_count(),
-              "every request kind but the two of the lifecycle is listed");
+static_assert(asked_kinds.size() + 4 == request_kind_count(),
+              "every request kind but the lifecycle and the steps of a chosen fix is listed");
 
 // 1 種類の要求を頼む（名前の変更は prepareProvider
 // の有無で変えられる所の問いと名前の変更を分ける）。
@@ -1404,7 +1411,12 @@ static_assert(asked_kinds.size() + 2 == request_kind_count(),
     {
     case app::LspRequestKind::initialize:
     case app::LspRequestKind::shutdown:
+    case app::LspRequestKind::code_action_resolve:
+    case app::LspRequestKind::execute_command:
         return false;
+    case app::LspRequestKind::code_action:
+        applied(controller, app::QueryLanguage{core::LanguageQueryKind::code_action});
+        return true;
     case app::LspRequestKind::completion:
         return controller.request_completion(1);
     case app::LspRequestKind::hover:
@@ -1437,7 +1449,7 @@ static_assert(asked_kinds.size() + 2 == request_kind_count(),
 void verify_every_request_expires()
 {
     constexpr std::string_view abilities =
-        R"("textDocumentSync":2,"completionProvider":{},"hoverProvider":true,"definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true,"signatureHelpProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true)";
+        R"("textDocumentSync":2,"completionProvider":{},"hoverProvider":true,"definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true,"signatureHelpProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"codeActionProvider":true)";
     for (const auto &[kind, method] : asked_kinds)
     {
         Editing editing(lsp_settings(true));

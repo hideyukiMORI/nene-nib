@@ -23,7 +23,7 @@ namespace
 // nib_unit_scopes（--every-scope）で回す。 載せていない物: --minimap-property（Debug で約 28
 // 秒・#2013 の実測）と --vim-window-path-all （全件版・見本版の --vim-fixture-window-path
 // が載っている）。 表は関数の外に置く（CPP-012・関数長の上限は表の行を数えない形で守る）。
-constexpr std::array<std::pair<std::string_view, void (*)()>, 149> contracts{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 150> contracts{{
     {"--vim-wrapped", verify_vim_wrapped_contracts},
     {"--wrapped-view", verify_wrapped_view_scope},
     {"--edge-arrows", verify_edge_arrows_scope},
@@ -173,6 +173,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 149> contracts{{
     {"--lsp-formatting", verify_lsp_formatting_scope},
     {"--input-line-property", verify_input_line_property_scope},
     {"--lsp-rename", verify_lsp_rename_scope},
+    {"--lsp-code-action", verify_lsp_code_action_scope},
 }};
 
 void verify_vim_scope_contracts()
@@ -190,7 +191,7 @@ void verify_file_text_scope()
     verify_document_read_contracts();
 }
 
-constexpr std::array<std::pair<std::string_view, void (*)()>, 174> scopes{{
+constexpr std::array<std::pair<std::string_view, void (*)()>, 175> scopes{{
     {"--body-layout", verify_body_layout_scope},
     {"--vim-wrapped", verify_vim_wrapped_scope},
     {"--wrapped-view", verify_wrapped_view_scope},
@@ -365,6 +366,7 @@ constexpr std::array<std::pair<std::string_view, void (*)()>, 174> scopes{{
     {"--indent-guides", verify_indent_guides_scope},
     {"--lsp-formatting", verify_lsp_formatting_scope},
     {"--lsp-rename", verify_lsp_rename_scope},
+    {"--lsp-code-action", verify_lsp_code_action_scope},
 }};
 
 // 名指しの scope にしかない検査（fixture の選び方の件数と名前など）を CTest で回す入口（#1324）。

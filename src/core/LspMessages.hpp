@@ -34,4 +34,8 @@ inline constexpr std::int64_t lsp_method_not_found_code = -32601;
 // サーバーからの要求に result: null で答える本文（`window/workDoneProgress/create`・ADR 0160 の
 // 2026-11-22 の追補）。
 [[nodiscard]] std::string lsp_null_result_body(const LspId &id);
+
+// サーバーからの要求に result で答える本文（`workspace/applyEdit` の
+// `ApplyWorkspaceEditResult`・#2005・ ADR 0194 の決定 6）。
+[[nodiscard]] std::string lsp_result_body(const LspId &id, const JsonValue &result);
 } // namespace nenenib::core

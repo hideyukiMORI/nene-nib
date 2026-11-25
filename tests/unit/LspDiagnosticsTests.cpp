@@ -190,7 +190,7 @@ void verify_published()
            "a publishDiagnostics keeps its uri and version");
     const std::vector<Diagnostic> expected{
         Diagnostic{OffsetRange{Offset{3}, Offset{9}}, DiagnosticSeverity::warning,
-                   "unused\nnote: here", "clangd", "x"},
+                   "unused\nnote: here", "clangd", "x", core::DiagnosticCodeForm::text},
         Diagnostic{OffsetRange{Offset{11}, Offset{12}}, DiagnosticSeverity::error,
                    "no severity\r\nsecond"}};
     expect(one.has_value() && one.value().diagnostics == expected,

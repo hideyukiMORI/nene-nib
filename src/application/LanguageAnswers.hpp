@@ -1,5 +1,7 @@
 #pragma once
 
+#include "LanguageCodeActionResolve.hpp"
+#include "LanguageCodeActions.hpp"
 #include "LanguageCompletion.hpp"
 #include "LanguageDefinition.hpp"
 #include "LanguageFormatting.hpp"
@@ -34,5 +36,8 @@ struct LanguageAnswers
     // 照合はどちらも使うときにする。
     std::optional<LanguageRenameTarget> rename_target = std::nullopt;
     std::optional<LanguageRename> rename = std::nullopt;
+    // クイックフィックスの答えと、`codeAction/resolve` の答え（#2005・ADR 0194 の決定 9・10）。
+    std::optional<LanguageCodeActions> code_actions = std::nullopt;
+    std::optional<LanguageCodeActionResolve> code_action_resolve = std::nullopt;
 };
 } // namespace nenenib::application

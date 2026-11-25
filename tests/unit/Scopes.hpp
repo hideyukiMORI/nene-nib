@@ -183,6 +183,8 @@ void verify_lsp_signature_scope();
 void verify_lsp_formatting_scope();
 // LspRenameTests.cpp（#2004・ADR 0194 の S7 a・WorkspaceEdit の土台と名前の変更）
 void verify_lsp_rename_scope();
+// LspCodeActionTests.cpp（#2005・ADR 0194 の S7 b・クイックフィックスと workspace/applyEdit）
+void verify_lsp_code_action_scope();
 // LspAnswersTests.cpp（#1825・ADR 0190 の決定 4・答えの読み 3 本と URI → パス）
 void verify_lsp_answers_scope();
 void verify_lsp_sync_property_scope();

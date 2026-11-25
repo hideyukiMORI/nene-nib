@@ -90,6 +90,7 @@ namespace
     case core::PaletteScope::diagnostics:
     case core::PaletteScope::references:
     case core::PaletteScope::symbols:
+    case core::PaletteScope::code_actions:
         return {};
     }
     std::unreachable();

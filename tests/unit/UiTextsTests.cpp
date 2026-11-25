@@ -85,8 +85,8 @@ void verify_columns()
         }
     }
     expect(
-        core::ui_message_count == 451,
-        "the table has 451 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
+        core::ui_message_count == 459,
+        "the table has 459 messages (T1a 197, T1b 4, the About operation 2 of D90, the "
         "project search mark 1 of #1003, the project search face 8 of #1763, the "
         "easymotion prompt of ADR 0163, the 5 context menu operations 10 of #1051, the finder "
         "preview 4 of #1785, the preview failures 3 more of #1793, the packaged "
@@ -103,15 +103,17 @@ void verify_columns()
         "the references subject of #1958, the signature operation 2 and notices 2 of "
         "#1959, the typing sparks rows 2 of #1979, the indent guide rows and values 14 of #1975, "
         "the pane resize rows 6 of #1972, the formatting operations 4 and notices 6 of "
-        "#1993 and the rename operation 2, prompt 1 and notices 17 of #2004)");
-    expect(placed == 56,
-           "56 messages take placeholders (T1a 26, the search progress 3, the "
+        "#1993, the rename operation 2, prompt 1 and notices 17 of #2004 and the quick fix "
+        "operation 2, the mark 1 and notices 5 of #2005)");
+    expect(placed == 57,
+           "57 messages take placeholders (T1a 26, the search progress 3, the "
            "preview line 1, the definition count 1, the settings summary 4, "
            "the settings no-match line 1, the link card hints 2 and the language "
            "server start notices 3, the language server rows 2, the language "
            "server starting 1, the references count 1 and the symbols count, "
            "the 2 empty lines and the subject of #1958, the file limit, the 2 "
-           "file names and the 2 applied counts and the 2 refused file names of #2004)");
+           "file names and the 2 applied counts and the 2 refused file names of #2004 and the "
+           "quick fix empty line of #2005)");
     expect(core::ui_text(core::UiMessage::tab_untitled, core::DisplayLanguage::english) ==
                "Untitled",
            "the English column is read for english");

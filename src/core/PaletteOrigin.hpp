@@ -27,7 +27,9 @@ enum class PaletteOrigin : std::uint8_t
     // 言語サーバーの参照の答え（#1947）。
     reference,
     // 言語サーバーの記号の答え（#1955）。
-    symbol
+    symbol,
+    // 言語サーバーのクイックフィックスの答え（#2005）。
+    code_action
 };
 
 // 行の右に添える補足の文言（ADR 0060 の決定 3）。文は表示言語の文の表（#1019）。

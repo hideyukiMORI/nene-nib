@@ -25,6 +25,11 @@ enum class LspRequestKind : std::uint8_t
     range_formatting,
     // 名前の変更（#2004・ADR 0194 の決定 2・7）。変えられる所の問いと、名前の変更。
     prepare_rename,
-    rename
+    rename,
+    // クイックフィックス（#2005・ADR 0194 の決定 2・8・10）。直し方の問い・`edit` を後で引く
+    // resolve・ サーバーの命令の実行（答えを待つ間だけ `workspace/applyEdit` を受ける）。
+    code_action,
+    code_action_resolve,
+    execute_command
 };
 } // namespace nenenib::application

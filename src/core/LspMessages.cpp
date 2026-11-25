@@ -236,4 +236,12 @@ std::string lsp_null_result_body(const LspId &id)
     members.emplace_back("result", JsonValue{JsonNull{}});
     return write_json(JsonValue{std::move(members)});
 }
+
+std::string lsp_result_body(const LspId &id, const JsonValue &result)
+{
+    JsonObject members = envelope();
+    members.emplace_back("id", id_value(id));
+    members.emplace_back("result", result);
+    return write_json(JsonValue{std::move(members)});
+}
 } // namespace nenenib::core

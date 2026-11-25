@@ -169,6 +169,8 @@ namespace
         return PaletteScope::references;
     case PaletteOrigin::symbol:
         return PaletteScope::symbols;
+    case PaletteOrigin::code_action:
+        return PaletteScope::code_actions;
     }
     std::unreachable();
 }
@@ -187,7 +189,8 @@ namespace
     case PaletteScope::files:
         return origin.value() != PaletteOrigin::diagnostic &&
                origin.value() != PaletteOrigin::reference &&
-               origin.value() != PaletteOrigin::symbol;
+               origin.value() != PaletteOrigin::symbol &&
+               origin.value() != PaletteOrigin::code_action;
     case PaletteScope::bookmarks:
         return origin.value() == PaletteOrigin::bookmark ||
                origin.value() == PaletteOrigin::bookmarked_tab;
@@ -200,6 +203,7 @@ namespace
     case PaletteScope::diagnostics:
     case PaletteScope::references:
     case PaletteScope::symbols:
+    case PaletteScope::code_actions:
         return scope_of(origin.value()) == scope;
     }
     std::unreachable();
@@ -506,6 +510,8 @@ namespace
         return UiMessage::palette_mark_references;
     case PaletteOrigin::symbol:
         return UiMessage::palette_mark_symbols;
+    case PaletteOrigin::code_action:
+        return UiMessage::palette_mark_code_actions;
     }
     std::unreachable();
 }

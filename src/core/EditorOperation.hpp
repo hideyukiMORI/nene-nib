@@ -125,6 +125,9 @@ enum class EditorOperation : std::uint8_t
     format_selection,
     // 名前を変更（#2004・ADR 0194 の決定 7）。F2 で両モード（VS Code と同じ・Vim の NORMAL の `grn`
     // と同じ問い）。新しい名前は入力行で聞く。
-    rename_symbol
+    rename_symbol,
+    // クイックフィックス（#2005・ADR 0194 の決定 8）。Ctrl+. で両モード（VS Code と同じ・Vim の
+    // NORMAL の `gra` と同じ問い）。答えは Ctrl+P の一覧の記号 `=` に出る。
+    quick_fix
 };
 } // namespace nenenib::core

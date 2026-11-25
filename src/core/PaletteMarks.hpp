@@ -18,7 +18,7 @@ namespace nenenib::core
 // 出どころの記号の表（ADR 0060 の決定 2）。載せるのは実装した出どころだけで、出どころを足すときは
 // ここに 1 行を足す。表に無い記号で始まる入力は files のただの検索の文字。最後の欄は検索欄の案内に
 // 出すか（ADR 0060 の 2026-11-22 の追補）。
-inline constexpr std::array<PaletteMark, 10> palette_marks{{
+inline constexpr std::array<PaletteMark, 11> palette_marks{{
     {'#', PaletteScope::tabs, UiMessage::palette_mark_tabs, PaletteMarkHint::always},
     {'*', PaletteScope::bookmarks, UiMessage::label_bookmarks, PaletteMarkHint::always},
     {'@', PaletteScope::history, UiMessage::label_history, PaletteMarkHint::always},
@@ -36,6 +36,9 @@ inline constexpr std::array<PaletteMark, 10> palette_marks{{
     // 言語サーバーの記号（#1955・ADR 0191 の決定 5）。Vim の Ex で今のファイルの `%`。入口は鍵
     // （`gO`）なので案内に出さない。
     {'%', PaletteScope::symbols, UiMessage::palette_mark_symbols, PaletteMarkHint::never},
+    // 言語サーバーのクイックフィックス（#2005・ADR 0194 の決定 9・hide に決めてほしいこと 3 の仮の
+    // 決め）。Vim の「整える」の `=`。入口は鍵（Ctrl+. / `gra`）なので案内に出さない。
+    {'=', PaletteScope::code_actions, UiMessage::palette_mark_code_actions, PaletteMarkHint::never},
 }};
 
 // 入力の先頭の 1 文字を表で引く。表にあればその出どころと残りの文字、無ければ files と入力の全体。

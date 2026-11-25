@@ -183,6 +183,10 @@ inline constexpr UiTextColumn ui_texts_japanese{{
     {UiMessage::operation_rename_symbol_description,
      "キャレットの所の名前を言語サーバーに変えてもらいます（ほかのファイルの使われ方も変わります"
      "）"},
+    {UiMessage::operation_quick_fix_name, "クイックフィックス"},
+    {UiMessage::operation_quick_fix_description,
+     "キャレットの所か選択の範囲の直し方とリファクタリングを言語サーバーに聞き、一覧から選んで当て"
+     "ます"},
     {UiMessage::app_error_window_class, "ウィンドウクラスを登録できませんでした。"},
     {UiMessage::app_error_window_create, "ウィンドウを作成できませんでした。"},
     {UiMessage::app_error_rendering_start, "Direct2D で描画を始められませんでした。"},
@@ -541,5 +545,15 @@ inline constexpr UiTextColumn ui_texts_japanese{{
      "{0} に言語サーバーへ送っていない変更があるので、当てませんでした（保存してからもう一度）"},
     {UiMessage::notice_server_edit_not_utf8,
      "{0} は BOM なしの UTF-8 でないので、当てませんでした"},
+    {UiMessage::palette_mark_code_actions, "クイックフィックス"},
+    {UiMessage::notice_code_action_not_supported,
+     "この言語サーバーはクイックフィックスに答えません"},
+    {UiMessage::notice_code_action_in_insert,
+     "挿入モードの間はクイックフィックスを頼みません（Esc で抜けてから）"},
+    {UiMessage::notice_code_actions_not_found, "ここで使える直し方はありません"},
+    {UiMessage::palette_empty_code_actions,
+     "直し方はまだありません。キャレットの所で {0}（Vim は {1}）で頼めます"},
+    {UiMessage::notice_code_action_waiting,
+     "前の直しの言語サーバーの答えを待っているので、選んだ直しは当てませんでした"},
 }};
 } // namespace nenenib::core

@@ -12,6 +12,7 @@
 #include "EditHistory.hpp"
 #include "EditorControllerDetail.hpp"
 #include "FilePath.hpp"
+#include "FilePort.hpp"
 #include "FileUri.hpp"
 #include "FormattedSpan.hpp"
 #include "FormattingPieces.hpp"
@@ -32,6 +33,7 @@
 #include "SaveState.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerEditFile.hpp"
+#include "ServerEditOrigin.hpp"
 #include "TabReach.hpp"
 #include "TextBuffer.hpp"
 #include "TextEncoding.hpp"
@@ -50,8 +52,9 @@
 #include <variant>
 #include <vector>
 
-// 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5）。名前の変更
-// （と S7 b のクイックフィックス・`workspace/applyEdit`）が同じ道を通る（ARC-001）。
+// 言語サーバーの編集（WorkspaceEdit）を当てる 1 本（#2004・ADR 0194 の決定 4・5）。名前の変更と
+// クイックフィックスの edit・resolve の
+// edit・`workspace/applyEdit`（#2005）が同じ道を通る（ARC-001）。
 //
 // 検査（何も変えない段を先に済ませ、状態を動かす reach_tab は最後）:
 // - 入力の途中でない（server_edit_interrupts）。頼んだ文書と改訂番号が同じ（照合 (a)）。
@@ -59,6 +62,8 @@
 // - 開いているタブは、頼んだときの写しの改訂番号と同じ（照合 (b)）。頼んだ席が `didOpen` していた
 //   文書は答えの版も今の改訂番号と同じ（照合 (c)）。`didOpen` していなかった文書は、未保存の変更が
 //   無いときだけ（サーバーはディスクの本文で数えている）。
+// - 頼んだときにタブに在ったファイルは今も同じタブに在り、当て先のタブは頼んだときも同じファイル
+//   （写しのパス・displaced_since・#2042）。
 // - タブの無いファイルは開く道と同じ読みの port で 4 MiB まで、同期に揃った UTF-8 の本文だけ。
 // - まだ読んでいないタブは reach_tab で読む（揃わなければ断る）。
 // - まだ文字組みの問いを判定していない本文に巨大な行が無い。各ファイルの編集を formatted_span で
@@ -97,6 +102,20 @@ namespace
     case core::TextEncoding::shift_jis:
     case core::TextEncoding::utf16_le:
     case core::TextEncoding::utf16_be:
+        return false;
+    }
+    std::unreachable();
+}
+
+// 照合 (a)（頼んだ文書と改訂番号）を照らすか。サーバーからの `workspace/applyEdit` には頼んだ文書が
+// 無い（#2005・ADR 0194 の決定 4）。
+[[nodiscard]] bool requests_document(ServerEditOrigin origin) noexcept
+{
+    switch (origin)
+    {
+    case ServerEditOrigin::answer:
+        return true;
+    case ServerEditOrigin::server_request:
         return false;
     }
     std::unreachable();
@@ -165,35 +184,44 @@ revision_and_saved(const core::EditHistory &history, const Document &document)
                                 : std::optional{core::UiMessage::notice_server_edit_not_utf8};
 }
 
-// 当て先 place が、頼んだときの写し opened に在ったタブか。
-[[nodiscard]] bool copied_place(const std::variant<AutosaveId, UnopenedFile> &place,
-                                const std::vector<OpenedRevision> &opened)
+// 当て先のファイル path（今の置き場は place）が、頼んだときの写し opened と食い違うか（#2042・
+// #2039 の形を含む）。サーバーは頼んだときにタブに在ったファイルをそのタブのバッファの本文で、
+// 無かったファイルをディスクの本文で数えた。次のどちらかなら、今の当て先はサーバーが数えた本文
+// ではない:
+// - 頼んだときにタブに在ったファイルが、今は同じタブに無い（閉じた・閉じて開き直した・名前を
+//   付けて保存で別のパスにした）。
+// - 当て先のタブが、頼んだときは別のファイル（か無題）だった（名前を付けて保存でこのパスにした・
+//   何も書いていない無題に開いた）。
+// 写しに無いタブ（頼んだ後に開いた・まだ読んでいない）とタブの無いファイルは、頼んだときにタブに
+// 無かったファイルなら食い違わない（そこから先は server_edit_check とディスクの読みの規則）。
+[[nodiscard]] bool displaced_since(const std::variant<AutosaveId, UnopenedFile> &place,
+                                   const core::FilePath &path,
+                                   const std::vector<OpenedRevision> &opened, const FilePort &files)
 {
     const auto *tab = std::get_if<AutosaveId>(&place);
-    return tab != nullptr && std::ranges::find(opened, *tab, &OpenedRevision::tab) != opened.end();
-}
-
-// 写しに在ったタブが 1 つでも帯から消えた後に、写しに無い当て先（タブの無いファイル・頼んだ後に
-// 開いたタブ・まだ読んでいないタブ）があるか（#2039）。写しはパスを持たないので、消えたタブが
-// どのファイルだったかを言えない。サーバーは消えたタブのバッファの本文で数えたかもしれないので、
-// ディスクから読んだ本文や開き直したタブに当てない。
-[[nodiscard]] bool lost_copied_tab(const std::vector<ServerEditFile> &files,
-                                   const std::vector<OpenedRevision> &opened,
-                                   const std::vector<AutosaveId> &ids)
-{
-    const bool lost =
-        std::ranges::any_of(opened, [&ids](const OpenedRevision &copied)
-                            { return std::ranges::find(ids, copied.tab) == ids.end(); });
-    return lost && !std::ranges::all_of(files, [&opened](const ServerEditFile &file)
-                                        { return copied_place(file.place, opened); });
+    return std::ranges::any_of(opened,
+                               [tab, &path, &files](const OpenedRevision &copied)
+                               {
+                                   const bool same_tab = tab != nullptr && copied.tab == *tab;
+                                   const bool same_path =
+                                       copied.path.has_value() &&
+                                       files.same_file(copied.path.value(), path);
+                                   return same_tab != same_path;
+                               });
 }
 } // namespace
 
-void EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
-                                            const LspEditContext &context,
-                                            core::LspPositionEncoding encoding)
+// 当てたら当てたタブの退避番号の列（今の本文と同じ結果なら空）、断ったら理由の 1 行（知らせにも
+// 置く）。origin が server_request（`workspace/applyEdit`・#2005）なら照合 (a) を飛ばす（ADR 0194
+// の 決定
+// 4）。当てたタブの列は、クイックフィックスが命令の写しを当てたタブだけ進めるのに使う（#2022 の
+// レビュー M1）。
+std::expected<std::vector<AutosaveId>, core::DisplayText>
+EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
+                                       const LspEditContext &context,
+                                       core::LspPositionEncoding encoding, ServerEditOrigin origin)
 {
-    auto files = server_edit_files(edit, context);
+    auto files = server_edit_files(edit, context, origin);
     if (files.has_value())
     {
         auto placed = reach_server_edit_tabs(files.value());
@@ -209,14 +237,14 @@ void EditorController::apply_workspace_edit(const core::LspWorkspaceEdit &edit,
     if (!files.has_value())
     {
         state_ = state_.with_command_message(files.error());
-        return;
+        return std::unexpected{files.error()};
     }
     // 今の本文と同じ結果だけなら何も変えず、何も知らせない（undo の単位を積まない）。
     if (files.value().empty())
     {
-        return;
+        return std::vector<AutosaveId>{};
     }
-    run_server_edits(std::move(files).value(), context.slot);
+    return run_server_edits(std::move(files).value(), context.slot);
 }
 
 // 読みが断った理由 → 1 行（決定 4）。
@@ -241,13 +269,13 @@ core::DisplayText EditorController::server_edit_refusal(core::LspWorkspaceEditFa
 // 動かさない（まだ読んでいないタブは退避番号のまま置き、reach_server_edit_tabs が後で読む）。
 std::expected<std::vector<ServerEditFile>, core::DisplayText>
 EditorController::server_edit_files(const core::LspWorkspaceEdit &edit,
-                                    const LspEditContext &context)
+                                    const LspEditContext &context, ServerEditOrigin origin)
 {
     if (server_edit_interrupts())
     {
         return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_busy)};
     }
-    if (server_edit_stale(context.request))
+    if (requests_document(origin) && server_edit_stale(context.request))
     {
         return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }
@@ -260,10 +288,6 @@ EditorController::server_edit_files(const core::LspWorkspaceEdit &edit,
         {
             return std::unexpected{resolved.error()};
         }
-    }
-    if (lost_copied_tab(files, context.opened, state_.autosave_ids()))
-    {
-        return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }
     return files;
 }
@@ -288,6 +312,10 @@ EditorController::resolve_server_edit(std::vector<ServerEditFile> &files,
     if (!place.has_value())
     {
         return std::unexpected{place.error()};
+    }
+    if (displaced_since(place.value(), path.value(), context.opened, ports_.files))
+    {
+        return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }
     if (const auto *tab = std::get_if<AutosaveId>(&place.value()))
     {
@@ -490,8 +518,10 @@ EditorController::place_server_edit_spans(std::vector<ServerEditFile> &files,
 }
 
 // 当てる（決定 5）。検査を通った後は replace が断る道が無い（入力の途中でなく、各区間は今の本文の
-// 上で組んだ・切り替えと開く道は本文を変えない）。
-void EditorController::run_server_edits(std::vector<ServerEditFile> files, LanguageServerSlot slot)
+// 上で組んだ・切り替えと開く道は本文を変えない）。当てたタブ（新しく開いたタブを含む）の退避番号を
+// 当てた順に返す。
+std::vector<AutosaveId> EditorController::run_server_edits(std::vector<ServerEditFile> files,
+                                                           LanguageServerSlot slot)
 {
     const auto &ids = state_.autosave_ids();
     const AutosaveId origin = ids.at(state_.active_tab());
@@ -501,6 +531,7 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files, Langu
         order.push_back(ids.at(position));
     }
     std::vector<AutosaveId> opened;
+    std::vector<AutosaveId> edited;
     std::size_t places = 0;
     const std::size_t changed = files.size();
     for (ServerEditFile &file : files)
@@ -516,6 +547,7 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files, Langu
             opened.push_back(state_.autosave_ids().at(state_.active_tab()));
         }
         announce_server_edit_target(slot);
+        edited.push_back(state_.autosave_ids().at(state_.active_tab()));
         const core::FormattedSpan &span = file.span.value();
         places += span.pieces.size();
         const std::size_t before = state_.history().position();
@@ -530,6 +562,7 @@ void EditorController::run_server_edits(std::vector<ServerEditFile> files, Langu
             ? ui_notice(core::UiMessage::notice_server_edit_applied, {std::to_string(places)})
             : ui_notice(core::UiMessage::notice_server_edit_applied_files,
                         {std::to_string(changed), std::to_string(places)}));
+    return edited;
 }
 
 // 当てる前に、答えた席 slot（文脈の席・#2011 のレビュー R6 の

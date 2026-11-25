@@ -25,6 +25,7 @@
 #include "SaveState.hpp"
 #include "SearchLine.hpp"
 #include "ServerAbilities.hpp"
+#include "ServerEditOrigin.hpp"
 #include "UiMessage.hpp"
 #include "Utf8.hpp"
 
@@ -219,35 +220,46 @@ void EditorController::request_rename(const std::string &name, const LspRequestC
                                          .slot = slot.value()});
 }
 
-// 帯の読み込み済みのタブごとの今の改訂番号と、頼んだ席 slot が `didOpen` しているか（決定 4・#2011
-// のレビュー
-// M1）。アクティブは状態の欄、脇は読み込み済みの束から引く。まだ読んでいないタブはディスクの
-// 本文なので写さない。
+// 帯の読み込み済みのタブごとの今のパス・改訂番号と、頼んだ席 slot が `didOpen` しているか
+// （決定 4・#2011 のレビュー M1・パスは #2042）。アクティブは状態の欄、脇は読み込み済みの束から
+// 引く。まだ読んでいないタブはディスクの本文なので写さない。
 std::vector<OpenedRevision> EditorController::opened_revisions(LanguageServerSlot slot) const
 {
-    const auto &documents = language_servers_.links.at(slot_index(slot)).documents;
     const auto &ids = state_.autosave_ids();
     std::vector<OpenedRevision> opened;
     opened.reserve(ids.size());
     for (std::size_t position = 0; position < ids.size(); ++position)
     {
-        const DocumentState *bundle = state_.parked_bundle_at(position);
-        if (bundle == nullptr && position != state_.active_tab())
+        auto revision = opened_revision_at(slot, position);
+        if (revision.has_value())
         {
-            continue;
+            opened.push_back(std::move(revision).value());
         }
-        const core::EditHistory &history = bundle != nullptr ? bundle->history : state_.history();
-        const Document &document = bundle != nullptr ? bundle->document : state_.document();
-        const AutosaveId tab = ids.at(position);
-        opened.push_back(OpenedRevision{
-            .tab = tab,
-            .revision = static_cast<std::uint64_t>(history.revision()),
-            .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &sent)
-                                        { return sent.tab == tab; }),
-            .saved =
-                save_state_of(document, history.content_position()) == core::SaveState::saved});
     }
     return opened;
+}
+
+// 帯の position 番目のタブの今の写し（まだ読んでいないタブは値なし・#2022 のレビュー M1 で 1 タブ
+// ずつ進めるために分けた）。
+std::optional<OpenedRevision> EditorController::opened_revision_at(LanguageServerSlot slot,
+                                                                   std::size_t position) const
+{
+    const auto &documents = language_servers_.links.at(slot_index(slot)).documents;
+    const DocumentState *bundle = state_.parked_bundle_at(position);
+    if (bundle == nullptr && position != state_.active_tab())
+    {
+        return std::nullopt;
+    }
+    const core::EditHistory &history = bundle != nullptr ? bundle->history : state_.history();
+    const Document &document = bundle != nullptr ? bundle->document : state_.document();
+    const AutosaveId tab = state_.autosave_ids().at(position);
+    return OpenedRevision{
+        .tab = tab,
+        .path = document.path,
+        .revision = static_cast<std::uint64_t>(history.revision()),
+        .sent = std::ranges::any_of(documents, [tab](const LanguageServerDocument &sent)
+                                    { return sent.tab == tab; }),
+        .saved = save_state_of(document, history.content_position()) == core::SaveState::saved};
 }
 
 // 名前の変更の答え（決定 7）。誤りの答えはサーバーの message を 1 行で、null・空の答えは「名前を
@@ -280,6 +292,7 @@ void EditorController::settle_rename_answer()
         state_ = state_.with_command_message(server_edit_refusal(answered.edit.error()));
         return;
     }
-    apply_workspace_edit(answered.edit.value(), answered.context, answered.encoding);
+    static_cast<void>(apply_workspace_edit(answered.edit.value(), answered.context,
+                                           answered.encoding, ServerEditOrigin::answer));
 }
 } // namespace nenenib::application
