@@ -29,9 +29,9 @@ constexpr unsigned char c1_last = 0x9F;
 // 行と段落の区切り（U+2028・U+2029 は E2 80 A8・A9）と双方向の制御（U+202A〜U+202E は
 // E2 80 AA〜AE・U+2066〜U+2069 は E2 81 A6〜A9）。区切りと埋め込みは続いた 1 つの範囲で引く。
 constexpr unsigned char bidi_lead = 0xE2;
-constexpr unsigned char bidi_embed_middle = 0x80;
-constexpr unsigned char bidi_embed_first = 0xA8;
-constexpr unsigned char bidi_embed_last = 0xAE;
+constexpr unsigned char separator_embed_middle = 0x80;
+constexpr unsigned char separator_embed_first = 0xA8;
+constexpr unsigned char separator_embed_last = 0xAE;
 constexpr unsigned char bidi_isolate_middle = 0x81;
 constexpr unsigned char bidi_isolate_first = 0xA6;
 constexpr unsigned char bidi_isolate_last = 0xA9;
@@ -194,8 +194,8 @@ constexpr unsigned char escape_final_first = 0x30;
     }
     const unsigned char middle = byte_at(sequence, 1);
     const unsigned char last = byte_at(sequence, 2);
-    const bool embedding =
-        middle == bidi_embed_middle && within(last, bidi_embed_first, bidi_embed_last);
+    const bool embedding = middle == separator_embed_middle &&
+                           within(last, separator_embed_first, separator_embed_last);
     const bool isolate =
         middle == bidi_isolate_middle && within(last, bidi_isolate_first, bidi_isolate_last);
     if (!embedding && !isolate)

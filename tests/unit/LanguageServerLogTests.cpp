@@ -146,11 +146,16 @@ void running(Editing &editing)
 // CSI と OSC・ESC \ で閉じる OSC・C1 でない 2 バイトと双方向の制御でない 3 バイト。
 void verify_server_log_line_edges()
 {
-    const std::array<std::pair<std::string_view, std::string_view>, 17> lines{{
+    const std::array<std::pair<std::string_view, std::string_view>, 20> lines{{
         // 中間の字（0x20〜0x2F）の列を持つ ESC の列は 1 つとして落とす（#2017）。
         {"a\x1b(Bb", "ab"},
         {"x\x1b#8y\x1b $@z", "xyz"},
         {"a\x1b(", "a"},
+        // 終わりの字が無ければ中間の字までを落とし、次の字は残す（UTF-8 の字・DEL・次の ESC
+        // の列）。
+        {"\x1b(\xE3\x81\x82", "\xE3\x81\x82"},
+        {"\x1b(\x7f", "\xE2\x90\xA1"},
+        {"\x1b(\x1b[31mX", "X"},
         {"\x1b\x01", "\xE2\x90\x9B\xE2\x90\x81"},
         // 行と段落の区切りは C1 の NEL と同じく「<U+XXXX>」、その手前の U+2027 は残す（#2017）。
         {"a\xE2\x80\xA8"
