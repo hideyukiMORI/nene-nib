@@ -706,6 +706,21 @@ void verify_ex_input_isolation()
     return !result.has_value() && result.error() == core::ExEvaluationFailure{failure};
 }
 
+// 番地の後ろに空白と数字の続く行（`:1 2resize 10`）。Vim は番地の後ろの空白を飛ばして足し算に
+// 読む（#2019 で実測する別件）。ここでは、今の Nib がこの形を断る（答えを返さない）ことだけを縛り、
+// どう読むかは縛らない（#2016 のレビュー 推奨 1）。
+void verify_ex_spaced_ranges()
+{
+    for (const std::string_view text :
+         {"1 2resize 10", "1 2tabnext", "1 2only", "1 2hardcopy", "1 2LspLog", "1 2version",
+          "1 2syntax on", "1 2preview", "1 2buffers", "1 2grep x", "1 2w"})
+    {
+        expect(
+            !core::evaluate_ex(text, core::default_editor_settings(), Appearance::dark).has_value(),
+            (std::string(text) + ": a number after the range and a space is refused").c_str());
+    }
+}
+
 // 範囲つきの行（ADR 0022 の追補 #1526）。範囲を取らない命令は E481、範囲つきの形をまだ持たない
 // 命令は unsupported、未知の命令は unknown のまま。範囲だけの `'<,'>` `.` `.,.+N` は受ける。
 void verify_ex_ranges()
@@ -1391,12 +1406,40 @@ void verify_ex_relativenumber()
     }
 }
 
+// `^=` は掛け算（Vim の OP_PREPENDING）。0 を掛けると 0、32 ビットの long を超える答えと `+=` の
+// あふれは E474 と同じ失敗（#1561・#2013）。
+void verify_ex_scrolloff_operations()
+{
+    auto margin = core::default_editor_settings();
+    margin.scrolloff = 7;
+    const auto zero = core::evaluate_ex("set so^=0", margin, Appearance::dark);
+    const auto twice = core::evaluate_ex("set so^=2", margin, Appearance::dark);
+    expect(carries_settings(zero) && settings_of(zero).scrolloff == 0 && carries_settings(twice) &&
+               settings_of(twice).scrolloff == 14,
+           "^= multiplies the current margin");
+    for (const auto text : {"set so^=2147483647", "set so+=2147483647"})
+    {
+        const auto refused = core::evaluate_ex(text, margin, Appearance::dark);
+        expect(!refused.has_value() && std::holds_alternative<core::ExFailure>(refused.error()) &&
+                   std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
+               "an answer past the 32-bit long is an invalid argument");
+    }
+}
+
 // 数の書き方は Vim の vim_str2nr（`010` は 8 進・`08` は 10 進・`0x10` は 16 進・実測・#1561）。
 void verify_ex_scrolloff_numbers()
 {
     const auto defaults = core::default_editor_settings();
-    for (const auto &[text, value] : std::array<std::pair<std::string_view, std::size_t>, 4>{
-             {{"set so=010", 8}, {"set so=08", 8}, {"set so=0x10", 16}, {"set so:3", 3}}})
+    // `0X` `0b` `0B` と 9 を含む `09`（10 進）も同じ vim_str2nr（#2013）。
+    for (const auto &[text, value] :
+         std::array<std::pair<std::string_view, std::size_t>, 8>{{{"set so=010", 8},
+                                                                  {"set so=08", 8},
+                                                                  {"set so=0x10", 16},
+                                                                  {"set so:3", 3},
+                                                                  {"set so=0X10", 16},
+                                                                  {"set so=0b11", 3},
+                                                                  {"set so=0B11", 3},
+                                                                  {"set so=09", 9}}})
     {
         const auto read = core::evaluate_ex(text, defaults, Appearance::dark);
         expect(carries_settings(read) && settings_of(read).scrolloff == value,
@@ -1409,6 +1452,7 @@ void verify_ex_scrolloff_numbers()
                    std::get<core::ExFailure>(refused.error()) == core::ExFailure::invalid_argument,
                "a negative or non-decimal margin is an invalid argument");
     }
+    verify_ex_scrolloff_operations();
 }
 
 // 追従の余白（#1041）。`so=N` は 0〜999 を置き、`so?` と名前だけの `so` は問い。
@@ -1692,10 +1736,19 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set nopaneresizestepvim",
                                                           "set indentguidestyle=rainbow",
                                                           "set indentguidestyle=plain",
-                                                          "set indentguidecolors=",
-                                                          "set indentguideactive",
-                                                          "set noindentguideactive",
+                                                          "set indentguidecolorcount=",
+                                                          "set indentguidehighlightcurrent",
+                                                          "set noindentguidehighlightcurrent",
                                                           "set indentguidewidth=",
+                                                          "set listeol",
+                                                          "set nolisteol",
+                                                          "set listtab",
+                                                          "set nolisttab",
+                                                          "set listwidespace",
+                                                          "set nolistwidespace",
+                                                          "set listspace=none",
+                                                          "set listspace=trail",
+                                                          "set listspace=all",
                                                           "set scrolloff=",
                                                           "set language=ja",
                                                           "set language=en",
@@ -1715,6 +1768,8 @@ const auto completion_ordinary = std::vector<std::string>{"colorscheme",
                                                           "set nominimap",
                                                           "set indentguides",
                                                           "set noindentguides",
+                                                          "set list",
+                                                          "set nolist",
                                                           "edit",
                                                           "buffer",
                                                           "ls",
@@ -1834,6 +1889,52 @@ void verify_input_history_entries()
            "history values are immutable");
 }
 
+// 入力欄の編集の数と、履歴の歩きか。編集を足すとこの switch がコンパイルで落ちる（-Wswitch-enum・
+// CPP-002）ので、数と最後の値を直してから下の試験を見直す（#2016 のレビュー 推奨 2）。
+constexpr std::size_t command_edit_count = 16;
+
+[[nodiscard]] constexpr bool history_edit(core::CommandEdit edit) noexcept
+{
+    switch (edit)
+    {
+    case core::CommandEdit::history_previous:
+    case core::CommandEdit::history_next:
+        return true;
+    case core::CommandEdit::left:
+    case core::CommandEdit::right:
+    case core::CommandEdit::home:
+    case core::CommandEdit::end:
+    case core::CommandEdit::backspace:
+    case core::CommandEdit::erase:
+    case core::CommandEdit::erase_word:
+    case core::CommandEdit::erase_to_start:
+    case core::CommandEdit::complete_next:
+    case core::CommandEdit::complete_previous:
+    case core::CommandEdit::page_previous:
+    case core::CommandEdit::page_next:
+    case core::CommandEdit::list_first:
+    case core::CommandEdit::list_last:
+        return false;
+    }
+    std::unreachable();
+}
+
+static_assert(history_edit(core::CommandEdit::history_next) &&
+                  std::to_underlying(core::CommandEdit::history_next) + 1U == command_edit_count,
+              "the command edits are counted to their last value");
+
+[[nodiscard]] constexpr std::array<bool, command_edit_count> history_edits_table()
+{
+    std::array<bool, command_edit_count> table{};
+    for (std::size_t value = 0; value < command_edit_count; ++value)
+    {
+        table.at(value) = history_edit(static_cast<core::CommandEdit>(value));
+    }
+    return table;
+}
+
+constexpr auto history_edits = history_edits_table();
+
 // 接頭辞の歩き・端で止まる・末尾の次は歩きを始めたときの入力。
 void verify_input_history_walk()
 {
@@ -1862,8 +1963,21 @@ void verify_input_history_walk()
                history.shown(walk.value()).text == "set" &&
                history.shown(walk.value()).caret.value == 3,
            "Down past the newest returns to the input typed before the walk");
-    expect(!history.stepped(typed, std::nullopt, CommandEdit::complete_next).has_value(),
-           "other edits are not history steps");
+    // 上下のほかの編集は 14 種類とも歩かない（歩きの途中でも・#2013）。
+    std::size_t others = 0;
+    for (std::size_t value = 0; value < command_edit_count; ++value)
+    {
+        if (history_edits.at(value))
+        {
+            continue;
+        }
+        ++others;
+        const auto edit = static_cast<CommandEdit>(value);
+        expect(!history.stepped(typed, std::nullopt, edit).has_value() &&
+                   !history.stepped(typed, walk, edit).has_value(),
+               "other edits are not history steps");
+    }
+    expect(others == 14, "the fourteen other edits are all tried");
     const core::InputText none{"zz", core::Offset{2}};
     expect(!history.stepped(none, std::nullopt, CommandEdit::history_previous).has_value(),
            "no entry with the prefix leaves the input");
@@ -2029,7 +2143,7 @@ void verify_ex_command_table()
 // が分類と同じ。
 constexpr std::array<std::string_view, 4> window_rechecking_options{"wrap", "relativenumber",
                                                                     "hlsearch", "scrolloff"};
-constexpr std::array<std::string_view, 28> window_keeping_options{"fontsize",
+constexpr std::array<std::string_view, 33> window_keeping_options{"fontsize",
                                                                   "guifont",
                                                                   "incsearch",
                                                                   "guide",
@@ -2054,9 +2168,14 @@ constexpr std::array<std::string_view, 28> window_keeping_options{"fontsize",
                                                                   "paneresizestepvim",
                                                                   "indentguides",
                                                                   "indentguidestyle",
-                                                                  "indentguidecolors",
-                                                                  "indentguideactive",
-                                                                  "indentguidewidth"};
+                                                                  "indentguidecolorcount",
+                                                                  "indentguidehighlightcurrent",
+                                                                  "indentguidewidth",
+                                                                  "list",
+                                                                  "listeol",
+                                                                  "listtab",
+                                                                  "listwidespace",
+                                                                  "listspace"};
 
 [[nodiscard]] bool listed_in(const auto &rows, std::string_view name)
 {
@@ -2253,7 +2372,11 @@ void verify_palette_set_value_staged()
 
 // 面の `:` で打った行のうち、設定の族でない引数つきの行（ファイルを書く・閉じる・本文を変える・
 // map・タブ・開く）は、打った行を候補にしない（V-1663 の M1・設計席の決め）。
-constexpr std::array<std::string_view, 12> palette_unoffered_lines{"w! C:\\work\\other.txt",
+// タブの移動・枠の大きさ・`:g` の行も同じ（#2013）。
+constexpr std::array<std::string_view, 15> palette_unoffered_lines{"tabnext 2",
+                                                                   "resize 10",
+                                                                   "g/a b/d",
+                                                                   "w! C:\\work\\other.txt",
                                                                    "saveas! C:\\work\\other.txt",
                                                                    "wq C:\\work\\new.txt",
                                                                    "x C:\\work\\new.txt",
@@ -2558,6 +2681,7 @@ void verify_ex_settings()
     verify_ex_command_table();
     verify_ex_window_recheck();
     verify_ex_ranges();
+    verify_ex_spaced_ranges();
     verify_ex_visual_range_refusal();
     verify_ex_visual_range_cancel_and_count();
     verify_ex_operator_colon_typed();

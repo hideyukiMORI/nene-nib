@@ -61,12 +61,16 @@ constexpr LayoutRect nowhere{0, 0, 0, 0};
     case SettingsValue::ui_language:
     case SettingsValue::finder_preview:
     case SettingsValue::indent_guide_style:
-    case SettingsValue::indent_guide_active:
+    case SettingsValue::indent_guide_highlight_current:
     case SettingsValue::pane_resize_step_vim:
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+    case SettingsValue::list_space:
         return SettingsControl::choice;
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
-    case SettingsValue::indent_guide_colors:
+    case SettingsValue::indent_guide_color_count:
     case SettingsValue::indent_guide_width:
     case SettingsValue::pane_resize_step:
         return SettingsControl::stepper;

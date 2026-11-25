@@ -82,6 +82,7 @@ constexpr std::string_view off_prefix = "no_";
     case EditorFeature::start_screen:
     case EditorFeature::syntax:
     case EditorFeature::indent_guides:
+    case EditorFeature::list:
         return feature_cost(feature).default_on;
     }
     std::unreachable();
@@ -119,6 +120,7 @@ void own_key_set(EditorSettings &settings, EditorFeature feature, bool on) noexc
     case EditorFeature::start_screen:
     case EditorFeature::syntax:
     case EditorFeature::indent_guides:
+    case EditorFeature::list:
         return;
     }
     std::unreachable();

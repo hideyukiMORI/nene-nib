@@ -18,11 +18,11 @@ namespace
 using Failure = application::SettingsFailure;
 // command の行が増えるので 16 KiB（ADR 0170 の決定 3・#1044・正本は core）。
 using core::maximum_settings_bytes;
-// 読む順と lock・bytes の照合の順（v6 → v5 → v4 → v3 → v2 → v1・ADR 0170 の 2026-11-16 の追補・
-// ADR 0192 の決定 1）。書くのは先頭の版だけ。
-constexpr std::array<SettingsVersion, 6> reading_order{SettingsVersion::v6, SettingsVersion::v5,
-                                                       SettingsVersion::v4, SettingsVersion::v3,
-                                                       SettingsVersion::v2, SettingsVersion::v1};
+// 読む順と lock・bytes の照合の順（v7 → v6 → v5 → v4 → v3 → v2 → v1・ADR 0170 の 2026-11-16 の
+// 追補・ADR 0192 の決定 1・ADR 0193 の 2026-11-24 の追補 2）。書くのは先頭の版だけ。
+constexpr std::array<SettingsVersion, 7> reading_order{
+    SettingsVersion::v7, SettingsVersion::v6, SettingsVersion::v5, SettingsVersion::v4,
+    SettingsVersion::v3, SettingsVersion::v2, SettingsVersion::v1};
 
 [[nodiscard]] std::expected<std::wstring, Failure> lock_name(const core::FilePath &path)
 {

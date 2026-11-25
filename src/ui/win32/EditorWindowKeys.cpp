@@ -6,6 +6,7 @@
 #include "ClipboardAction.hpp"
 #include "ClipboardKeys.hpp"
 #include "CloseCompletion.hpp"
+#include "CompletionStep.hpp"
 #include "EditMode.hpp"
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
@@ -21,6 +22,7 @@
 #include "SearchHop.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SettleRecentTab.hpp"
+#include "StepCompletion.hpp"
 #include "TabCommand.hpp"
 #include "TabKeyTable.hpp"
 #include "TabShortcut.hpp"
@@ -680,6 +682,13 @@ void EditorWindow::press_vim_key(WPARAM word)
             send(application::CloseCompletion{});
         }
         send(application::VimKeyPress{core::VimKey{core::VimCharacter{tab_character}}});
+        return;
+    }
+    // 補完の面が見えている INSERT の ↑↓・PageUp / PageDown は面の行を選ぶ（#2024・map より先）。
+    const auto step = vim_completion_step_for(word, held(VK_SHIFT));
+    if (step.has_value() && controller_.completion_takes_arrows())
+    {
+        send(application::StepCompletion{step.value()});
         return;
     }
     const auto special = vim_special_for(word, held(VK_SHIFT));

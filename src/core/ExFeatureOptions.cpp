@@ -12,6 +12,7 @@
 #include "FeatureStorage.hpp"
 #include "IndentGuide.hpp"
 #include "IndentGuideStyle.hpp"
+#include "Invisibles.hpp"
 
 #include <array>
 #include <expected>
@@ -25,68 +26,75 @@ namespace nenenib::core::detail
 {
 namespace
 {
-// インデントガイドの形（ADR 0193 の決定 4・#1975）。`set indentguideactive` `noindentguideactive`
-// `indentguideactive?`、`set indentguidestyle=rainbow|plain` `indentguidestyle?` `indentguidestyle`
-// （文字列の option の名前だけは問い）、`set indentguidecolors=N`（3〜6）と `indentguidewidth=N`
-// （2 / 4 / 8・数の問いと `+=` などは数の表 number_options が引く）。値の読みは core の
-// IndentGuide.hpp の 1 本ずつで、範囲の外・表に無い値は E474 と同じ失敗。`indentguidewidth?` は設定
+// インデントガイドの形（ADR 0193 の決定 4・#1975）。`set indentguidehighlightcurrent`
+// `noindentguidehighlightcurrent` `indentguidehighlightcurrent?`、`set
+// indentguidestyle=rainbow|plain` `indentguidestyle?` `indentguidestyle` （文字列の option
+// の名前だけは問い）、`set indentguidecolorcount=N`（3〜6）と `indentguidewidth=N` （2 / 4 /
+// 8・数の問いと `+=` などは数の表 number_options が引く）。値の読みは core の IndentGuide.hpp の 1
+// 本ずつで、範囲の外・表に無い値は E474 と同じ失敗。`indentguidewidth?` は設定
 // の値を答える（推し当てた値を見せる口は作らない・依頼書の決め）。
-constexpr std::array<std::string_view, 1> indent_guide_active_names{
-    indent_guide_active_option_name};
+constexpr std::array<std::string_view, 1> indent_guide_highlight_current_names{
+    indent_guide_highlight_current_option_name};
 
-[[nodiscard]] std::optional<ExResult> indent_guide_active_option(std::string_view option,
-                                                                 const EditorSettings &settings)
+[[nodiscard]] std::optional<ExResult>
+indent_guide_highlight_current_option(std::string_view option, const EditorSettings &settings)
 {
-    const auto request = switch_request(option, indent_guide_active_names);
+    const auto request = switch_request(option, indent_guide_highlight_current_names);
     if (!request.has_value())
     {
         return std::nullopt;
     }
-    const std::string_view name = indent_guide_active_names.front();
+    const std::string_view name = indent_guide_highlight_current_names.front();
     if (!request.value().has_value())
     {
         return ExResult{std::nullopt, std::nullopt, std::nullopt,
-                        switch_message(name, settings.indent_guide_active)};
+                        switch_message(name, settings.indent_guide_highlight_current)};
     }
     EditorSettings changed = settings;
-    changed.indent_guide_active = request.value().value();
-    const bool wanted = changed.indent_guide_active;
+    changed.indent_guide_highlight_current = request.value().value();
+    const bool wanted = changed.indent_guide_highlight_current;
     return ExResult{std::move(changed), std::nullopt, std::nullopt, switch_message(name, wanted)};
-}
-
-[[nodiscard]] DisplayText indent_guide_style_message(IndentGuideStyle style)
-{
-    return DisplayText::parse(std::string(indent_guide_style_option_name) + "=" +
-                              std::string(indent_guide_style_name(style)))
-        .value();
 }
 
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_style_option(std::string_view option, const EditorSettings &settings)
 {
-    if (!option.starts_with(indent_guide_style_option_name))
+    return chosen_option<&EditorSettings::indent_guide_style, indent_guide_style_named,
+                         indent_guide_style_name>(option, indent_guide_style_option_name, settings);
+}
+
+// 不可視文字の種類の真偽（ADR 0193 の決定 4・#1977）。`set listeol` `nolisteol` `listeol?`
+// と同じ形の 3 つ。表の行は名前と設定の欄の対。
+using ListMark = std::pair<std::string_view, bool EditorSettings::*>;
+constexpr std::array<ListMark, 3> list_marks{{
+    {list_eol_option_name, &EditorSettings::list_eol},
+    {list_tab_option_name, &EditorSettings::list_tab},
+    {list_wide_space_option_name, &EditorSettings::list_wide_space},
+}};
+
+[[nodiscard]] std::optional<ExResult> list_mark_option(std::string_view option,
+                                                       const EditorSettings &settings)
+{
+    for (const auto &[name, field] : list_marks)
     {
-        return std::nullopt;
+        const std::array<std::string_view, 1> names{name};
+        const auto request = switch_request(option, names);
+        if (!request.has_value())
+        {
+            continue;
+        }
+        if (!request.value().has_value())
+        {
+            return ExResult{std::nullopt, std::nullopt, std::nullopt,
+                            switch_message(name, settings.*field)};
+        }
+        EditorSettings changed = settings;
+        changed.*field = request.value().value();
+        const bool wanted = changed.*field;
+        return ExResult{std::move(changed), std::nullopt, std::nullopt,
+                        switch_message(name, wanted)};
     }
-    const std::string_view rest = option.substr(indent_guide_style_option_name.size());
-    if (rest.empty() || rest == "?")
-    {
-        return ExResult{std::nullopt, std::nullopt, std::nullopt,
-                        indent_guide_style_message(settings.indent_guide_style)};
-    }
-    if (!rest.starts_with('='))
-    {
-        return std::nullopt;
-    }
-    const auto wanted = indent_guide_style_named(rest.substr(1));
-    if (!wanted.has_value())
-    {
-        return std::unexpected(ExFailure::invalid_argument);
-    }
-    EditorSettings changed = settings;
-    changed.indent_guide_style = wanted.value();
-    return ExResult{std::move(changed), std::nullopt, std::nullopt,
-                    indent_guide_style_message(wanted.value())};
+    return std::nullopt;
 }
 
 // `name=` で始まるか。
@@ -95,17 +103,17 @@ indent_guide_style_option(std::string_view option, const EditorSettings &setting
     return option.starts_with(name) && option.substr(name.size()).starts_with('=');
 }
 
-// `indentguidecolors=N` と `indentguidewidth=N` の値を置く（問いは数の表が答える）。
+// `indentguidecolorcount=N` と `indentguidewidth=N` の値を置く（問いは数の表が答える）。
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_number_option(std::string_view option, const EditorSettings &settings)
 {
-    const bool colors = assigns(option, indent_guide_colors_option_name);
+    const bool colors = assigns(option, indent_guide_color_count_option_name);
     if (!colors && !assigns(option, indent_guide_width_option_name))
     {
         return std::nullopt;
     }
     const std::string_view value = option.substr(option.find('=') + 1);
-    const auto parsed = colors ? indent_guide_colors_of(value) : indent_guide_width_of(value);
+    const auto parsed = colors ? indent_guide_color_count_of(value) : indent_guide_width_of(value);
     if (!parsed.has_value())
     {
         return std::unexpected(ExFailure::invalid_argument);
@@ -113,7 +121,7 @@ indent_guide_number_option(std::string_view option, const EditorSettings &settin
     EditorSettings changed = settings;
     if (colors)
     {
-        changed.indent_guide_colors = parsed.value();
+        changed.indent_guide_color_count = parsed.value();
     }
     else
     {
@@ -184,7 +192,7 @@ switch_request(std::string_view option, std::span<const std::string_view> names)
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 indent_guide_option(std::string_view option, const EditorSettings &settings)
 {
-    auto active = indent_guide_active_option(option, settings);
+    auto active = indent_guide_highlight_current_option(option, settings);
     if (active.has_value())
     {
         return std::expected<ExResult, ExEvaluationFailure>{std::move(active).value()};
@@ -195,6 +203,18 @@ indent_guide_option(std::string_view option, const EditorSettings &settings)
         return style;
     }
     return indent_guide_number_option(option, settings);
+}
+
+std::optional<std::expected<ExResult, ExEvaluationFailure>>
+list_option(std::string_view option, const EditorSettings &settings)
+{
+    auto mark = list_mark_option(option, settings);
+    if (mark.has_value())
+    {
+        return std::expected<ExResult, ExEvaluationFailure>{std::move(mark).value()};
+    }
+    return chosen_option<&EditorSettings::list_space, list_space_named, list_space_name>(
+        option, list_space_option_name, settings);
 }
 
 } // namespace nenenib::core::detail

@@ -181,6 +181,29 @@ void verify_held_limit()
            "the oldest of nine windows was dropped and is asked again");
 }
 
+// 作れない理由ごとの 1 行の文（3 列の表の文・大きすぎる・読めない・ローカルでない）。
+void verify_failure_lines()
+{
+    using Failure = std::pair<app::PreviewFailure, core::UiMessage>;
+    for (const auto &[failure, line] :
+         {Failure{app::PreviewFailure::too_large, core::UiMessage::palette_preview_too_large},
+          Failure{app::PreviewFailure::unreadable, core::UiMessage::palette_preview_unreadable},
+          Failure{app::PreviewFailure::not_local, core::UiMessage::palette_preview_not_local}})
+    {
+        Editing editing = rooted_editing();
+        searched(editing, 2);
+        auto &port = editing.previews();
+        port.serve(app::PreviewBatch{port.requests().back().ticket, std::unexpected(failure)});
+        applied(editing.controller(), app::WorkCompleted{});
+        const auto failed = preview_of(editing.controller());
+        expect(failed.has_value() && failed.value().lines.empty() &&
+                   failed.value().notice.has_value() &&
+                   failed.value().notice.value().text() ==
+                       core::ui_text(line, core::DisplayLanguage::japanese),
+               "each reason a file cannot be previewed has its own line");
+    }
+}
+
 // 作れない理由は 1 行の文。面を閉じると今の券を取り消し、保持を全部捨てる。
 void verify_failure_and_close()
 {
@@ -324,6 +347,7 @@ void verify_finder_preview_contracts()
     verify_tickets();
     verify_held_limit();
     verify_failure_and_close();
+    verify_failure_lines();
     verify_drained_after_close();
     verify_marks_follow_the_hit();
     verify_not_drawn();

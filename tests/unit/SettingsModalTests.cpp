@@ -8,23 +8,27 @@
 #include "BuiltinTheme.hpp"
 #include "BuiltinThemes.hpp"
 #include "ChangeSetting.hpp"
+#include "ChooseSettingsChoice.hpp"
 #include "ChooseSettingsPreset.hpp"
 #include "CloseSettings.hpp"
 #include "CloseTab.hpp"
 #include "Column.hpp"
 #include "CommandText.hpp"
+#include "ComposeText.hpp"
 #include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFeature.hpp"
 #include "EditorFrame.hpp"
+#include "EditorIntent.hpp"
 #include "EditorSettings.hpp"
 #include "EndSession.hpp"
 #include "FeatureCosts.hpp"
 #include "FilePath.hpp"
 #include "FilterSettings.hpp"
 #include "FirstFramePresented.hpp"
+#include "FocusSettingsRow.hpp"
 #include "FontSize.hpp"
 #include "FontSizeAdjustment.hpp"
 #include "InsertText.hpp"
@@ -39,8 +43,10 @@
 #include "OpenCompletion.hpp"
 #include "OpenDocument.hpp"
 #include "OpenSettings.hpp"
+#include "OpenSettingsChoice.hpp"
 #include "PlaceCaret.hpp"
 #include "PointMinimap.hpp"
+#include "PointSettingsChoice.hpp"
 #include "PointText.hpp"
 #include "PointerClicks.hpp"
 #include "PreviewPlacement.hpp"
@@ -51,11 +57,14 @@
 #include "ScrollExplorer.hpp"
 #include "ScrollLines.hpp"
 #include "ScrollPane.hpp"
+#include "ScrollSettings.hpp"
+#include "ScrollSettingsChoice.hpp"
 #include "ScrollTabs.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "SessionEnd.hpp"
 #include "SetPreviewPlacement.hpp"
+#include "SettingsChoiceTimeout.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsPreset.hpp"
 #include "SettingsRows.hpp"
@@ -68,6 +77,7 @@
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "TypeSettingsChoice.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
 #include "VimKeyPress.hpp"
@@ -190,6 +200,69 @@ void verify_other_intents_close()
     const auto typed = controller.apply_frame(app::InsertText{"a"});
     expect(!typed.settings_panel.has_value() && editing.settings().writes() == 1,
            "another user operation closes the panel and saves once");
+}
+
+// 面の意図は面が閉じていれば何もしない（設定を変えず・書かず・面を開かない）。面を開いても選ぶ欄の
+// 一覧が無ければ、一覧の意図（指す・送る・決める・頭文字・1 秒の合図）は一覧を開かず値を変えない。
+void verify_panel_intents_need_the_panel()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    const auto before = controller.frame().settings;
+    const app::EditorIntent closed[] = {
+        app::StepSettings{true},
+        app::ChangeSetting{true},
+        app::FilterSettings{"wrap"},
+        app::JumpSettingsSection{core::SettingsSection::display},
+        app::FocusSettingsRow{1},
+        app::ScrollSettings{10},
+        app::OpenSettingsChoice{},
+        app::ChooseSettingsChoice{},
+        app::TypeSettingsChoice{"a"},
+        app::RevertSettings{},
+        app::ChooseSettingsPreset{core::SettingsPreset::all_on},
+    };
+    for (const auto &intent : closed)
+    {
+        const auto frame = controller.apply_frame(intent);
+        expect(!frame.settings_panel.has_value() && core::same_settings(frame.settings, before) &&
+                   editing.settings().writes() == 0,
+               "a panel intent with the panel closed changes and writes nothing");
+    }
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    const app::EditorIntent unlisted[] = {
+        app::PointSettingsChoice{1},  app::ScrollSettingsChoice{1}, app::ChooseSettingsChoice{},
+        app::TypeSettingsChoice{"a"}, app::SettingsChoiceTimeout{},
+    };
+    for (const auto &intent : unlisted)
+    {
+        const auto frame = controller.apply_frame(intent);
+        expect(frame.settings_panel.has_value() && !panel_of(frame).choice.has_value() &&
+                   core::same_settings(frame.settings, before) && !panel_of(frame).changed,
+               "a choice-list intent without an open list keeps the panel and the values");
+    }
+}
+
+// 開いている面をもう一度開いても焦点はそのまま。変換の途中に開くと変換を取り消して開く（#1835 の
+// レビュー R2）。探す欄に当たりが無ければ上下は何もしない。
+void verify_open_again_and_over_composition()
+{
+    Editing editing;
+    auto &controller = editing.controller();
+    static_cast<void>(controller.apply(app::OpenSettings{}));
+    static_cast<void>(controller.apply(app::StepSettings{true}));
+    const auto again = controller.apply_frame(app::OpenSettings{});
+    expect(panel_of(again).focused == std::optional<std::size_t>{1},
+           "opening the open panel again keeps the focus");
+    static_cast<void>(controller.apply(app::FilterSettings{"zzzzzzzzqqqq"}));
+    const auto stepped = controller.apply_frame(app::StepSettings{true});
+    expect(stepped.settings_panel.has_value() && panel_of(stepped).rows.empty(),
+           "up and down with no matching row keep the empty panel");
+    static_cast<void>(controller.apply(app::CloseSettings{}));
+    static_cast<void>(controller.apply(app::ComposeText{composed_of("に", {}, 0)}));
+    const auto opened = controller.apply_frame(app::OpenSettings{});
+    expect(opened.settings_panel.has_value() && !opened.composition.has_value(),
+           "opening over the IME composition cancels the composition");
 }
 
 // 探す欄・焦点・節の札（追補 2・施主決定 D102）。
@@ -609,6 +682,8 @@ void verify_settings_modal_scope()
     verify_end_session_tries_once();
     verify_open_change_close();
     verify_revert();
+    verify_panel_intents_need_the_panel();
+    verify_open_again_and_over_composition();
     verify_other_intents_close();
     verify_filter_and_sections();
     verify_presets();

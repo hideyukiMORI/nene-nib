@@ -67,6 +67,8 @@
 #include "VisibleLines.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <expected>
 #include <functional>
 #include <optional>
@@ -357,10 +359,107 @@ void verify_user_completion_order()
            "failed custom name remains a completion");
 }
 
+// 読めなかった理由ごとの文（docs/i18n/inventory-2026-11-13.tsv の theme_failure_* の 15
+// 行・#2013）。
+constexpr std::array<std::pair<core::ThemeFailure, std::string_view>, 15> theme_failure_texts{{
+    {core::ThemeFailure::not_found, "Theme file not found"},
+    {core::ThemeFailure::unreadable, "Theme file could not be read"},
+    {core::ThemeFailure::too_large, "Theme file exceeds 16 KiB"},
+    {core::ThemeFailure::malformed, "Expected key=value lines"},
+    {core::ThemeFailure::duplicate_key, "Duplicate theme field"},
+    {core::ThemeFailure::unknown_key, "Unknown theme field"},
+    {core::ThemeFailure::missing_field, "Required theme field missing"},
+    {core::ThemeFailure::unsupported_version, "Unsupported theme version"},
+    {core::ThemeFailure::invalid_name, "Invalid theme filename or name"},
+    {core::ThemeFailure::name_mismatch, "Theme name does not match filename"},
+    {core::ThemeFailure::reserved_name, "Reserved theme name"},
+    {core::ThemeFailure::invalid_text, "Invalid UTF-8 or theme attribution"},
+    {core::ThemeFailure::invalid_appearance, "Appearance must be dark or light"},
+    {core::ThemeFailure::invalid_color, "Invalid RGB or RGBA color"},
+    {core::ThemeFailure::insufficient_contrast, "Text/background contrast must be at least 4.5"},
+}};
+
+// 理由の表の行の番号。理由を足すとこの switch がコンパイルで落ちる（-Wswitch-enum・CPP-002）ので、
+// 表に行を足す（#2016 のレビュー 推奨 2）。
+[[nodiscard]] consteval std::size_t theme_failure_row(core::ThemeFailure failure) noexcept
+{
+    using core::ThemeFailure;
+    switch (failure)
+    {
+    case ThemeFailure::not_found:
+        return 0;
+    case ThemeFailure::unreadable:
+        return 1;
+    case ThemeFailure::too_large:
+        return 2;
+    case ThemeFailure::malformed:
+        return 3;
+    case ThemeFailure::duplicate_key:
+        return 4;
+    case ThemeFailure::unknown_key:
+        return 5;
+    case ThemeFailure::missing_field:
+        return 6;
+    case ThemeFailure::unsupported_version:
+        return 7;
+    case ThemeFailure::invalid_name:
+        return 8;
+    case ThemeFailure::name_mismatch:
+        return 9;
+    case ThemeFailure::reserved_name:
+        return 10;
+    case ThemeFailure::invalid_text:
+        return 11;
+    case ThemeFailure::invalid_appearance:
+        return 12;
+    case ThemeFailure::invalid_color:
+        return 13;
+    case ThemeFailure::insufficient_contrast:
+        return 14;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] consteval bool theme_failure_rows_in_order() noexcept
+{
+    for (std::size_t index = 0; index < theme_failure_texts.size(); ++index)
+    {
+        if (theme_failure_row(theme_failure_texts.at(index).first) != index)
+        {
+            return false;
+        }
+    }
+    return theme_failure_row(core::ThemeFailure::insufficient_contrast) + 1U ==
+           theme_failure_texts.size();
+}
+
+static_assert(theme_failure_rows_in_order(), "the reason table has one row for every ThemeFailure");
+
+// 理由の文は表のとおりで、知らせはテーマの名前を前に置く。比較は名前と理由の両方を見る。
+void verify_theme_failure_texts()
+{
+    for (const auto &[failure, text] : theme_failure_texts)
+    {
+        expect(core::theme_failure_reason(failure) == text,
+               "each theme failure has the inventory's reason text");
+        expect(core::theme_failure_message(core::ThemeLookupFailure{user_name("ocean"), failure})
+                       .text() == "ocean: " + std::string(text),
+               "the theme failure message is the name, a colon and the reason");
+    }
+    const core::ThemeLookupFailure missing{user_name("ocean"), core::ThemeFailure::not_found};
+    expect(missing == core::ThemeLookupFailure{user_name("ocean"), core::ThemeFailure::not_found},
+           "the same name and reason are equal");
+    expect(
+        !(missing == core::ThemeLookupFailure{user_name("ocean"), core::ThemeFailure::malformed}),
+        "a different reason is a different failure");
+    expect(!(missing == core::ThemeLookupFailure{user_name("lake"), core::ThemeFailure::not_found}),
+           "a different name is a different failure");
+}
 } // namespace
 
 void verify_user_theme_selection()
 {
+    verify_theme_failure_texts();
     verify_theme_catalog();
     verify_user_theme_commands();
     verify_user_completion_order();

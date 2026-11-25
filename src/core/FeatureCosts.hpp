@@ -27,7 +27,7 @@ inline constexpr std::uint16_t reference_single_key_us = 641;
 // 機能の表（ADR 0170 の決定 1・2・2026-11-18 の追補 1・3）。EditorFeature の宣言の順に 1 行ずつ。
 // 測った数字（single_key_delta_us・bench）は docs/quality/feature-costs.md の行を写したもので、
 // 文書の行と表の一致は試験 `--feature-costs` が見る。数字を変えるときは文書と同じ PR で変える。
-inline constexpr std::array<FeatureCost, 13> feature_costs{{
+inline constexpr std::array<FeatureCost, 14> feature_costs{{
     {EditorFeature::wrap, "wrap", true, FeatureStorage::own_key, 0, "", false,
      UiMessage::settings_wrap_name, UiMessage::settings_wrap_description},
     {EditorFeature::guide, "guide", true, FeatureStorage::own_key, 0, "", false,
@@ -55,6 +55,8 @@ inline constexpr std::array<FeatureCost, 13> feature_costs{{
      UiMessage::settings_caret_sparks_name, UiMessage::settings_caret_sparks_description},
     {EditorFeature::indent_guides, "indentguides", false, FeatureStorage::listed, 0, "", false,
      UiMessage::settings_indent_guides_name, UiMessage::settings_indent_guides_description},
+    {EditorFeature::list, "list", false, FeatureStorage::listed, 0, "", false,
+     UiMessage::settings_list_name, UiMessage::settings_list_description},
 }};
 
 // 表の行が宣言の順に並んでいること（行が欠けた・入れ替わった表はここで落ちる）。
@@ -67,7 +69,7 @@ inline constexpr std::array<FeatureCost, 13> feature_costs{{
             return false;
         }
     }
-    return std::to_underlying(EditorFeature::indent_guides) + 1U == feature_costs.size();
+    return std::to_underlying(EditorFeature::list) + 1U == feature_costs.size();
 }
 static_assert(feature_costs_in_order(), "feature_costs follows the EditorFeature declaration");
 

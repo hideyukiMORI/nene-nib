@@ -127,6 +127,8 @@ void verify_indent_guides_scope();
 // IndentGuidePathTests.cpp（ADR 0193・#1975 のレビュー・推し当ての道と窓の上限・--indent-guides
 // の続き）
 void verify_indent_guide_paths();
+// InvisiblesTests.cpp（ADR 0193 の段 2・#1977・不可視文字の区間と印・`:set list`・設定の行・frame）
+void verify_invisibles_scope();
 void verify_settings_modal_scope();
 void verify_settings_panel_scope();
 // SettingsChoiceTests.cpp（#1926・選ぶ欄の一覧・`--settings-panel` から呼ぶ）

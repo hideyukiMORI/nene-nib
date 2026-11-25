@@ -23,15 +23,20 @@ namespace nenenib::core
 // （#1835 のレビュー R4）。面の行はこの表の 1 つから作り、ui は frame の値を読むだけ。
 // 折り返しは「編集」の節、言語サーバーのオン・オフは「機能」の節（要約と組の下に印のある行が並ぶ・
 // #1836 の差し戻し）。「言語サーバー」の節は行を持たず、言語ごとのコマンド（読むだけ）だけが並ぶ。
-inline constexpr std::array<SettingsRow, 22> settings_rows{{
+inline constexpr std::array<SettingsRow, 27> settings_rows{{
     {SettingsSection::display, SettingsValue::theme},
     {SettingsSection::display, SettingsValue::ui_language},
     {SettingsSection::display, EditorFeature::guide},
     {SettingsSection::display, EditorFeature::indent_guides},
     {SettingsSection::display, SettingsValue::indent_guide_style},
-    {SettingsSection::display, SettingsValue::indent_guide_colors},
-    {SettingsSection::display, SettingsValue::indent_guide_active},
+    {SettingsSection::display, SettingsValue::indent_guide_color_count},
+    {SettingsSection::display, SettingsValue::indent_guide_highlight_current},
     {SettingsSection::display, SettingsValue::indent_guide_width},
+    {SettingsSection::display, EditorFeature::list},
+    {SettingsSection::display, SettingsValue::list_eol},
+    {SettingsSection::display, SettingsValue::list_tab},
+    {SettingsSection::display, SettingsValue::list_wide_space},
+    {SettingsSection::display, SettingsValue::list_space},
     {SettingsSection::text, SettingsValue::font_family},
     {SettingsSection::text, SettingsValue::font_size},
     {SettingsSection::editing, EditorFeature::wrap},

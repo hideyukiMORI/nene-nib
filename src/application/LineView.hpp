@@ -5,6 +5,7 @@
 #include "DiagnosticSpan.hpp"
 #include "DisplayLine.hpp"
 #include "IndentGuides.hpp"
+#include "LineInvisibles.hpp"
 #include "LineNumber.hpp"
 #include "LineWindow.hpp"
 #include "MotionLabel.hpp"
@@ -58,6 +59,9 @@ struct LineView
     // インデントガイド（ADR 0193 の決定 1・9）。`features=indentguides` がオフの
     // frame・巨大な行の窓・ IME の差し込み行・格子では値なし（オフでは作らない・決定 6）。
     std::optional<IndentGuides> indent_guides{};
+    // 不可視文字（ADR 0193 の決定 1・10）。`features=list` がオフの frame・巨大な行の窓・IME の
+    // 差し込み行・格子では値なし（オフでは作らない・決定 6）。
+    std::optional<LineInvisibles> invisibles{};
 };
 
 [[nodiscard]] inline std::string_view presented_text(const LineView &line) noexcept

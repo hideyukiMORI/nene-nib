@@ -15,6 +15,7 @@
 #include "FontSizeAdjustment.hpp"
 #include "IndentGuide.hpp"
 #include "IndentGuideStyle.hpp"
+#include "ListSpace.hpp"
 #include "PaneResizeStep.hpp"
 #include "SettingsChoices.hpp"
 #include "SettingsControl.hpp"
@@ -69,8 +70,68 @@ constexpr std::array<IndentGuideStyle, 2> indent_guide_style_order{IndentGuideSt
 
 // 2 つの選択肢の値の列（選ぶ欄の一覧の順・#1926）。どちらの向きに送っても反対へ行くので、送りは
 // この順に依らない。今の線を強めるは「強める → 強めない」、Vim の鍵は「1 回分 → 回数に従う」。
-constexpr std::array<bool, 2> indent_guide_active_order{true, false};
+constexpr std::array<bool, 2> indent_guide_highlight_current_order{true, false};
 constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
+// 不可視文字の種類のスイッチは「出す → 出さない」、空白は宣言の順（ADR 0193 の決定 4）。
+constexpr std::array<bool, 2> list_mark_order{true, false};
+constexpr std::array<ListSpace, 3> list_space_order{ListSpace::none, ListSpace::trail,
+                                                    ListSpace::all};
+
+[[nodiscard]] UiMessage list_mark_title(bool shown) noexcept
+{
+    return shown ? UiMessage::settings_list_mark_shown : UiMessage::settings_list_mark_hidden;
+}
+
+[[nodiscard]] UiMessage list_space_title(ListSpace space) noexcept
+{
+    switch (space)
+    {
+    case ListSpace::none:
+        return UiMessage::settings_list_space_none;
+    case ListSpace::trail:
+        return UiMessage::settings_list_space_trail;
+    case ListSpace::all:
+        return UiMessage::settings_list_space_all;
+    }
+    std::unreachable();
+}
+
+// 不可視文字の種類のスイッチ（改行・Tab・全角空白）の欄。ほかの値は値なし（nullptr）。
+template <typename Settings>
+[[nodiscard]] auto list_mark_of(Settings &settings, SettingsValue value) noexcept
+    -> decltype(&settings.list_eol)
+{
+    switch (value)
+    {
+    case SettingsValue::list_eol:
+        return &settings.list_eol;
+    case SettingsValue::list_tab:
+        return &settings.list_tab;
+    case SettingsValue::list_wide_space:
+        return &settings.list_wide_space;
+    case SettingsValue::theme:
+    case SettingsValue::ui_language:
+    case SettingsValue::font_family:
+    case SettingsValue::font_size:
+    case SettingsValue::finder_preview:
+    case SettingsValue::caret_motion_time:
+    case SettingsValue::indent_guide_style:
+    case SettingsValue::indent_guide_color_count:
+    case SettingsValue::indent_guide_highlight_current:
+    case SettingsValue::indent_guide_width:
+    case SettingsValue::pane_resize_step:
+    case SettingsValue::pane_resize_step_vim:
+    case SettingsValue::list_space:
+        return nullptr;
+    }
+    std::unreachable();
+}
+
+[[nodiscard]] bool list_mark_value(const EditorSettings &settings, SettingsValue value) noexcept
+{
+    const bool *field = list_mark_of(settings, value);
+    return field != nullptr && *field;
+}
 
 [[nodiscard]] UiMessage indent_guide_style_title(IndentGuideStyle style) noexcept
 {
@@ -102,16 +163,24 @@ constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
         return UiMessage::settings_caret_motion_time_name;
     case SettingsValue::indent_guide_style:
         return UiMessage::settings_indent_guide_style_name;
-    case SettingsValue::indent_guide_colors:
-        return UiMessage::settings_indent_guide_colors_name;
-    case SettingsValue::indent_guide_active:
-        return UiMessage::settings_indent_guide_active_name;
+    case SettingsValue::indent_guide_color_count:
+        return UiMessage::settings_indent_guide_color_count_name;
+    case SettingsValue::indent_guide_highlight_current:
+        return UiMessage::settings_indent_guide_highlight_current_name;
     case SettingsValue::indent_guide_width:
         return UiMessage::settings_indent_guide_width_name;
     case SettingsValue::pane_resize_step:
         return UiMessage::settings_pane_resize_step_name;
     case SettingsValue::pane_resize_step_vim:
         return UiMessage::settings_pane_resize_step_vim_name;
+    case SettingsValue::list_eol:
+        return UiMessage::settings_list_eol_name;
+    case SettingsValue::list_tab:
+        return UiMessage::settings_list_tab_name;
+    case SettingsValue::list_wide_space:
+        return UiMessage::settings_list_wide_space_name;
+    case SettingsValue::list_space:
+        return UiMessage::settings_list_space_name;
     }
     std::unreachable();
 }
@@ -134,16 +203,24 @@ constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
         return UiMessage::settings_caret_motion_time_description;
     case SettingsValue::indent_guide_style:
         return UiMessage::settings_indent_guide_style_description;
-    case SettingsValue::indent_guide_colors:
-        return UiMessage::settings_indent_guide_colors_description;
-    case SettingsValue::indent_guide_active:
-        return UiMessage::settings_indent_guide_active_description;
+    case SettingsValue::indent_guide_color_count:
+        return UiMessage::settings_indent_guide_color_count_description;
+    case SettingsValue::indent_guide_highlight_current:
+        return UiMessage::settings_indent_guide_highlight_current_description;
     case SettingsValue::indent_guide_width:
         return UiMessage::settings_indent_guide_width_description;
     case SettingsValue::pane_resize_step:
         return UiMessage::settings_pane_resize_step_description;
     case SettingsValue::pane_resize_step_vim:
         return UiMessage::settings_pane_resize_step_vim_description;
+    case SettingsValue::list_eol:
+        return UiMessage::settings_list_eol_description;
+    case SettingsValue::list_tab:
+        return UiMessage::settings_list_tab_description;
+    case SettingsValue::list_wide_space:
+        return UiMessage::settings_list_wide_space_description;
+    case SettingsValue::list_space:
+        return UiMessage::settings_list_space_description;
     }
     std::unreachable();
 }
@@ -166,16 +243,24 @@ constexpr std::array<bool, 2> pane_resize_step_vim_order{false, true};
         return "caretmotiontime";
     case SettingsValue::indent_guide_style:
         return "indentguidestyle";
-    case SettingsValue::indent_guide_colors:
-        return "indentguidecolors";
-    case SettingsValue::indent_guide_active:
-        return "indentguideactive";
+    case SettingsValue::indent_guide_color_count:
+        return "indentguidecolorcount";
+    case SettingsValue::indent_guide_highlight_current:
+        return "indentguidehighlightcurrent";
     case SettingsValue::indent_guide_width:
         return "indentguidewidth";
     case SettingsValue::pane_resize_step:
         return "paneresizestep";
     case SettingsValue::pane_resize_step_vim:
         return "paneresizestepvim";
+    case SettingsValue::list_eol:
+        return "listeol";
+    case SettingsValue::list_tab:
+        return "listtab";
+    case SettingsValue::list_wide_space:
+        return "listwidespace";
+    case SettingsValue::list_space:
+        return "listspace";
     }
     std::unreachable();
 }
@@ -319,10 +404,10 @@ template <typename Value, std::size_t Count, typename Named>
     return texts;
 }
 
-[[nodiscard]] UiMessage indent_guide_active_title(bool active) noexcept
+[[nodiscard]] UiMessage indent_guide_highlight_current_title(bool active) noexcept
 {
-    return active ? UiMessage::settings_indent_guide_active_on
-                  : UiMessage::settings_indent_guide_active_off;
+    return active ? UiMessage::settings_indent_guide_highlight_current_on
+                  : UiMessage::settings_indent_guide_highlight_current_off;
 }
 
 [[nodiscard]] UiMessage pane_resize_step_vim_title(bool follows) noexcept
@@ -453,11 +538,12 @@ std::string settings_value_text(const EditorSettings &settings, SettingsValue va
     case SettingsValue::indent_guide_style:
         return std::string(
             ui_text(indent_guide_style_title(settings.indent_guide_style), language));
-    case SettingsValue::indent_guide_colors:
-        return std::to_string(settings.indent_guide_colors);
-    case SettingsValue::indent_guide_active:
+    case SettingsValue::indent_guide_color_count:
+        return std::to_string(settings.indent_guide_color_count);
+    case SettingsValue::indent_guide_highlight_current:
         return std::string(
-            ui_text(indent_guide_active_title(settings.indent_guide_active), language));
+            ui_text(indent_guide_highlight_current_title(settings.indent_guide_highlight_current),
+                    language));
     case SettingsValue::indent_guide_width:
         return std::to_string(settings.indent_guide_width);
     case SettingsValue::pane_resize_step:
@@ -465,6 +551,12 @@ std::string settings_value_text(const EditorSettings &settings, SettingsValue va
     case SettingsValue::pane_resize_step_vim:
         return std::string(
             ui_text(pane_resize_step_vim_title(settings.pane_resize_step_vim), language));
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return std::string(ui_text(list_mark_title(list_mark_value(settings, value)), language));
+    case SettingsValue::list_space:
+        return std::string(ui_text(list_space_title(settings.list_space), language));
     }
     std::unreachable();
 }
@@ -498,13 +590,13 @@ EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue val
         settings.indent_guide_style =
             cycled(indent_guide_style_order, settings.indent_guide_style, forward);
         return settings;
-    case SettingsValue::indent_guide_colors:
-        settings.indent_guide_colors =
-            indent_guide_colors_stepped(settings.indent_guide_colors, forward);
+    case SettingsValue::indent_guide_color_count:
+        settings.indent_guide_color_count =
+            indent_guide_color_count_stepped(settings.indent_guide_color_count, forward);
         return settings;
-    case SettingsValue::indent_guide_active:
-        settings.indent_guide_active =
-            cycled(indent_guide_active_order, settings.indent_guide_active, forward);
+    case SettingsValue::indent_guide_highlight_current:
+        settings.indent_guide_highlight_current = cycled(
+            indent_guide_highlight_current_order, settings.indent_guide_highlight_current, forward);
         return settings;
     case SettingsValue::indent_guide_width:
         settings.indent_guide_width =
@@ -517,6 +609,17 @@ EditorSettings settings_value_stepped(EditorSettings settings, SettingsValue val
         // 2 つの選択肢なので、どちらの向きに送っても反対へ。
         settings.pane_resize_step_vim =
             cycled(pane_resize_step_vim_order, settings.pane_resize_step_vim, forward);
+        return settings;
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+    {
+        bool *field = list_mark_of(settings, value);
+        *field = cycled(list_mark_order, *field, forward);
+        return settings;
+    }
+    case SettingsValue::list_space:
+        settings.list_space = cycled(list_space_order, settings.list_space, forward);
         return settings;
     }
     std::unreachable();
@@ -541,15 +644,21 @@ std::size_t settings_choice_count(const EditorSettings &settings, SettingsValue 
         return finder_preview_order.size();
     case SettingsValue::indent_guide_style:
         return indent_guide_style_order.size();
-    case SettingsValue::indent_guide_active:
-        return indent_guide_active_order.size();
+    case SettingsValue::indent_guide_highlight_current:
+        return indent_guide_highlight_current_order.size();
     case SettingsValue::pane_resize_step_vim:
         return pane_resize_step_vim_order.size();
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return list_mark_order.size();
+    case SettingsValue::list_space:
+        return list_space_order.size();
     // 段の上下と読むだけの欄は一覧を持たない。
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
-    case SettingsValue::indent_guide_colors:
+    case SettingsValue::indent_guide_color_count:
     case SettingsValue::indent_guide_width:
     case SettingsValue::pane_resize_step:
         return 0;
@@ -575,14 +684,21 @@ std::optional<std::size_t> settings_choice_position(const EditorSettings &settin
         return position_in(finder_preview_order, settings.finder_preview);
     case SettingsValue::indent_guide_style:
         return position_in(indent_guide_style_order, settings.indent_guide_style);
-    case SettingsValue::indent_guide_active:
-        return position_in(indent_guide_active_order, settings.indent_guide_active);
+    case SettingsValue::indent_guide_highlight_current:
+        return position_in(indent_guide_highlight_current_order,
+                           settings.indent_guide_highlight_current);
     case SettingsValue::pane_resize_step_vim:
         return position_in(pane_resize_step_vim_order, settings.pane_resize_step_vim);
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return position_in(list_mark_order, list_mark_value(settings, value));
+    case SettingsValue::list_space:
+        return position_in(list_space_order, settings.list_space);
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
-    case SettingsValue::indent_guide_colors:
+    case SettingsValue::indent_guide_color_count:
     case SettingsValue::indent_guide_width:
     case SettingsValue::pane_resize_step:
         return std::nullopt;
@@ -613,18 +729,30 @@ EditorSettings settings_choice_applied(EditorSettings settings, SettingsValue va
         settings.indent_guide_style =
             value_at(indent_guide_style_order, position, settings.indent_guide_style);
         return settings;
-    case SettingsValue::indent_guide_active:
-        settings.indent_guide_active =
-            value_at(indent_guide_active_order, position, settings.indent_guide_active);
+    case SettingsValue::indent_guide_highlight_current:
+        settings.indent_guide_highlight_current =
+            value_at(indent_guide_highlight_current_order, position,
+                     settings.indent_guide_highlight_current);
         return settings;
     case SettingsValue::pane_resize_step_vim:
         settings.pane_resize_step_vim =
             value_at(pane_resize_step_vim_order, position, settings.pane_resize_step_vim);
         return settings;
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+    {
+        bool *field = list_mark_of(settings, value);
+        *field = value_at(list_mark_order, position, *field);
+        return settings;
+    }
+    case SettingsValue::list_space:
+        settings.list_space = value_at(list_space_order, position, settings.list_space);
+        return settings;
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
-    case SettingsValue::indent_guide_colors:
+    case SettingsValue::indent_guide_color_count:
     case SettingsValue::indent_guide_width:
     case SettingsValue::pane_resize_step:
         return settings;
@@ -654,16 +782,24 @@ std::vector<std::string> settings_choice_texts(const EditorSettings &settings, S
     case SettingsValue::indent_guide_style:
         return texts_of(indent_guide_style_order, [&said](IndentGuideStyle style)
                         { return said(indent_guide_style_title(style)); });
-    case SettingsValue::indent_guide_active:
-        return texts_of(indent_guide_active_order,
-                        [&said](bool active) { return said(indent_guide_active_title(active)); });
+    case SettingsValue::indent_guide_highlight_current:
+        return texts_of(indent_guide_highlight_current_order, [&said](bool active)
+                        { return said(indent_guide_highlight_current_title(active)); });
     case SettingsValue::pane_resize_step_vim:
         return texts_of(pane_resize_step_vim_order, [&said](bool follows)
                         { return said(pane_resize_step_vim_title(follows)); });
+    case SettingsValue::list_eol:
+    case SettingsValue::list_tab:
+    case SettingsValue::list_wide_space:
+        return texts_of(list_mark_order,
+                        [&said](bool shown) { return said(list_mark_title(shown)); });
+    case SettingsValue::list_space:
+        return texts_of(list_space_order,
+                        [&said](ListSpace space) { return said(list_space_title(space)); });
     case SettingsValue::font_family:
     case SettingsValue::font_size:
     case SettingsValue::caret_motion_time:
-    case SettingsValue::indent_guide_colors:
+    case SettingsValue::indent_guide_color_count:
     case SettingsValue::indent_guide_width:
     case SettingsValue::pane_resize_step:
         return {};

@@ -6,6 +6,7 @@
 #include "ExplorerLayout.hpp"
 #include "FinderPreview.hpp"
 #include "IndentGuide.hpp"
+#include "Invisibles.hpp"
 #include "KeyMap.hpp"
 #include "KeyValueFields.hpp"
 #include "Language.hpp"
@@ -31,9 +32,9 @@ namespace
 using Failure = application::SettingsFailure;
 using Field = std::optional<std::string_view> SettingsFields::*;
 
-// 鍵の名前と DTO の欄の対（同じ位置）。v4・v5・v6 だけの鍵も読むが、旧版にあれば
-// apply_v4_fields・apply_v5_fields・apply_v6_fields が拒否する。
-constexpr std::array<std::string_view, 28> field_names{"version",
+// 鍵の名前と DTO の欄の対（同じ位置）。v4・v5・v6・v7 だけの鍵も読むが、旧版にあれば
+// apply_v4_fields・apply_v5_fields・apply_v6_fields・apply_v7_fields が拒否する。
+constexpr std::array<std::string_view, 32> field_names{"version",
                                                        "colorscheme",
                                                        "font_family",
                                                        "font_size",
@@ -58,10 +59,14 @@ constexpr std::array<std::string_view, 28> field_names{"version",
                                                        "pane_resize_step",
                                                        "pane_resize_step_vim",
                                                        "indent_guide_style",
-                                                       "indent_guide_colors",
-                                                       "indent_guide_active",
-                                                       "indent_guide_width"};
-constexpr std::array<Field, 28> field_members{&SettingsFields::version,
+                                                       "indent_guide_color_count",
+                                                       "indent_guide_highlight_current",
+                                                       "indent_guide_width",
+                                                       "list_eol",
+                                                       "list_tab",
+                                                       "list_wide_space",
+                                                       "list_space"};
+constexpr std::array<Field, 32> field_members{&SettingsFields::version,
                                               &SettingsFields::colorscheme,
                                               &SettingsFields::font_family,
                                               &SettingsFields::font_size,
@@ -86,9 +91,13 @@ constexpr std::array<Field, 28> field_members{&SettingsFields::version,
                                               &SettingsFields::pane_resize_step,
                                               &SettingsFields::pane_resize_step_vim,
                                               &SettingsFields::indent_guide_style,
-                                              &SettingsFields::indent_guide_colors,
-                                              &SettingsFields::indent_guide_active,
-                                              &SettingsFields::indent_guide_width};
+                                              &SettingsFields::indent_guide_color_count,
+                                              &SettingsFields::indent_guide_highlight_current,
+                                              &SettingsFields::indent_guide_width,
+                                              &SettingsFields::list_eol,
+                                              &SettingsFields::list_tab,
+                                              &SettingsFields::list_wide_space,
+                                              &SettingsFields::list_space};
 
 // 言語ごとのサーバーの命令の鍵 `lsp.<language>.command`（ADR 0160・ADR 0170 の決定 3）。
 constexpr std::string_view lsp_prefix = "lsp.";
@@ -203,6 +212,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     case SettingsVersion::v4:
     case SettingsVersion::v5:
     case SettingsVersion::v6:
+    case SettingsVersion::v7:
         return switch_from(fields.guide).transform(guide_of);
     }
     std::unreachable();
@@ -224,6 +234,7 @@ theme_from(std::string_view name, const core::ThemeCatalog &themes)
     case SettingsVersion::v4:
     case SettingsVersion::v5:
     case SettingsVersion::v6:
+    case SettingsVersion::v7:
         return switch_from(fields.wrap).transform(wrapping_of);
     }
     std::unreachable();
@@ -349,7 +360,8 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
                                });
 }
 
-// v5 の鍵の集合を持つ版か（v6 は v5 の全部の鍵を同じ形で持つ・ADR 0192 の決定 1）。
+// v5 の鍵の集合を持つ版か（v6 は v5 の全部の鍵を同じ形で持ち、v7 は v6 の全部の鍵を同じ形で
+// 持つ・ADR 0192 の決定 1・ADR 0193 の 2026-11-24 の追補 2）。
 [[nodiscard]] bool carries_v5_fields(SettingsVersion version) noexcept
 {
     switch (version)
@@ -361,6 +373,7 @@ later_explorer_width_from(const std::optional<std::string_view> &value) noexcept
         return false;
     case SettingsVersion::v5:
     case SettingsVersion::v6:
+    case SettingsVersion::v7:
         return true;
     }
     std::unreachable();
@@ -446,6 +459,7 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     case SettingsVersion::v4:
     case SettingsVersion::v5:
     case SettingsVersion::v6:
+    case SettingsVersion::v7:
         return true;
     }
     std::unreachable();
@@ -538,7 +552,8 @@ lsp_commands_from(const SettingsFields &fields, SettingsVersion version)
     return fields.caret_motion.has_value() || fields.caret_motion_time.has_value() ||
            fields.caret_sparks.has_value() || fields.pane_resize_step.has_value() ||
            fields.pane_resize_step_vim.has_value() || fields.indent_guide_style.has_value() ||
-           fields.indent_guide_colors.has_value() || fields.indent_guide_active.has_value() ||
+           fields.indent_guide_color_count.has_value() ||
+           fields.indent_guide_highlight_current.has_value() ||
            fields.indent_guide_width.has_value();
 }
 
@@ -565,18 +580,19 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
 [[nodiscard]] std::expected<void, Failure> apply_indent_guide_fields(core::EditorSettings &settings,
                                                                      const SettingsFields &fields)
 {
-    const auto active = fields.indent_guide_active.has_value()
-                            ? switch_from(fields.indent_guide_active)
-                            : std::expected<bool, Failure>{settings.indent_guide_active};
+    const auto active = fields.indent_guide_highlight_current.has_value()
+                            ? switch_from(fields.indent_guide_highlight_current)
+                            : std::expected<bool, Failure>{settings.indent_guide_highlight_current};
     if (!active)
     {
         return std::unexpected(active.error());
     }
-    settings.indent_guide_active = active.value();
+    settings.indent_guide_highlight_current = active.value();
     const auto style = later_value_from(fields.indent_guide_style, settings.indent_guide_style,
                                         core::indent_guide_style_named);
-    const auto colors = later_value_from(fields.indent_guide_colors, settings.indent_guide_colors,
-                                         core::indent_guide_colors_of);
+    const auto colors =
+        later_value_from(fields.indent_guide_color_count, settings.indent_guide_color_count,
+                         core::indent_guide_color_count_of);
     const auto width = later_value_from(fields.indent_guide_width, settings.indent_guide_width,
                                         core::indent_guide_width_of);
     if (!style || !colors || !width)
@@ -632,6 +648,7 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
         }
         return {};
     case SettingsVersion::v6:
+    case SettingsVersion::v7:
         break;
     }
     const auto motion = later_switch_from(fields.caret_motion);
@@ -663,7 +680,66 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
     return apply_indent_guide_fields(settings, fields);
 }
 
-// v4・v5・v6 の欄を順に置く（どれかが拒めばそこで止める）。
+[[nodiscard]] bool has_v7_fields(const SettingsFields &fields) noexcept
+{
+    return fields.list_eol.has_value() || fields.list_tab.has_value() ||
+           fields.list_wide_space.has_value() || fields.list_space.has_value();
+}
+
+// 後から足した on/off の鍵で、無いときの既定がオン（不可視文字の種類のスイッチ）。
+[[nodiscard]] std::expected<void, Failure>
+later_on_from(const std::optional<std::string_view> &text, bool &value)
+{
+    if (!text.has_value())
+    {
+        return {};
+    }
+    const auto parsed = switch_from(text);
+    if (!parsed)
+    {
+        return std::unexpected(parsed.error());
+    }
+    value = parsed.value();
+    return {};
+}
+
+// v7 だけの鍵（ADR 0193 の決定 4 と 2026-11-24 の追補 2・#1977）。v6 以前に在れば未知の鍵として
+// 拒否し（v6 の読みは 1.2.0 と同じ厳しさ）、無ければ既定（改行・Tab・全角空白は on・空白は trail）
+// のまま。v7 は後から足した鍵の形（無ければ既定・有れば厳密）で読む。空白の名前の読みは core の
+// list_space_named の 1 本（`:set listspace=` と共用）。
+[[nodiscard]] std::expected<void, Failure> apply_v7_fields(core::EditorSettings &settings,
+                                                           const SettingsFields &fields,
+                                                           SettingsVersion version)
+{
+    switch (version)
+    {
+    case SettingsVersion::v1:
+    case SettingsVersion::v2:
+    case SettingsVersion::v3:
+    case SettingsVersion::v4:
+    case SettingsVersion::v5:
+    case SettingsVersion::v6:
+        if (has_v7_fields(fields))
+        {
+            return std::unexpected(Failure::malformed);
+        }
+        return {};
+    case SettingsVersion::v7:
+        break;
+    }
+    const auto eol = later_on_from(fields.list_eol, settings.list_eol);
+    const auto tab = later_on_from(fields.list_tab, settings.list_tab);
+    const auto wide = later_on_from(fields.list_wide_space, settings.list_wide_space);
+    const auto space =
+        later_value_from(fields.list_space, settings.list_space, core::list_space_named);
+    if (!eol || !tab || !wide || !space)
+    {
+        return std::unexpected(Failure::malformed);
+    }
+    return {};
+}
+
+// v4・v5・v6・v7 の欄を順に置く（どれかが拒めばそこで止める）。
 [[nodiscard]] std::expected<void, Failure> apply_later_fields(core::EditorSettings &settings,
                                                               const SettingsFields &fields,
                                                               SettingsVersion version)
@@ -678,7 +754,12 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
     {
         return later;
     }
-    return apply_v6_fields(settings, fields, version);
+    const auto sixth = apply_v6_fields(settings, fields, version);
+    if (!sixth)
+    {
+        return sixth;
+    }
+    return apply_v7_fields(settings, fields, version);
 }
 
 [[nodiscard]] std::string_view version_text(SettingsVersion version)
@@ -697,6 +778,8 @@ later_value_from(const std::optional<std::string_view> &text, Value &value, Read
         return "5";
     case SettingsVersion::v6:
         return "6";
+    case SettingsVersion::v7:
+        return "7";
     }
     std::unreachable();
 }
@@ -837,18 +920,20 @@ std::string encode_settings(const core::EditorSettings &settings)
     const auto explorer_width = settings.explorer_width.has_value()
                                     ? std::to_string(settings.explorer_width.value())
                                     : std::string{};
-    // 書くのは v6 だけ（ADR 0192 の決定 1）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
-    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ・`lsp.<language>.command` の前
-    // （`caret_motion_time` の後ろに粒の `caret_sparks`・枠の大きさの 2 つ（#1972）・インデント
-    // ガイドの 4 つの順・ADR 0192 の追補・ADR 0193 の決定 4）。
+    // 書くのは v7 だけ（ADR 0193 の 2026-11-24 の追補 2）。v4 の鍵は同じ名前・同じ順で、v5 の鍵は
+    // `explorer_width` の後ろ、v6 の鍵は `finder_preview` の後ろ（`caret_motion_time` の後ろに粒の
+    // `caret_sparks`・枠の大きさの 2 つ（#1972）・インデントガイドの 4 つの順・ADR 0192 の追補・
+    // ADR 0193 の決定 4）、v7 の不可視文字の 4 つは `indent_guide_width` の後ろ・
+    // `lsp.<language>.command` の前。
     return std::format(
-        "version=6\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
+        "version=7\ncolorscheme={}\nfont_family={}\nfont_size={}\nguide={}\n"
         "wrap={}\nui_language={}\nlsp={}\nexplorer={}\nroot={}\nfeatures={}\n"
         "ignorecase={}\nsmartcase={}\nrelativenumber={}\nscrolloff={}\n"
         "explorer_width={}\nautoindent={}\nfinder_preview={}\ncaret_motion={}\n"
         "caret_motion_time={}\ncaret_sparks={}\npane_resize_step={}\npane_resize_step_vim={}\n"
-        "indent_guide_style={}\nindent_guide_colors={}\nindent_guide_active={}\n"
-        "indent_guide_width={}\n{}{}",
+        "indent_guide_style={}\nindent_guide_color_count={}\nindent_guide_highlight_current={}\n"
+        "indent_guide_width={}\nlist_eol={}\nlist_tab={}\nlist_wide_space={}\nlist_space={}\n"
+        "{}{}",
         theme, settings.font_family.text(), settings.font_size.points(), guide, wrap,
         core::display_language_choice_name(settings.ui_language), switch_text(settings.lsp),
         switch_text(settings.explorer), root, features_text(settings.features),
@@ -858,8 +943,10 @@ std::string encode_settings(const core::EditorSettings &settings)
         switch_text(settings.caret_motion), settings.caret_motion_time,
         switch_text(settings.caret_sparks), static_cast<unsigned>(settings.pane_resize_step),
         switch_text(settings.pane_resize_step_vim),
-        core::indent_guide_style_name(settings.indent_guide_style), settings.indent_guide_colors,
-        switch_text(settings.indent_guide_active), settings.indent_guide_width,
+        core::indent_guide_style_name(settings.indent_guide_style),
+        settings.indent_guide_color_count, switch_text(settings.indent_guide_highlight_current),
+        settings.indent_guide_width, switch_text(settings.list_eol), switch_text(settings.list_tab),
+        switch_text(settings.list_wide_space), core::list_space_name(settings.list_space),
         lsp_commands_text(settings.lsp_commands), maps_text(settings));
 }
 } // namespace nenenib::adapters::win32

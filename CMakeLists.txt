@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.31)
 # 版はここが唯一の出どころ（Phase 4 で manifest / VERSIONINFO がこれを受け取る）。
 # C は third_party の外部コード（md4c・ADR 0151）のためだけに有効にする。
-project(NeNeNib VERSION 1.1.0 LANGUAGES C CXX)
+project(NeNeNib VERSION 1.2.0 LANGUAGES C CXX)
 
 # manifest（PMv2 DPI・版）と VERSIONINFO は project(... VERSION) からだけ導く。
 # 固定の manifest と版リテラルは CNF-007（eng/conformance.py の version_metadata_checks）が拒否する。
@@ -53,7 +53,7 @@ nenenib_target(nenenib_core core STATIC
     src/core/CommandLine.cpp src/core/FontFamilies.cpp src/core/CommandChoice.cpp src/core/SubsequenceScore.cpp src/core/CommandPalette.cpp src/core/PaletteMarks.cpp src/core/Composition.cpp
     src/core/BytesReservation.cpp src/core/DetectedText.cpp src/core/DisplayLine.cpp src/core/DisplayText.cpp src/core/EditorSettings.cpp src/core/FeatureCosts.cpp src/core/SettingsRows.cpp src/core/SettingsChoices.cpp src/core/SettingsPanel.cpp src/core/ExplorerLayout.cpp src/core/ExplorerMark.cpp src/core/Minimap.cpp src/core/MinimapLayout.cpp src/core/ExplorerTree.cpp src/core/ExMapCommand.cpp src/core/ExRange.cpp src/core/ExResult.cpp src/core/ExSubstituteCommand.cpp src/core/ExLineCommand.cpp src/core/FontSize.cpp
     src/core/EditHistory.cpp src/core/FileFolder.cpp src/core/LspRootMarkers.cpp src/core/FilePath.cpp src/core/InputText.cpp src/core/InputHistory.cpp
-    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp src/core/ContextMenu.cpp src/core/FinderPreview.cpp src/core/CaretGlide.cpp src/core/CaretSparks.cpp src/core/PaneResizeStep.cpp src/core/IndentGuide.cpp src/core/ExFeatureOptions.cpp
+    src/core/DateTimeText.cpp src/core/PrintPages.cpp src/core/KeyChord.cpp src/core/KeyMap.cpp src/core/ModeLabel.cpp src/core/OperationBindings.cpp src/core/OperationGuide.cpp src/core/OperationGuideLayout.cpp src/core/StartScreen.cpp src/core/StartScreenLayout.cpp src/core/StartPress.cpp src/core/OperationTexts.cpp src/core/OrdinaryCharacterBoundary.cpp src/core/OrdinaryWordBoundary.cpp src/core/Palette.cpp src/core/PaletteLayout.cpp src/core/ContextMenu.cpp src/core/FinderPreview.cpp src/core/CaretGlide.cpp src/core/CaretSparks.cpp src/core/PaneResizeStep.cpp src/core/IndentGuide.cpp src/core/ExFeatureOptions.cpp src/core/Invisibles.cpp
     src/core/NewlineIndex.cpp src/core/ScrollBounds.cpp src/core/GutterLabels.cpp src/core/SearchLine.cpp
     src/core/LiteralPattern.cpp src/core/ProjectSearchRules.cpp src/core/ProjectQuery.cpp src/core/ProjectHits.cpp src/core/ProjectHitRows.cpp src/core/GoToLineInput.cpp src/core/SubstituteAll.cpp src/core/SubstituteReplacement.cpp src/core/ShellRegistration.cpp src/core/WslPlaces.cpp
     src/core/StatusBarLayout.cpp src/core/StatusItems.cpp src/core/LineEndingConversion.cpp
@@ -91,7 +91,7 @@ nenenib_link(nenenib_core nenenib_md4c)
 
 nenenib_target(nenenib_application application STATIC
     src/application/SettingsIssue.cpp src/application/CommandInput.cpp src/application/EditorController.cpp src/application/EditorState.cpp
-    src/application/FindState.cpp src/application/MatchParen.cpp src/application/IndentGuideLines.cpp src/application/MinimapCache.cpp src/application/EditorControllerMinimap.cpp
+    src/application/FindState.cpp src/application/MatchParen.cpp src/application/IndentGuideLines.cpp src/application/InvisibleLines.cpp src/application/MinimapCache.cpp src/application/EditorControllerMinimap.cpp
     src/application/FileBookmarkEdit.cpp src/application/FileHistoryEdit.cpp src/application/ImeStance.cpp src/application/ExitPlan.cpp
     src/application/LineSpanEvaluation.cpp src/application/ComposedLine.cpp src/application/VisualTextView.cpp src/application/GiantLineWindow.cpp src/application/EditorControllerView.cpp
     src/application/EditorControllerEditing.cpp src/application/EditorControllerVim.cpp src/application/EditorControllerDocuments.cpp
@@ -221,7 +221,7 @@ nenenib_target(nib_tests unit_tests EXECUTABLE
     tests/unit/UiLanguageTests.cpp
     tests/unit/FindReplaceTests.cpp tests/unit/ExSubstituteTests.cpp tests/unit/SubstituteConfirmTests.cpp tests/unit/ExLinesTests.cpp tests/unit/MatchParenTests.cpp tests/unit/MinimapTests.cpp
     tests/unit/MinimapPropertyTests.cpp tests/unit/MinimapPointerTests.cpp
-    tests/unit/FeatureCostsTests.cpp tests/unit/CaretMotionTests.cpp tests/unit/CaretSparkTests.cpp tests/unit/IndentGuideTests.cpp tests/unit/IndentGuidePathTests.cpp tests/unit/SettingsModalTests.cpp tests/unit/SettingsPanelTests.cpp tests/unit/SettingsChoiceTests.cpp
+    tests/unit/FeatureCostsTests.cpp tests/unit/CaretMotionTests.cpp tests/unit/CaretSparkTests.cpp tests/unit/IndentGuideTests.cpp tests/unit/IndentGuidePathTests.cpp tests/unit/InvisiblesTests.cpp tests/unit/SettingsModalTests.cpp tests/unit/SettingsPanelTests.cpp tests/unit/SettingsChoiceTests.cpp
     tests/unit/GuideTests.cpp
     tests/unit/ExitPlanTests.cpp
     tests/unit/DisplayTests.cpp
@@ -332,7 +332,7 @@ nenenib_system_link(nenenib_adapters ole32)
 
 # QLT-013: adapters/win32 のファイル読み書きは、GetTempPathW の下の試験ごとの一時フォルダ
 # （tests/adapters/TemporaryTestDirectory・#1103）で往復させる（ADR 0010）。中核の分岐カバレッジ（coverage-policy.json）の対象には入れない。
-nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp tests/adapters/SettingsVersionSixTests.cpp tests/adapters/SettingsLspCommandTests.cpp
+nenenib_target(nib_adapter_tests adapter_tests EXECUTABLE tests/adapters/NibAdapterTests.cpp tests/adapters/SettingsVersionSixTests.cpp tests/adapters/SettingsReleasedSixTests.cpp tests/adapters/SettingsVersionSevenTests.cpp tests/adapters/SettingsLspCommandTests.cpp
     tests/adapters/TemporaryTestDirectory.cpp)
 nenenib_link(nib_adapter_tests nenenib_core)
 nenenib_link(nib_adapter_tests nenenib_application)
@@ -544,7 +544,7 @@ nenenib_target(nenenib_window ui_win32 STATIC
     src/ui/win32/EditorWindowOperations.cpp src/ui/win32/EditorWindowContextMenu.cpp src/ui/win32/EditorWindowSettings.cpp src/ui/win32/SettingsInput.cpp src/ui/win32/EditorWindowCompletion.cpp src/ui/win32/EditorWindowLinkCard.cpp src/ui/win32/EditorWindowTableScroll.cpp src/ui/win32/EditorWindowIme.cpp src/ui/win32/EditorWindowExplorer.cpp src/ui/win32/EditorWindowSplit.cpp src/ui/win32/EditorPointer.cpp src/ui/win32/FileDialog.cpp src/ui/win32/FileDrop.cpp
     src/ui/win32/FileFailureText.cpp
     src/ui/win32/FontFallbackCache.cpp src/ui/win32/FallbackSegmentMemo.cpp src/ui/win32/FontFallbackKey.cpp src/ui/win32/FallbackRunSource.cpp src/ui/win32/PrimaryFontCoverage.cpp src/ui/win32/ScriptRunSink.cpp
-    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/SettingsPanelPainter.cpp src/ui/win32/SettingsPanelFormats.cpp src/ui/win32/CompletionPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
+    src/ui/win32/BodyGlyphCollector.cpp src/ui/win32/ReplacedTints.cpp src/ui/win32/InvisibleMarkBoxes.cpp src/ui/win32/BodyTextLayouts.cpp src/ui/win32/SystemFontFamilies.cpp src/ui/win32/Win32Printer.cpp src/ui/win32/PrintComposition.cpp src/ui/win32/PrintDialog.cpp src/ui/win32/PrintPageDrawing.cpp src/ui/win32/PrintPaperSizes.cpp src/ui/win32/PrintRendering.cpp src/ui/win32/TextLayoutPoint.cpp src/ui/win32/GutterTextLayouts.cpp src/ui/win32/PaletteRowLayouts.cpp src/ui/win32/ExplorerPainter.cpp src/ui/win32/KeycapPainter.cpp src/ui/win32/StartScreenPainter.cpp src/ui/win32/ContextMenuPainter.cpp src/ui/win32/SettingsPanelPainter.cpp src/ui/win32/SettingsPanelFormats.cpp src/ui/win32/CompletionPainter.cpp src/ui/win32/ExplorerShapes.cpp src/ui/win32/LineUtf16Evaluation.cpp src/ui/win32/PresentedMilestones.cpp src/ui/win32/StatusLayoutDemand.cpp src/ui/win32/GuideKeyWidth.cpp src/ui/win32/WindowLines.cpp src/ui/win32/WindowCorners.cpp src/ui/win32/WindowBackdrop.cpp
     src/ui/win32/PreviewTextLayouts.cpp src/ui/win32/PreviewBlockTops.cpp src/ui/win32/PreviewScrollFold.cpp src/ui/win32/PreviewBrushes.cpp src/ui/win32/PreviewMetrics.cpp src/ui/win32/PreviewTableMetrics.cpp
     src/ui/win32/PreviewPane.cpp src/ui/win32/MinimapPicture.cpp src/ui/win32/FullPreviewBody.cpp src/ui/win32/SaveQuestion.cpp
     src/ui/win32/PreviewInlineImages.cpp src/ui/win32/PreviewImageObject.cpp src/ui/win32/PreviewBitmaps.cpp
@@ -578,7 +578,7 @@ nenenib_target(nib_window_tests window_tests EXECUTABLE
     tests/ui/PaletteLayoutTests.cpp tests/ui/ExplorerPaintTests.cpp tests/ui/PointerPressTests.cpp tests/ui/GuideKeyWidthTests.cpp
     tests/ui/CaptionPressTests.cpp tests/ui/WindowHitTests.cpp
     tests/ui/PrintRenderTests.cpp tests/ui/MemoryXpsTarget.cpp tests/ui/MemoryPackageTarget.cpp
-    tests/ui/MatchParenOutlineTests.cpp tests/ui/CaretMotionPaintTests.cpp tests/ui/CaretSparksPaintTests.cpp tests/ui/IndentGuidePaintTests.cpp tests/ui/MotionLabelPaintTests.cpp tests/ui/TabTipPaintTests.cpp tests/ui/HoverTipPaintTests.cpp tests/ui/LinkCardPaintTests.cpp tests/ui/SaveQuestionTests.cpp tests/ui/SubstituteConfirmPaintTests.cpp
+    tests/ui/MatchParenOutlineTests.cpp tests/ui/CaretMotionPaintTests.cpp tests/ui/CaretSparksPaintTests.cpp tests/ui/IndentGuidePaintTests.cpp tests/ui/InvisibleMarkPaintTests.cpp tests/ui/MotionLabelPaintTests.cpp tests/ui/TabTipPaintTests.cpp tests/ui/HoverTipPaintTests.cpp tests/ui/LinkCardPaintTests.cpp tests/ui/SaveQuestionTests.cpp tests/ui/SubstituteConfirmPaintTests.cpp
     tests/ui/VimSpecialKeyTests.cpp tests/ui/ClosingStepsTests.cpp
     tests/ui/PreviewCycleKeyTests.cpp tests/ui/MinimapPaintTests.cpp tests/ui/MinimapPressTests.cpp
     tests/ui/StandardKeyTests.cpp

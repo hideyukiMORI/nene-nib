@@ -18,13 +18,19 @@ enum class SettingsValue : std::uint8_t
     // インデントガイドの形（ADR 0193 の決定 4）。単色 / 虹と強める段は選択、色の数（3〜6）と段の幅
     // （2 / 4 / 8）は段の上下。
     indent_guide_style,
-    indent_guide_colors,
-    indent_guide_active,
+    indent_guide_color_count,
+    indent_guide_highlight_current,
     indent_guide_width,
     // 枠の「広げる / 狭める」の 1 回分（ADR 0148 の 2026-11-23 の追補・#1972・段の上下・1
     // 升ずつ）。
     pane_resize_step,
     // Vim の回数なしの `Ctrl-w > < + -` が 1 回分に従うか（2 つの選択肢を巡る・#1972）。
-    pane_resize_step_vim
+    pane_resize_step_vim,
+    // 不可視文字の種類ごとの形（ADR 0193 の決定 4・#1977・settings.v7）。改行・Tab・全角空白は
+    // 「出す / 出さない」の選択、空白は「出さない / 行末だけ / 全部」の選択。
+    list_eol,
+    list_tab,
+    list_wide_space,
+    list_space
 };
 } // namespace nenenib::core

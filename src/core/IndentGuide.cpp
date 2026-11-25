@@ -319,25 +319,25 @@ std::size_t indent_guide_step(std::optional<IndentUnit> guessed, std::uint8_t wi
     return guessed.has_value() ? indent_unit_cells(guessed.value()) : std::size_t{width};
 }
 
-std::optional<std::uint8_t> indent_guide_colors_of(std::string_view text) noexcept
+std::optional<std::uint8_t> indent_guide_color_count_of(std::string_view text) noexcept
 {
-    if (text.size() != 1 || text.front() < '0' + indent_guide_colors_minimum ||
-        text.front() > '0' + indent_guide_colors_maximum)
+    if (text.size() != 1 || text.front() < '0' + indent_guide_color_count_minimum ||
+        text.front() > '0' + indent_guide_color_count_maximum)
     {
         return std::nullopt;
     }
     return static_cast<std::uint8_t>(text.front() - '0');
 }
 
-std::uint8_t indent_guide_colors_stepped(std::uint8_t count, bool forward) noexcept
+std::uint8_t indent_guide_color_count_stepped(std::uint8_t count, bool forward) noexcept
 {
     if (forward)
     {
-        return count >= indent_guide_colors_maximum ? indent_guide_colors_maximum
-                                                    : static_cast<std::uint8_t>(count + 1);
+        return count >= indent_guide_color_count_maximum ? indent_guide_color_count_maximum
+                                                         : static_cast<std::uint8_t>(count + 1);
     }
-    return count <= indent_guide_colors_minimum ? indent_guide_colors_minimum
-                                                : static_cast<std::uint8_t>(count - 1);
+    return count <= indent_guide_color_count_minimum ? indent_guide_color_count_minimum
+                                                     : static_cast<std::uint8_t>(count - 1);
 }
 
 std::string_view indent_guide_style_name(IndentGuideStyle style) noexcept

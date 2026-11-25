@@ -10,6 +10,7 @@
 #include "SettingsCodec.hpp"
 #include "SettingsFailure.hpp"
 #include "SettingsVersion.hpp"
+#include "SettingsVersionSevenTests.hpp"
 
 #include <string>
 #include <string_view>
@@ -63,14 +64,14 @@ void verify_released_v5(Expect expect)
     const auto read = decode_settings(released_v5_settings, SettingsVersion::v5);
     expect(read && released_v5_values(read.value()),
            "the 1.1.0 settings.v5 is read with every value and the caret motion defaults");
-    expect(read && encode_settings(read.value()) == released_v5_as_v6(),
-           "the 1.1.0 settings are written back in the v6 form with the caret motion keys after "
+    expect(read && encode_settings(read.value()) == v6_as_v7(released_v5_as_v6()),
+           "the 1.1.0 settings are written back in the v7 form with the caret motion keys after "
            "finder_preview and the unknown language row kept");
-    for (const auto extra :
-         {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n",
-          "caret_sparks=off\n", "caret_sparks=on\n", "pane_resize_step=5\n",
-          "pane_resize_step_vim=off\n", "pane_resize_step_vim=on\n", "indent_guide_style=rainbow\n",
-          "indent_guide_colors=4\n", "indent_guide_active=on\n", "indent_guide_width=4\n"})
+    for (const auto extra : {"caret_motion=off\n", "caret_motion=on\n", "caret_motion_time=120\n",
+                             "caret_sparks=off\n", "caret_sparks=on\n", "pane_resize_step=5\n",
+                             "pane_resize_step_vim=off\n", "pane_resize_step_vim=on\n",
+                             "indent_guide_style=rainbow\n", "indent_guide_color_count=4\n",
+                             "indent_guide_highlight_current=on\n", "indent_guide_width=4\n"})
     {
         const auto refused =
             decode_settings(std::string(released_v5_settings) + extra, SettingsVersion::v5);
@@ -93,7 +94,7 @@ void verify_v6_keys(Expect expect)
     settings.caret_motion_time = 200;
     settings.caret_sparks = true;
     const auto bytes = encode_settings(settings);
-    const auto read = decode_settings(bytes, SettingsVersion::v6);
+    const auto read = decode_settings(bytes, SettingsVersion::v7);
     expect(read && read.value().caret_motion && read.value().caret_motion_time == 200 &&
                read.value().caret_sparks &&
                bytes.find("\ncaret_motion=on\ncaret_motion_time=200\ncaret_sparks=on\n") !=
@@ -113,12 +114,12 @@ void verify_v6_keys(Expect expect)
           std::pair{"caret_motion_time", "0120"}, std::pair{"caret_motion_time", ""},
           std::pair{"caret_sparks", "1"}, std::pair{"caret_sparks", ""}})
     {
-        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
+        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v7);
         expect(!broken && broken.error() == SettingsFailure::malformed,
                "a malformed caret motion value is refused");
     }
-    expect(!decode_settings(bytes + "caret_motion=on\n", SettingsVersion::v6) &&
-               !decode_settings(bytes + "caret_sparks=on\n", SettingsVersion::v6),
+    expect(!decode_settings(bytes + "caret_motion=on\n", SettingsVersion::v7) &&
+               !decode_settings(bytes + "caret_sparks=on\n", SettingsVersion::v7),
            "a duplicate caret motion or sparks key is refused");
 }
 
@@ -128,40 +129,40 @@ void verify_indent_guide_keys(Expect expect)
 {
     auto settings = core::default_editor_settings();
     settings.indent_guide_style = core::IndentGuideStyle::plain;
-    settings.indent_guide_colors = 6;
-    settings.indent_guide_active = false;
+    settings.indent_guide_color_count = 6;
+    settings.indent_guide_highlight_current = false;
     settings.indent_guide_width = 2;
     const auto bytes = encode_settings(settings);
-    const auto read = decode_settings(bytes, SettingsVersion::v6);
-    expect(
-        read && core::same_settings(read.value(), settings) &&
-            bytes.find("\npane_resize_step_vim=off\nindent_guide_style=plain\n"
-                       "indent_guide_colors=6\nindent_guide_active=off\nindent_guide_width=2\n") !=
-                std::string::npos,
-        "the indent guide keys follow the pane resize keys and round trip through v6");
+    const auto read = decode_settings(bytes, SettingsVersion::v7);
+    expect(read && core::same_settings(read.value(), settings) &&
+               bytes.find("\npane_resize_step_vim=off\nindent_guide_style=plain\n"
+                          "indent_guide_color_count=6\nindent_guide_highlight_current=off\nindent_"
+                          "guide_width=2\n") != std::string::npos,
+           "the indent guide keys follow the pane resize keys and round trip through v6");
     std::string bare = released_v5_as_v6();
-    for (const auto key :
-         {"indent_guide_style", "indent_guide_colors", "indent_guide_active", "indent_guide_width"})
+    for (const auto key : {"indent_guide_style", "indent_guide_color_count",
+                           "indent_guide_highlight_current", "indent_guide_width"})
     {
         bare = without_key(bare, key);
     }
     const auto missing = decode_settings(bare, SettingsVersion::v6);
     expect(missing && missing.value().indent_guide_style == core::IndentGuideStyle::rainbow &&
-               missing.value().indent_guide_colors == 4 && missing.value().indent_guide_active &&
+               missing.value().indent_guide_color_count == 4 &&
+               missing.value().indent_guide_highlight_current &&
                missing.value().indent_guide_width == 4,
            "a v6 without the indent guide keys takes the defaults");
     for (const auto &[key, value] :
          {std::pair{"indent_guide_style", "stripes"}, std::pair{"indent_guide_style", ""},
-          std::pair{"indent_guide_colors", "2"}, std::pair{"indent_guide_colors", "7"},
-          std::pair{"indent_guide_colors", "04"}, std::pair{"indent_guide_active", "yes"},
-          std::pair{"indent_guide_width", "3"}, std::pair{"indent_guide_width", "16"},
-          std::pair{"indent_guide_width", ""}})
+          std::pair{"indent_guide_color_count", "2"}, std::pair{"indent_guide_color_count", "7"},
+          std::pair{"indent_guide_color_count", "04"},
+          std::pair{"indent_guide_highlight_current", "yes"}, std::pair{"indent_guide_width", "3"},
+          std::pair{"indent_guide_width", "16"}, std::pair{"indent_guide_width", ""}})
     {
-        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
+        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v7);
         expect(!broken && broken.error() == SettingsFailure::malformed,
                "a malformed indent guide value is refused");
     }
-    expect(!decode_settings(bytes + "indent_guide_width=4\n", SettingsVersion::v6),
+    expect(!decode_settings(bytes + "indent_guide_width=4\n", SettingsVersion::v7),
            "a duplicate indent guide key is refused");
 }
 
@@ -172,7 +173,7 @@ void verify_pane_resize_keys(Expect expect)
     settings.pane_resize_step = 12;
     settings.pane_resize_step_vim = true;
     const auto bytes = encode_settings(settings);
-    const auto read = decode_settings(bytes, SettingsVersion::v6);
+    const auto read = decode_settings(bytes, SettingsVersion::v7);
     expect(read && read.value().pane_resize_step == 12 && read.value().pane_resize_step_vim &&
                bytes.find("\ncaret_sparks=off\npane_resize_step=12\npane_resize_step_vim=on\n") !=
                    std::string::npos,
@@ -188,11 +189,11 @@ void verify_pane_resize_keys(Expect expect)
           std::pair{"pane_resize_step", "05"}, std::pair{"pane_resize_step", ""},
           std::pair{"pane_resize_step_vim", "yes"}, std::pair{"pane_resize_step_vim", ""}})
     {
-        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v6);
+        const auto broken = decode_settings(with_value(bytes, key, value), SettingsVersion::v7);
         expect(!broken && broken.error() == SettingsFailure::malformed,
                "a malformed pane resize value is refused");
     }
-    expect(!decode_settings(bytes + "pane_resize_step=3\n", SettingsVersion::v6),
+    expect(!decode_settings(bytes + "pane_resize_step=3\n", SettingsVersion::v7),
            "a duplicate pane resize key is refused");
 }
 } // namespace
@@ -208,7 +209,7 @@ bool released_v5_values(const core::EditorSettings &settings)
            settings.caret_motion_time == 120 && !settings.caret_sparks &&
            settings.pane_resize_step == 5 && !settings.pane_resize_step_vim &&
            settings.indent_guide_style == core::IndentGuideStyle::rainbow &&
-           settings.indent_guide_colors == 4 && settings.indent_guide_active &&
+           settings.indent_guide_color_count == 4 && settings.indent_guide_highlight_current &&
            settings.indent_guide_width == 4;
 }
 
@@ -243,6 +244,8 @@ void verify_v3_refuses_later_keys(Expect expect, std::string_view v3_settings)
                              "pane_resize_step=5\n",
                              "pane_resize_step_vim=off\n",
                              "indent_guide_style=rainbow\n",
+                             "indent_guide_color_count=4\n",
+                             "indent_guide_highlight_current=on\n",
                              "indent_guide_width=4\n"})
     {
         const auto refused = decode_settings(std::string(v3_settings) + extra, SettingsVersion::v3);

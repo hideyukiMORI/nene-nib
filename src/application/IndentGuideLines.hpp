@@ -17,7 +17,8 @@ namespace nenenib::application
 // indent_guide_width。巨大な行の窓・IME の差し込み行には欄を置かない（字下げの数えには使う）。
 void mark_indent_guides(const EditorState &state, std::size_t screen, std::vector<LineView> &lines);
 
-// 強める段（決定 9）。操作中の枠の行だけに写す（finish_frame が呼ぶ）。設定の indent_guide_active
+// 強める段（決定 9）。操作中の枠の行だけに写す（finish_frame が呼ぶ）。設定の
+// indent_guide_highlight_current
 // がオフ・キャレットの行が見えていない・キャレットの行に欄が無ければ何もしない。区間は見えている行の
 // 中で打ち切る（core の active_indent_run）。
 void mark_active_indent_guide(const EditorState &state, std::vector<LineView> &lines);

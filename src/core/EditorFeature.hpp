@@ -24,6 +24,8 @@ enum class EditorFeature : std::uint8_t
     // 打ったときの粒（ADR 0192 の追補・#1979・自分の鍵 caret_sparks）。
     caret_sparks,
     // インデントガイド（ADR 0193 の決定 3・#1975・`features=indentguides`）。
-    indent_guides
+    indent_guides,
+    // 不可視文字（ADR 0193 の決定 3・#1977・`features=list`・`:set list`）。
+    list
 };
 } // namespace nenenib::core

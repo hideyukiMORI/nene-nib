@@ -9,6 +9,7 @@
 #include "GuideVisibility.hpp"
 #include "IndentGuideStyle.hpp"
 #include "LineWrapping.hpp"
+#include "ListSpace.hpp"
 #include "MapRow.hpp"
 #include "Theme.hpp"
 #include "ThemeChoice.hpp"
@@ -83,13 +84,20 @@ struct EditorSettings
     std::uint8_t pane_resize_step = 5;
     bool pane_resize_step_vim = false;
     // インデントガイドの形（ADR 0193 の決定 4・#1975・settings.v6 の鍵 `indent_guide_style`
-    // `indent_guide_colors` `indent_guide_active` `indent_guide_width`）。表示のオン・オフは
-    // `features=indentguides`。色の数は 3〜6、段の幅は 2 / 4 / 8 で推し当てが外れた文書に使う
-    // （IndentGuide.hpp）。
+    // `indent_guide_color_count` `indent_guide_highlight_current`
+    // `indent_guide_width`）。表示のオン・オフは `features=indentguides`。色の数は 3〜6、段の幅は 2
+    // / 4 / 8 で推し当てが外れた文書に使う （IndentGuide.hpp）。
     IndentGuideStyle indent_guide_style = IndentGuideStyle::rainbow;
-    std::uint8_t indent_guide_colors = 4;
-    bool indent_guide_active = true;
+    std::uint8_t indent_guide_color_count = 4;
+    bool indent_guide_highlight_current = true;
     std::uint8_t indent_guide_width = 4;
+    // 不可視文字の種類ごとのスイッチ（ADR 0193 の決定 4 と 2026-11-24 の追補 2・#1977・settings.v7
+    // の鍵 `list_eol` `list_tab` `list_wide_space` `list_space`）。全体のオン・オフは
+    // `features=list` で、種類のスイッチは全体がオンのときだけ効く。v6 以前を読んだときもこの既定。
+    bool list_eol = true;
+    bool list_tab = true;
+    bool list_wide_space = true;
+    ListSpace list_space = ListSpace::trail;
 };
 
 // `scrolloff` の上限（Vim の値は任意の非負だが、画面の半分で切り詰めるので 999 で足りる）。

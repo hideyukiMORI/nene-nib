@@ -32,6 +32,7 @@
 #include "IndentGuide.hpp"
 #include "IndentGuideStyle.hpp"
 #include "InputText.hpp"
+#include "Invisibles.hpp"
 #include "LanguageTable.hpp"
 #include "Utf8.hpp"
 #include "VimSearchHighlight.hpp"
@@ -54,11 +55,16 @@ namespace nenenib::core
 {
 namespace
 {
-using detail::indent_guide_active_option_name;
-using detail::indent_guide_colors_option_name;
+using detail::indent_guide_color_count_option_name;
+using detail::indent_guide_highlight_current_option_name;
 using detail::indent_guide_option;
 using detail::indent_guide_style_option_name;
 using detail::indent_guide_width_option_name;
+using detail::list_eol_option_name;
+using detail::list_option;
+using detail::list_space_option_name;
+using detail::list_tab_option_name;
+using detail::list_wide_space_option_name;
 using detail::listed_feature_option;
 using detail::switch_message;
 using detail::switch_request;
@@ -713,33 +719,8 @@ constexpr std::string_view finder_preview_option_name = "finderpreview";
 [[nodiscard]] std::optional<std::expected<ExResult, ExEvaluationFailure>>
 finder_preview_option(std::string_view option, const EditorSettings &settings)
 {
-    if (!option.starts_with(finder_preview_option_name))
-    {
-        return std::nullopt;
-    }
-    const std::string_view rest = option.substr(finder_preview_option_name.size());
-    const auto message = [](FinderPreview preview)
-    {
-        return DisplayText::parse(std::string(finder_preview_option_name) + "=" +
-                                  std::string(finder_preview_name(preview)))
-            .value();
-    };
-    if (rest.empty() || rest == "?")
-    {
-        return ExResult{std::nullopt, std::nullopt, std::nullopt, message(settings.finder_preview)};
-    }
-    if (!rest.starts_with('='))
-    {
-        return std::nullopt;
-    }
-    const auto wanted = finder_preview_named(rest.substr(1));
-    if (!wanted.has_value())
-    {
-        return std::unexpected(ExFailure::invalid_argument);
-    }
-    EditorSettings changed = settings;
-    changed.finder_preview = wanted.value();
-    return ExResult{std::move(changed), std::nullopt, std::nullopt, message(wanted.value())};
+    return detail::chosen_option<&EditorSettings::finder_preview, finder_preview_named,
+                                 finder_preview_name>(option, finder_preview_option_name, settings);
 }
 
 // 追従の余白の名前（#1041）。`set so=N` `set so?` `set so`（数の option の名前だけは問い・
@@ -954,6 +935,11 @@ view_option(std::string_view option, const EditorSettings &settings)
     {
         return std::move(guides).value();
     }
+    auto invisibles = list_option(option, settings);
+    if (invisibles.has_value())
+    {
+        return std::move(invisibles).value();
+    }
     auto indent = autoindent_option(option, settings);
     if (indent.has_value())
     {
@@ -1021,7 +1007,7 @@ using SwitchOption = std::tuple<std::string_view, std::string_view, SwitchReader
 // hlsearch と incsearch の値は設定に無い Vim の状態（ExWindowState）から読む（レビュー L4）。
 // wrapscan も Vim の状態（#1561）。magic と expandtab は Nib の振る舞いが固定（照合器は magic・
 // ADR 0015 の決定 9〜11 の noexpandtab）なので、変えられない行（#1561）。
-constexpr std::array<SwitchOption, 19> switch_options{{
+constexpr std::array<SwitchOption, 23> switch_options{{
     {"wrap", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.wrapping == LineWrapping::wrap; }, true},
     {"guide", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -1045,9 +1031,19 @@ constexpr std::array<SwitchOption, 19> switch_options{{
     {feature_cost(EditorFeature::indent_guides).name, "",
      [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return feature_enabled(settings, EditorFeature::indent_guides); }, true},
-    {indent_guide_active_option_name, "",
+    {indent_guide_highlight_current_option_name, "",
      [](const EditorSettings &settings, const ExWindowState &) noexcept
-     { return settings.indent_guide_active; }, true},
+     { return settings.indent_guide_highlight_current; }, true},
+    {feature_cost(EditorFeature::list).name, "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return feature_enabled(settings, EditorFeature::list); }, true},
+    {list_eol_option_name, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.list_eol; }, true},
+    {list_tab_option_name, "", [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.list_tab; }, true},
+    {list_wide_space_option_name, "",
+     [](const EditorSettings &settings, const ExWindowState &) noexcept
+     { return settings.list_wide_space; }, true},
     {"explorer", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
      { return settings.explorer; }, true},
     {"lsp", "", [](const EditorSettings &settings, const ExWindowState &) noexcept
@@ -1133,8 +1129,8 @@ constexpr std::array<NumberOption, 5> number_options{{
      true},
     {"shiftwidth", "sw", [](const EditorSettings &) noexcept { return vim_shift_width; }, false},
     {"tabstop", "ts", [](const EditorSettings &) noexcept { return vim_tab_stop; }, false},
-    {indent_guide_colors_option_name, "", [](const EditorSettings &settings) noexcept
-     { return std::size_t{settings.indent_guide_colors}; }, true},
+    {indent_guide_color_count_option_name, "", [](const EditorSettings &settings) noexcept
+     { return std::size_t{settings.indent_guide_color_count}; }, true},
     {indent_guide_width_option_name, "", [](const EditorSettings &settings) noexcept
      { return std::size_t{settings.indent_guide_width}; }, true},
 }};
@@ -1174,8 +1170,8 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     return name;
 }
 
-// 名前の表から選ぶ文字列の option（`finderpreview` `indentguidestyle`）の既定値の書き方。どちらでも
-// なければ値なし。
+// 名前の表から選ぶ文字列の option（`finderpreview` `indentguidestyle`
+// `listspace`）の既定値の書き方。 どれでもなければ値なし。
 [[nodiscard]] std::optional<std::string> chosen_default_text(std::string_view name,
                                                              const EditorSettings &defaults)
 {
@@ -1188,6 +1184,11 @@ constexpr std::array<std::string_view, 3> default_suffixes{"&vim", "&vi", "&"};
     {
         return std::string(indent_guide_style_option_name) + "=" +
                std::string(indent_guide_style_name(defaults.indent_guide_style));
+    }
+    if (name == list_space_option_name)
+    {
+        return std::string(list_space_option_name) + "=" +
+               std::string(list_space_name(defaults.list_space));
     }
     return std::nullopt;
 }
@@ -2648,7 +2649,7 @@ ranged_command(std::string_view text, const EditorSettings &settings, const ExWi
 // 候補は命令の完全な形だけで、省略の形を並べない（`nohlsearch` は 1 つ・Issue #501）。
 // 問いの形（`set clipboard?` `set explorer?` `set root?` `set lsp?`）は並べない（`?`
 // は操作の一覧の印と重なる）。
-constexpr std::array<std::string_view, 71> fixed_candidates{"colorscheme",
+constexpr std::array<std::string_view, 80> fixed_candidates{"colorscheme",
                                                             "set fontsize=",
                                                             guifont_command,
                                                             "set incsearch",
@@ -2700,10 +2701,19 @@ constexpr std::array<std::string_view, 71> fixed_candidates{"colorscheme",
                                                             "set nopaneresizestepvim",
                                                             "set indentguidestyle=rainbow",
                                                             "set indentguidestyle=plain",
-                                                            "set indentguidecolors=",
-                                                            "set indentguideactive",
-                                                            "set noindentguideactive",
+                                                            "set indentguidecolorcount=",
+                                                            "set indentguidehighlightcurrent",
+                                                            "set noindentguidehighlightcurrent",
                                                             "set indentguidewidth=",
+                                                            "set listeol",
+                                                            "set nolisteol",
+                                                            "set listtab",
+                                                            "set nolisttab",
+                                                            "set listwidespace",
+                                                            "set nolistwidespace",
+                                                            "set listspace=none",
+                                                            "set listspace=trail",
+                                                            "set listspace=all",
                                                             "set scrolloff=",
                                                             "set language=ja",
                                                             "set language=en",

@@ -557,6 +557,35 @@ void verify_waiting()
            "an empty answer to a waiting face says there are no completions");
 }
 
+// 面の鍵（上下・ホイール・確定）は、見せる行が無ければ何もしない。面が閉じているときも、答えを
+// 待って行がまだ無いときも、本文を変えず、Enter と Tab を面へ取らない（completion_commits が偽）。
+void expect_face_keys_inert(Editing &editing, std::string_view body, const char *when)
+{
+    auto &controller = editing.controller();
+    static_cast<void>(stepped(editing, app::CompletionStep::next));
+    static_cast<void>(controller.apply_frame(app::ScrollCompletion{1}));
+    const auto chose = controller.apply_frame(app::ChooseCompletion{});
+    expect(!chose.completion.has_value() && text_of(editing) == body &&
+               !controller.completion_commits(app::CompletionCommitKey::enter) &&
+               !controller.completion_commits(app::CompletionCommitKey::tab),
+           when);
+}
+
+void verify_face_keys_without_rows()
+{
+    Editing closed;
+    static_cast<void>(typed(closed, "alpha al"));
+    expect_face_keys_inert(closed, "alpha al", "the face keys do nothing while the face is closed");
+    Editing waiting(lsp_settings(true));
+    capable(waiting);
+    static_cast<void>(typed(waiting, "zz"));
+    static_cast<void>(opened(waiting));
+    expect_face_keys_inert(waiting, "int main() {}|zz",
+                           "the face keys do nothing while the face waits for the answer");
+    expect(rows(answered(waiting, R"([{"label":"zzz"}])")) == std::vector<std::string>{"zzz"},
+           "the waiting face still opens with the answer after the keys");
+}
+
 // 決定 5: 使う人が選ぶ行を動かした後に届いた答えは、選んでいる候補を保つ。
 void verify_selection_kept()
 {
@@ -727,6 +756,7 @@ void verify_completion_face_contracts()
     verify_incomplete();
     verify_cancel_on_close();
     verify_waiting();
+    verify_face_keys_without_rows();
     verify_selection_kept();
     verify_trigger_characters();
     verify_word_trigger();

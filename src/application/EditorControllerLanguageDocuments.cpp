@@ -488,8 +488,9 @@ core::DiagnosticCounts EditorController::diagnostic_counts() const
     return core::diagnostic_counts(state_.diagnostics(), state_.diagnostics_count());
 }
 
-// 知らせの欄に出す診断の文の優先はこの 1 か所（ADR 0161 の決定 4 の追補）。ほかの知らせ
-// （command_message）とマクロの録画（`recording @a` を隠さない・R3-3）が勝つ。
+// ステータスバーに出す診断の文の優先はこの 1 か所（ADR 0161 の決定 4 の追補）。ほかの知らせ
+// （command_message）とマクロの録画（`recording @a` を隠さない・R3-3）が勝つ。文は窓がモードの
+// 文の後ろに書く（2026-11-24 の追補・#2025）。
 std::optional<core::DisplayText> EditorController::shown_diagnostic_message() const
 {
     const auto &diagnostics = state_.diagnostics();
@@ -498,11 +499,6 @@ std::optional<core::DisplayText> EditorController::shown_diagnostic_message() co
         return std::nullopt;
     }
     return core::diagnostic_notice(diagnostics, state_.selection().caret);
-}
-
-bool EditorController::diagnostic_message_shown() const
-{
-    return shown_diagnostic_message().has_value();
 }
 
 void EditorController::add_diagnostics(EditorFrame &result) const

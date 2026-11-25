@@ -5,12 +5,16 @@
 // と同じ :normal! の鍵の口の両方で流す。
 #include "AutosaveTick.hpp"
 #include "CancelCommand.hpp"
+#include "CommandEdit.hpp"
 #include "CommandText.hpp"
+#include "EditCommand.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
+#include "EditorIntent.hpp"
 #include "ImeStance.hpp"
 #include "InputLinePrompt.hpp"
+#include "PasteCommand.hpp"
 #include "PlaceCaret.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
@@ -18,7 +22,10 @@
 #include "SubmitCommand.hpp"
 #include "TestSupport.hpp"
 #include "TextPosition.hpp"
+#include "VimKey.hpp"
+#include "VimKeyPress.hpp"
 #include "VimMode.hpp"
+#include "VimSpecialKey.hpp"
 #include "VimTestSupport.hpp"
 #include "WorkCompleted.hpp"
 
@@ -223,6 +230,25 @@ void verify_prompt_and_frame()
            "& is shown as typed");
 }
 
+// 窓から届く行の編集・貼り付け・Vim の鍵も、問いを開いたまま受けて答えにならない（決定 6）。
+void verify_window_intents_keep_question()
+{
+    const app::EditorIntent kept[] = {
+        app::EditCommand{core::CommandEdit::left},
+        app::PasteCommand{},
+        app::VimKeyPress{core::VimKey{core::VimSpecialKey::arrow_left}},
+    };
+    for (const auto &intent : kept)
+    {
+        Editing editing;
+        opened(editing, four_lines, "3G:%s/a/X/gc<CR>");
+        auto &controller = editing.controller();
+        const auto frame = controller.apply_frame(intent);
+        expect(question_of(frame) == "replace with X (y/n/a/q/l)?" && vim_body(frame) == four_lines,
+               "a line edit, a paste and a Vim key from the window keep the question open");
+    }
+}
+
 void verify_keys_and_signals()
 {
     Editing editing;
@@ -413,6 +439,7 @@ void verify_substitute_confirm_scope()
     verify_empty_and_breaks();
     verify_prompt_and_frame();
     verify_keys_and_signals();
+    verify_window_intents_keep_question();
     verify_flags_and_repeats();
     verify_replays();
     verify_operator_refused();

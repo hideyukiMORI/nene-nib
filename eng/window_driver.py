@@ -241,11 +241,11 @@ def forget_session(environment: dict) -> bool:
     return deleted
 
 
-# settings.v6 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3 と 2026-11-16 の追補・#1041・
-# #1380・#1668・ADR 0192 の決定 1・ADR 0193 の決定 4）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は
-# v6 → v5 → v4 の順に読むので、道具も v6 を書く（古い版を書くと、同じ profile に残った新しい版に負けて黙って
+# settings.v7 の全部の鍵と、設定ファイルの無い起動と同じ値（ADR 0170 決定 3 と 2026-11-16 の追補・#1041・
+# #1380・#1668・ADR 0192 の決定 1・ADR 0193 の決定 4 と 2026-11-24 の追補 2）。書くのは道具の profile だけで、利用者の本物の設定には書かない。製品は
+# v7 → v6 → v5 → v4 の順に読むので、道具も v7 を書く（古い版を書くと、同じ profile に残った新しい版に負けて黙って
 # 効かない・#1780）。
-SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
+SETTINGS_DEFAULTS = (("version", "7"), ("colorscheme", "system"),
                         ("font_family", "Cascadia Code"), ("font_size", "13.5"), ("guide", "on"),
                         ("wrap", "on"), ("ui_language", "system"), ("lsp", "off"),
                         ("explorer", "off"), ("root", ""), ("features", ""),
@@ -254,17 +254,18 @@ SETTINGS_DEFAULTS = (("version", "6"), ("colorscheme", "system"),
                         ("finder_preview", "auto"), ("caret_motion", "off"),
                         ("caret_motion_time", "120"), ("caret_sparks", "off"),
                         ("pane_resize_step", "5"), ("pane_resize_step_vim", "off"),
-                        ("indent_guide_style", "rainbow"),
-                        ("indent_guide_colors", "4"), ("indent_guide_active", "on"),
-                        ("indent_guide_width", "4"))
+                        ("indent_guide_style", "rainbow"), ("indent_guide_color_count", "4"),
+                        ("indent_guide_highlight_current", "on"), ("indent_guide_width", "4"),
+                        ("list_eol", "on"), ("list_tab", "on"), ("list_wide_space", "on"),
+                        ("list_space", "trail"))
 
 
 # 製品が今の版で読み書きする設定ファイルの名前。道具が設定の置き場を決めるのはここと settings_path
-# の 1 か所で、版が上がったとき（settings.v5・#1668・settings.v6・#1933）はこの名前だけを直す（#1784）。
-# 道具は今の版の 1 つだけを書くので、v6 を読まない exe（1.1.0 と #1933 より前の main）を道具で動かすと
+# の 1 か所で、版が上がったとき（settings.v5・#1668・settings.v6・#1933・settings.v7・#1977）はこの名前だけを
+# 直す（#1784）。道具は今の版の 1 つだけを書くので、v7 を読まない exe（1.2.0 と #1977 より前の main）を道具で動かすと
 # 書いた設定は効かず既定のまま動く（minimap・lsp のベンチや verify-settings.py。古い exe を測る道具は
 # 今は無いので直さない・ADR 0192 の限界・#1956 の R5）。
-SETTINGS_FILE = "settings.v6"
+SETTINGS_FILE = "settings.v7"
 
 
 def settings_path(environment: dict) -> Path:
@@ -338,7 +339,7 @@ def await_text(path: Path, expected: str, seconds: float = 5.0) -> str | None:
 
 def write_settings(environment: dict, changed: dict[str, str] | None = None,
                    lsp_commands: dict[str, str] | None = None) -> Path:
-    """Write NeNeNib/settings.v6 of the tool profile the environment names; return its path.
+    """Write NeNeNib/settings.v7 of the tool profile the environment names; return its path.
 
     Every fixed key is written with the value an editor without a settings file uses, except the
     ones named in changed; lsp_commands adds one lsp.<language>.command line per language (ADR
@@ -353,7 +354,7 @@ def write_settings(environment: dict, changed: dict[str, str] | None = None,
     fields = dict(SETTINGS_DEFAULTS)
     unknown = set(changed or {}) - set(fields)
     if unknown:
-        raise AssertionError(f"settings.v6 has no key {sorted(unknown)}")
+        raise AssertionError(f"settings.v7 has no key {sorted(unknown)}")
     fields.update(changed or {})
     lines = [f"{key}={value}" for key, value in fields.items()]
     lines += [f"lsp.{language}.command={command}"

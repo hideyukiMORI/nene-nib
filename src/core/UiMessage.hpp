@@ -464,12 +464,12 @@ enum class UiMessage : std::uint16_t
     settings_indent_guide_style_description,
     settings_indent_guide_style_rainbow,
     settings_indent_guide_style_plain,
-    settings_indent_guide_colors_name,
-    settings_indent_guide_colors_description,
-    settings_indent_guide_active_name,
-    settings_indent_guide_active_description,
-    settings_indent_guide_active_on,
-    settings_indent_guide_active_off,
+    settings_indent_guide_color_count_name,
+    settings_indent_guide_color_count_description,
+    settings_indent_guide_highlight_current_name,
+    settings_indent_guide_highlight_current_description,
+    settings_indent_guide_highlight_current_on,
+    settings_indent_guide_highlight_current_off,
     settings_indent_guide_width_name,
     settings_indent_guide_width_description,
     // 枠の「広げる / 狭める」の 1 回分と、Vim の回数なしの Ctrl-w がそれに従うかの設定の画面の行
@@ -511,10 +511,27 @@ enum class UiMessage : std::uint16_t
     // M1・R2）。
     notice_server_edit_unsent,
     notice_server_edit_not_utf8,
+    // 不可視文字の設定の行（ADR 0193 の決定 4・#1977）。全体のスイッチ・種類ごとの 4 つの行・2 つの
+    // 選択肢（出す / 出さない）・空白の 3 つの選択肢。
+    settings_list_name,
+    settings_list_description,
+    settings_list_eol_name,
+    settings_list_eol_description,
+    settings_list_tab_name,
+    settings_list_tab_description,
+    settings_list_wide_space_name,
+    settings_list_wide_space_description,
+    settings_list_space_name,
+    settings_list_space_description,
+    settings_list_mark_shown,
+    settings_list_mark_hidden,
+    settings_list_space_none,
+    settings_list_space_trail,
+    settings_list_space_all,
 };
 
 // 値の数（最後の値から数える・足し方の 1）。列の大きさはこの数で、static_assert
 // が埋まりを守る。
 inline constexpr std::size_t ui_message_count =
-    std::to_underlying(UiMessage::notice_server_edit_not_utf8) + 1U;
+    std::to_underlying(UiMessage::settings_list_space_all) + 1U;
 } // namespace nenenib::core

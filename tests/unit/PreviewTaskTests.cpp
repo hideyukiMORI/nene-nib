@@ -1,6 +1,10 @@
 // プレビューのタスクリストの切り替えの application の契約（ADR 0155 の追補 24〜26・#1101）。
 // クリックの意図 → 印の 1 バイトを置き換える Edit 1 回・undo で戻る・古い結果の 1
 // 行・改訂番号の道で 描き直す・キャレットは動かない。
+#include "Column.hpp"
+#include "DeleteDirection.hpp"
+#include "DeleteText.hpp"
+#include "DeleteUnit.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorController.hpp"
@@ -8,6 +12,7 @@
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InsertText.hpp"
+#include "LineNumber.hpp"
 #include "MarkdownOutcome.hpp"
 #include "MarkdownParse.hpp"
 #include "MarkdownStop.hpp"
@@ -32,6 +37,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 namespace nenenib::tests
@@ -141,6 +147,24 @@ void verify_stale_result_is_refused()
     expect(body_of(no_task) == "text\n\n- [ ] a" &&
                message_of(no_task) == "プレビューが古いので切り替えられません",
            "a block without a task is refused");
+
+    // 印の位置は同じでも、3 バイトが `[ ]` `[x]` `[X]` の形でなくなっていれば同じく断る（追補
+    // 24）。
+    for (const auto &[column, typed, shown] :
+         {std::tuple{std::size_t{4}, "q", "- [q] a"}, std::tuple{std::size_t{5}, ")", "- [ ) a"}})
+    {
+        Editing edited;
+        open_previewed(edited, "- [ ] a");
+        auto &edit = edited.controller();
+        applied(edit, app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{column}},
+                                      core::SelectionAnchoring::collapse});
+        applied(edit, app::DeleteText{core::DeleteDirection::forward, core::DeleteUnit::character});
+        applied(edit, app::InsertText{typed});
+        const EditorFrame broken = edit.apply_frame(app::TogglePreviewTask{0});
+        expect(body_of(broken) == shown &&
+                   message_of(broken) == "プレビューが古いので切り替えられません",
+               "a mark whose brackets no longer read as a task is refused");
+    }
 }
 
 // 3. 描き直しは改訂番号の道（決定 8）。切り替えの後に tick 2 回で今の本文を頼む。

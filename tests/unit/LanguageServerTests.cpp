@@ -14,6 +14,7 @@
 #include "DiagnosticSpan.hpp"
 #include "DiagnosticsCount.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
 #include "EditorIntent.hpp"
@@ -37,6 +38,7 @@
 #include "LayoutRect.hpp"
 #include "LineView.hpp"
 #include "LspDiagnostics.hpp"
+#include "LspRequestKind.hpp"
 #include "NewTab.hpp"
 #include "Offset.hpp"
 #include "OpenCompletion.hpp"
@@ -49,6 +51,7 @@
 #include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "ScrollLines.hpp"
+#include "SelectAll.hpp"
 #include "SelectDisplay.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
@@ -61,9 +64,11 @@
 #include "ServerStarted.hpp"
 #include "Session.hpp"
 #include "SessionTab.hpp"
+#include "SettingsFailure.hpp"
 #include "SplitLayout.hpp"
 #include "SplitPane.hpp"
 #include "StatusItems.hpp"
+#include "SubmitCommand.hpp"
 #include "SwitchTab.hpp"
 #include "TabStep.hpp"
 #include "TabTipMeasure.hpp"
@@ -71,6 +76,8 @@
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "TextViewGeometry.hpp"
+#include "UiMessage.hpp"
+#include "UiTexts.hpp"
 #include "VimAction.hpp"
 #include "VimCharacter.hpp"
 #include "VimKey.hpp"
@@ -84,6 +91,7 @@
 #include "WorkCompleted.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -169,6 +177,28 @@ void started(Editing &editing)
         editing,
         app::ServerMessage{
             R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
+}
+
+// 読めない本文（JSON でない・JSON-RPC の形でない）は捨てる（receive_server
+// の決まり）。何も送り返さず、 待っている `initialize` の答えはその後に届いても読む。
+void verify_unreadable_messages_dropped()
+{
+    Editing editing(lsp_settings(true));
+    hold_documents(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(source_path)});
+    static_cast<void>(delivered(editing, app::ServerStarted{}));
+    auto &server = editing.language_server();
+    const std::size_t sent = server.sent().size();
+    static_cast<void>(delivered(editing, app::ServerMessage{"not json"}));
+    static_cast<void>(delivered(editing, app::ServerMessage{R"({"jsonrpc":"2.0"})"}));
+    expect(server.sent().size() == sent, "an unreadable message is dropped without an answer");
+    static_cast<void>(delivered(
+        editing,
+        app::ServerMessage{
+            R"({"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":2}}})"}));
+    expect(server.sent().size() == sent + 2 &&
+               contains(server.sent().at(sent), R"("method":"initialized")"),
+           "the answer to initialize after the dropped messages still starts the server");
 }
 
 // 設定の 1 行を起こす要求にする（決定 7）。
@@ -282,6 +312,33 @@ void verify_switch()
     const auto asked = run_ex(editing.controller(), "set lsp?");
     expect(message(asked) == "lsp=on" && server.launches().size() == 2,
            "set lsp? only tells the current value");
+    // 保存できなければ断り、子はそのまま（決定 7「保存できなければ断る」）。
+    editing.settings().fail(app::SettingsFailure::unwritable);
+    const auto refused = run_ex(editing.controller(), "set nolsp");
+    expect(message(refused) == "Settings could not be saved" &&
+               !contains(last_sent(editing), R"("method":"shutdown")") &&
+               saved_lsp(editing) == std::optional<bool>{true},
+           "set nolsp that cannot be saved is refused and keeps the server");
+}
+
+// `shutdown` を送った後に子が答えずに終わったのは頼んだ終わりで、失敗として知らせない（決定 6）。
+void verify_exit_while_shutting_down()
+{
+    Editing editing(lsp_settings(true));
+    started(editing);
+    static_cast<void>(run_ex(editing.controller(), "set nolsp"));
+    const auto ended = delivered(editing, app::ServerExited{0});
+    // 同じ終わりを shutdown の前に受けたときの知らせ（決定 6）は出さない。
+    const std::string failure = core::ui_text_filled(core::UiMessage::notice_language_server_ended,
+                                                     core::DisplayLanguage::japanese, {"cpp"});
+    expect(editing.language_server().stops() == 1 && message(ended) != failure &&
+               saved_lsp(editing) == std::optional<bool>{false},
+           "a child that ends after shutdown is stopped without a failure notice");
+    // 対照: shutdown を頼んでいない子の終わりは、その知らせを出す。
+    Editing crashed(lsp_settings(true));
+    started(crashed);
+    expect(message(delivered(crashed, app::ServerExited{0})) == failure,
+           "a child that ends on its own is told as a failure");
 }
 
 // 失敗は 1 行の知らせ・自動の再起動は 3 回まで・超えたら止まり `:set lsp` で再開（決定 6）。
@@ -841,23 +898,25 @@ void verify_diagnostic_frame()
            "the window's count reads the same value as the frame");
 }
 
-// 決定 4 の追補（R3-3）: マクロの録画中は診断の文を出さず `recording @a` を隠さない。窓の口
-// diagnostic_message_shown は frame の文の有無と同じ値。
+// 決定 4 の追補（R3-3）: マクロの録画中は診断の文を出さず `recording @a` を隠さない。
+// 2026-11-24 の追補（#2025）: 文が出たままモードを切り替えると、frame
+// のモードとモードの文が変わり、 文も残る（窓はモードの文の後ろに文を書くので、切り替えが見える）。
 void verify_recording_hides_message()
 {
     Editing editing(lsp_settings(true));
     diagnosed(editing);
+    const auto ordinary = editing.controller().apply_frame(app::WorkCompleted{});
     applied(editing.controller(), app::SelectEditMode{core::EditMode::vim});
     const auto shown = editing.controller().apply_frame(app::WorkCompleted{});
-    expect(diagnostic_message(shown) == "w" && editing.controller().diagnostic_message_shown(),
-           "the message shows in Vim mode and the window's reading agrees");
+    expect(diagnostic_message(shown) == "w" && shown.mode == core::EditMode::vim &&
+               shown.mode_label != ordinary.mode_label,
+           "switching to Vim on a diagnostic changes the mode and its label and keeps the message");
     for (const auto &key : vim_keys_of("qa"))
     {
         applied(editing.controller(), app::VimKeyPress{key});
     }
     const auto recording = editing.controller().frame();
-    expect(recording.recording.has_value() && diagnostic_message(recording) == "<none>" &&
-               !editing.controller().diagnostic_message_shown(),
+    expect(recording.recording.has_value() && diagnostic_message(recording) == "<none>",
            "recording a macro hides the diagnostic message so `recording @a` stays visible");
     for (const auto &key : vim_keys_of("q"))
     {
@@ -1286,6 +1345,115 @@ void verify_request_expiry()
            "a silent hover request is cancelled after two ticks without a notice");
     answer_with(editing, id, R"({"contents":"late"})");
     expect(hover_text(editing) == "<none>", "the answer after the expiry is dropped");
+}
+
+// 要求の種類の数（値は 0 から並ぶ・網羅の switch なので種類が増えればここで落ちる）。
+[[nodiscard]] constexpr bool is_request_kind(app::LspRequestKind kind) noexcept
+{
+    switch (kind)
+    {
+    case app::LspRequestKind::initialize:
+    case app::LspRequestKind::shutdown:
+    case app::LspRequestKind::completion:
+    case app::LspRequestKind::hover:
+    case app::LspRequestKind::definition:
+    case app::LspRequestKind::references:
+    case app::LspRequestKind::document_symbol:
+    case app::LspRequestKind::signature_help:
+    case app::LspRequestKind::formatting:
+    case app::LspRequestKind::range_formatting:
+    case app::LspRequestKind::prepare_rename:
+    case app::LspRequestKind::rename:
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] consteval std::size_t request_kind_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_request_kind(static_cast<app::LspRequestKind>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
+using AskedKind = std::pair<app::LspRequestKind, std::string_view>;
+// 寿命の 2 つ（initialize・shutdown）は別の扱い（失敗に数える・止める）なので、ほかの全部。
+constexpr std::array<AskedKind, 10> asked_kinds{{
+    {app::LspRequestKind::completion, "textDocument/completion"},
+    {app::LspRequestKind::hover, "textDocument/hover"},
+    {app::LspRequestKind::definition, "textDocument/definition"},
+    {app::LspRequestKind::references, "textDocument/references"},
+    {app::LspRequestKind::document_symbol, "textDocument/documentSymbol"},
+    {app::LspRequestKind::signature_help, "textDocument/signatureHelp"},
+    {app::LspRequestKind::formatting, "textDocument/formatting"},
+    {app::LspRequestKind::range_formatting, "textDocument/rangeFormatting"},
+    {app::LspRequestKind::prepare_rename, "textDocument/prepareRename"},
+    {app::LspRequestKind::rename, "textDocument/rename"},
+}};
+static_assert(asked_kinds.size() + 2 == request_kind_count(),
+              "every request kind but the two of the lifecycle is listed");
+
+// 1 種類の要求を頼む（名前の変更は prepareProvider
+// の有無で変えられる所の問いと名前の変更を分ける）。
+[[nodiscard]] bool asked_once(app::EditorController &controller, app::LspRequestKind kind)
+{
+    switch (kind)
+    {
+    case app::LspRequestKind::initialize:
+    case app::LspRequestKind::shutdown:
+        return false;
+    case app::LspRequestKind::completion:
+        return controller.request_completion(1);
+    case app::LspRequestKind::hover:
+        return controller.request_hover();
+    case app::LspRequestKind::definition:
+        return controller.request_definition();
+    case app::LspRequestKind::references:
+        return controller.request_references();
+    case app::LspRequestKind::document_symbol:
+        return controller.request_document_symbols();
+    case app::LspRequestKind::signature_help:
+        return controller.request_signature_help(std::nullopt, false);
+    case app::LspRequestKind::formatting:
+        return controller.request_formatting(false);
+    case app::LspRequestKind::range_formatting:
+        applied(controller, app::SelectAll{});
+        return controller.request_formatting(true);
+    case app::LspRequestKind::prepare_rename:
+    case app::LspRequestKind::rename:
+        applied(controller, app::QueryLanguage{core::LanguageQueryKind::rename});
+        applied(controller, app::CommandText{"x"});
+        applied(controller, app::SubmitCommand{});
+        return true;
+    }
+    return false;
+}
+
+// 寿命のほかの要求は全部、答えないまま 2 回の tick で `$/cancelRequest` を送って捨て、知らせも止め
+// もしない（ADR 0190 の決定 1・名前の変更も同じ待ちの上限・ADR 0194 の 31 行）。
+void verify_every_request_expires()
+{
+    constexpr std::string_view abilities =
+        R"("textDocumentSync":2,"completionProvider":{},"hoverProvider":true,"definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true,"signatureHelpProvider":{},"documentFormattingProvider":true,"documentRangeFormattingProvider":true)";
+    for (const auto &[kind, method] : asked_kinds)
+    {
+        Editing editing(lsp_settings(true));
+        const bool prepares = kind == app::LspRequestKind::prepare_rename;
+        started_with(editing, "{" + std::string(abilities) +
+                                  (prepares ? R"(,"renameProvider":{"prepareProvider":true}})"
+                                            : R"(,"renameProvider":true})"));
+        auto &controller = editing.controller();
+        const bool asked = asked_once(controller, kind);
+        const std::int64_t id = last_request(editing, method);
+        static_cast<void>(controller.apply_frame(app::LanguageServerTick{}));
+        const auto stale = controller.apply_frame(app::LanguageServerTick{});
+        expect(asked && id >= 0 && editing.language_server().cancelled() == std::vector{id} &&
+                   message(stale).empty() && editing.language_server().stops() == 0,
+               "every request kind but the lifecycle is cancelled after two ticks silently");
+    }
 }
 
 // ---------------------------------------------- 段 L3: hover の札と定義へ（ADR 0190 の決定
@@ -1955,6 +2123,57 @@ void verify_diagnostics_uri_forms()
     }
 }
 
+// uri の無い publishDiagnostics と、診断の列が読めない publishDiagnostics は捨てる（送った覚えの
+// ない文書の診断は捨てる・決定 2）。前に置いた診断は残す。
+void verify_unplaceable_diagnostics_dropped()
+{
+    Editing editing(lsp_settings(true));
+    started_with_lines(editing);
+    editing.language_server().publish(source_uri, 0, main_error);
+    static_cast<void>(editing.controller().apply_frame(app::WorkCompleted{}));
+    const std::string without_uri =
+        R"({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"diagnostics":)" +
+        std::string(int_warning) + "}}";
+    const std::string unreadable =
+        R"({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":")" +
+        std::string(source_uri) + R"(","diagnostics":5}})";
+    for (const std::string &body : {without_uri, unreadable})
+    {
+        const auto frame = delivered(editing, app::ServerMessage{body});
+        expect(underlined(frame.lines.at(0), 5, 9, core::DiagnosticSeverity::error),
+               "a publish without a URI or with unreadable diagnostics is dropped");
+    }
+}
+
+// 起こせない理由の数（値は 0 から並ぶ・網羅の switch なので値が増えればここで落ちる）。
+[[nodiscard]] constexpr bool is_server_failure(app::ServerFailure failure) noexcept
+{
+    switch (failure)
+    {
+    case app::ServerFailure::not_found:
+    case app::ServerFailure::cannot_start:
+    case app::ServerFailure::pipe_failed:
+    case app::ServerFailure::write_failed:
+    case app::ServerFailure::read_failed:
+    case app::ServerFailure::message_too_long:
+    case app::ServerFailure::header_too_long:
+    case app::ServerFailure::not_absolute:
+    case app::ServerFailure::script_refused:
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] consteval std::size_t server_failure_count() noexcept
+{
+    std::size_t count = 0;
+    while (is_server_failure(static_cast<app::ServerFailure>(count)))
+    {
+        ++count;
+    }
+    return count;
+}
+
 // 2026-11-20 の追補（#1897）: 起こせない理由を分けて 1 行で知らせる。
 void verify_start_failure_notices()
 {
@@ -1974,6 +2193,17 @@ void verify_start_failure_notices()
                 "言語サーバーに .cmd / .bat は使えません（node.exe とスクリプトで書きます）: cpp" &&
             told(app::ServerFailure::pipe_failed) == "言語サーバーを起こせませんでした: cpp",
         "missing, relative, script and other start failures are told apart");
+    // 名指しの 3 つのほかは全部同じ「起こせませんでした」（ADR 0160 の 2026-11-20 の追補）。値は
+    // server_failure_count() の全部を回すので、足した値も「ほか」の行で縛られる。
+    for (std::size_t index = 0; index < server_failure_count(); ++index)
+    {
+        const auto failure = static_cast<app::ServerFailure>(index);
+        const bool named = failure == app::ServerFailure::not_found ||
+                           failure == app::ServerFailure::not_absolute ||
+                           failure == app::ServerFailure::script_refused;
+        expect(named || told(failure) == "言語サーバーを起こせませんでした: cpp",
+               "every other start failure says the server could not be started");
+    }
 }
 
 // 2026-11-20 の追補（#1897）: 表に無い名前の命令の行（後の版が足す言語）は使わない。
@@ -1996,7 +2226,9 @@ void verify_language_server_contracts()
     verify_server_command();
     verify_ex_lsp_option();
     verify_lifecycle();
+    verify_unreadable_messages_dropped();
     verify_switch();
+    verify_exit_while_shutting_down();
     verify_language_server_slots();
     verify_restart_limit();
     verify_failures_reset();
@@ -2025,6 +2257,7 @@ void verify_language_server_contracts()
     verify_cancel();
     verify_completion_answer();
     verify_request_expiry();
+    verify_every_request_expires();
     verify_language_queries();
     verify_abilities_one_by_one();
     verify_requests_need_a_sent_document();
@@ -2033,6 +2266,7 @@ void verify_language_server_contracts()
     verify_unsynced_diagnostics();
     verify_did_save();
     verify_diagnostics_uri_forms();
+    verify_unplaceable_diagnostics_dropped();
     verify_start_failure_notices();
     verify_unknown_command_rows_unused();
     verify_language_server_log();

@@ -44,9 +44,14 @@ struct SettingsFields
     std::optional<std::string_view> pane_resize_step_vim;
     // v6 だけの鍵。インデントガイドの形（ADR 0193 の決定 4）。
     std::optional<std::string_view> indent_guide_style;
-    std::optional<std::string_view> indent_guide_colors;
-    std::optional<std::string_view> indent_guide_active;
+    std::optional<std::string_view> indent_guide_color_count;
+    std::optional<std::string_view> indent_guide_highlight_current;
     std::optional<std::string_view> indent_guide_width;
+    // v7 だけの鍵。不可視文字の種類ごとのスイッチ（ADR 0193 の 2026-11-24 の追補 2・#1977）。
+    std::optional<std::string_view> list_eol;
+    std::optional<std::string_view> list_tab;
+    std::optional<std::string_view> list_wide_space;
+    std::optional<std::string_view> list_space;
     // `lsp.<language>.command` の行（鍵の中の言語の名前と値・読んだ順）。
     std::vector<std::pair<std::string_view, std::string_view>> lsp_commands;
     // Vim の `map.<modes>.<lhs>` の行（鍵の全体と値・ファイルの中の順）と `mapleader`
