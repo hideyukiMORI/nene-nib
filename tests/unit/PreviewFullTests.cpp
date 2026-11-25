@@ -3,6 +3,8 @@
 #include "ActOnLinkCard.hpp"
 #include "ActivateCommandChoice.hpp"
 #include "AdjustFontSize.hpp"
+#include "AutosaveId.hpp"
+#include "AutosaveRemnant.hpp"
 #include "AutosaveTick.hpp"
 #include "CancelCommand.hpp"
 #include "CancelComposition.hpp"
@@ -22,7 +24,9 @@
 #include "CopyTabName.hpp"
 #include "DeleteDirection.hpp"
 #include "DeleteText.hpp"
+#include "DiscardAutosave.hpp"
 #include "DisplayForm.hpp"
+#include "DisplayLanguage.hpp"
 #include "EditCommand.hpp"
 #include "EditMode.hpp"
 #include "Editing.hpp"
@@ -77,10 +81,13 @@
 #include "PreviewSelectionText.hpp"
 #include "PreviewTick.hpp"
 #include "ResizeExplorer.hpp"
+#include "RestoreAutosave.hpp"
 #include "RevealTab.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
+#include "ScriptedAutosave.hpp"
+#include "ScriptedBookmarks.hpp"
 #include "ScriptedFiles.hpp"
 #include "ScriptedMarkdown.hpp"
 #include "ScrollExplorer.hpp"
@@ -106,9 +113,11 @@
 #include "SwitchTab.hpp"
 #include "TabNamePart.hpp"
 #include "TabStep.hpp"
+#include "TabTitle.hpp"
 #include "TestSupport.hpp"
 #include "TextEncoding.hpp"
 #include "TextPosition.hpp"
+#include "ToggleBookmark.hpp"
 #include "ToggleExplorer.hpp"
 #include "TogglePreview.hpp"
 #include "TogglePreviewTask.hpp"
@@ -1124,6 +1133,81 @@ void verify_full_preview_passes_input()
     };
     expect_all_pass(passing);
 }
+
+// 前回のプロセスが残した退避の 1 本（location は替え玉が本文を引く鍵）。
+[[nodiscard]] app::AutosaveRemnant full_remnant(std::string location)
+{
+    const auto path = core::FilePath::parse("C:\\work\\restored.md").value();
+    auto title =
+        core::tab_title_for(path, core::SaveState::modified, core::DisplayLanguage::japanese);
+    return app::AutosaveRemnant{std::move(location), app::AutosaveId{0}, path, std::move(title),
+                                core::TextPosition{core::LineNumber{1}, core::Column{1}}};
+}
+
+// 全面の間の起動の問いの答え（ADR 0155 の 2026-11-25
+// の追補・#2031）。「はい」は今の本文を置き換えず、
+// 戻した分を帯の末尾の新しいタブに足して切り替える。全面のプレビューは窓の値なので新しいタブに残り、
+// 戻したタブの本文で頼み直す。「いいえ」は残骸を forget するだけで何も変えない。
+void verify_full_preview_autosave_answers()
+{
+    Editing editing;
+    open_text(editing, "# title\n\ntext");
+    auto &controller = editing.controller();
+    editing.autosave().remain(full_remnant("2031/0"), "# restored\n\nbody");
+    static_cast<void>(controller.autosave_remnants());
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    const std::size_t asked = editing.markdown().requests().size();
+    const auto restored = controller.apply_frame(app::RestoreAutosave{});
+    expect(restored.tabs.size() == 2 && restored.active_tab == 1 &&
+               message_of(restored) != refused && controller.text().text() == "# restored\n\nbody",
+           "restoring in full adds the remnant as a new tab and switches to it");
+    expect(restored.full_preview.has_value() && editing.markdown().requests().size() == asked + 1 &&
+               *editing.markdown().requests().back().text == "# restored\n\nbody",
+           "the full preview stays on the restored tab and asks for its text");
+    const auto first = controller.apply_frame(app::SwitchTab{0});
+    expect(controller.text().text() == "# title\n\ntext" &&
+               first.document.save_state == core::SaveState::saved,
+           "the body that was shown before restoring is not replaced");
+    expect(editing.autosave().forgotten() == std::vector<std::string>{"2031/0"},
+           "the remnant is forgotten after restoring");
+
+    Editing other;
+    open_text(other, "# title\n\ntext");
+    other.autosave().remain(full_remnant("2031/1"), "# kept");
+    static_cast<void>(other.controller().autosave_remnants());
+    applied(other.controller(), app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(other);
+    const auto before = other.controller().frame();
+    const std::string shown = other.controller().text().text();
+    const auto discarded = other.controller().apply_frame(app::DiscardAutosave{});
+    expect(discarded.tabs.size() == before.tabs.size() &&
+               other.controller().text().text() == shown && discarded.full_preview.has_value() &&
+               message_of(discarded) != refused &&
+               other.autosave().forgotten() == std::vector<std::string>{"2031/1"},
+           "discarding in full only forgets the remnant and keeps the full preview");
+}
+
+// 全面の間の Ctrl+D と F1 の「ブックマーク」（#2031）。本文を変えず bookmarks
+// のファイルだけを書く。
+void verify_full_preview_bookmark()
+{
+    Editing editing;
+    open_text(editing, "# title\n\ntext");
+    auto &controller = editing.controller();
+    applied(controller, app::SetPreviewPlacement{PreviewPlacement::full});
+    serve_parsed(editing);
+    const auto before = controller.frame();
+    const std::string shown = controller.text().text();
+    const auto toggled = controller.apply_frame(app::ToggleBookmark{});
+    expect(editing.bookmarks().reads() == 1 && editing.bookmarks().writes() == 1 &&
+               editing.bookmarks().written().has_value() && message_of(toggled) != refused,
+           "the bookmark toggle in full reads and writes the bookmarks once");
+    expect(controller.text().text() == shown &&
+               toggled.document.save_state == before.document.save_state &&
+               toggled.full_preview.has_value(),
+           "the toggle leaves the body and the full preview as they were");
+}
 } // namespace
 
 void verify_preview_full_scope()
@@ -1154,5 +1238,7 @@ void verify_preview_full_scope()
     verify_full_preview_passes_input();
     verify_full_preview_menu();
     verify_full_preview_passes_effects();
+    verify_full_preview_autosave_answers();
+    verify_full_preview_bookmark();
 }
 } // namespace nenenib::tests
