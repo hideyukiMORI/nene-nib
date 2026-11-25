@@ -15,7 +15,11 @@
 #include "EditorIntent.hpp"
 #include "EditorOperation.hpp"
 #include "EditorSettings.hpp"
+#include "ExplorerPointing.hpp"
 #include "FilePath.hpp"
+#include "FolderBatch.hpp"
+#include "FolderEntry.hpp"
+#include "FolderProgress.hpp"
 #include "HistoryAction.hpp"
 #include "HistoryDirection.hpp"
 #include "InputLinePrompt.hpp"
@@ -28,15 +32,18 @@
 #include "LspRename.hpp"
 #include "LspWorkspaceEditFailure.hpp"
 #include "LspWorkspaceEdits.hpp"
+#include "NewTab.hpp"
 #include "OpenCommandPalette.hpp"
 #include "OpenDocument.hpp"
 #include "OperationBindings.hpp"
 #include "OperationKey.hpp"
 #include "PlaceCaret.hpp"
+#include "PointExplorer.hpp"
 #include "QueryLanguage.hpp"
 #include "SaveDocument.hpp"
 #include "SaveState.hpp"
 #include "Scopes.hpp"
+#include "ScriptedFolders.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
 #include "ServerMessage.hpp"
@@ -1403,14 +1410,130 @@ void verify_unrelated_tab_closed()
     caret_on_add(unopened);
     renamed_to_sum(unopened);
     applied(unopened.controller(), app::CloseTab{2});
-    const auto refused = answered(unopened, rename_method, clangd_changes());
-    expect(message_of(refused) == notice(unopened, core::UiMessage::notice_server_edit_stale) &&
-               refused.tabs.size() == 2 && whole_vim_body(unopened.controller()) == main_text,
-           "after a copied tab is closed, a file without a tab refuses the whole answer");
+    const auto opened = answered(unopened, rename_method, clangd_changes());
+    expect(message_of(opened) == filled(unopened, core::UiMessage::notice_server_edit_applied_files,
+                                        {"3", "4"}) &&
+               opened.tabs.size() == 3 && whole_vim_body(unopened.controller()) == renamed_main &&
+               tab_is(opened, 2, lib_path, core::SaveState::modified),
+           "closing an unrelated tab keeps an answer that opens a file no tab ever held");
 }
 
-// 写しのタブを閉じた後に開いた別のファイルのタブ（写しに無い・改訂番号 0・保存済み）を当て先に
-// 含む答えは断る（#2041 のレビュー P2）。
+// 無題のタブ（写しではパスが無い）を閉じただけなら、タブの無いファイルを含む答えも当てる（#2042 の
+// 断りすぎない側）。
+void verify_untitled_tab_closed()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    applied(editing.controller(), app::NewTab{});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    const auto before = editing.controller().frame();
+    expect(before.tabs.size() == 3 && !before.tabs.at(2).path.has_value(),
+           "the untitled tab sits right after main.cpp before it is closed");
+    applied(editing.controller(), app::CloseTab{2});
+    const auto frame = answered(editing, rename_method, clangd_changes());
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"3", "4"}) &&
+               frame.tabs.size() == 3 && whole_vim_body(editing.controller()) == renamed_main,
+           "closing an untitled tab keeps an answer that opens a file without a tab");
+}
+
+constexpr std::string_view moved_header_path = "C:\\work\\lib2.hpp";
+
+// lib.hpp（未保存の変更あり・頼んだ席が開いている・帯の 0）を、答えの前に「名前を付けて保存」で
+// target にしてから main.cpp へ戻り、answer で答える（#2042）。
+[[nodiscard]] app::EditorFrame header_saved_as(Editing &editing, std::string_view target,
+                                               const std::string &answer)
+{
+    started_with_header_opened(editing);
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::InsertText{"x"});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SaveDocument{path_of(target), core::TextEncoding::utf8});
+    applied(editing.controller(), app::SwitchTab{1});
+    return answered(editing, rename_method, answer);
+}
+
+// 名前を付けて保存でタブが別のパスになった後は、元のパス（ディスクの古い本文）にも、保存先の
+// パス（頼んだときは別のファイルだったタブ）にも当てず、全体を断る（#2042・#2041 のレビュー P1）。
+void verify_saved_as_other_path()
+{
+    Editing left(lsp_on());
+    const auto old_path = header_saved_as(left, moved_header_path, main_and_header());
+    expect(message_of(old_path) == notice(left, core::UiMessage::notice_server_edit_stale) &&
+               old_path.active_tab == 1 && old_path.tabs.size() == 2 &&
+               tab_is(old_path, 0, moved_header_path, core::SaveState::saved) &&
+               whole_vim_body(left.controller()) == main_text,
+           "a tab saved under another path refuses an answer for the path it left");
+    Editing taken(lsp_on());
+    const auto new_path = header_saved_as(taken, lib_path,
+                                          R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) +
+                                              "," + uri_edits(lib_uri, add_to_sum()) + "}}");
+    expect(message_of(new_path) == notice(taken, core::UiMessage::notice_server_edit_stale) &&
+               new_path.tabs.size() == 2 && tab_is(new_path, 0, lib_path, core::SaveState::saved) &&
+               whole_vim_body(taken.controller()) == main_text &&
+               body_of_tab(taken, 0) == "x" + std::string{header_text},
+           "a tab saved over another file refuses an answer counted on that file's old text");
+}
+
+[[nodiscard]] SettingsReading lsp_with_explorer()
+{
+    auto settings = core::default_editor_settings();
+    settings.lsp = true;
+    settings.lsp_commands = {{"cpp", std::string{clangd_command}}};
+    settings.explorer = true;
+    settings.root = path_of("C:\\work");
+    return SettingsReading{std::optional<core::EditorSettings>{std::move(settings)}};
+}
+
+void clicked_row(Editing &editing, std::size_t row)
+{
+    applied(editing.controller(), app::PointExplorer{row, app::ExplorerPointing::pressed});
+    applied(editing.controller(), app::PointExplorer{row, app::ExplorerPointing::released});
+}
+
+// プレビューのタブ（エクスプローラーの 1 回クリックで見ただけのタブ）が答えの前に別のファイルに
+// 置き換わっても、関係の無い答えは当てる（#2042 の断りすぎない側・#2041 のレビュー C1）。
+void verify_preview_tab_replaced()
+{
+    constexpr std::string_view memo_path = "C:\\work\\memo.txt";
+    Editing editing(lsp_with_explorer());
+    editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
+    editing.files().hold_at(std::string(memo_path), Bytes{std::string("memo\n")});
+    const auto ticket = editing.folders().requests().back().ticket;
+    started_with_header_opened(editing);
+    editing.folders().serve(app::FolderBatch{ticket,
+                                             {app::FolderEntry{path_of(notes_path), false, false},
+                                              app::FolderEntry{path_of(memo_path), false, false}},
+                                             app::FolderProgress::complete});
+    applied(editing.controller(), app::WorkCompleted{});
+    clicked_row(editing, 0);
+    const auto previewed = editing.controller().frame();
+    expect(previewed.tabs.size() == 3 && tab_is(previewed, 2, notes_path, core::SaveState::saved) &&
+               previewed.tabs.at(2).transient,
+           "one click opens notes.txt as the preview tab after main.cpp");
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    clicked_row(editing, 1);
+    const auto replaced = editing.controller().frame();
+    expect(replaced.tabs.size() == 3 && tab_is(replaced, 2, memo_path, core::SaveState::saved),
+           "the next click replaces the preview tab with memo.txt");
+    applied(editing.controller(), app::SwitchTab{1});
+    const auto frame = answered(editing, rename_method, clangd_changes());
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"3", "4"}) &&
+               frame.tabs.size() == 4 && whole_vim_body(editing.controller()) == renamed_main &&
+               body_of_tab(editing, 0) == renamed_header,
+           "replacing the preview tab keeps an answer on files it never showed");
+}
+
+// 写しのタブ（関係の無い notes.txt）を閉じた後に開いた別のファイルのタブ（写しに無い・改訂番号
+// 0・保存済み）は、頼んだときにタブに無かったファイルなので当てる（#2042・#2039 では断っていた）。
 void verify_opened_after_closing()
 {
     Editing editing(lsp_on());
@@ -1426,15 +1549,17 @@ void verify_opened_after_closing()
     const auto frame = answered(editing, rename_method,
                                 R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
                                     uri_edits(lib_uri, add_to_sum()) + "}}");
-    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
-               frame.tabs.size() == 3 && whole_vim_body(editing.controller()) == main_text &&
-               tab_is(frame, 2, lib_path, core::SaveState::saved) &&
-               body_of_tab(editing, 2) == lib_text,
-           "after a copied tab is closed, a tab opened later refuses the whole answer");
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "2"}) &&
+               frame.tabs.size() == 3 &&
+               whole_vim_body(editing.controller()) == half_renamed_main &&
+               tab_is(frame, 2, lib_path, core::SaveState::modified) &&
+               body_of_tab(editing, 2) == renamed_lib,
+           "after an unrelated tab is closed, a tab opened later for another file is renamed");
 }
 
-// 写しのタブを閉じた後に、まだ読んでいないタブ（前回のタブ・写しに無い）を当て先に含む答えは
-// 断り、そのタブを読まない（#2041 のレビュー P2）。
+// 写しのタブ（関係の無い notes.txt）を閉じた後でも、まだ読んでいないタブ（前回のタブ・写しに
+// 無い）は読んで当てる（#2042・#2039 では断っていた）。
 void verify_unread_after_closing()
 {
     const auto listed = [](std::string_view path, std::size_t rank)
@@ -1465,12 +1590,12 @@ void verify_unread_after_closing()
     const auto frame = answered(editing, rename_method,
                                 R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
                                     uri_edits(header_uri, add_to_sum()) + "}}");
-    const auto &requests = editing.reads().requests();
-    expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
-               frame.tabs.size() == 2 && whole_vim_body(editing.controller()) == main_text &&
-               std::ranges::none_of(requests, [](const app::DocumentReadRequest &request)
-                                    { return request.path.text() == header_path; }),
-           "after a copied tab is closed, a tab not read yet refuses the answer and stays unread");
+    expect(message_of(frame) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "2"}) &&
+               frame.tabs.size() == 2 &&
+               whole_vim_body(editing.controller()) == half_renamed_main &&
+               body_of_tab(editing, 1) == renamed_header,
+           "after an unrelated tab is closed, a tab not read yet is read and renamed");
 }
 } // namespace
 
@@ -1509,6 +1634,9 @@ void verify_lsp_rename_scope()
     verify_c_header(true);
     verify_closed_copied_tab();
     verify_unrelated_tab_closed();
+    verify_untitled_tab_closed();
+    verify_saved_as_other_path();
+    verify_preview_tab_replaced();
     verify_opened_after_closing();
     verify_unread_after_closing();
 }
