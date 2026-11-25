@@ -12,7 +12,7 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 ## いまの状態（2026-11-25）
 
 - **公開版は 1.1.0**: Microsoft Store と [GitHub の v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0)（2026-11-23 12:43 JST）。区切りはまとめ枝 46 ＋ 47、公開元は main `4fcf258c`。記録は [release-1.1.0-2026-11-17.md](../quality/release-1.1.0-2026-11-17.md)、手順は `D:/NeNeNib/evidence/v1.1.0-release/README.md`。
-- **次の版は 1.2.0**（D115）: **公開元は main `b8f0a919`**（2026-11-25・まとめ枝 52 = PR #2052 ＋ 公開の記録と掲載文の PR #2053）。**梱包と照合まで済み**（`D:/NeNeNib/releases/v1.2.0/` の ZIP と Store 用の MSIX・`D:/NeNeNib/evidence/v1.2.0-release/final-verification.md`）、残りは hide の手（実機の確かめ → WACK → Store の申請）と、認定の後の GitHub の tag と Release。`settings.v6` の鍵の集合は 1.2.0 の公開元で閉じた（後から足すなら `settings.v7`）。**公開まで main に機能を入れない。** 記録は [release-1.2.0-2026-11-25.md](../quality/release-1.2.0-2026-11-25.md)（前半まで）。
+- **次の版は 1.2.0**（D115）: **公開元は main `b8f0a919`**（2026-11-25・まとめ枝 52 = PR #2052 ＋ 公開の記録と掲載文の PR #2053）。**梱包と照合まで済み**（`D:/NeNeNib/releases/v1.2.0/` の ZIP と Store 用の MSIX・`D:/NeNeNib/evidence/v1.2.0-release/final-verification.md`）、**WACK は `PASS`（2026-11-25 21:39）・Store へ更新を申請済み（2026-11-25 夜・hide）・認定待ち**。残りは認定の後の GitHub の tag と Release。`settings.v6` の鍵の集合は 1.2.0 の公開元で閉じた（後から足すなら `settings.v7`）。**公開まで main に機能を入れない。** 記録は [release-1.2.0-2026-11-25.md](../quality/release-1.2.0-2026-11-25.md)（前半まで）。
 - **main は公開元 `b8f0a919` ＋ 文書**。1.1.0 の後に入った物の一覧は公開の記録の「中身の一覧」（LSP の言語ごとの席から名前の変更まで・split の大きさ・キャレットの動きと粒・インデントガイド・設定の選ぶ欄 ほか）。
 - **最後のゲート**（まとめ枝 52・木 `5ad83876` = main `68c5059f`）: 速さ 8 本・悪化 0（`D:/NeNeNib/outputs/20261125/gate-int52-valid.log`）・網羅率（QLT-009）90.43%・CI run 45553560292 success。手元の全件は `nib_autosave` の 1 本だけがディスクの混みで Timeout（#2049・CI では成功）。
 - **次の版の PR（どれも draft・公開の後のまとめ枝 53 の候補）**: クイックフィックス（#2005・PR #2022・直しの残りと #2042 を作業中）・不可視文字（#1977・PR #2047・`settings.v7`・レビューの直し済み・hide の試用待ち）・小さな不具合 4 本（#2017 #2018 #2019 #2031 = PR #2043〜#2046・検証済み）。構文の色（#1974）は ADR 0195（PR #2040・提案）と見本 `D:/NeNeNib/evidence/design-20261125/syntax-roles.html`。
@@ -20,7 +20,7 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 
 ## 次の順
 
-1. **1.2.0 を公開する**: 公開元と梱包は済み。残りは hide の実機の確かめ（`D:/NeNeNib/evidence/v1.2.0-release/hide-checklist.md` の手順 1 から・**2-B のふだんの `settings.v6` の 2 行の書き換えを必ず通す**）→ WACK → Store へ更新を申請 → 認定の後に GitHub の tag `v1.2.0` と Release（本文は日英・D120）→ 公開の記録の後半。細部は[引き継ぎ 2026-11-25](../handoffs/2026-11-25.md)。
+1. **1.2.0 を公開する**: 公開元・梱包・WACK・Store の申請（2026-11-25 夜）は済み。残りは Store の認定 → 認定の後に GitHub の tag `v1.2.0` と Release（本文は日英・D120）→ 公開の記録の後半。細部は[引き継ぎ 2026-11-25](../handoffs/2026-11-25.md)。
 2. **1.2.0 の後のまとめ枝 53**: #2042 → クイックフィックス（#2022）・小さな不具合 4 本（#2043〜#2046・#2046 は組む前に独立レビュー）・不可視文字（#2047・hide の試用の後）。その後に構文の色の役割と semantic tokens（#1974・hide の Q1〜Q6 の答えで ADR 0195 を直す）。
 3. **本文の飾りの残り**: 括弧（#1976）・字下げの幅を Vim にも（#1991）。Vim は範囲だけの Ex の行（#2048）を先頭に。
 4. **マーク**（#1932）・root のブックマーク（#1978）・大きさと字体のプレビュー（#1731・D93）。
@@ -35,7 +35,7 @@ GitHub Issue が正で、ここは 1 画面の要約。日ごとの経緯は書�
 
 ## hide の返事待ち
 
-- **1.2.0 の実機の確かめ・WACK・Store の申請**（`hide-checklist.md`）と、`release-smoke.py`（窓を前に出す短い起動の確かめ）を回してよいか。
+- **1.2.0 の申請の紙**（`hide-checklist.md` の手順 10・11 の欄: 新しい申請のボタンの名前・写されなかった欄・提出の日時）と、Store の認定が通ったかどうか。
 - 構文の色の見本の Q1〜Q6（`D:/NeNeNib/evidence/design-20261125/syntax-roles.html`・おすすめ `Q1=A Q2=B Q3=B Q4=A Q5=B Q6=A`）。
 - 不可視文字の試用（`D:/NeNeNib/evidence/20261125-trial/`）。
 - `PRIVACY.md` に足した文（言語サーバーの節は端末の中だけを探して通信しない）と、`let mapleader="<Space>"` を 1 鍵として受け続ける決め（#2044）でよいか。
