@@ -1480,6 +1480,68 @@ void verify_saved_as_other_path()
            "a tab saved over another file refuses an answer counted on that file's old text");
 }
 
+// main.cpp と lib.cpp を当てる答え（lib.cpp は 1 行目の add だけ）。
+[[nodiscard]] std::string main_and_lib()
+{
+    return R"({"changes":{)" + uri_edits(main_uri, add_to_sum()) + "," +
+           uri_edits(lib_uri, add_to_sum()) + "}}";
+}
+
+// 残した断りすぎ（#2042 の (2)・レビュー R13 の P1）: 頼んだ後に「何も書いていない無題」のタブへ
+// 開いたファイル（退避番号が同じまま本文が替わる）を当てる答えは、名前を付けて保存と写しの上で
+// 区別できないので断る。頼み直せば通る。
+void verify_opened_into_blank_untitled()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    applied(editing.controller(), app::NewTab{});
+    applied(editing.controller(), app::SwitchTab{1});
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    applied(editing.controller(), app::SwitchTab{2});
+    applied(editing.controller(), app::OpenDocument{path_of(lib_path)});
+    applied(editing.controller(), app::SwitchTab{1});
+    const auto refused = answered(editing, rename_method, main_and_lib());
+    expect(message_of(refused) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+               refused.tabs.size() == 3 && tab_is(refused, 2, lib_path, core::SaveState::saved) &&
+               whole_vim_body(editing.controller()) == main_text,
+           "a file opened into the blank untitled tab after asking refuses the answer");
+    caret_on_add(editing);
+    renamed_to_sum(editing);
+    const auto again = answered(editing, rename_method, main_and_lib());
+    expect(message_of(again) ==
+                   filled(editing, core::UiMessage::notice_server_edit_applied_files, {"2", "2"}) &&
+               whole_vim_body(editing.controller()) == half_renamed_main &&
+               body_of_tab(editing, 2) == renamed_lib,
+           "asking again after opening into the blank untitled tab applies");
+}
+
+// 同じパスのタブが 2 つある形（ほかのタブが開いているファイルの上に名前を付けて保存した）は、
+// そのファイルを当てる答えを頼み直しても断る（安全の側の限界・レビュー R13 の P2）。
+void verify_two_tabs_of_one_file()
+{
+    Editing editing(lsp_on());
+    started_with_header_opened(editing);
+    applied(editing.controller(), app::OpenDocument{path_of(lib_path)});
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SaveDocument{path_of(lib_path), core::TextEncoding::utf8});
+    applied(editing.controller(), app::SwitchTab{1});
+    const auto doubled = editing.controller().frame();
+    expect(doubled.tabs.size() == 3 && tab_is(doubled, 0, lib_path, core::SaveState::saved) &&
+               tab_is(doubled, 2, lib_path, core::SaveState::saved),
+           "saving over a file another tab holds leaves two tabs of that file");
+    for (const char *said : {"two tabs of one file refuse an answer for that file",
+                             "two tabs of one file refuse it again when asked again"})
+    {
+        caret_on_add(editing);
+        renamed_to_sum(editing);
+        const auto frame = answered(editing, rename_method, main_and_lib());
+        expect(message_of(frame) == notice(editing, core::UiMessage::notice_server_edit_stale) &&
+                   whole_vim_body(editing.controller()) == main_text,
+               said);
+    }
+}
+
 [[nodiscard]] SettingsReading lsp_with_explorer()
 {
     auto settings = core::default_editor_settings();
@@ -1639,6 +1701,8 @@ void verify_lsp_rename_scope()
     verify_unrelated_tab_closed();
     verify_untitled_tab_closed();
     verify_saved_as_other_path();
+    verify_opened_into_blank_untitled();
+    verify_two_tabs_of_one_file();
     verify_preview_tab_replaced();
     verify_opened_after_closing();
     verify_unread_after_closing();
