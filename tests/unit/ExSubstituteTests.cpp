@@ -8,6 +8,8 @@
 #include "EditorController.hpp"
 #include "EditorFrame.hpp"
 #include "EditorSettings.hpp"
+#include "ExAddress.hpp"
+#include "ExAddressBase.hpp"
 #include "ExRange.hpp"
 #include "ExResult.hpp"
 #include "ExSubstituteCommand.hpp"
@@ -152,6 +154,34 @@ void verify_confirm_flag_text()
            "the c flag is read since stage 2a (ADR 0168 decision 6)");
 }
 
+// 範囲の中の空白と Tab（#2019・Vim 9.1 の実測）。足しの前・区切りの前後の空白は読み飛ばし、足しの
+// 続かない空白は命令の前に残す。`%` の後ろの足しと範囲の字は読まずに読み捨てる（`:%2y` と
+// `:% 2,4y` は全体）。
+void verify_range_blanks()
+{
+    const auto [tab, tab_length] = core::parsed_ex_range("1\t2d");
+    expect(tab_length == 3 && tab.addresses.size() == 1 && tab.addresses.front().number == 1 &&
+               tab.addresses.front().offset == 2,
+           "a tab before a number adds it like a blank");
+    const auto [semicolon, semicolon_length] = core::parsed_ex_range("2 ; +1d");
+    expect(semicolon_length == 6 && semicolon.addresses.size() == 2 &&
+               semicolon.addresses.back().after_semicolon && semicolon.addresses.back().offset == 1,
+           "blanks around ; are read and the address after it counts from the one before");
+    const auto [plain, plain_length] = core::parsed_ex_range("1 d");
+    expect(plain_length == 1 && plain.addresses.size() == 1 && plain.addresses.front().offset == 0,
+           "a blank with no offset after it is left before the command");
+    for (const std::string_view text : {"%2y", "% 2y", "%+1y", "%-3y", "% 2,4y"})
+    {
+        const auto [whole, whole_length] = core::parsed_ex_range(text);
+        expect(whole_length + 1 == text.size() && whole.addresses.size() == 2 &&
+                   whole.addresses.back().base == core::ExAddressBase::last &&
+                   whole.addresses.back().offset == 0,
+               "what follows % up to the command is skipped and the range stays 1,$");
+    }
+    expect(core::parsed_ex_range("%,5d").first.addresses.size() == 3,
+           "a comma right after % still starts the next address");
+}
+
 void verify_substitute_ranges()
 {
     const auto settings = core::default_editor_settings();
@@ -185,6 +215,7 @@ void verify_substitute_ranges()
     expect(core::parsed_ex_range("s/a/b/").second == 0, "no range is length 0");
     expect(core::parsed_ex_range(",5s").first.addresses.size() == 2,
            "an empty address next to a comma is the caret's line");
+    verify_range_blanks();
 }
 
 [[nodiscard]] std::optional<std::string> group_text(std::string_view pattern, std::string_view line,

@@ -18,7 +18,9 @@ struct ExRange
 };
 
 // 行の先の範囲と、その長さ（バイト）。番地を `,` `;` で区切って続けて読む（空の番地も Vim と同じに
-// 許し、キャレットの行になる）。範囲が無ければ長さ 0。Ex の行の範囲を読むのはこの 1 本で、命令を
-// 切り出す長さ（ExResult の ranged_command）もここから取る。
+// 許し、キャレットの行になる）。番地の前・足しの前・区切りの前の空白と Tab は Vim の
+// get_address と同じく読み飛ばす（`:1 2d` は 3 行目・`:1 ,3d`・#2019）。範囲が無ければ長さ 0。
+// Ex の行の範囲を読むのはこの 1 本で、命令を切り出す長さ（ExResult の ranged_command）も
+// ここから取る。
 [[nodiscard]] std::pair<ExRange, std::size_t> parsed_ex_range(std::string_view text);
 } // namespace nenenib::core
