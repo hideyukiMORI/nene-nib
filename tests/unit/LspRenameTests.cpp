@@ -1502,14 +1502,17 @@ void verify_preview_tab_replaced()
     Editing editing(lsp_with_explorer());
     editing.files().hold_at(std::string(notes_path), Bytes{std::string("add\n")});
     editing.files().hold_at(std::string(memo_path), Bytes{std::string("memo\n")});
-    const auto ticket = editing.folders().requests().back().ticket;
-    started_with_header_opened(editing);
-    editing.folders().serve(app::FolderBatch{ticket,
-                                             {app::FolderEntry{path_of(notes_path), false, false},
-                                              app::FolderEntry{path_of(memo_path), false, false}},
-                                             app::FolderProgress::complete});
+    // エクスプローラーの列挙は最初の frame で頼まれる。文書を開く前に答えておく。
+    static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
+    app::FolderBatch batch{
+        editing.folders().requests().back().ticket, {}, app::FolderProgress::complete};
+    batch.entries.push_back(app::FolderEntry{path_of(notes_path), false, false});
+    batch.entries.push_back(app::FolderEntry{path_of(memo_path), false, false});
+    editing.folders().serve(std::move(batch));
     applied(editing.controller(), app::WorkCompleted{});
-    clicked_row(editing, 0);
+    started_with_header_opened(editing);
+    // 行は名前の順（memo.txt が 0・notes.txt が 1）。
+    clicked_row(editing, 1);
     const auto previewed = editing.controller().frame();
     expect(previewed.tabs.size() == 3 && tab_is(previewed, 2, notes_path, core::SaveState::saved) &&
                previewed.tabs.at(2).transient,
@@ -1517,7 +1520,7 @@ void verify_preview_tab_replaced()
     applied(editing.controller(), app::SwitchTab{1});
     caret_on_add(editing);
     renamed_to_sum(editing);
-    clicked_row(editing, 1);
+    clicked_row(editing, 0);
     const auto replaced = editing.controller().frame();
     expect(replaced.tabs.size() == 3 && tab_is(replaced, 2, memo_path, core::SaveState::saved),
            "the next click replaces the preview tab with memo.txt");
