@@ -1,11 +1,11 @@
-# Microsoft Store の掲載文 — NeNe Nib 1.1.0
+# Microsoft Store の掲載文 — NeNe Nib 1.2.0
 
 > Issue #1582・施主決定 D88。Partner Center への入力は hide が行う。ここは入力する文面の正本である。
 > 欄の上限は [Microsoft の文書](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/add-and-edit-store-listing-info)
 > （2026-11-13 に読んだ）と、NeNe Loupe の入力で分かったこと（Loupe の `docs/release/store-listing.md`）に合わせた。
 > 申請の手順と申告の答えは [submission.md](submission.md)、スクリーンショットは [screenshots.md](screenshots.md)。
 
-製品名 `NeNe Nib`・Store ID `9NCLGDTFQ529`・発行者の表示名 `Hideyuki Mori`・版 1.1.0（Store の版は `1.1.0.0`。1.0.0 は 2026-11-15 に初回の申請をして公開済みで、1.1.0 は「更新」の申請・#1815。GitHub の ZIP も同じ素の版 `1.1.0`）。
+製品名 `NeNe Nib`・Store ID `9NCLGDTFQ529`・発行者の表示名 `Hideyuki Mori`・版 1.2.0（Store の版は `1.2.0.0`。1.0.0 は 2026-11-15 に初回の申請をして公開済み、1.1.0 は「更新」の申請（#1815）をして 2026-11-23 に公開済みで、1.2.0 は 2 回目の「更新」の申請・#2050。GitHub の ZIP も同じ素の版 `1.2.0`）。
 掲載の言語は日本語・英語・中国語（簡体字）の 3 つ（D88）。
 
 ## 書き方の約束
@@ -20,6 +20,11 @@
   区切りをまとめ枝 47 に移したとき（#1924）、説明の Markdown プレビューの段にホイールの 1 文を足し、「新機能」に
   スクロールの行と言語サーバーの保存の後の診断（日本語と中国語は起動の失敗の知らせも）を足した。英語の「新機能」は
   1,500 文字に収めるために、ほかの行の言い回しを詰め、本文とタブの右クリックのメニューを 1 行にまとめた。
+  1.2.0（#2050）では、説明の「そのほかの機能」の 2 分割の行と言語サーバーの行を直し（境界線のドラッグ・参照と記号の一覧・
+  引数の情報・整形・名前の変更）、インデントガイド・キャレットの動き・打ったときの粒の 1 行を足した。製品の機能は 20 項目の
+  ままで、欄 7（2 分割）と欄 19（言語サーバー）の文を直した。「新機能」は 1.2.0 の文に置き換えた（1.1.0 の文は git の履歴と
+  `D:/NeNeNib/evidence/v1.1.0-release/store-listing/`）。クイックフィックス・不可視文字・括弧の色分けは次の版なので書かない。
+  速さの文と脚注 [^speed] は 1.1.0 のままで、1.2.0 でも変えない（設計席の決め 2026-11-25: まとめ枝 52 の速さのゲートは起動 42.025 ms・単打 0.582 ms・16 MiB を開く 52.375 ms で、1.1.0 のまとめ枝の値（起動 45〜46 ms）より大きくない・公開の記録 `release-1.2.0-2026-11-25.md`）。
 - F1「Windows の右クリックに登録する」は掲載文に書かない。Store 版（MSIX）ではエクスプローラーに出ないことを 1.0.0 で
   実機で確かめ（submission.md の「packaged の実機の確かめ」）、1.1.0 から Store 版の F1 の一覧に出さない（#1809）。
 - 説明の欄には HTML・コード例・URL を入れない（Microsoft の文書）。サポートとプライバシーの URL は専用の欄に入れる。
@@ -27,9 +32,11 @@
 - 最上級（「最速」「fastest」）を使わない。速さは測った値と、測った機械を添えて書く（脚注 [^speed]）。
 - **貼る前の確かめ**: 「表示は日本語・英語・中国語（簡体字）」の文は 1.0.0 で確かめた。1.1.0 でも表示言語は同じ 3 つ
   （韓国語・スペイン語・ドイツ語は後の版・施主決定 D100）。
-  新しく足した文（全文検索・プレビュー欄・右クリックのメニュー・イージーモーション・設定の面・補完・言語サーバー・
-  Markdown の表とリンク・プレビューのホイール）は、申請する 1.1.0 の exe で動くことを
-  施主の試用（`D:/NeNeNib/evidence/v1.1.0-release/hide-checklist.md`）で確かめてから貼る。
+  1.1.0 で足した文（全文検索・プレビュー欄・右クリックのメニュー・イージーモーション・設定の面・補完・言語サーバー・
+  Markdown の表とリンク・プレビューのホイール）は、1.1.0 の exe で動くことを施主の試用で確かめて貼った。
+  1.2.0 で足した文（言語サーバーの参照・記号・引数の情報・整形・名前の変更と言語ごとのサーバー・補完の一覧の確定・
+  2 分割の大きさ・インデントガイド・キャレットの動きと粒・設定の選ぶ欄の一覧）は、申請する 1.2.0 の exe で動くことを
+  施主の試用（`D:/NeNeNib/evidence/v1.2.0-release/hide-checklist.md`）で確かめてから貼る。
 - 「通常」の言い方は施主決定 D89（画面の名前は英語 `Basic`・中国語 `标准`）。中国語の文は画面と同じ `标准编辑` と書き、`普通` を使わない（Vim の「普通模式」と紛れる）。英語の説明の文は画面の名前を引かない所なので ordinary editing のまま。
 - 端末の表示からではなく、このファイルをエディタで開いてコピーする（端末からは折り返しの位置に改行が入る）。
 
@@ -37,11 +44,11 @@
 
 | 欄 | 上限 | この原稿 |
 | --- | --- | --- |
-| 説明 | 10,000 文字・必須・平文 | 1.1.0 の文で数え直した値は `D:/NeNeNib/evidence/v1.1.0-release/store-listing/counts.md`（#1815） |
+| 説明 | 10,000 文字・必須・平文 | 各言語 10,000 文字未満。貼り付け用のファイルと道具の数えた値は、掲載文が main に入った後に設計席が道具で作る `D:/NeNeNib/evidence/v1.2.0-release/store-listing/counts.md`（1.1.0 の値は `v1.1.0-release/store-listing/counts.md`・#1815） |
 | 短い説明 | 1,000 文字（表示は最初の 270 文字。270 未満を推奨） | 各言語 270 文字未満 |
-| 製品の機能 | 1 項目 200 文字・20 項目まで | 各言語 20 項目（1.1.0 で 6 項目足した・上限に届いた） |
+| 製品の機能 | 1 項目 200 文字・20 項目まで | 各言語 20 項目（1.1.0 で 6 項目足して上限に届いた・1.2.0 は数を変えず欄 7 と 19 の文を直した） |
 | 検索語 | 7 個・各 40 文字・全体で 21 単語（Loupe の入力画面の表示） | 各言語 7 個 |
-| このバージョンの新機能 | 1,500 文字。初回の申請（1.0.0）では空欄にした（Microsoft の文書） | 1.1.0 の文（各言語 1,500 文字未満・数は counts.md） |
+| このバージョンの新機能 | 1,500 文字。初回の申請（1.0.0）では空欄にした（Microsoft の文書） | 1.2.0 の文（各言語 1,500 文字未満・コードポイントの数は #2050 の PR の本文） |
 | スクリーンショットの説明 | 200 文字 | screenshots.md |
 
 ---
@@ -81,7 +88,7 @@ Ctrl+Shift+F で、エクスプローラーの起点のフォルダ（無けれ�
 ・タイトルバーのタブ。次の起動で前回のタブが戻ります
 ・Ctrl+P で、開いているタブ・ブックマーク・最近閉じたファイル・同じフォルダのファイルをまとめて探せます
 ・左側のファイルエクスプローラー（Ctrl+Shift+E）
-・左右・上下の 2 分割
+・左右・上下の 2 分割。境界線をドラッグして大きさを変えられます
 ・125 種類の組み込みのテーマ。Windows のライト／ダークに従います
 ・25 言語の構文の色分け
 ・UTF-8・Shift_JIS・UTF-16 と、CRLF・LF を読んだ形のまま保存
@@ -95,7 +102,8 @@ Ctrl+Shift+F で、エクスプローラーの起点のフォルダ（無けれ�
 ・タブにマウスを載せると、そのファイルのフルパスを小さな札で表示
 ・Vim のイージーモーション: バックスラッシュを 2 回打ってから w・b・e・j・k・l や f・F・s と文字を打つと、見えている跳び先に小さな札が出て、札の文字を打つとそこへ跳びます
 ・Vim の自動の字下げ（:set autoindent）
-・言語サーバーの診断・補完・情報の表示・定義へ移動（既定はオフ。設定に書いたサーバーを起動します）
+・言語サーバーの診断・補完・情報の表示・定義へ移動・参照と記号の一覧・引数の情報・整形・名前の変更（既定はオフ。設定で選んだサーバーだけを起動します）
+・インデントガイド・キャレットの動き・打ったときの粒（どれも既定はオフ）
 
 ■ プライバシー
 アカウントは不要です。利用状況を送らず、アプリ自身はネットワークに接続しません。Markdown プレビューのリンクは、札で確かめた後に既定のブラウザかメールに渡すだけです。設定と履歴は端末の中に保存します。
@@ -117,7 +125,7 @@ Ctrl+Shift+F で、エクスプローラーの起点のフォルダ（無けれ�
 Markdown プレビュー（隣の欄・全面）。端末の中の画像とチェックボックスに対応
 タイトルバーのタブと前回のタブの復元
 Ctrl+P でタブ・ブックマーク・最近のファイル・同じフォルダのファイルを探す
-ファイルエクスプローラーと 2 分割の表示
+ファイルエクスプローラーと、大きさを変えられる 2 分割の表示
 125 種類のテーマ。Windows のライト／ダークに従う
 25 言語の構文の色分け
 UTF-8・Shift_JIS・UTF-16 と改行の形を読んだまま保存。最大 1 GiB の UTF-8 を裏で読み込み
@@ -129,7 +137,7 @@ Ctrl+Shift+F でフォルダの下のファイルを全文検索。選んだ候�
 本文の右クリックのメニュー（切り取り・コピー・貼り付けなど）。Vim のモードでも使える
 Vim のイージーモーション。見えている跳び先に小さな札を出して、札の文字で跳ぶ
 設定（Ctrl+,）。切り替えはその場で本文に効き、閉じると保存
-補完（Ctrl+Space・Vim の INSERT の Ctrl-n）と、言語サーバーの情報の表示・定義へ移動
+補完（Ctrl+Space・Vim の INSERT の Ctrl-n）と、言語サーバーの定義へ移動・参照・整形・名前の変更
 Markdown の表・alert・囲みのコードの色。リンクは宛先を札で確かめてから開く
 ```
 
@@ -147,23 +155,18 @@ Markdown
 
 ### このバージョンの新機能
 
-1.0.0 の初回の申請では空欄にした。1.1.0 の文（1,500 文字以内）:
+1.0.0 の初回の申請では空欄にした。1.2.0 の文（1,500 文字以内）:
 
 ```text
-・プロジェクトの全文検索: Ctrl+Shift+F（Vim では :grep も）で、エクスプローラーの起点のフォルダ（無ければ開いている文書のフォルダ）の下のファイルを探します。打つたびに探し直し、Enter で見つかった行を開きます。
-・Ctrl+P の一覧にプレビュー欄: 選んだ候補の中身を右か下に表示します。Ctrl+Shift+P で右・下・なしを切り替えます。
-・設定: Ctrl+, で窓の右に開き、配色・字体・文字の大きさなどを探して切り替えると、その場で本文に効きます。閉じると保存します。
-・補完: 通常モードでは Ctrl+Space（Ctrl+I でも）、Vim の INSERT では Ctrl-n で、打っている語の候補を出します。
-・言語サーバー（既定はオフ）: 補完の候補に加えて、Vim の K で情報を表示し、gd か F12 で定義へ移動します。保存の後に診断が更新されます。起動できない命令（実行ファイルが無い・.cmd や .bat）は起こさずに 1 行で知らせます。
-・Markdown プレビュー: 表と GitHub の alert（NOTE・TIP など）、打ち消し線を表示します。広い表は横に送れます。囲みのコードに本文と同じ構文の色が付きます。リンクはクリックすると宛先を札で見せ、確かめてから開きます。#見出し のリンクはその見出しへ跳びます。
-・スクロール: Markdown プレビューのホイールが、長いコード・長い段落・画像の中でも 1 刻みごとに動くようにしました。折り返さない長い行のスクロールと、Vim の Ctrl-f などの 1 画面の送りを軽くしました。
-・タブの右クリックのメニュー: エクスプローラーで場所を開く・パスをコピー・ファイル名をコピー・保存・ほかのタブを閉じる・右のタブを閉じるなど。
-・本文の右クリックのメニュー: 切り取り・コピー・貼り付け・削除・すべて選択・検索・置換。Shift+F10 とメニューキーでも開き、Vim のモードでも使えます。
-・Vim のイージーモーション: バックスラッシュを 2 回打ってから w・b・e・j・k・l や f・F・s と文字を打つと、見えている跳び先に小さな札が出て、札の文字でそこへ跳びます。
-・タブにマウスを載せると、フルパスを小さな札で表示します。
-・Vim: 自動の字下げ（:set autoindent）、:s の c フラグ、:d・:y・:g・:v、検索の \zs と \ze、NORMAL の s と S、: と / の行の Ctrl+U と Ctrl+W。改行で終わるファイルの行の数を Vim と同じにしました。
-・直し: Markdown プレビューの長い段落で止まることがあったのを直しました。1 つの字を長く繰り返した巨大な行を格子表示にしたとき止まることがあったのを直しました。Windows 11 より前の Windows で nul.txt のような名前のファイルの中身が失われることがあったのを直しました。
-・Store 版では、効かない「Windows の右クリックに登録する」と「登録を外す」を F1 の一覧に出さないようにしました。
+・言語サーバー（既定はオフ）: 言語ごとにサーバーが動き、タブを切り替えても止まりません。C と C++ のように同じサーバーで動く言語は 1 本を共有します。設定の「言語サーバー」の節に PC で見つかったサーバーが並び、「使う」で設定に書きます。
+・言語サーバーの新しい操作: 診断の間を F8 / Shift+F8 で移動、参照の一覧（Shift+F12・Vim の grr）、記号の一覧（Vim の gO）、挿入中の引数の情報、文書と選択範囲の整形、名前の変更（F2・Vim の grn）。参照と記号は Ctrl+P の一覧に出て、選ぶとそこへ跳びます。
+・補完の一覧: 打った文字で開いた一覧は、クリックか Tab で確定し、Enter は ↑↓ で選んだときだけ確定します。Vim の INSERT でも . などを打つと一覧が開き、↑↓ で候補を選べます。
+・2 分割: 境界線のドラッグ・Vim の Ctrl-w > < + - ・F1 の操作で、枠の幅と高さを変えられます。
+・インデントガイド（既定はオフ）: 字下げの段ごとに縦の線を引きます。虹の色か 1 色を選べ、キャレットのいる段を強めます。
+・キャレットの動きと打ったときの粒（どちらも既定はオフ）: キャレットが尾を引いて移り、打った所から小さな粒が散ります。
+・設定: 配色などの選ぶ欄を一覧から選べるようにしました（クリック・Enter・Alt+↓）。焦点のある行が、どのテーマでも枠で分かります。
+・言語の名前: Java・Kotlin・Ruby・Swift など 16 言語を見分けます（構文の色はまだ付きません）。
+・直し: 文字の大きさを 0.5 pt ずつ変えるようにしました。日本語の画面の言葉を分かりやすくしました。診断の文が出ている間も、モードの表示が見えるようにしました。
 ```
 
 ---
@@ -203,7 +206,7 @@ Also included
 • Tabs in the title bar, restored the next time you start
 • Ctrl+P finds open tabs, bookmarks, recently closed files and files in the current folder in one list
 • A file explorer on the left (Ctrl+Shift+E)
-• Two split panes, side by side or one above the other
+• Two split panes, side by side or one above the other; drag the border to resize them
 • 125 built-in themes that follow the Windows light or dark setting
 • Syntax colors for 25 languages
 • UTF-8, Shift_JIS and UTF-16, with CRLF or LF kept as read
@@ -217,7 +220,8 @@ Also included
 • Rest the pointer on a tab to see the file's full path in a small tip
 • Vim easymotion: type backslash twice and then w, b, e, j, k or l, or f, F or s and a character, and every visible target gets a small label; type the label to jump there
 • Vim autoindent (:set autoindent)
-• Language-server diagnostics, completion, information and go-to-definition (off by default; starts only the server you configure)
+• Language-server diagnostics, completion, information, go-to-definition, references, symbols, parameter info, formatting and rename (off by default; starts only the servers you choose in the settings)
+• Indent guides, caret motion and typing sparks (all off by default)
 
 Privacy
 No account is needed. The app sends no usage data and makes no network connections of its own. A link in the Markdown preview is only handed to the default browser or mail app after you confirm it in a small card. Settings and history stay on your device.
@@ -239,7 +243,7 @@ Vim editing checked against the real Vim 9.1: motions, operators, text objects, 
 Markdown preview in the next pane or full view, with local images and clickable checkboxes
 Tabs in the title bar, restored on the next start
 Ctrl+P finds tabs, bookmarks, recent files and files in the current folder
-File explorer and two split panes
+File explorer and two split panes you can resize
 125 themes that follow the Windows light or dark setting
 Syntax colors for 25 languages
 UTF-8, Shift_JIS and UTF-16 with line endings kept as read; UTF-8 files up to 1 GiB load in the background
@@ -251,7 +255,7 @@ Project-wide search with Ctrl+Shift+F, and a preview pane for the chosen entry
 A right-click menu in the text (cut, copy, paste and more), also in Vim editing
 Vim easymotion: small labels on the visible targets, type one to jump there
 A settings drawer (Ctrl+,): changes apply at once and are saved on closing
-Completion (Ctrl+Space, Vim INSERT Ctrl-n), and language-server information and go-to-definition
+Completion (Ctrl+Space, Vim INSERT Ctrl-n), and language-server go-to-definition, references, formatting and rename
 Markdown tables, alerts and colored code blocks; a link shows its real destination before it opens
 ```
 
@@ -269,21 +273,18 @@ Markdown preview
 
 ### What's new in this version
 
-Left blank for the first submission (1.0.0, Microsoft's guidance). The text for 1.1.0 (up to 1,500 characters):
+Left blank for the first submission (1.0.0, Microsoft's guidance). The text for 1.2.0 (up to 1,500 characters):
 
 ```text
-• Project-wide search: Ctrl+Shift+F (or :grep in Vim) searches files under the explorer's root or the document's folder.
-• A preview pane in the Ctrl+P list (Ctrl+Shift+P: right, below or off).
-• Settings: Ctrl+, opens a drawer; changes apply at once, saved on closing.
-• Completion: Ctrl+Space (or Ctrl+I), or Ctrl-n in Vim INSERT.
-• Language server (off by default): completion, K for information, gd or F12 to go to a definition; diagnostics update on save.
-• Markdown preview: tables, GitHub alerts, strikethrough, sideways scrolling for wide tables, syntax colors in fenced code; links show their real destination before opening; #heading links jump.
-• Smoother preview wheel, even inside long code; lighter scrolling for long unwrapped lines and Vim page moves.
-• Right-click menus in the text (cut, copy, paste and more; also Shift+F10, in Vim too) and on tabs (Reveal in File Explorer, Copy Path, Close Other Tabs and more); a tab shows its full path on hover.
-• Vim easymotion: \\ then w, b, e, j, k, l, or f, F, s and a character; type a label to jump.
-• Vim: :set autoindent, :s with the c flag, :d, :y, :g, :v, \zs and \ze, NORMAL s and S, Ctrl+U and Ctrl+W on the : and / lines; line counts match Vim for files ending in a line break.
-• Fixes: stalls on long Markdown paragraphs and giant lines in the grid display; before Windows 11, a file named like nul.txt could lose its text.
-• Store version: F1 hides the two Windows right-click menu operations, which do not work there.
+• Language servers (off by default): one server per language, kept running across tab switches; C and C++ share one. Settings lists the servers found on the PC; Use writes the command line.
+• New language server operations: F8 / Shift+F8 between diagnostics, references (Shift+F12, Vim grr), document symbols (Vim gO), parameter info while typing, format document or selection, rename (F2, Vim grn). References and symbols open in the Ctrl+P list; choose one to jump.
+• Completion: in a list opened by typing, click or Tab accepts; Enter accepts only a row chosen with the arrows. Typing . and the like also opens it in Vim INSERT, where the arrows now choose a row.
+• Split panes: drag the border, use Vim Ctrl-w > < + - or the F1 operations to resize.
+• Indent guides (off by default): a line per indent level, rainbow or one color, with the caret's level highlighted.
+• Caret motion and typing sparks (both off by default).
+• Settings: choose values such as the color scheme from a list (click, Enter, Alt+Down); the focused row is outlined in every theme.
+• 16 more languages recognized, such as Java, Kotlin, Ruby and Swift (no syntax colors yet).
+• Fixes: font size steps of 0.5 pt; clearer Japanese UI wording; the mode label stays visible while a diagnostic is shown.
 ```
 
 ---
@@ -326,7 +327,7 @@ Markdown 预览
 • 标题栏中的标签页，下次启动时自动恢复
 • 按 Ctrl+P 在一个列表中查找打开的标签页、书签、最近关闭的文件和当前文件夹中的文件
 • 左侧的文件资源管理器（Ctrl+Shift+E）
-• 左右或上下两个分割窗格
+• 左右或上下两个分割窗格，拖动分隔线即可调整大小
 • 125 种内置主题，跟随 Windows 的浅色或深色设置
 • 25 种语言的语法高亮
 • 支持 UTF-8、Shift_JIS 和 UTF-16，按读取时的形式保留 CRLF 或 LF
@@ -340,7 +341,8 @@ Markdown 预览
 • 鼠标停在标签页上时，以小提示显示文件的完整路径
 • Vim 的 easymotion：连按两次反斜杠后输入 w、b、e、j、k、l，或输入 f、F、s 加一个字符，可见的跳转目标上会出现小标签，输入标签即可跳到该处
 • Vim 的自动缩进（:set autoindent）
-• 语言服务器的诊断、补全、信息显示和转到定义（默认关闭，只启动您在设置中配置的服务器）
+• 语言服务器的诊断、补全、信息显示、转到定义、引用和符号列表、参数信息、格式化和重命名（默认关闭，只启动您在设置中选择的服务器）
+• 缩进参考线、光标动画和输入火花（默认均关闭）
 
 隐私
 无需账号。不发送使用情况数据，应用本身不连接网络。Markdown 预览中的链接，只在您于小卡片中确认后交给默认的浏览器或邮件应用。设置和历史记录保存在您的设备上。
@@ -362,7 +364,7 @@ Markdown 预览
 Markdown 预览（旁边的窗格或全屏），支持本地图片和可点击的复选框
 标题栏中的标签页，下次启动时自动恢复
 按 Ctrl+P 查找标签页、书签、最近的文件和当前文件夹中的文件
-文件资源管理器和两个分割窗格
+文件资源管理器和可调整大小的两个分割窗格
 125 种主题，跟随 Windows 的浅色或深色设置
 25 种语言的语法高亮
 支持 UTF-8、Shift_JIS 和 UTF-16，保留原有换行符；最大 1 GiB 的 UTF-8 文件在后台读取
@@ -374,7 +376,7 @@ Markdown 预览（旁边的窗格或全屏），支持本地图片和可点击�
 正文的右键菜单（剪切、复制、粘贴等），Vim 编辑中也可使用
 Vim 的 easymotion：在可见的跳转目标上显示小标签，输入标签即可跳转
 设置面板（Ctrl+,），切换立即生效，关闭时保存
-补全（Ctrl+Space、Vim 的 INSERT 中的 Ctrl-n），以及语言服务器的信息显示和转到定义
+补全（Ctrl+Space、Vim 的 INSERT 中的 Ctrl-n），以及语言服务器的转到定义、引用、格式化和重命名
 Markdown 的表格、alert 和代码块着色；链接先在小卡片中确认目标再打开
 ```
 
@@ -392,23 +394,18 @@ Markdown 预览
 
 ### 此版本中的新增功能
 
-首次提交（1.0.0）时留空（Microsoft 的说明）。1.1.0 的文字（1,500 字以内）：
+首次提交（1.0.0）时留空（Microsoft 的说明）。1.2.0 的文字（1,500 字以内）：
 
 ```text
-• 项目全文搜索：按 Ctrl+Shift+F（Vim 中也可用 :grep），搜索资源管理器的根文件夹（没有时为当前文档所在的文件夹）下的文件。每次修改文字都会重新搜索，按 Enter 打开找到的行。
-• Ctrl+P 的列表新增预览窗格，在右侧或下方显示所选项的内容。按 Ctrl+Shift+P 在右侧、下方和关闭之间切换。
-• 设置：按 Ctrl+, 在窗口右侧打开设置面板。搜索并切换配色、字体、字号等，正文会立即生效。关闭时保存。
-• 补全：标准模式下按 Ctrl+Space（也可用 Ctrl+I），Vim 的 INSERT 中按 Ctrl-n，显示正在输入的单词的候选。
-• 语言服务器（默认关闭）：除补全候选外，可在 Vim 中按 K 显示信息，按 gd 或 F12 转到定义。保存后诊断会更新。无法启动的命令（可执行文件不存在、.cmd 或 .bat）不会启动，并以一行提示告知。
-• Markdown 预览：显示表格、GitHub 的 alert（NOTE、TIP 等）和删除线。较宽的表格可以横向滚动。围栏代码块使用与正文相同的语法着色。点击链接时先在小卡片中显示目标，确认后再打开。#标题 链接会跳转到该标题。
-• 滚动：Markdown 预览的滚轮每滚动一格都会移动，在长代码、长段落和图片中也是如此。不自动换行的长行的滚动，以及 Vim 中 Ctrl-f 等整屏翻页变得更轻快。
-• 标签页的右键菜单：在文件资源管理器中显示、复制路径、复制文件名、保存、关闭其他标签页、关闭右侧的标签页等。
-• 正文的右键菜单：剪切、复制、粘贴、删除、全选、查找和替换。也可用 Shift+F10 和菜单键打开，Vim 编辑中也可使用。
-• Vim 的 easymotion：连按两次反斜杠后输入 w、b、e、j、k、l，或输入 f、F、s 加一个字符，可见的跳转目标上会出现小标签，输入标签即可跳到该处。
-• 鼠标停在标签页上时，以小提示显示完整路径。
-• Vim：自动缩进（:set autoindent）、:s 的 c 标志、:d、:y、:g、:v、搜索模式中的 \zs 和 \ze、NORMAL 的 s 和 S，以及 : 和 / 行中的 Ctrl+U 和 Ctrl+W。以换行结尾的文件的行数现在与 Vim 相同。
-• 修复：Markdown 预览中的长段落可能使编辑器停顿；在网格显示中，重复同一个字符的超长行可能使编辑器停顿；在 Windows 11 之前的 Windows 上，名称类似 nul.txt 的文件的内容可能丢失。
-• 在 Store 版中，F1 列表不再显示无法使用的「添加到 Windows 右键菜单」和「从 Windows 右键菜单中移除」。
+• 语言服务器（默认关闭）：每种语言各有自己的服务器，切换标签页时不会停止。C 和 C++ 等由同一服务器处理的语言共用一个。设置面板的「语言服务器」部分会列出在电脑上找到的服务器，按「使用」即可写入设置。
+• 语言服务器的新操作：用 F8 / Shift+F8 在诊断之间移动、引用列表（Shift+F12，Vim 中为 grr）、符号列表（Vim 中为 gO）、插入时显示参数信息、格式化文档和选定内容、重命名（F2，Vim 中为 grn）。引用和符号显示在 Ctrl+P 的列表中，选择即可跳转。
+• 补全列表：输入字符时自动打开的列表，可点击或按 Tab 确定；Enter 仅在用 ↑↓ 选择后才确定。在 Vim 的 INSERT 中输入 . 等字符也会打开列表，并可用 ↑↓ 选择候选。
+• 分割窗格：拖动分隔线、使用 Vim 的 Ctrl-w > < + - 或 F1 列表中的操作，可调整窗格的宽度和高度。
+• 缩进参考线（默认关闭）：为每一级缩进绘制竖线。可选彩虹色或单色，并突出显示光标所在的级别。
+• 光标动画和输入火花（默认均关闭）：光标移动时带有拖尾，输入处会散出小火花。
+• 设置：配色等选项现在可从列表中选择（点击、Enter、Alt+↓）。在任何主题中，焦点所在的行都会显示边框。
+• 新识别 Java、Kotlin、Ruby、Swift 等 16 种语言（尚无语法高亮）。
+• 修复：字号按 0.5 pt 调整；显示诊断信息时仍显示模式标记。
 ```
 
 ---
