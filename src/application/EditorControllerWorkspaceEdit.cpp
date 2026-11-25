@@ -133,6 +133,17 @@ revision_and_saved(const core::EditHistory &history, const Document &document)
     return copied != nullptr && copied->sent;
 }
 
+// 頼んだときに `didOpen` していた文書 copied を、席が頼んだ後にその文書だけ閉じたか（`:set ft=`・
+// URI が変わった・送れる大きさを超えた）。サーバーはもうバッファの本文を持たないので、照合 (b)(c)
+// が通っても照らせない（#2039・レビュー R10 の C1）。documents は答えた席が今開いている文書。
+[[nodiscard]] bool closed_by_seat(const OpenedRevision *copied,
+                                  const std::vector<LanguageServerDocument> &documents)
+{
+    return sent_by_seat(copied) &&
+           std::ranges::none_of(documents, [copied](const LanguageServerDocument &document)
+                                { return document.tab == copied->tab; });
+}
+
 // 頼んだ席が `didOpen` していなかった当て先の断り（無ければ値なし・#2011 のレビュー R6 の
 // N1・N2）。 サーバーはディスクの本文で数えるので、頼んだときも今も保存済みで、BOM なしの UTF-8
 // のときだけ 当てる。写しに無いタブ（頼んだ後に開いた・読んだ）は、読んでから 1
@@ -152,6 +163,29 @@ revision_and_saved(const core::EditHistory &history, const Document &document)
     }
     return plain_utf8(encoding) ? std::nullopt
                                 : std::optional{core::UiMessage::notice_server_edit_not_utf8};
+}
+
+// 当て先 place が、頼んだときの写し opened に在ったタブか。
+[[nodiscard]] bool copied_place(const std::variant<AutosaveId, UnopenedFile> &place,
+                                const std::vector<OpenedRevision> &opened)
+{
+    const auto *tab = std::get_if<AutosaveId>(&place);
+    return tab != nullptr && std::ranges::find(opened, *tab, &OpenedRevision::tab) != opened.end();
+}
+
+// 写しに在ったタブが 1 つでも帯から消えた後に、写しに無い当て先（タブの無いファイル・頼んだ後に
+// 開いたタブ・まだ読んでいないタブ）があるか（#2039）。写しはパスを持たないので、消えたタブが
+// どのファイルだったかを言えない。サーバーは消えたタブのバッファの本文で数えたかもしれないので、
+// ディスクから読んだ本文や開き直したタブに当てない。
+[[nodiscard]] bool lost_copied_tab(const std::vector<ServerEditFile> &files,
+                                   const std::vector<OpenedRevision> &opened,
+                                   const std::vector<AutosaveId> &ids)
+{
+    const bool lost =
+        std::ranges::any_of(opened, [&ids](const OpenedRevision &copied)
+                            { return std::ranges::find(ids, copied.tab) == ids.end(); });
+    return lost && !std::ranges::all_of(files, [&opened](const ServerEditFile &file)
+                                        { return copied_place(file.place, opened); });
 }
 } // namespace
 
@@ -226,6 +260,10 @@ EditorController::server_edit_files(const core::LspWorkspaceEdit &edit,
         {
             return std::unexpected{resolved.error()};
         }
+    }
+    if (lost_copied_tab(files, context.opened, state_.autosave_ids()))
+    {
+        return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }
     return files;
 }
@@ -325,7 +363,8 @@ EditorController::server_edit_check(AutosaveId tab, const core::LspFileEdits &fi
                           : revision_and_saved(state_.history(), state_.document());
     const auto copied = std::ranges::find(context.opened, tab, &OpenedRevision::tab);
     const OpenedRevision *known = copied != context.opened.end() ? &*copied : nullptr;
-    if (moved_since(known, file.version, revision))
+    if (moved_since(known, file.version, revision) ||
+        closed_by_seat(known, language_servers_.links.at(slot_index(context.slot)).documents))
     {
         return std::unexpected{ui_notice(core::UiMessage::notice_server_edit_stale)};
     }

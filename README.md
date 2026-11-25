@@ -395,7 +395,8 @@ records in `docs/quality/`.
   an answer that spans more than 32 files, creates or deletes files, or reaches a file the server has not
   opened that is not UTF-8 without a BOM (or is over 4 MiB) is refused in one line. Known limits: a server that has not read the other files
   of the project yet may rename the name only in the open files; and if a tab that the server has not opened
-  has unsaved changes, the whole rename is refused (save it and try again).
+  has unsaved changes, the whole rename is refused (save it and try again). If a tab is closed while the answer
+  is on its way, an answer that also reaches a file without a tab is refused as out of date (ask again).
   In Vim INSERT mode, typing a trigger character also opens the completion list (decision D109). *New in 1.2.0*: while that
   list is open in Vim INSERT mode, ↑ ↓ PageUp PageDown choose a row instead of moving the caret (decision D111). In a list
   opened by a trigger character (ordinary and Vim modes), clicking a row accepts it, Tab accepts the chosen row
