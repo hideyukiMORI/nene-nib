@@ -66,6 +66,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <expected>
 #include <initializer_list>
 #include <optional>
 #include <random>
@@ -1602,8 +1603,131 @@ void verify_map_names()
            "the candidates are the full names and let mapleader=");
 }
 
+// `:let mapleader=` の行が要求する leader の記法（Ex の読みで断られたら `<ex-refused>`）。
+[[nodiscard]] std::string leader_notation_of(std::string_view text)
+{
+    const auto result =
+        core::evaluate_ex(text, core::default_editor_settings(), core::Appearance::dark);
+    if (!result.has_value())
+    {
+        return "<ex-refused>";
+    }
+    const auto &map = result.value().map;
+    return map.has_value() ? map.value().rhs : std::string("<ex-refused>");
+}
+
+// `:let mapleader=` の行の行き先。Ex の読みで断る（`<ex-refused>`）・1 鍵でないので断る
+// （`<not-one-key>`）・受けて置いた leader の記法のどれか。
+[[nodiscard]] std::string leader_outcome(std::string_view text)
+{
+    const std::string notation = leader_notation_of(text);
+    if (notation == "<ex-refused>")
+    {
+        return notation;
+    }
+    const auto edited =
+        core::map_edited(core::default_editor_settings(),
+                         {core::ExMapVerb::leader, core::VimModeSet{}, "", notation, true});
+    if (!edited.has_value())
+    {
+        return edited.error() == core::ExMapFailure::bad_leader ? "<not-one-key>" : "<other>";
+    }
+    return edited.value().mapleader;
+}
+
+void verify_vim_leader_notations()
+{
+    const std::array<std::pair<std::string_view, std::string_view>, 17> values{{
+        {R"(let mapleader="\n")", "<NL>"},
+        {R"(let mapleader="\t")", "<Tab>"},
+        {R"(let mapleader="\r")", "<CR>"},
+        {R"(let mapleader="\e")", "<Esc>"},
+        {R"(let mapleader="\b")", "<C-h>"},
+        {R"(let mapleader="\<Space>")", "<Space>"},
+        {R"(let mapleader="\ ")", "<Space>"},
+        {R"(let mapleader="\<Esc>")", "<Esc>"},
+        {R"(let mapleader="\<lt>")", "<"},
+        {R"(let mapleader="\<")", "<"},
+        {R"(let mapleader="\q")", "q"},
+        {R"(let mapleader="\,")", ","},
+        {R"(let mapleader="\x41")", "A"},
+        {R"(let mapleader="\101")", "A"},
+        {R"(let mapleader="\u00e9")", "\xC3\xA9"},
+        {R"(let mapleader="\\n")", "\\n"},
+        {R"(let mapleader="<Space>x")", "<lt>Space>x"},
+    }};
+    for (const auto &[text, notation] : values)
+    {
+        expect(leader_notation_of(text) == notation,
+               "each Vim string becomes the notation of its keys");
+    }
+    expect(leader_notation_of(R"(let mapleader='\n')") == "\\n" &&
+               leader_notation_of("let mapleader='<'") == "<",
+           "a single quoted value keeps its backslash and a lone < is the < key");
+    expect(leader_outcome(R"(let mapleader="a\")") == "<ex-refused>",
+           "a backslash before the closing quote leaves the string open (Vim's E114)");
+}
+
+// 値の全体が鍵の名前の字の列なら、今までの版と同じくその鍵（ADR 0176 の 2026-11-25 の追補・Vim は
+// 書いたままの字の列の leader だが、Nib は 1 鍵の leader しか持てない）。
+void verify_leader_key_names()
+{
+    for (const std::string_view text : {R"(let mapleader="<Space>")", R"(let mapleader='<Space>')",
+                                        R"(let mapleader="\<Space>")", R"(let mapleader=" ")"})
+    {
+        expect(leader_outcome(text) == "<Space>", "the four spellings are the same Space key");
+    }
+    expect(leader_outcome(R"(let mapleader="<Tab>")") == "<Tab>" &&
+               leader_outcome(R"(let mapleader='<C-a>')") == "<C-a>",
+           "a value that is exactly one table name is that key");
+    expect(leader_outcome(R"(let mapleader="<Space>x")") == "<not-one-key>" &&
+               leader_outcome(R"(let mapleader="<Foo>")") == "<not-one-key>" &&
+               leader_outcome(R"(let mapleader="\<Foo>")") == "<not-one-key>" &&
+               leader_outcome(R"(let mapleader="<leader>")") == "<not-one-key>",
+           "a name with more after it, an unknown name and <leader> are not one key");
+}
+
+// 数の逃がしでバイトを置く形（Vim 9.1 の実測: `"\xe9"` `"\Xe9"` `"\351"` は 1 バイトの e9・
+// `"\400"` は空・`"\u00e9"` `"\U000000e9"` は é の 2 バイト）。字にならない値は 1 鍵でない。
+void verify_leader_byte_escapes()
+{
+    for (const std::string_view text :
+         {R"(let mapleader="\xe9")", R"(let mapleader="\Xe9")", R"(let mapleader="\351")",
+          R"(let mapleader="\400")", R"(let mapleader="\x80")"})
+    {
+        expect(leader_outcome(text) == "<not-one-key>",
+               "an escape that places a byte at or above 0x80 is not one key");
+    }
+    expect(leader_outcome(R"(let mapleader="\u00e9")") == "\xC3\xA9" &&
+               leader_outcome(R"(let mapleader="\U000000e9")") == "\xC3\xA9" &&
+               leader_outcome(R"(let mapleader="\x41")") == "A",
+           "a code point escape and an ASCII byte are one key");
+}
+
+// Vim 9.1 で測った `let mapleader=` の値（#2018・測った命令と結果は #2018 の PR）:
+// "…" の `\n` `\t` `\r` `\e` `\b` `\f` は 1 字、`\x41` `\101` `\u00e9` は数、`\<Space>` `\<lt>` は
+// 鍵、知らない `\q` は `q`、`\<Foo>` は `<Foo>` の 5 字。'…' は `''` のほかは書いたまま。
+void verify_vim_leader_escapes()
+{
+    verify_vim_leader_notations();
+    verify_leader_key_names();
+    verify_leader_byte_escapes();
+    const auto settings = core::default_editor_settings();
+    const auto newline =
+        core::map_edited(settings, {core::ExMapVerb::leader, core::VimModeSet{}, "",
+                                    leader_notation_of(R"(let mapleader="\n")"), true});
+    expect(newline.has_value() && newline.value().mapleader == "<NL>" &&
+               core::key_map_of(newline.value()).has_value(),
+           "\"\\n\" is the one key <NL> like Vim's mapleader");
+    expect(leader_outcome(R"(let mapleader="\t")") == "<Tab>", "\"\\t\" is the one key <Tab>");
+    expect(leader_outcome(R"(let mapleader='\n')") == "<not-one-key>" &&
+               leader_outcome(R"(let mapleader="\b")") == "<not-one-key>" &&
+               leader_outcome(R"(let mapleader="")") == "<not-one-key>",
+           "two characters, a key Nib has no name for and the empty value are not one key");
+}
+
 // 引用符の中の逃がし: '…' の中の '' は 1 つの '、"…" の中の \\ と \" は次の字をそのまま（Vim の
-// expr-quote と同じ形の分だけ。Vim のほかの逃がし（`\n` など）は #2018）。
+// expr-quote・ほかの逃がしは verify_vim_leader_escapes）。
 void verify_leader_strings()
 {
     constexpr core::VimModeSet none{};
@@ -1612,6 +1736,7 @@ void verify_leader_strings()
                         {core::ExMapVerb::leader, none, "", "a\"b", true}) &&
                requests("let mapleader=\"\\\\\"", {core::ExMapVerb::leader, none, "", "\\", true}),
            "the quoted value reads the doubled quote, \\\\ and \\\"");
+    verify_vim_leader_escapes();
     const auto settings = core::default_editor_settings();
     const auto comma = core::map_edited(settings, {core::ExMapVerb::leader, none, "", ",", true});
     expect(comma.has_value() && comma.value().mapleader == ",", "a one-key leader is stored");

@@ -5,11 +5,17 @@
 #include "KeyMap.hpp"
 #include "KeyMapFailure.hpp"
 #include "MapRow.hpp"
+#include "Offset.hpp"
+#include "Utf8.hpp"
+#include "VimKeyNotation.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -51,7 +57,6 @@ constexpr std::array<ExMapName, 18> map_names{{
 
 constexpr std::string_view let_name = "let";
 constexpr std::string_view leader_variable = "mapleader";
-constexpr std::string_view space_notation = "<Space>";
 constexpr std::string_view leader_spelling = "<Leader>";
 constexpr std::string_view leader_canonical = "<leader>";
 
@@ -123,45 +128,289 @@ using Evaluated = std::expected<ExResult, ExEvaluationFailure>;
                       row.name);
 }
 
-// 引用符の中の at の文字が、次の文字を書いたままにする印か。'…' は `''`、"…" は `\\` `\"` `\<`。
-[[nodiscard]] bool escapes_next(char quote, std::string_view inner, std::size_t at) noexcept
+// Vim の文字列の 1 字の鍵の記法（Vim 9.1 の keytrans と同じ名前のうち Nib の表にある綴り・
+// #2018）。Tab・改行・CR・ESC・空白は名前、ほかの C0 の 0x01〜0x1A は `<C-a>` 〜 `<C-z>`
+// （表に無ければ読みで断る）、NUL と 0x1C〜0x1F と DEL と code point でない値は Nib の表に名前の
+// 無い形で、読みで断る。
+// `<` は 1 字の値なら `<` のまま、並びの中では `<lt>`（並べた記法が 1 鍵の名前に化けない）。
+constexpr std::array<std::pair<char32_t, std::string_view>, 6> character_names{{
+    {U'\t', "<Tab>"},
+    {U'\n', "<NL>"},
+    {U'\r', "<CR>"},
+    {U'\x1b', "<Esc>"},
+    {U' ', "<Space>"},
+    {U'<', "<lt>"},
+}};
+constexpr char32_t last_control_letter = 0x1A;
+constexpr char32_t delete_code_point = 0x7F;
+constexpr char32_t last_code_point = 0x10FFFF;
+constexpr char32_t first_surrogate = 0xD800;
+constexpr char32_t last_surrogate = 0xDFFF;
+constexpr std::string_view unnamed_control = "<C-?>";
+constexpr std::string_view lone_less_than = "<";
+
+[[nodiscard]] std::string character_notation(char32_t letter)
 {
-    if (at + 1 >= inner.size())
+    const auto named =
+        std::ranges::find(character_names, letter, &std::pair<char32_t, std::string_view>::first);
+    if (named != character_names.end())
+    {
+        return std::string(named->second);
+    }
+    if (letter >= 1 && letter <= last_control_letter)
+    {
+        return std::string("<C-") + static_cast<char>('a' + (letter - 1)) + ">";
+    }
+    if (letter < U' ' || letter == delete_code_point || letter > last_code_point ||
+        (letter >= first_surrogate && letter <= last_surrogate))
+    {
+        return std::string(unnamed_control);
+    }
+    std::string text;
+    append_utf8(text, letter);
+    return text;
+}
+
+// "…" の中の 1 字の逃がし（Vim の expr-quote の `\n` `\t` `\r` `\e` `\b` `\f`）。
+constexpr std::array<std::pair<char, char32_t>, 6> letter_escapes{{
+    {'n', U'\n'},
+    {'t', U'\t'},
+    {'r', U'\r'},
+    {'e', U'\x1b'},
+    {'b', U'\b'},
+    {'f', U'\f'},
+}};
+// 数の逃がし（`\x41` `\X41` は 16 進 2 桁まで・`\u00e9` は 4 桁まで・`\U0001F600` は 8 桁まで）。
+constexpr std::array<std::pair<char, std::size_t>, 4> hex_escapes{{
+    {'x', 2},
+    {'X', 2},
+    {'u', 4},
+    {'U', 8},
+}};
+constexpr std::size_t octal_digits = 3;
+constexpr std::uint32_t octal_base = 8;
+constexpr std::uint32_t hex_base = 16;
+constexpr std::uint32_t decimal_digits = 10;
+
+// 文字の数値（base の桁でなければ base 以上）。
+[[nodiscard]] std::uint32_t digit_value(char letter) noexcept
+{
+    if (letter >= '0' && letter <= '9')
+    {
+        return static_cast<std::uint32_t>(letter - '0');
+    }
+    if (letter >= 'a' && letter <= 'f')
+    {
+        return static_cast<std::uint32_t>(letter - 'a') + decimal_digits;
+    }
+    if (letter >= 'A' && letter <= 'F')
+    {
+        return static_cast<std::uint32_t>(letter - 'A') + decimal_digits;
+    }
+    return hex_base;
+}
+
+// text の先頭から base の桁を limit 桁まで読む（値と読んだ桁の数）。
+[[nodiscard]] std::pair<char32_t, std::size_t>
+digits_read(std::string_view text, std::uint32_t base, std::size_t limit) noexcept
+{
+    std::uint32_t value = 0;
+    std::size_t read = 0;
+    while (read < limit && read < text.size() && digit_value(text.at(read)) < base)
+    {
+        value = value * base + digit_value(text.at(read));
+        ++read;
+    }
+    return {static_cast<char32_t>(value), read};
+}
+
+// 数の逃がしの値の記法。`\x` `\X` と 8 進はバイトを置くので、0x80 以上は 1 字にならない（Vim 9.1
+// の実測: `"\xe9"` `"\351"` は 1 バイトの e9・`"\400"` は空）。Nib は字でない値を断る
+// （unnamed_control）。`\u` `\U` は code point。
+[[nodiscard]] std::string byte_notation(char32_t value, bool byte)
+{
+    constexpr char32_t first_high_byte = 0x80;
+    return byte && value >= first_high_byte ? std::string(unnamed_control)
+                                            : character_notation(value);
+}
+
+// 1 字の記法と、逃がしの印 `\` の後ろから読んだバイトの数。
+using EscapedUnit = std::pair<std::string, std::size_t>;
+
+// `\<Name>`。Nib の表にある名前はその記法、`<lt>` は `<`、ほかは Vim と同じく `<` の 1 字（後ろの
+// 名前は普通の字として続く）。
+[[nodiscard]] EscapedUnit named_escape(std::string_view rest)
+{
+    const auto close = rest.find('>');
+    const auto name = rest.substr(0, close == std::string_view::npos ? 0 : close + 1);
+    if (name == "<lt>")
+    {
+        return {character_notation(U'<'), name.size()};
+    }
+    if (!name.empty() && vim_key_of_name(name).has_value())
+    {
+        return {std::string(name), name.size()};
+    }
+    return {character_notation(U'<'), 1};
+}
+
+// `\` の後ろ rest（空でない）の逃がしを読む。知らない字はその字のまま（`\q` は `q`）。
+[[nodiscard]] EscapedUnit escaped_unit(std::string_view rest)
+{
+    const char letter = rest.front();
+    const auto simple =
+        std::ranges::find(letter_escapes, letter, &std::pair<char, char32_t>::first);
+    if (simple != letter_escapes.end())
+    {
+        return {character_notation(simple->second), 1};
+    }
+    const auto hex = std::ranges::find(hex_escapes, letter, &std::pair<char, std::size_t>::first);
+    if (hex != hex_escapes.end())
+    {
+        const auto [value, read] = digits_read(rest.substr(1), hex_base, hex->second);
+        const bool byte = letter == 'x' || letter == 'X';
+        return read == 0 ? EscapedUnit{std::string(1, letter), 1}
+                         : EscapedUnit{byte_notation(value, byte), read + 1};
+    }
+    if (letter >= '0' && letter <= '7')
+    {
+        const auto [value, read] = digits_read(rest, octal_base, octal_digits);
+        return {byte_notation(value, true), read};
+    }
+    if (letter == '<')
+    {
+        return named_escape(rest);
+    }
+    const std::size_t length = next_code_point(rest, Offset{0}).value;
+    return {character_notation(code_point_at(rest, Offset{0})), length};
+}
+
+[[nodiscard]] bool key_name_letter(char letter) noexcept
+{
+    return (letter >= 'a' && letter <= 'z') || (letter >= 'A' && letter <= 'Z') ||
+           (letter >= '0' && letter <= '9') || letter == '-';
+}
+
+// text が `<名前>` の形（英数字と `-`・`<leader>` `<Leader>` を除く）か。
+[[nodiscard]] bool key_name_shape(std::string_view text) noexcept
+{
+    if (text.size() <= 2 || text.front() != '<' || text.back() != '>' || text == leader_canonical ||
+        text == leader_spelling)
     {
         return false;
     }
-    const char letter = inner.at(at);
-    const char next = inner.at(at + 1);
-    if (quote == '\'')
-    {
-        return letter == '\'' && next == '\'';
-    }
-    return letter == '\\' && (next == '\\' || next == '"' || next == '<');
+    return std::ranges::all_of(text.substr(1, text.size() - 2), key_name_letter);
 }
 
-// Vim の文字列の値（`"\<Space>"` は `<Space>`）。引用符で囲まれていなければ値なし。
-[[nodiscard]] std::optional<std::string> quoted_value(std::string_view text)
+// 読んだ値の全体が `<名前>` の字の列（`'<Space>'` `"<Tab>"`）ならその字の列。名前は英数字と `-`
+// で、`<leader>` は除く。字でない単位（`\<Space>` の鍵・空白・制御文字）を含めば値なし。
+[[nodiscard]] std::optional<std::string> key_name_text(const std::vector<std::string> &units)
 {
-    if (text.size() < 2 || text.front() != text.back() ||
-        (text.front() != '\'' && text.front() != '"'))
+    std::string text;
+    for (const auto &unit : units)
+    {
+        if (unit == character_notation(U'<'))
+        {
+            text += '<';
+            continue;
+        }
+        if (unit.size() > 1 && unit.front() == '<')
+        {
+            return std::nullopt;
+        }
+        text += unit;
+    }
+    if (!key_name_shape(text))
     {
         return std::nullopt;
     }
-    const char quote = text.front();
-    const auto inner = text.substr(1, text.size() - 2);
-    std::string value;
-    for (std::size_t at = 0; at < inner.size(); ++at)
+    return text;
+}
+
+// 1 字ずつの記法を 1 つの値へ。1 字なら `<lt>` は `<` に戻す（`<` の 1 鍵）。値の全体が鍵の
+// 名前の字の列なら、今までの版と同じくその名前の鍵として読む（Vim は書いたままの字の列の leader
+// だが、Nib は 1 鍵の leader しか持てない・ADR 0176 の 2026-11-25 の追補）。
+[[nodiscard]] std::string joined_notation(const std::vector<std::string> &units)
+{
+    if (units.size() == 1 && units.front() == character_notation(U'<'))
     {
-        if (escapes_next(quote, inner, at))
-        {
-            ++at;
-        }
-        value += inner.at(at);
+        return std::string(lone_less_than);
+    }
+    if (auto named = key_name_text(units))
+    {
+        return std::move(named).value();
+    }
+    std::string value;
+    for (const auto &unit : units)
+    {
+        value += unit;
     }
     return value;
 }
 
-// `:let mapleader = ","`。ほかの変数は受けない。空白 1 つの値は `<Space>` と同じ。
+// "…" の中身を Vim の expr-quote として 1 字ずつの記法へ。終わりの `\` は閉じの `"` を逃がすので
+// 閉じていない（Vim の E114）。
+[[nodiscard]] std::optional<std::vector<std::string>> double_quoted_units(std::string_view inner)
+{
+    std::vector<std::string> units;
+    std::size_t at = 0;
+    while (at < inner.size())
+    {
+        if (inner.at(at) != '\\')
+        {
+            units.push_back(character_notation(code_point_at(inner, Offset{at})));
+            at = next_code_point(inner, Offset{at}).value;
+            continue;
+        }
+        if (at + 1 == inner.size())
+        {
+            return std::nullopt;
+        }
+        auto [unit, read] = escaped_unit(inner.substr(at + 1));
+        units.push_back(std::move(unit));
+        at += 1 + read;
+    }
+    return units;
+}
+
+// '…' の中身（逃がしは `''` の 1 つだけ・`'\n'` は 2 字・`'<Space>'` は 7 字）。
+[[nodiscard]] std::vector<std::string> single_quoted_units(std::string_view inner)
+{
+    std::vector<std::string> units;
+    std::size_t at = 0;
+    while (at < inner.size())
+    {
+        units.push_back(character_notation(code_point_at(inner, Offset{at})));
+        const bool doubled = inner.substr(at).starts_with("''");
+        at = doubled ? at + 2 : next_code_point(inner, Offset{at}).value;
+    }
+    return units;
+}
+
+// Vim の文字列の値を鍵の記法で（`"\<Space>"` と `" "` は `<Space>`・`"\n"` は `<NL>`・#2018）。
+// 引用符で囲まれていない・閉じていなければ値なし。
+[[nodiscard]] std::optional<std::string> quoted_value(std::string_view text)
+{
+    if (text.size() < 2 || text.front() != text.back() ||
+        (text.front() != '\'' && text.front() != '"') || !validate_utf8(text).has_value())
+    {
+        return std::nullopt;
+    }
+    const auto inner = text.substr(1, text.size() - 2);
+    if (text.front() == '\'')
+    {
+        return joined_notation(single_quoted_units(inner));
+    }
+    const auto units = double_quoted_units(inner);
+    if (!units.has_value())
+    {
+        return std::nullopt;
+    }
+    return joined_notation(units.value());
+}
+
+// `:let mapleader = ","`。ほかの変数は受けない。値は 1 字ずつ鍵の記法に写し、1 鍵かは
+// map_edited の parse_map_leader が決める。
 [[nodiscard]] Evaluated leader_assigned(std::string_view argument)
 {
     if (!argument.starts_with(leader_variable))
@@ -178,8 +427,8 @@ using Evaluated = std::expected<ExResult, ExEvaluationFailure>;
     {
         return std::unexpected(ExFailure::invalid_argument);
     }
-    std::string leader = value.value() == " " ? std::string(space_notation) : value.value();
-    return map_result(ExMapRequest{ExMapVerb::leader, {}, {}, std::move(leader), true}, let_name);
+    return map_result(ExMapRequest{ExMapVerb::leader, {}, {}, std::move(value).value(), true},
+                      let_name);
 }
 
 // `<Leader>` を `<leader>` に揃えた左辺（追補 17・ほかの綴りは表どおりで大小を区別する）。
