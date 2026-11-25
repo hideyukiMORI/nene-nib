@@ -50,7 +50,11 @@ Three things can still reach a network because you chose them, not because the a
 - **Language servers (off by default).** If you turn on `lsp` and add a `lsp.<language>.command=` line in the
   settings, the application starts that program on your device and exchanges the text of your named documents with
   it through standard input and output. Untitled documents are not sent. What that program does is up to that
-  program; the application does not start any server you have not configured.
+  program; the application does not start any server you have not configured. When the settings panel is opened,
+  its language-server section looks for known servers on your device only, in the folders of `PATH` and a fixed
+  set of places (the global npm folders, `.cargo\bin`, `go\bin`, `.dotnet\tools`, `LLVM\bin` and the LLVM inside
+  Visual Studio); it reads file names and npm `package.json` files there, skips network drives and `\\` paths,
+  and makes no network connection.
 - **Links in the Markdown preview.** When you click a link in the preview, the application first shows its real
   destination in a small card and does nothing until you confirm. If you confirm, an `http` / `https` link is handed
   to your default browser and a `mailto:` link to your default mail application; that application, not NeNe Nib,
@@ -81,7 +85,7 @@ Questions: open an issue at <https://github.com/hideyukiMORI/nene-nib/issues>.
 | --- | --- | --- |
 | 文書 | 開いたファイルを読み、保存したファイルを書きます。プロジェクトの全文検索（Ctrl+P の `!`）は探すフォルダの下のファイルを、Ctrl+P の面のプレビュー欄は選んだ候補のファイルを、画面に出すためだけに読みます。保存するときは、先に保存先の隣へ一時ファイル（`<ファイル>.nib-tmp-<プロセスの番号>-<番号>`）を書いてから置き換えます。 | 選んだファイルとフォルダ。どこにも送りません。 |
 | 未保存の編集 | 30 秒ごとに、未保存の変更があるタブの本文を端末の中のフォルダへ写します。アプリが異常に終わったとき、次の起動で 1 回だけ戻すかを聞くためです。未保存の変更を残さずに窓を閉じたとき、または「保存しない」を選んだときに消します。それ以外の終わり方では次の起動のために残します。64 MiB を超える文書は写しません。 | 端末の `%LOCALAPPDATA%\NeNeNib\autosave\`。 |
-| 設定 | テーマ・フォント・折り返しなどの表示の選択（Ctrl+P の面のプレビュー欄の置き方を含む）、エクスプローラーの起点のフォルダ、Vim の `map` の行と `autoindent` などの設定、書いた場合は言語サーバーの命令。 | 端末の `%LOCALAPPDATA%\NeNeNib\settings.v7`（1.2.0 は `settings.v6`、1.1.0 は `settings.v5`、1.0.0 は `settings.v4` を使っていました。古いファイルは `settings.v7` が無いときだけ読み、書き換えずに残します）。 |
+| 設定 | テーマ・フォント・折り返しなどの表示の選択（Ctrl+P の一覧のプレビュー欄の置き方を含む）、エクスプローラーの起点のフォルダ、Vim の `map` の行と `autoindent` などの設定、書いた場合は言語サーバーの命令。 | 端末の `%LOCALAPPDATA%\NeNeNib\settings.v7`（1.2.0 は `settings.v6`、1.1.0 は `settings.v5`、1.0.0 は `settings.v4` を使っていました。古いファイルは `settings.v7` が無いときだけ読み、書き換えずに残します）。 |
 | タブ・履歴・ブックマーク | 窓を閉じたときに開いていたタブのパス（キャレットとスクロールの位置つき）、閉じたファイル最大 100 件、ブックマーク最大 1024 件。 | `%LOCALAPPDATA%\NeNeNib\` の `session.v2`・`history.v1`・`bookmarks.v1`。 |
 | クリップボード | コピー・切り取り・貼り付け（Vim の `"+` `"*` レジスタを含む）の操作をしたときだけ読み書きします。 | お使いの端末のクリップボード。 |
 | Windows の設定 | Windows のライト／ダークの設定と、Windows の表示言語（設定が「Windows に合わせる」のとき画面の文の言語を決めるため）と、入っている WSL の一覧（フォルダとして選べるようにするため）を読みます。起動のときに、Microsoft Store 版のパッケージとして動いているかを Windows に問います（下のエクスプローラーへの登録の操作を出さないため）。変更はしません。 | 保存しません。 |
@@ -109,11 +113,14 @@ Markdown プレビューが表示する画像はファイルとして読める�
 - **ネットワーク上のファイル。** 共有フォルダ（例: `\\server\share`）のファイルを開く・保存する、ネットワークのプリンタへ印刷する、
   を選ぶと、Windows がその場所へアクセスします。共有フォルダを割り当てたドライブ（例: `Z:\`）の上の画像を Markdown プレビューに
   表示するときも同じで、プレビューは端末の中のファイルと同じように読みます。探すフォルダや見るファイルが共有フォルダの上にあるときの
-  プロジェクトの全文検索と Ctrl+P の面のプレビュー欄も同じです。クラウドのフォルダ（例: OneDrive）では、中身がまだ端末に無いファイルは
+  プロジェクトの全文検索と Ctrl+P の一覧のプレビュー欄も同じです。クラウドのフォルダ（例: OneDrive）では、中身がまだ端末に無いファイルは
   読まないので、Windows に取り寄せさせません。
 - **言語サーバー（既定はオフ）。** 設定で `lsp` をオンにして `lsp.<言語>.command=` の行を書くと、アプリはその命令のプログラムを端末の中で起動し、
   名前のある文書の本文を標準入出力でやり取りします。無題の文書は送りません。そのプログラムが何をするかはそのプログラムしだいです。
-  設定に書いていないサーバーをアプリが起動することはありません。
+  設定に書いていないサーバーをアプリが起動することはありません。設定を開いたとき、「言語サーバー」の節は、知っているサーバーを
+  端末の中だけで探します。探すのは `PATH` のフォルダと決まった置き場（npm のグローバルの置き場・`.cargo\bin`・`go\bin`・
+  `.dotnet\tools`・`LLVM\bin`・Visual Studio の中の LLVM）で、そこのファイルの名前と npm の `package.json` を読むだけです。
+  ネットワークのドライブと `\\` の場所は探さず、通信はしません。
 - **Markdown プレビューのリンク。** プレビューのリンクをクリックすると、アプリはまず本当の宛先を小さな札で見せ、確かめるまで何もしません。
   確かめると、`http`・`https` のリンクは既定のブラウザに、`mailto:` のリンクは既定のメールのアプリに渡します。宛先へ接続するのは
   そのアプリで、NeNe Nib ではありません。テキストのファイルへのリンクはアプリの中の新しいタブで開きます。それ以外の種類のリンクは開きません。
