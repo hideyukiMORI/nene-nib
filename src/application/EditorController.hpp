@@ -1235,7 +1235,7 @@ class EditorController final
                                                   const std::vector<AutosaveId> &tabs) const;
     [[nodiscard]] std::optional<OpenedRevision> opened_revision_at(LanguageServerSlot slot,
                                                                    std::size_t position) const;
-    [[nodiscard]] bool awaits_command(LanguageServerSlot slot) const;
+    [[nodiscard]] bool awaits_chosen_fix(LanguageServerSlot slot) const;
     void settle_execute_command_answer(const core::LspResponse &response);
     void answer_apply_edit(LanguageServerSlot slot, const core::LspRequest &request);
     [[nodiscard]] std::optional<std::string_view>

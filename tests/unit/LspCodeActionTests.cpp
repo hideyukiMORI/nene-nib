@@ -39,6 +39,7 @@
 #include "OperationKey.hpp"
 #include "PlaceCaret.hpp"
 #include "QueryLanguage.hpp"
+#include "SaveDocument.hpp"
 #include "Scopes.hpp"
 #include "SelectEditMode.hpp"
 #include "SelectionAnchoring.hpp"
@@ -47,6 +48,7 @@
 #include "SwitchTab.hpp"
 #include "TestSupport.hpp"
 #include "TextBuffer.hpp"
+#include "TextEncoding.hpp"
 #include "TextPosition.hpp"
 #include "UiMessage.hpp"
 #include "UiTexts.hpp"
@@ -142,18 +144,10 @@ app::EditorFrame delivered(Editing &editing, app::ServerEvent event)
     return std::string(core::ui_text(message, editing.controller().display_language()));
 }
 
-// main.cpp（と、two なら先に other.cpp）を開き、capabilities で `initialize` に答え、2 つの診断を
-// 届けてからキャレットを 1 行目の `1` に置く。
-void started(Editing &editing, std::string_view capabilities, bool two = false)
+// 席を起こして capabilities で `initialize` に答え、main.cpp の 2 つの診断を届けてからキャレットを
+// 1 行目の `1` に置く（main.cpp がアクティブ）。
+void served(Editing &editing, std::string_view capabilities)
 {
-    editing.files().hold_at(std::string(main_path), Bytes{std::string(main_text)});
-    editing.files().hold_at(std::string(other_path), Bytes{std::string("int other;\n")});
-    static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
-    if (two)
-    {
-        applied(editing.controller(), app::OpenDocument{path_of(other_path)});
-    }
-    applied(editing.controller(), app::OpenDocument{path_of(main_path)});
     static_cast<void>(delivered(editing, app::ServerStarted{}));
     static_cast<void>(delivered(
         editing,
@@ -166,6 +160,20 @@ void started(Editing &editing, std::string_view capabilities, bool two = false)
     applied(editing.controller(),
             app::PlaceCaret{core::TextPosition{core::LineNumber{1}, core::Column{13}},
                             core::SelectionAnchoring::collapse});
+}
+
+// main.cpp（と、two なら先に other.cpp）を開いてから席を起こす。
+void started(Editing &editing, std::string_view capabilities, bool two = false)
+{
+    editing.files().hold_at(std::string(main_path), Bytes{std::string(main_text)});
+    editing.files().hold_at(std::string(other_path), Bytes{std::string("int other;\n")});
+    static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
+    if (two)
+    {
+        applied(editing.controller(), app::OpenDocument{path_of(other_path)});
+    }
+    applied(editing.controller(), app::OpenDocument{path_of(main_path)});
+    served(editing, capabilities);
 }
 
 app::EditorFrame asked(Editing &editing)
@@ -907,6 +915,16 @@ void awaiting_both(Editing &editing)
     static_cast<void>(editing.controller().apply_frame(app::ActivateCommandChoice{1}));
 }
 
+// 照合と検査が断った applyEdit の返事か。命令が 1 本出ていて、待ちが下りた・命令が出ていない
+// ときの理由（Nib is not waiting…）では通らない（R10 の P1）。
+[[nodiscard]] bool refused_as_moved(Editing &editing, std::string_view id)
+{
+    return contains(reply_to(editing, id),
+                    R"("applied":false,"failureReason":"the documents changed since the command )"
+                    R"(was sent or could not be edited")") &&
+           editing.language_server().requests(execute_method).size() == 1;
+}
+
 // M1: 写しの土台は頼んだ時点で、進めるのは Nib が当てたタブだけ。一覧を開いてから選ぶまで・命令を
 // 送ってから届くまで・1 通目と 2 通目の間に別のタブで打った分は写しに入らず、断る。
 void verify_snapshot_from_request()
@@ -918,19 +936,19 @@ void verify_snapshot_from_request()
     static_cast<void>(listed.controller().apply(app::CancelCommand{}));
     typed_in_other(listed, "y");
     static_cast<void>(listed.controller().apply(app::OpenCommandPalette{}));
-    static_cast<void>(listed.controller().apply_frame(app::CommandText{"="}));
+    const auto shown = listed.controller().apply_frame(app::CommandText{"="});
+    expect(shown.command_palette.has_value() && shown.command_palette.value().rows.size() == 4,
+           "typing in another tab keeps the held list of the asked document");
     static_cast<void>(listed.controller().apply_frame(app::ActivateCommandChoice{1}));
     static_cast<void>(apply_edit_sent(listed, "a1", other_edit));
-    expect(contains(reply_to(listed, "a1"), R"("applied":false)") &&
-               !contains(other_body(listed), "thing"),
+    expect(refused_as_moved(listed, "a1") && !contains(other_body(listed), "thing"),
            "a tab typed in between opening the list and choosing is refused");
 
     Editing sent(lsp_on());
     awaiting_both(sent);
     typed_in_other(sent, "y");
     static_cast<void>(apply_edit_sent(sent, "b1", other_edit));
-    expect(contains(reply_to(sent, "b1"), R"("applied":false)") &&
-               !contains(other_body(sent), "thing"),
+    expect(refused_as_moved(sent, "b1") && !contains(other_body(sent), "thing"),
            "a tab typed in after the command was sent is refused");
 
     Editing between(lsp_on());
@@ -939,8 +957,7 @@ void verify_snapshot_from_request()
     typed_in_other(between, "y");
     static_cast<void>(apply_edit_sent(between, "c2", other_edit));
     expect(contains(reply_to(between, "c1"), R"("applied":true)") &&
-               contains(reply_to(between, "c2"), R"("applied":false)") &&
-               !contains(other_body(between), "thing"),
+               refused_as_moved(between, "c2") && !contains(other_body(between), "thing"),
            "a tab typed in between the first and the second applyEdit is refused");
 
     Editing quiet(lsp_on());
@@ -1001,6 +1018,184 @@ void verify_one_command_at_a_time()
     static_cast<void>(apply_edit_sent(editing, "w1", semi_edit));
     expect(contains(reply_to(editing, "w1"), R"("applied":true)"),
            "the awaited command's applyEdit still applies with its own snapshot");
+}
+
+// P2: 席が開いていないタブ（席が起きる前に開いて打った other.cpp）は、命令の後に保存しても
+// 写しの「頼んだときは未保存」が残り、applyEdit を断る（保存で洗われない・R8 の M1 の穴 (1)）。
+void verify_saved_after_command()
+{
+    Editing editing(lsp_on());
+    editing.files().hold_at(std::string(main_path), Bytes{std::string(main_text)});
+    editing.files().hold_at(std::string(other_path), Bytes{std::string("int other;\n")});
+    static_cast<void>(editing.controller().apply(app::VisibleLines{20}));
+    applied(editing.controller(), app::OpenDocument{path_of(other_path)});
+    applied(editing.controller(), app::InsertText{"y"});
+    applied(editing.controller(), app::OpenDocument{path_of(main_path)});
+    served(editing, able);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, action_method, four_actions()));
+    static_cast<void>(editing.controller().apply_frame(app::ActivateCommandChoice{1}));
+    applied(editing.controller(), app::SwitchTab{0});
+    applied(editing.controller(), app::SaveDocument{path_of(other_path), core::TextEncoding::utf8});
+    applied(editing.controller(), app::SwitchTab{1});
+    const auto frame = apply_edit_sent(editing, "p1", other_edit);
+    expect(refused_as_moved(editing, "p1") && !contains(other_body(editing), "thing") &&
+               message_of(frame) == core::ui_text_filled(core::UiMessage::notice_server_edit_unsent,
+                                                         editing.controller().display_language(),
+                                                         {"other.cpp"}),
+           "a tab the seat never opened, unsaved when asked and saved later, is still refused");
+}
+
+// N1: resolve の答えを待つ間も次の項目を走らせない。resolve の答えの edit と command は、並ぶ命令が
+// 無いので待ちを取り消さずに進み、その命令の applyEdit は自分の写しで当たる。
+void verify_one_fix_while_resolving()
+{
+    Editing editing(lsp_on());
+    started(editing, able);
+    static_cast<void>(asked(editing));
+    static_cast<void>(answered(editing, action_method, four_actions()));
+    static_cast<void>(editing.controller().apply_frame(app::ActivateCommandChoice{3}));
+    static_cast<void>(editing.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(editing.controller().apply_frame(app::CommandText{"="}));
+    const auto refused = editing.controller().apply_frame(app::ActivateCommandChoice{1});
+    expect(message_of(refused) == notice(editing, core::UiMessage::notice_code_action_waiting) &&
+               editing.language_server().requests(execute_method).empty() &&
+               editing.language_server().requests(resolve_method).size() == 1 &&
+               editing.language_server().cancelled().empty() &&
+               whole_vim_body(editing.controller()) == main_text,
+           "another item is refused while a resolve is awaited and nothing is sent or cancelled");
+    static_cast<void>(answered(editing, resolve_method,
+                               R"({"title":"Extract","edit":)" + std::string{rename_edit} +
+                                   R"(,"command":{"title":"c","command":"fix.rename"}})"));
+    expect(whole_vim_body(editing.controller()) == renamed_text &&
+               editing.language_server().requests(execute_method).size() == 1 &&
+               editing.language_server().cancelled().empty(),
+           "the resolved edit and command go on without cancelling anything");
+    static_cast<void>(apply_edit_sent(editing, "q1", semi_edit));
+    expect(contains(reply_to(editing, "q1"), R"("applied":true)") &&
+               whole_vim_body(editing.controller()) ==
+                   "int count = 1;\nint main() { return value; }\n",
+           "the resolved command's applyEdit is checked against the text after its own edit");
+
+    // 答えない resolve は 2 回の tick で取り消して下り、次の項目を選べる。
+    Editing aged(lsp_on());
+    started(aged, able);
+    static_cast<void>(asked(aged));
+    static_cast<void>(answered(aged, action_method, four_actions()));
+    static_cast<void>(aged.controller().apply_frame(app::ActivateCommandChoice{3}));
+    const auto resolving = aged.language_server().requests(resolve_method);
+    for (std::size_t tick = 0; tick < app::language_server_stale_ticks; ++tick)
+    {
+        static_cast<void>(aged.controller().apply(app::LanguageServerTick{}));
+    }
+    static_cast<void>(aged.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(aged.controller().apply_frame(app::CommandText{"="}));
+    static_cast<void>(aged.controller().apply_frame(app::ActivateCommandChoice{1}));
+    expect(resolving.size() == 1 && aged.language_server().cancelled() == resolving &&
+               aged.language_server().requests(execute_method).size() == 1,
+           "a resolve that never answers is cancelled when stale and frees the next fix");
+}
+
+// 版の違う main.cpp の編集だけを持つ項目（照合 (c) が断る）。
+[[nodiscard]] std::string outdated_action()
+{
+    return R"([{"title":"Old","edit":{"documentChanges":[{"textDocument":{"uri":")" +
+           std::string{main_uri} +
+           R"(","version":9},"edits":[{"range":{"start":{"line":0,"character":13},)"
+           R"("end":{"line":0,"character":13}},"newText":";"}]}]}}])";
+}
+
+// P4: resolve の答えは入力の途中なら進めない。resolve を待つ間に入り直した VISUAL は、当てた後に
+// NORMAL。選んだ項目の当て先を照合が断っても VISUAL を抜けている。
+void verify_resolve_answer_and_visual()
+{
+    Editing busy(lsp_on());
+    started(busy, able);
+    static_cast<void>(asked(busy));
+    static_cast<void>(answered(busy, action_method, four_actions()));
+    static_cast<void>(busy.controller().apply_frame(app::ActivateCommandChoice{3}));
+    static_cast<void>(busy.controller().apply(app::OpenCommandPalette{}));
+    const auto arrived = answered(busy, resolve_method,
+                                  R"({"title":"Extract","edit":)" + std::string{semi_edit} +
+                                      R"(,"command":{"title":"c","command":"fix.rename"}})");
+    static_cast<void>(busy.controller().apply_frame(app::CancelCommand{}));
+    expect(whole_vim_body(busy.controller()) == main_text &&
+               busy.language_server().requests(execute_method).empty() &&
+               message_of(arrived) == notice(busy, core::UiMessage::notice_server_edit_busy),
+           "a resolve answer in the middle of input applies nothing and sends no command");
+
+    Editing again(lsp_on());
+    started(again, able);
+    applied(again.controller(), app::SelectEditMode{core::EditMode::vim});
+    static_cast<void>(asked(again));
+    static_cast<void>(answered(again, action_method, four_actions()));
+    static_cast<void>(again.controller().apply_frame(app::ActivateCommandChoice{3}));
+    vim_replay(again.controller(), "0vll");
+    static_cast<void>(answered(again, resolve_method,
+                               R"({"title":"Extract","edit":)" + std::string{semi_edit} + "}"));
+    expect(whole_vim_body(again.controller()) == fixed_text &&
+               again.controller().frame().vim_mode == core::VimMode::normal,
+           "a resolved fix applied in a VISUAL entered while waiting leaves VISUAL");
+
+    Editing refused(lsp_on());
+    started(refused, able);
+    applied(refused.controller(), app::SelectEditMode{core::EditMode::vim});
+    vim_replay(refused.controller(), "0vll");
+    static_cast<void>(asked(refused));
+    static_cast<void>(answered(refused, action_method, outdated_action()));
+    const auto frame = refused.controller().apply_frame(app::ActivateCommandChoice{0});
+    expect(message_of(frame) == notice(refused, core::UiMessage::notice_server_edit_stale) &&
+               whole_vim_body(refused.controller()) == main_text &&
+               frame.vim_mode == core::VimMode::normal,
+           "a chosen fix refused by the checks has already left VISUAL");
+}
+
+// other.cpp の thing を again にする編集（other_edit を当てた後の本文の位置）。
+constexpr std::string_view other_again_edit =
+    R"({"changes":{"file:///C:/work/other.cpp":[{"range":{"start":{"line":0,"character":4},)"
+    R"("end":{"line":0,"character":9}},"newText":"again"}]}})";
+
+// #2042 の規則は命令の道と控えの一覧にも効く（規則は apply_workspace_edit の 1 本）: 頼んだときに
+// タブに在った other.cpp を閉じた後は、その applyEdit も、控えの一覧から選んだ edit も断る。Nib が
+// 当てて新しく開いたタブは進めた写しにパスごと入り、同じ命令の 2 通目が当たる。
+void verify_copied_path_on_commands()
+{
+    Editing closed(lsp_on());
+    awaiting_both(closed);
+    applied(closed.controller(), app::SwitchTab{0});
+    applied(closed.controller(), app::CloseTab{0});
+    const auto after = apply_edit_sent(closed, "x1", other_edit);
+    expect(refused_as_moved(closed, "x1") && after.tabs.size() == 1 &&
+               whole_vim_body(closed.controller()) == main_text &&
+               message_of(after) == notice(closed, core::UiMessage::notice_server_edit_stale),
+           "an applyEdit for a file whose tab was closed while the command is awaited is refused");
+
+    Editing listed(lsp_on());
+    started_both(listed);
+    typed_in_other(listed, "y");
+    static_cast<void>(asked(listed));
+    static_cast<void>(
+        answered(listed, action_method,
+                 R"([{"title":"Fix other","edit":)" + std::string{other_edit} + "}]"));
+    static_cast<void>(listed.controller().apply(app::CancelCommand{}));
+    applied(listed.controller(), app::SwitchTab{0});
+    applied(listed.controller(), app::CloseTab{0});
+    static_cast<void>(listed.controller().apply(app::OpenCommandPalette{}));
+    static_cast<void>(listed.controller().apply_frame(app::CommandText{"="}));
+    const auto chosen = listed.controller().apply_frame(app::ActivateCommandChoice{0});
+    expect(message_of(chosen) == notice(listed, core::UiMessage::notice_server_edit_stale) &&
+               chosen.tabs.size() == 1 && whole_vim_body(listed.controller()) == main_text,
+           "a held fix for a file closed unsaved after asking opens nothing and changes nothing");
+
+    Editing opened(lsp_on());
+    awaiting(opened);
+    const auto first = apply_edit_sent(opened, "y1", other_edit);
+    const auto second = apply_edit_sent(opened, "y2", other_again_edit);
+    applied(opened.controller(), app::SwitchTab{1});
+    expect(contains(reply_to(opened, "y1"), R"("applied":true)") && first.tabs.size() == 2 &&
+               contains(reply_to(opened, "y2"), R"("applied":true)") && second.tabs.size() == 2 &&
+               whole_vim_body(opened.controller()) == "int again;\n",
+           "a second applyEdit reaches the tab the first one opened");
 }
 
 // R4: 同じタブのまま席が文書を閉じたら控えを捨てる（`:set nolsp`）。
@@ -1095,6 +1290,10 @@ void verify_lsp_code_action_scope()
     verify_change_before_reply();
     verify_resolved_command_checked();
     verify_one_command_at_a_time();
+    verify_saved_after_command();
+    verify_one_fix_while_resolving();
+    verify_resolve_answer_and_visual();
+    verify_copied_path_on_commands();
     verify_held_forgotten_by_seat();
     verify_more_shapes();
     verify_selection_and_titles();

@@ -318,34 +318,42 @@ void EditorController::choose_code_action(const core::CommandChoice &choice)
         state_ = state_.with_command_message(ui_notice(core::UiMessage::notice_server_edit_stale));
         return;
     }
-    // 前の命令の答えを待つ間は次の項目を走らせない（取り消した命令の `workspace/applyEdit` が後の
-    // 命令の写しで照らされる道を作らない・#2022 のレビュー R1）。
-    if (awaits_command(held.context.slot))
+    // 前に選んだ直しの続き（resolve か命令の答え）を待つ間は次の項目を走らせない。2 つの直しが
+    // 並ぶと、後から送る命令が待っている命令を取り消し、取り消した命令の `workspace/applyEdit` が
+    // 後の命令の写しで照らされる（#2022 のレビュー R1・R10 の N1）。
+    if (awaits_chosen_fix(held.context.slot))
     {
         state_ =
             state_.with_command_message(ui_notice(core::UiMessage::notice_code_action_waiting));
         return;
     }
-    // 選んだ時点で VISUAL を抜ける（Command だけの項目でも edit の道と同じ結果のモード・R3）。
-    leave_visual_for_formatting();
     run_code_action(held.actions.at(index.value()), held.context, held.encoding);
 }
 
-// 席 slot が送った `workspace/executeCommand` の答えを待っているか（待つ列にその要求がある）。
-bool EditorController::awaits_command(LanguageServerSlot slot) const
+// 席 slot が、選んだ直しの続きの答え（`codeAction/resolve` か `workspace/executeCommand`）を
+// 待っているか（待つ列にその要求がある）。resolve の答えは命令を送り得るので、命令と同じに数える
+// （N1）。
+bool EditorController::awaits_chosen_fix(LanguageServerSlot slot) const
 {
     const auto &pending = language_servers_.links.at(slot_index(slot)).pending;
-    return std::ranges::find(pending, LspRequestKind::execute_command, &PendingLspRequest::kind) !=
-           pending.end();
+    return std::ranges::any_of(pending,
+                               [](const PendingLspRequest &request)
+                               {
+                                   return request.kind == LspRequestKind::execute_command ||
+                                          request.kind == LspRequestKind::code_action_resolve;
+                               });
 }
 
 // edit → command の順（決定 10・LSP の文）。edit は apply_workspace_edit の 1 本で当て、断ったら
 // command を送らない。edit が無く data があり、答えた席が resolve に答えるなら `codeAction/resolve`
-// で引く（続きは届いた答えで）。Vim の VISUAL は当てた後に NORMAL へ戻す（整形と同じ）。
+// で引く（続きは届いた答えで）。Vim の VISUAL は入口の検査を通った項目を走らせる前に抜ける
+// （Command だけの項目・resolve を待つ間に入り直した VISUAL でも結果のモードが同じ・R3。当て先の
+// 照合が断っても NORMAL のまま・R10 の P4）。
 void EditorController::run_code_action(const core::LspCodeAction &action,
                                        const LspEditContext &context,
                                        core::LspPositionEncoding encoding)
 {
+    leave_visual_for_formatting();
     LspEditContext advanced = context;
     if (action.edit.has_value())
     {
@@ -377,7 +385,10 @@ void EditorController::run_code_action(const core::LspCodeAction &action,
 }
 
 // 写し context を、Nib がサーバーの編集で当てたタブ tabs だけ今の値へ進める（当てた後の改訂番号・
-// 席が開いているか・保存の状態・新しく開いたタブは足す）。ほかのタブは頼んだ時点の値のまま残すので、
+// パス・席が開いているか・保存の状態・新しく開いたタブは足す）。席が開いていないタブは、進めた
+// 写しで「席が開いていない・未保存」になるので、同じ命令の次の `workspace/applyEdit` では断る
+// （サーバーはそのファイルをディスクで数えていて、当てた後の本文を知らない・R10 の
+// P3）。ほかのタブは頼んだ時点の値のまま残すので、
 // 頼んだ後に使う人が打った・保存したタブは照合で断られる（#2022 のレビュー M1）。
 LspEditContext EditorController::advanced_context(LspEditContext context,
                                                   const std::vector<AutosaveId> &tabs) const

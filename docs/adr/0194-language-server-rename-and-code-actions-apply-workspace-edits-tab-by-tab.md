@@ -184,7 +184,7 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
   - 能力の無い席では頼まないこと。
   - `prepareRename` の読み。
   - 入力行の Enter / Esc。
-- S7 b の守り: **active**（`nib_tests --lsp-code-action`・#2005。下の 7 つを替え玉のサーバーで縛る。`initialize` の能力は `--language-server` の `verify_abilities` も読む。Ctrl+. の写しは `nib_window_tests --quick-fix-key`）。
+- S7 b の守り: **active**（`nib_tests --lsp-code-action`・#2005。下の 8 つを替え玉のサーバーで縛る。`initialize` の能力は `--language-server` の `verify_abilities` も読む。Ctrl+. の写しは `nib_window_tests --quick-fix-key`）。
   - codeAction の読み（Command と CodeAction の両方）。
   - `context.diagnostics` に戻す形（code の型・data）。
   - Ctrl+P の出どころ。
@@ -192,11 +192,14 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
   - resolve。
   - 頼んでいない `workspace/applyEdit` への `applied: false`。
   - 入力の途中の `applied: false`。
+  - 写しの規則が命令の道でも効くこと（2026-11-25・R10 の P1・P2・N1・#2042）: 断った理由（`failureReason`）と命令の本数、席が開いていないタブを命令の後に保存した形、resolve を待つ間の次の項目、命令を待つ間・控えの一覧が残る間に閉じたタブ、1 通目が開いたタブへの 2 通目（`verify_snapshot_from_request`・`verify_saved_after_command`・`verify_one_fix_while_resolving`・`verify_resolve_answer_and_visual`・`verify_copied_path_on_commands`）。
   - 実装の形（#2005・#2022 のレビュー R8）:
     - 写しの土台は、一覧を開くクイックフィックスを頼んだ時点の `LspEditContext`（帯の読み込み済みのタブごとの改訂番号・頼んだ席が `didOpen` しているか・保存の状態）。選んだ項目の `edit` と、当てた `workspace/applyEdit` で **Nib が当てたタブだけ**を当てた後の値へ進め（新しく開いたタブは足す）、ほかのタブは頼んだ時点の値のまま残す。一覧を開いてから選ぶまで・命令を送ってから届くまで・1 通目と 2 通目の間に使う人が別のタブで打った・保存した分は写しに入らず、照合 (b) と席が開いていない当て先の規則で断る。
     - 照らすのは `apply_workspace_edit` の 1 本で、`workspace/applyEdit` だけ (a) を `ServerEditOrigin::server_request` で飛ばす。resolve の答えは、edit の有無に依らず頼んだ文書と入力の途中を照らしてから進める（Command だけの答えも）。
     - 当てたら、`applied: true` の返事の前に当てた編集の `didChange` を流す（返事を受けた時点のサーバーの本文が揃う）。
-    - 待ちは席の答えを待つ列にある `execute_command` の要求そのもので、答え（成功・誤り）・tick の古さ・席の止まりのどれでも列から外れて下りる（別の旗を持たない）。待つ間は次の項目を選んでも走らせず 1 行で断る（取り消した命令の `workspace/applyEdit` が後の命令の写しで照らされる道を作らない）。
+    - 待ちは席の答えを待つ列にある `execute_command` の要求そのもので、答え（成功・誤り）・tick の古さ・席の止まりのどれでも列から外れて下りる（別の旗を持たない）。前に選んだ直しの続き（`codeAction/resolve` の答えか、命令の答え）を待つ間は、次の項目を選んでも走らせず 1 行で断る（`awaits_chosen_fix`・2 つの直しが並ぶと、後から送る命令が待っている命令を取り消し、取り消した命令の `workspace/applyEdit` が後の命令の写しで照らされるため。resolve の答えも命令を送り得るので、命令と同じに数える・2026-11-25・独立レビュー R10 の N1）。待ちが古さで下りた後は次の項目を選べるので、取り消しを送った前の命令の `workspace/applyEdit` が遅れて届くと、次の命令の写しで照らされる（LSP の `workspace/applyEdit` は命令を名指ししないので区別できない。当て先の改訂番号・版・パスの照合は通る・受け入れる限界・R10 の C3）。
+    - Vim の VISUAL は、入口の検査（控えの古さ・待ち、resolve の答えでは入力の途中と頼んだ文書）を通った項目を走らせる前に抜ける（`run_code_action` の入口の 1 か所）。Command だけの項目でも、resolve を待つ間に入り直した VISUAL でも、結果は NORMAL。その後に当て先の照合が断っても NORMAL のまま（整形は当てた後に抜ける・R10 の P4）。
+    - 進めた写しは、席が開いていないタブ（ほかの言語・ほかの席の文書）を「席が開いていない・未保存」と記すので、Nib が 1 通目を当てたそのタブへの同じ命令の 2 通目は断る（サーバーはそのファイルをディスクで数えていて、当てた後の本文を知らない。席が受ける文書は当てる前に `didOpen` するので 2 通目も当たる・R10 の P3）。
     - 命令は `executeCommandProvider.commands` にある名前だけ送る（無い名前は client の側の命令で Nib には実行できないので、何も送らず何も出さない）。edit も command も無く resolve もできない項目は、選んでも何も起きない。
     - 入力の途中に届いた `workspace/applyEdit` は、画面に何も出さず `applied: false` だけを返す。
 - オフの打鍵の道と速さ: **planned**（QLT-014・各段の PR の後に設計席が速さのゲートを回す）。
@@ -221,10 +224,12 @@ S6 までで、言語サーバーへの要求は ADR 0190 の表の 1 本、答�
 - resource operation（ファイルを作る・名前を変える・消す）を含む編集は丸ごと断る。ts の「Move to a new file」や、rust-analyzer のモジュールのファイルの名前の変更などが該当する。
 - 32 を超えるファイルにまたがる編集は断る。
 - 裏の読みになったファイル（製品では 64 MiB 超で、4 MiB の上限で先に断る）は断る。
-- 開いていないファイルの、ディスクと索引のずれは照らせない（版が無い）。答えを待つ間に（タブを閉じずに）ディスクが外から変わった形（`git checkout` など）も照らせず、古い位置で当たり得る（2026-11-25 の追補の直しでも消えない・R10 の C5）。
+- 開いていないファイルの、ディスクと索引のずれは照らせない（版が無い）。答えを待つ間に（タブを閉じずに）ディスクが外から変わった形（`git checkout` など）も照らせず、古い位置で当たり得る（2026-11-25 の追補の直しでも消えない・R10 の C5）。クイックフィックスでは、控えの一覧が残る間（頼んだ文書の改訂番号が同じ間）も同じで、名前の変更より窓が広い。
 - 頼んだときにタブに在ったファイルを答えの前に閉じる・開き直す・名前を付けて保存で別のパスにすると、そのファイルを当てる答えは断る（頼み直せば通る・#2039 / #2042）。席がその文書を閉じる前に作られた答えも断る（区別できない・安全の側）。頼んだ後に「何も書いていない無題」へ開いたファイルを当てる答えも断る（#2042 の (2)）。
 - 写しに無いタブ（頼んだ後に開いた・読んだ）を、答えの前に打って保存して閉じた形は照らせない（写しにそのファイルが無い。ディスクが Nib の保存で変わった形で、外から変わった形と同じ限界・#2042 で確かめた残り）。
 - Command の結果で窓や URL を開く項目（gopls の Browse…）は、Nib では何も起きない（`window/showDocument` は MethodNotFound）。
+- 命令の途中で Nib が当てた「席が開いていないタブ」は、同じ命令の次の `workspace/applyEdit` で断られる（1 通目だけ当たった形が残る・`u` で戻せる・R10 の P3）。
+- 命令の待ちが古さで下りた後に、前の命令の `workspace/applyEdit` が遅れて届くと、次の命令の待ちで受ける（R10 の C3）。
 - Vim の VISUAL の `gra` は無い。
 - `changeAnnotations` の確かめの問いは無い（断る）。
 - クイックフィックスの `context.diagnostics` は Nib が持つ欄（range・severity・code・source・message・data）だけを戻す。`tags` `relatedInformation` `codeDescription` は戻さない（rust-analyzer と ts は自分の持つ診断か code と range で照らすので、実害は小さい）。次のときは受けた JSON と同じにならない: severity の無い診断（Nib は error を補って 1 を戻す）・128 バイトを超える文字列の code（落ちて戻らない）・3,840 バイトで切った message（message で照らすサーバーは長い診断に直しを返せない）・4 KiB を超える `data`（落とす）。往復は clangd と ts の実物の答えで確かめた（#2022）。
