@@ -179,11 +179,29 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件、折り返しの窓
 
 ## 梱包
 
-未実施。
+本番の物（公開元 `b8f0a919917a1f645bb29e0e65ce0872e9094354`・作業木 `D:/NeNeNib/worktrees/v1.2.0`・置き場 `D:/NeNeNib/releases/v1.2.0/`・2026-11-25 15:48〜15:49）。ログ `D:/NeNeNib/outputs/20261125/package-zip.log`・`package-msix.log`。値は設計席の照合 `D:/NeNeNib/evidence/v1.2.0-release/final-verification.md` と `package.json`・`msix.json` から写し、2026-11-27 に `stat` と `sha256sum` で読み直して同じ値。
+
+| 物 | 名前 | bytes | SHA-256 |
+| --- | --- | --- | --- |
+| exe（`build/release-b8f0a91/NeNeNib.exe`） | `NeNeNib.exe` | 5,089,792 | `ca361007e85e58b4f9a8aff3a39e1b25230a9a058e67e7adf5f9815725cbf55e` |
+| ZIP | `NeNeNib-1.2.0-windows-x64.zip` | 2,083,573 | `35ffc31ae36a09aab238cd1020d09662cc47edbb5248a79a47fca7144c854431` |
+| ZIP の `SHA256SUMS` | `SHA256SUMS`（1 行） | 97 | `23b7920db16e43e97270881bf24166b793476d0fd8193bc8f8233293f62e4f8f` |
+| MSIX（Store 用・署名なし） | `NeNeNib-1.2.0.0-windows-x64-store.msix` | 2,220,860 | `4e7731eb5ab437481f32bd4b54d5a902a503cf290278fa7bb350d06347c845d3` |
+| MSIX の `SHA256SUMS` | `SHA256SUMS`（1 行） | 106 | `820cef43c245f8cea176cb7f5ab824e39e7a0d40cad7768b9d5a91ad3e1155b3` |
+
+照合:
+
+- [x] `package.json` と `msix.json` の `commit` が公開元（`builtFromWorktree` false）・`package.json` の `verification.path` がこの記録
+- [x] `version` `1.2.0`・`fileVersion` `1.2.0.0`・`packageVersion` `1.2.0.0`・`store` true・`AppxManifest.xml` の `Identity` が `HideyukiMori.NeNeNib`・`Version="1.2.0.0"`・x64
+- [x] ZIP の中と MSIX の中の `NeNeNib.exe` の SHA-256 がどちらも上の exe の値（`extractedBytesMatch` true・`zip.executableMatches` true）
+- [x] manifest の `Resources` が `en-US` `ja-JP` `zh-Hans` の順
+- [x] `msix.json` の `entries` が 32 個（1.1.0 と同じ数・`unpackedMatches` true）。ZIP は `NeNeNib.exe` `README.txt` `LICENSE` `THIRD_PARTY_NOTICES.txt` の 4 個。Release のビルドの warning 0（`zip/build.log`）・import は 15 個
+- [x] 展開した exe の短い起動（`release-smoke.py`・隔離 profile・hide の了承の後に 1 回）: 2026-11-27 13:45 JST・`"result": "pass"`・exit 0・`documentUnchanged true`・題 `release-launch.txt - NeNe Nib`・DPI 120・結果 `D:/NeNeNib/evidence/v1.2.0-smoke-b8f0a919/result.json`
+- [x] 製品の入力は速さのゲートを測った木と同じ（`git diff 5ad83876 b8f0a919 -- src tests eng third_party CMakeLists.txt` が空）
 
 ## GitHub の公開
 
-未実施（Store の認定の後に出す・H-10・D120）。
+tag `v1.2.0` → 公開元 `b8f0a919917a1f645bb29e0e65ce0872e9094354`・題 `NeNe Nib 1.2.0`（draft でも pre-release でもない）・2026-11-27 13:46:54 JST・https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.2.0 ・添付は `NeNeNib-1.2.0-windows-x64.zip`（SHA-256 `35ffc31ae36a09aab238cd1020d09662cc47edbb5248a79a47fca7144c854431`）と `SHA256SUMS`。本文は日英（D120）。再取得の照合 `verify-publication.py` は `"result": "pass"`（`downloadedBytesMatch` true・`zipContentsMatch` true・release id 460177908）。公開は Store の公開を hide が知らせた後に設計席が `publish.ps1` で行った。
 
 ## Microsoft Store の提出
 
@@ -191,13 +209,13 @@ Vim の fixture は `tests/vim/fixtures.json` が 6,892 件、折り返しの窓
 
 | 順 | 誰 | 状態 | 日時・記録 |
 | --- | --- | --- | --- |
-| 手順書（`hide-checklist.md`） | hide | 申請まで進んだ | 紙（手順 10・11 の欄）はまだ受け取っていない |
+| 手順書（`hide-checklist.md`） | hide | 申請まで進んだ | 紙（手順 10・11 の欄）は受け取っていない（申請の時刻だけ hide の答えで #2065） |
 | WACK（手順 8） | hide | `OVERALL_RESULT="PASS"` | 報告の生成 2026-11-25 21:39:01・`APP_NAME="HideyukiMori.NeNeNib"`・`APP_VERSION="1.2.0.0"`・`APP_TYPE="Centennial"`・WACK `10.0.26100.7705`・OS `10.0.26300.0`・報告 `D:/NeNeNib/releases/v1.2.0/wack/report.xml`（ID `c46211a8de0acdf87414aa23ebd5bb93`） |
 | 更新の申請（Submission 3） | hide | 提出 | 2026-11-25 22:00 ごろ（JST・hide「22:00くらいだと思うよ」）・Partner Center |
-| 認定・Store で公開 | Microsoft | 待ち | 1.1.0 は提出から約 1 日半で公開された |
+| 認定・Store で公開 | Microsoft | 認定・公開済み（hide の確認） | 2026-11-27 に hide が Store のページで 1.2.0 を確かめた。この PC の Store 版は `1.2.0.0`（`SignatureKind Store`）で、`NeNeNib.exe` の SHA-256 が ZIP の exe と同じ `ca361007e85e58b4f9a8aff3a39e1b25230a9a058e67e7adf5f9815725cbf55e`（2026-11-27 に設計席が照合） |
 
 GitHub の tag `v1.2.0` と Release は Store の認定の後に出す（H-10・D120）。
 
 ## 公開の結果
 
-未実施。
+公開版は 1.2.0（Microsoft Store と GitHub）。公開元は main `b8f0a919`。GitHub の再取得の照合は pass で、Store 版と ZIP の exe は同じ。`settings.v6` の鍵の集合はこの版で閉じた（足すなら `settings.v7`）。main の凍結（D116）はここで解き、次の版の PR はまとめ枝 53 から入れる。
