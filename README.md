@@ -6,6 +6,8 @@
 
 [![Watch the 28-second NeNe Nib video on YouTube.](https://img.youtube.com/vi/xke9Ph3RQ3M/maxresdefault.jpg)](https://youtu.be/xke9Ph3RQ3M)
 
+Videos of 1.2.0: [caret motion (61 s)](https://youtu.be/hyy7_ePLoRg) · [search in about a minute](https://www.youtube.com/watch?v=uF7mM3ryELA) · shorts: [caret](https://youtube.com/shorts/4Jn6RUnZoC4), [search](https://youtube.com/shorts/5xViByllpqE)
+
 ## Why Nib
 
 - **Fast.** Text is on screen 100 ms after launch, and a 16 MiB file opens in 117 ms: 4.5× and 7.8× faster than
@@ -30,7 +32,7 @@
 NeNe Nib は、Windows 11 用の約 5 MB の軽くて速いテキストエディタです。メモ帳のように普通に書くことも、`Ctrl+Shift+Space` で Vim の操作に切り替えることもできます。
 起動から本文の表示まで 100 ms、16 MiB のファイルは 117 ms で、同じ PC のメモ帳より 4.5 倍と 7.8 倍速く表示します（同じ PC・初期設定・同じ窓の大きさ・メモ帳 11.2609 と比較・1.1.0 で計測・詳しくは下の「Speed and memory」）。
 日本語入力、Shift_JIS、最大 1 GiB の UTF-8 ファイル、Markdown プレビュー、全文検索、125 種類のテーマ、言語サーバー（補完・定義へ移動・名前の変更など）に対応しています。
-[Microsoft Store から入手できます](https://apps.microsoft.com/detail/9nclgdtfq529)。[日本語の紹介動画（28 秒）](https://youtu.be/p6SaOZh6L-A)もあります。
+[Microsoft Store から入手できます](https://apps.microsoft.com/detail/9nclgdtfq529)。[日本語の紹介動画（28 秒）](https://youtu.be/p6SaOZh6L-A)もあります。1.2.0 の動画は[キャレットの動き（61 秒）](https://youtu.be/Rofgz6c1d7o)と[検索の使い方（65 秒）](https://youtu.be/IHcKylsrUM0)です。
 
 ## Get it
 
