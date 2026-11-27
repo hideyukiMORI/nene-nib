@@ -1,6 +1,6 @@
 # NeNe Nib
 
-**A 4.4 MB text editor for Windows 11. Press `Ctrl+Shift+Space` to switch between ordinary editing and Vim.**
+**A fast 5 MB text editor for Windows 11. Write like in Notepad, or press `Ctrl+Shift+Space` for a real Vim.**
 
 <a href="https://apps.microsoft.com/detail/9nclgdtfq529?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200" alt="Get NeNe Nib from the Microsoft Store"></a>
 
@@ -8,20 +8,28 @@
 
 ## Why Nib
 
-- **Small.** One 4.4 MB executable (4,571,648 bytes in version 1.1.0), with no runtime to install.
-- **Notepad or Vim.** Edit the ordinary way, or switch to a Vim written from scratch and tested against real Vim 9.1.
-- **Made for large files.** Open UTF-8 files up to 1 GiB. They are read in the background.
-- **Good with Japanese.** Japanese IME, Shift_JIS, UTF-8 and UTF-16 files, and a Japanese interface.
-- **Find anything.** `Ctrl+P` lists tabs, bookmarks, recent files and folder files. `Ctrl+Shift+F` searches a project.
-- **Markdown preview.** See tables, alerts, colored code blocks and task lists next to the text.
-- **125 themes.** Syntax colors for 25 languages are included.
-- **Language servers when you want them.** Off by default. Install a server and connect it for diagnostics, completion, hover and go-to-definition.
+- **Fast.** Text is on screen 100 ms after launch, and a 16 MiB file opens in 117 ms: 4.5× and 7.8× faster than
+  Windows Notepad 11.2609 on the same PC, with default settings and the same window size ([measured with 1.1.0](#speed-and-memory)).
+- **Small and light.** One 5.1 MB executable (5,089,792 bytes in version 1.2.0) with no runtime to install.
+  After opening a 16 MiB file, 1.1.0 used about a third of the memory Notepad used.
+- **Notepad or Vim, one key apart.** Edit the ordinary Windows way, or switch to a Vim written from scratch and
+  replayed against real Vim 9.1 in thousands of tests: motions, operators, text objects, macros, registers, `:s`, `:g` and `map`.
+- **Ready for code when you want it.** Connect a language server (off by default) for diagnostics, completion,
+  hover, go-to-definition, references, symbols, parameter info, formatting and rename (F2, Vim `grn`).
+- **Made for large files.** UTF-8 files up to 1 GiB are read in the background, and a giant single line can be shown as a grid.
+- **Find anything.** `Ctrl+P` lists tabs, bookmarks, recent files and folder files; `Ctrl+Shift+F` searches a whole
+  project, with a preview of each hit.
+- **Markdown preview.** Tables, alerts, task lists and colored code blocks next to the text.
+- **Good with Japanese.** Japanese IME, Shift_JIS, UTF-8 and UTF-16 files, and a Japanese, English or Simplified Chinese interface.
+- **Make it yours.** 125 themes, syntax colors for 25 languages, rainbow indent guides, and optional caret motion
+  and typing sparks.
 - **Private.** Nib collects no personal information and makes no network connections of its own.
 
 ## 日本語
 
-NeNe Nib は、Windows 11 用の 4.4 MB のテキストエディタです。メモ帳のように普通に書くことも、`Ctrl+Shift+Space` で Vim の操作に切り替えることもできます。
-日本語入力、Shift_JIS、最大 1 GiB の UTF-8 ファイル、Markdown プレビュー、125 種類のテーマに対応しています。
+NeNe Nib は、Windows 11 用の約 5 MB の軽くて速いテキストエディタです。メモ帳のように普通に書くことも、`Ctrl+Shift+Space` で Vim の操作に切り替えることもできます。
+起動から本文の表示まで 100 ms、16 MiB のファイルは 117 ms で、同じ PC のメモ帳より 4.5 倍と 7.8 倍速く表示します（同じ PC・初期設定・同じ窓の大きさ・メモ帳 11.2609 と比較・1.1.0 で計測・詳しくは下の「Speed and memory」）。
+日本語入力、Shift_JIS、最大 1 GiB の UTF-8 ファイル、Markdown プレビュー、全文検索、125 種類のテーマ、言語サーバー（補完・定義へ移動・名前の変更など）に対応しています。
 [Microsoft Store から入手できます](https://apps.microsoft.com/detail/9nclgdtfq529)。[日本語の紹介動画（28 秒）](https://youtu.be/p6SaOZh6L-A)もあります。
 
 ## Get it
@@ -31,14 +39,18 @@ NeNe Nib は、Windows 11 用の 4.4 MB のテキストエディタです。メ�
 
 Requires Windows 11 x64. Built with C++23, plain Win32, Direct2D and DirectWrite, with no UI library. MIT licensed.
 
-![NeNe Nib displays its README in Vim NORMAL mode with two document tabs.](docs/images/nib-vim.png)
+![NeNe Nib in Vim NORMAL mode: C++ with syntax colors, rainbow indent guides and the matching bracket marked.](docs/images/nib-1.2.0-vim.png)
 
 <p>
-  <img src="docs/images/nib-palette.png" width="49%" alt="NeNe Nib lists open tabs, bookmarks, recently closed files and folder files in Ctrl+P.">
-  <img src="docs/images/nib-light.png" width="49%" alt="NeNe Nib wraps Japanese specification text in ordinary editing mode with its light theme.">
+  <img src="docs/images/nib-1.2.0-markdown.png" width="49%" alt="NeNe Nib shows a Markdown file with a table, task list and TIP alert next to its live preview.">
+  <img src="docs/images/nib-1.2.0-search.png" width="49%" alt="NeNe Nib searches a project with Ctrl+Shift+F and previews the lines around the selected hit.">
+</p>
+<p>
+  <img src="docs/images/nib-1.2.0-lsp.png" width="49%" alt="NeNe Nib lists completions from the clangd language server while typing C++ in Vim INSERT mode.">
+  <img src="docs/images/nib-1.2.0-light.png" width="49%" alt="NeNe Nib wraps Japanese travel notes in ordinary mode with the GitHub Light theme and a Japanese interface.">
 </p>
 
-Screenshots use the default font and size in a development build of 2026-10-12; [capture details](docs/quality/showcase-2026-10-12.md).
+Screenshots of the published version 1.2.0 with the default font and size; [capture details](docs/quality/showcase-2026-11-27.md).
 
 <details>
 <summary>Full status of the published versions</summary>
