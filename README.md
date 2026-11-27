@@ -26,8 +26,8 @@ NeNe Nib は、Windows 11 用の 4.4 MB のテキストエディタです。メ�
 
 ## Get it
 
-- **[Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)**: version 1.1.0, updated by the Store.
-- **ZIP**: [v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0) on GitHub.
+- **[Microsoft Store](https://apps.microsoft.com/detail/9nclgdtfq529)**: version 1.2.0, updated by the Store.
+- **ZIP**: [v1.2.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.2.0) on GitHub.
 
 Requires Windows 11 x64. Built with C++23, plain Win32, Direct2D and DirectWrite, with no UI library. MIT licensed.
 
@@ -43,7 +43,7 @@ Screenshots use the default font and size in a development build of 2026-10-12; 
 <details>
 <summary>Full status of the published versions</summary>
 
-> **Status (2026-11-23):** [v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0) (GitHub and the Microsoft Store) is the published build for Windows 11 x64.
+> **Status (2026-11-27):** [v1.2.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.2.0) (GitHub and the Microsoft Store) is the published build for Windows 11 x64; the one before it was [v1.1.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.1.0) (2026-11-23).
 > The previous version, [v1.0.0](https://github.com/hideyukiMORI/nene-nib/releases/tag/v1.0.0) (a GitHub pre-release, published 2026-11-17), has ordinary editing with Notepad-style find,
 > replace, go to line, printing and date insertion; UTF-8, Shift_JIS and UTF-16 files (UTF-8 up to 1 GiB, read
 > in the background); Japanese IME; 125 built-in themes; syntax colors for 25 languages; a Markdown preview with
