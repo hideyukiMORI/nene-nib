@@ -317,7 +317,7 @@ void verify_notices_follow_language()
            "a notice follows the switch to simplified Chinese");
     expect(core::ui_text_filled(UiMessage::notice_replay_limit, DisplayLanguage::japanese,
                                 {core::grouped_decimal_text(100000)}) ==
-               "再生を 100,000 鍵で止めました（残りは捨てました）",
+               "再生を 100,000 キーで止めました（残りは捨てました）",
            "the replay notice keeps the grouped Japanese number");
 }
 
