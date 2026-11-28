@@ -1242,7 +1242,7 @@ void verify_vim_inconsistent_round_trip()
     expect(refused.layout_failure == std::optional{TextLayoutFailure::inconsistent},
            "#665 a screen row asked again is delivered as inconsistent");
     expect(refused.command_message.has_value() &&
-               refused.command_message.value().text() == "内部の不整合: 画面行の問い（鍵は無効）",
+               refused.command_message.value().text() == "内部の不整合: 画面行の問い（キーは無効）",
            "#665 a broken round trip raises the one-line notice");
     expect(!controller.delivery().layout_failure.has_value(),
            "#665 inconsistent is delivered once and not in the next delivery");

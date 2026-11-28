@@ -674,7 +674,7 @@ void verify_macro_key_limit()
 {
     static_assert(nenenib::core::vim_replay_key_limit == 100000U);
     const std::optional<std::string> expected_notice{
-        "再生を 100,000 鍵で止めました（残りは捨てました）"};
+        "再生を 100,000 キーで止めました（残りは捨てました）"};
     for (const bool mapped : {false, true})
     {
         const auto [inside, quiet] = limited_replay(7U, mapped);

@@ -42,7 +42,7 @@ NeNe Nib の画面の文は `src/core/UiTexts*.hpp` の列（`UiMessage` の値�
 | `notice_preview_task_stale` | プレビューが古いので切り替えられません | …so the task cannot be toggled | 预览已过期，无法更改任务的勾选状态 | 预览已过期，无法切换任务 | 「切换任务」はアプリの切り替えと読める（V-1597）。チェックボックスの付け外しの知らせ |
 | `shell_verb_open` | NeNe Nib で開く | Open with NeNe Nib | 通过 NeNe Nib 打开 | 用 NeNe Nib 打开・使用 NeNe Nib 打开 | VS Code の右クリックの「通过 Code 打开」に合わせた |
 | `notice_shell_empty_path` | exe のパスがありません | The exe path is empty | 缺少 exe 的路径 | exe 路径为空 | 原文は「無い」。英語は「空」 |
-| `notice_replay_limit` | 再生を {0} 鍵で止めました（残りは捨てました） | Stopped the replay at {0} keys… | 回放到 {0} 个键时已停止（其余已丢弃） | 已在第 {0} 个键处停止回放 | 「鍵」は打鍵の数。「回放」はマクロの再生 |
+| `notice_replay_limit` | 再生を {0} キーで止めました（残りは捨てました） | Stopped the replay at {0} keys… | 回放到 {0} 个键时已停止（其余已丢弃） | 已在第 {0} 个键处停止回放 | 「鍵」は打鍵の数。「回放」はマクロの再生 |
 | `palette_footer_hint` | ↑↓ 選択   Enter 決定   Esc 閉じる | ↑↓ Navigate   Enter Select   Esc Close | ↑↓ 选择   Enter 确定   Esc 关闭 | Enter 打开 | 「決定」は开く以外（設定の選択）にも使う |
 | `prompt_replace_with_pattern` | 置換後 ({0}): | Replace "{0}" with: | 将（{0}）替换为： | 替换（{0}）为： | 入力行の前置き。語順を中国語に合わせた |
 | `dialog_settings_unwritable` | 別の起動で使用中… | …in use by another instance of NeNe Nib… | 设置文件正被另一个 NeNe Nib 实例使用 | 另一个窗口 | 「別の起動」は別のプロセス。主語はファイルで、何の实例かを名指した（V-1597） |
